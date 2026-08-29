@@ -25,13 +25,29 @@ nonisolated struct SearchHits {
 /// takes a single `Sendable` value.
 nonisolated struct SearchRequest {
     let query: String
-    let playlistID: String
-    let restrictToPlaylist: Bool
+    /// The playlists to search, by `id.uuidString`. One id scopes the results
+    /// to that playlist; several give each its own share of the budget; empty
+    /// searches the store unscoped (there is no playlist yet).
+    let playlistIDs: [String]
     let wantMovies: Bool
     let wantSeries: Bool
     let wantLive: Bool
     let excludedCategoryIDs: Set<String>
+    /// Max rows per content type, across every playlist searched.
     let limit: Int
+
+    /// The fetches one type is split into: one per playlist, so a single
+    /// catalog can't spend the whole budget. The id-prefix scope matches a row
+    /// whether or not it has a category, so uncategorised m3u entries need no
+    /// pass of their own.
+    var scopes: [SearchScope] {
+        guard !playlistIDs.isEmpty else {
+            return [SearchScope(query: query, playlistID: "", restrictToPlaylist: false, excluded: excludedCategoryIDs)]
+        }
+        return playlistIDs.map {
+            SearchScope(query: query, playlistID: $0, restrictToPlaylist: true, excluded: excludedCategoryIDs)
+        }
+    }
 }
 
 /// Runs the bounded `localizedStandardContains` fetches on a background
@@ -39,12 +55,7 @@ nonisolated struct SearchRequest {
 /// can't cross actor boundaries.
 nonisolated enum SearchFetcher {
     static func fetch(container: ModelContainer, request: SearchRequest) -> SearchHits {
-        let scope = SearchScope(
-            query: request.query,
-            playlistID: request.playlistID,
-            restrictToPlaylist: request.restrictToPlaylist,
-            excluded: request.excludedCategoryIDs
-        )
+        let scopes = request.scopes
         let limit = request.limit
         let context = ModelContext(container)
         var hits = SearchHits()
@@ -55,11 +66,14 @@ nonisolated enum SearchFetcher {
         // (263 ms for movies alone on a 179k-title catalog, 479 ms for the three
         // together) to show 50 rows. Without it the scan stops at the 50th hit.
         // The per-type name order the list has always shown is applied over the
-        // hydrated rows instead — see `SearchView.assembleResults`.
+        // hydrated rows instead — see `SearchView.assembleResults`. Across
+        // several playlists each is fetched to the same budget and the budget
+        // is then spent round-robin (`interleaved`), so one catalog can't crowd
+        // the others out and one with few matches hands its share back.
         if request.wantMovies {
-            var descriptor = FetchDescriptor<Movie>(predicate: searchMoviePredicate(scope: scope))
-            descriptor.fetchLimit = limit
-            hits.movies = ((try? context.fetch(descriptor)) ?? []).map(\.persistentModelID)
+            hits.movies = interleaved(scopes.map {
+                ids(in: context, predicate: searchMoviePredicate(scope: $0), limit: limit)
+            }, limit: limit)
         }
 
         // Each entity fetch is its own table scan, so a superseded query that
@@ -71,20 +85,28 @@ nonisolated enum SearchFetcher {
         guard !Task.isCancelled else { return hits }
 
         if request.wantSeries {
-            var descriptor = FetchDescriptor<Series>(predicate: searchSeriesPredicate(scope: scope))
-            descriptor.fetchLimit = limit
-            hits.series = ((try? context.fetch(descriptor)) ?? []).map(\.persistentModelID)
+            hits.series = interleaved(scopes.map {
+                ids(in: context, predicate: searchSeriesPredicate(scope: $0), limit: limit)
+            }, limit: limit)
         }
 
         guard !Task.isCancelled else { return hits }
 
         if request.wantLive {
-            var descriptor = FetchDescriptor<LiveStream>(predicate: searchLiveStreamPredicate(scope: scope))
-            descriptor.fetchLimit = limit
-            hits.streams = ((try? context.fetch(descriptor)) ?? []).map(\.persistentModelID)
+            hits.streams = interleaved(scopes.map {
+                ids(in: context, predicate: searchLiveStreamPredicate(scope: $0), limit: limit)
+            }, limit: limit)
         }
 
         return hits
+    }
+
+    private static func ids<Model: PersistentModel>(
+        in context: ModelContext, predicate: Predicate<Model>, limit: Int
+    ) -> [PersistentIdentifier] {
+        var descriptor = FetchDescriptor<Model>(predicate: predicate)
+        descriptor.fetchLimit = limit
+        return ((try? context.fetch(descriptor)) ?? []).map(\.persistentModelID)
     }
 }
 
@@ -186,8 +208,8 @@ nonisolated func searchLiveStreamPredicate(scope: SearchScope) -> Predicate<Live
 // MARK: - Interleaving
 
 /// Spends `limit` by taking one element from each list in turn, preserving each
-/// list's own order and dropping repeats. Used for hits from several Stalker
-/// portals: each returns its own relevance ranking, and concatenating them
+/// list's own order and dropping repeats. Used for the per-playlist catalog
+/// fetches above, and for hits from several Stalker portals: each returns its own relevance ranking, and concatenating them
 /// would bury a second portal's best match under everything the first had to
 /// say. Lists shorter than the rest simply drop out of the rotation.
 nonisolated func interleaved<Element: Hashable>(_ lists: [[Element]], limit: Int) -> [Element] {

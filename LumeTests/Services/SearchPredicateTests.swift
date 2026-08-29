@@ -3,7 +3,8 @@
 //  LumeTests
 //
 //  Search excludes hidden/restricted categories inside the fetch, so the
-//  per-type result limit isn't spent on rows the viewer will never see. The
+//  per-type result limit isn't spent on rows the viewer will never see, and
+//  splits that limit between playlists when searching across them. The
 //  predicates must run against an on-disk SQLite store: in-memory stores
 //  evaluate predicates without SQL generation, so a form CoreData can't render
 //  passes there and traps on device (see `TmdbIdPredicateTests`).
@@ -160,5 +161,84 @@ struct SearchPredicateTests {
             )))
         )
         #expect(fetched.map(\.id) == ["PL-A-movie-1"])
+    }
+
+    // MARK: - Cross-playlist budget
+
+    /// Two playlists, one of which alone can fill the whole budget with titles
+    /// that sort first. The other must still be represented — a single catalog
+    /// crowding the rest out is indistinguishable, on screen, from the setting
+    /// not working at all.
+    private func insertTwoCatalogs(_ context: ModelContext, limit: Int) throws -> (String, String) {
+        let big = UUID().uuidString
+        let small = UUID().uuidString
+        for index in 0 ..< (limit + 10) {
+            let movie = Movie(id: "\(big)-movie-\(index)", streamId: index, name: "Aaa Matrix \(index)")
+            movie.categoryId = "\(big)-vod-1"
+            context.insert(movie)
+        }
+        for index in 0 ..< 2 {
+            let movie = Movie(id: "\(small)-movie-\(index)", streamId: index, name: "Zzz Matrix \(index)")
+            movie.categoryId = "\(small)-vod-1"
+            context.insert(movie)
+        }
+        try context.save()
+        return (big, small)
+    }
+
+    private func names(_ ids: [PersistentIdentifier], in context: ModelContext) -> [String] {
+        ids.compactMap { (context.model(for: $0) as? Movie)?.name }
+    }
+
+    @Test func `each playlist gets a share of the result budget`() throws {
+        let container = try makeSQLiteContainer()
+        let context = container.mainContext
+        let limit = 20
+        let (big, small) = try insertTwoCatalogs(context, limit: limit)
+
+        let hits = SearchFetcher.fetch(container: container, request: SearchRequest(
+            query: "matrix", playlistIDs: [big, small],
+            wantMovies: true, wantSeries: false, wantLive: false,
+            excludedCategoryIDs: [], limit: limit
+        ))
+
+        #expect(hits.movies.count == limit)
+        let matched = names(hits.movies, in: context)
+        #expect(matched.contains { $0.hasPrefix("Zzz") })
+        #expect(matched.count(where: { $0.hasPrefix("Aaa") }) == limit - 2)
+    }
+
+    @Test func `a split search still finds uncategorised titles`() throws {
+        let container = try makeSQLiteContainer()
+        let context = container.mainContext
+        let (big, small) = try insertTwoCatalogs(context, limit: 5)
+        // m3u sources don't always supply a category. The per-playlist scope
+        // keys off the playlist UUID prefixed onto the row's own id, so a row
+        // with no category is still found under its playlist.
+        context.insert(Movie(id: "\(small)-movie-999", streamId: 999, name: "Bbb Matrix"))
+        try context.save()
+
+        let hits = SearchFetcher.fetch(container: container, request: SearchRequest(
+            query: "matrix", playlistIDs: [big, small],
+            wantMovies: true, wantSeries: false, wantLive: false,
+            excludedCategoryIDs: [], limit: 20
+        ))
+
+        #expect(names(hits.movies, in: context).contains("Bbb Matrix"))
+    }
+
+    @Test func `a single playlist search is unchanged`() throws {
+        let container = try makeSQLiteContainer()
+        let context = container.mainContext
+        let (big, _) = try insertTwoCatalogs(context, limit: 5)
+
+        let hits = SearchFetcher.fetch(container: container, request: SearchRequest(
+            query: "matrix", playlistIDs: [big],
+            wantMovies: true, wantSeries: false, wantLive: false,
+            excludedCategoryIDs: [], limit: 20
+        ))
+
+        #expect(hits.movies.count == 15)
+        #expect(names(hits.movies, in: context).allSatisfy { $0.hasPrefix("Aaa") })
     }
 }

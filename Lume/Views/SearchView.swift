@@ -300,7 +300,10 @@ struct SearchView: View {
     private func localSearch(
         query: String, playlist: Playlist?, wantMovies: Bool, wantSeries: Bool, wantLive: Bool
     ) async -> SearchHits {
-        // Scope to the active playlist unless cross-playlist search is on. Every
+        // Scope to the active playlist unless cross-playlist search is on, in
+        // which case every playlist is named and each gets its own share of the
+        // budget — one alphabetically-early catalog would otherwise fill all
+        // `resultLimit` rows and the others would look unsearched. Every
         // catalog row's id carries its playlist's UUID as a prefix (see
         // `SearchScope.playlistIDPrefix`), so a prefix test on the indexed `id`
         // limits results to that playlist. Hidden/restricted categories are
@@ -308,8 +311,7 @@ struct SearchView: View {
         // spent on rows the viewer will never see.
         let request = SearchRequest(
             query: query,
-            playlistID: playlist?.id.uuidString ?? "",
-            restrictToPlaylist: !searchAllPlaylists && playlist != nil,
+            playlistIDs: searchAllPlaylists ? playlists.map(\.id.uuidString) : [playlist?.id.uuidString].compactMap(\.self),
             wantMovies: wantMovies,
             wantSeries: wantSeries,
             wantLive: wantLive,
