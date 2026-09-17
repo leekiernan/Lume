@@ -27,6 +27,12 @@ final class HomeTrendingCache {
     private(set) var watchlistKey: String?
     private(set) var watchlist: [HomeMediaItem] = []
 
+    /// Matched items for the user's custom rows, keyed by section id. One entry
+    /// for the whole set: they are fetched together and share an invalidation
+    /// key, so a partial cache would never be read.
+    private(set) var customSectionsKey: String?
+    private(set) var customSections: [UUID: [HomeMediaItem]] = [:]
+
     func trendingEntry(for key: String) -> (heroes: [HeroItem], movies: [HomeMediaItem], series: [HomeMediaItem])? {
         guard key == trendingKey else { return nil }
         return (heroItems, trendingMovies, trendingSeries)
@@ -47,5 +53,15 @@ final class HomeTrendingCache {
     func storeWatchlist(key: String, items: [HomeMediaItem]) {
         watchlistKey = key
         watchlist = items
+    }
+
+    func customEntry(for key: String) -> [UUID: [HomeMediaItem]]? {
+        guard key == customSectionsKey else { return nil }
+        return customSections
+    }
+
+    func storeCustom(key: String, items: [UUID: [HomeMediaItem]]) {
+        customSectionsKey = key
+        customSections = items
     }
 }

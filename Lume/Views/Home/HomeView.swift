@@ -48,7 +48,12 @@ struct HomeView: View {
     @AppStorage(HomeLayoutSettings.sectionOrderKey) private var sectionOrderRaw = ""
     /// Sections the user switched off (Settings › Layout › Home). "For You" is
     /// gated by `recommendationsEnabled` instead — see `HomeLayoutSettings`.
-    @AppStorage(HomeLayoutSettings.disabledSectionsKey) private var disabledSectionsRaw = ""
+    /// Internal: `HomeView+CustomSections.swift` reads it to skip hidden rows.
+    @AppStorage(HomeLayoutSettings.disabledSectionsKey) var disabledSectionsRaw = ""
+    /// The user's custom list-backed rows (Settings › Layout › Home › Add
+    /// Section), and the titles each one resolved to, keyed by section id.
+    @AppStorage(CustomHomeSections.storageKey) var customSectionsRaw = ""
+    @State var customSectionItems: [UUID: [HomeMediaItem]] = [:]
     /// Bumped by the DEBUG "Recalculate" action in Settings (always 0 otherwise);
     /// part of the task id so the row recomputes on demand.
     @AppStorage(RecommendationSettings.manualRecalculationKey) private var recommendationsRecalcToken = 0
@@ -223,6 +228,9 @@ struct HomeView: View {
             .task(id: recommendationsKey) {
                 await loadRecommendations()
             }
+            .task(id: customSectionsKey) {
+                await loadCustomSections(cacheKey: customSectionsKey)
+            }
             .task(id: seriesResumeKey) {
                 await loadSeriesResume()
             }
@@ -247,19 +255,35 @@ struct HomeView: View {
     /// immersive home. Rows render in the user's chosen order (Settings › Layout ›
     /// Home); each only appears when it has content.
     private var homeRows: some View {
-        ForEach(HomeLayoutSettings.resolve(orderRaw: sectionOrderRaw)) { section in
-            homeRow(for: section)
+        ForEach(HomeLayoutSettings.resolve(orderRaw: sectionOrderRaw, custom: customSections)) { ref in
+            homeRow(for: ref)
         }
     }
 
     @ViewBuilder
-    private func homeRow(for section: HomeSection) -> some View {
+    private func homeRow(for ref: HomeSectionRef) -> some View {
+        switch ref {
+        case let .builtin(section):
+            builtinRow(for: section)
+        case let .custom(id):
+            // A custom row's header is the user's own text, so it goes through
+            // verbatim; the items are resolved in `HomeView+CustomSections`.
+            if let section = customSections.first(where: { $0.id == id }),
+               HomeLayoutSettings.isEnabled(ref, disabledRaw: disabledSectionsRaw)
+            {
+                rail(Text(verbatim: section.title), customSectionItems[id] ?? [])
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func builtinRow(for section: HomeSection) -> some View {
         if isSectionEnabled(section) {
             switch section {
             case .recentlyWatched:
-                rail("Recently Watched", recentlyWatched, onRemove: removeFromRecentlyWatched)
+                rail(Text("Recently Watched"), recentlyWatched, onRemove: removeFromRecentlyWatched)
             case .favorites:
-                rail("Favorites", favorites)
+                rail(Text("Favorites"), favorites)
             case .forYou:
                 ForYouRow(
                     items: recommendations,
@@ -270,9 +294,9 @@ struct HomeView: View {
                     animationNamespace: animationNamespace
                 )
             case .trendingMovies:
-                rail("Trending Movies", trendingMovies)
+                rail(Text("Trending Movies"), trendingMovies)
             case .trendingSeries:
-                rail("Trending Series", trendingSeries)
+                rail(Text("Trending Series"), trendingSeries)
             case .traktWatchlist:
                 rail("From Your Trakt Watchlist", watchlist)
             case .sports:
@@ -287,14 +311,14 @@ struct HomeView: View {
     func isSectionEnabled(_ section: HomeSection) -> Bool {
         section == .forYou
             ? (recommendationsEnabled && premium.isPremium)
-            : HomeLayoutSettings.isEnabled(section, disabledRaw: disabledSectionsRaw)
+            : HomeLayoutSettings.isEnabled(.builtin(section), disabledRaw: disabledSectionsRaw)
     }
 
     /// A standard Home rail that only renders when it has items. The Recently
     /// Watched rail passes `onRemove` to add its remove-from-history action.
     @ViewBuilder
     private func rail(
-        _ title: LocalizedStringKey,
+        _ title: Text,
         _ items: [HomeMediaItem],
         onRemove: ((HomeMediaItem) -> Void)? = nil
     ) -> some View {
@@ -394,6 +418,7 @@ struct HomeView: View {
             && trendingSeries.isEmpty
             && watchlist.isEmpty
             && !sportsRailHasContent
+            && customSectionItems.values.allSatisfy(\.isEmpty)
             && trendingState.isSettled
     }
 
@@ -557,23 +582,6 @@ private extension HomeView {
         try? modelContext.save()
 
         recommendations.removeAll { $0.id == item.id }
-    }
-}
-
-// MARK: - Load state
-
-/// Internal (not file-private): `HomeView+Trending.swift` drives the transitions.
-enum HomeLoadState {
-    case idle
-    case loading
-    case loaded
-    case failed
-
-    var isSettled: Bool {
-        switch self {
-        case .idle, .loading: false
-        case .loaded, .failed: true
-        }
     }
 }
 

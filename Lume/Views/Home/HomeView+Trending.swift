@@ -169,8 +169,9 @@ extension HomeView {
     /// All active-playlist catalog matches for the given TMDB ids from one
     /// query, keyed by id. The per-title variant this replaces issued one fetch
     /// per trending/watchlist row — hundreds of sequential main-context
-    /// round-trips on every Home load.
-    private func fetchMovies(tmdbIds: [Int]) -> [Int: Movie] {
+    /// round-trips on every Home load. Internal (not private): the custom
+    /// sections in `HomeView+CustomSections.swift` match the same way.
+    func fetchMovies(tmdbIds: [Int]) -> [Int: Movie] {
         let ids = Set(tmdbIds)
         guard !ids.isEmpty else { return [:] }
         let descriptor = FetchDescriptor<Movie>(predicate: movieTmdbIdPredicate(ids: ids))
@@ -184,7 +185,7 @@ extension HomeView {
         return byId
     }
 
-    private func fetchSeries(tmdbIds: [Int]) -> [Int: Series] {
+    func fetchSeries(tmdbIds: [Int]) -> [Int: Series] {
         let ids = Set(tmdbIds)
         guard !ids.isEmpty else { return [:] }
         let descriptor = FetchDescriptor<Series>(predicate: seriesTmdbIdPredicate(ids: ids))
@@ -212,4 +213,22 @@ nonisolated func movieTmdbIdPredicate(ids: Set<Int>) -> Predicate<Movie> {
 nonisolated func seriesTmdbIdPredicate(ids: Set<Int>) -> Predicate<Series> {
     let optionalIds = Set(ids.map(Int?.some))
     return #Predicate { optionalIds.contains($0.tmdbId) }
+}
+
+// MARK: - Load state
+
+/// Internal (not file-private): `HomeView` renders from it and the transitions
+/// above drive it.
+enum HomeLoadState {
+    case idle
+    case loading
+    case loaded
+    case failed
+
+    var isSettled: Bool {
+        switch self {
+        case .idle, .loading: false
+        case .loaded, .failed: true
+        }
+    }
 }

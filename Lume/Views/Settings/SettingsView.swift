@@ -118,6 +118,15 @@ struct SettingsView: View {
         @AppStorage(RecommendationSettings.enabledKey) var recommendationsEnabled = RecommendationSettings.enabledDefault
         @AppStorage(HomeLayoutSettings.sectionOrderKey) var homeSectionOrderRaw = ""
         @AppStorage(HomeLayoutSettings.disabledSectionsKey) var homeDisabledSectionsRaw = ""
+        /// The user's custom list-backed Home rows, and the inline add / edit
+        /// form's state. tvOS has no sheet-based editor here — the Home pane
+        /// grows the form in place, the way the EPG pane adds a source.
+        @AppStorage(CustomHomeSections.storageKey) var homeCustomSectionsRaw = ""
+        @State var homeSectionEditor: TVCustomSectionEditorMode?
+        @State var homeSectionEditorTitle = ""
+        @State var homeSectionEditorURL = ""
+        @State var homeSectionEditorError: String?
+        @State var homeSectionEditorChecking = false
     #endif
 
     /// The user's ordered engine fallback list (migrates the legacy single-engine

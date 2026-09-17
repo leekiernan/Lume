@@ -67,8 +67,55 @@ enum HomeSection: String, CaseIterable, Identifiable {
     }
 }
 
-/// The order of the Home rows, top to bottom. Each section still only renders
-/// when it has something to show (and "For You" additionally honours the
+/// A row on the Home screen: one of the built-in sections, or a user-added
+/// custom section (`CustomHomeSection`) identified by its id. This is what the
+/// stored order and the hidden set are lists of, so built-in and custom rows
+/// interleave freely and hide the same way.
+enum HomeSectionRef: Hashable, Identifiable {
+    case builtin(HomeSection)
+    case custom(UUID)
+
+    /// Marks a custom section's token. `HomeSection` raw values are plain
+    /// identifiers, so the prefix can never collide with one.
+    private static let customPrefix = "custom:"
+
+    var id: String {
+        token
+    }
+
+    /// The stable string stored in the order / hidden lists.
+    var token: String {
+        switch self {
+        case let .builtin(section): section.rawValue
+        case let .custom(id): "\(Self.customPrefix)\(id.uuidString)"
+        }
+    }
+
+    /// Parses a stored token, returning nil for anything unrecognised — a
+    /// section removed from a newer build, or a malformed value.
+    init?(token: String) {
+        if token.hasPrefix(Self.customPrefix) {
+            guard let uuid = UUID(uuidString: String(token.dropFirst(Self.customPrefix.count))) else { return nil }
+            self = .custom(uuid)
+        } else if let section = HomeSection(rawValue: token) {
+            self = .builtin(section)
+        } else {
+            return nil
+        }
+    }
+
+    var builtin: HomeSection? {
+        if case let .builtin(section) = self { return section }
+        return nil
+    }
+
+    var customID: UUID? {
+        if case let .custom(id) = self { return id }
+        return nil
+    }
+}
+
+/// The order of the Home rows, top to bottom.as something to show (and "For You" additionally honours the
 /// recommendations toggle, see `RecommendationSettings`). Persisted as a
 /// comma-separated list of `HomeSection` raw values under `sectionOrderKey`.
 enum HomeLayoutSettings {
@@ -83,50 +130,70 @@ enum HomeLayoutSettings {
     /// (expensive) recommendation recompute on Home.
     static let disabledSectionsKey = "home.disabledSections.v1"
 
-    static func decodeDisabled(_ raw: String) -> Set<HomeSection> {
-        Set(raw.split(separator: ",").compactMap { HomeSection(rawValue: String($0)) })
+    static func decodeDisabled(_ raw: String) -> Set<HomeSectionRef> {
+        Set(raw.split(separator: ",").compactMap { HomeSectionRef(token: String($0)) })
     }
 
     /// Encode the disabled set in a stable order so the stored value (and its
     /// iCloud-synced @AppStorage) doesn't churn as the set is mutated.
-    static func encodeDisabled(_ sections: Set<HomeSection>) -> String {
-        sections.map(\.rawValue).sorted().joined(separator: ",")
+    static func encodeDisabled(_ sections: Set<HomeSectionRef>) -> String {
+        sections.map(\.token).sorted().joined(separator: ",")
     }
 
     /// Whether `section` should render. Not meaningful for `.forYou` (see
     /// `disabledSectionsKey`); callers handle that case via `RecommendationSettings`.
-    static func isEnabled(_ section: HomeSection, disabledRaw: String) -> Bool {
+    static func isEnabled(_ section: HomeSectionRef, disabledRaw: String) -> Bool {
         !decodeDisabled(disabledRaw).contains(section)
     }
 
-    /// Decode the stored order into a complete, de-duplicated section list,
-    /// falling back to the declaration order when nothing has been stored yet.
-    static func resolve(orderRaw: String) -> [HomeSection] {
-        normalized(decode(orderRaw))
+    /// Flip one row's hidden state, returning the new encoded set.
+    static func settingEnabled(
+        _ isOn: Bool,
+        for section: HomeSectionRef,
+        disabledRaw: String
+    ) -> String {
+        var disabled = decodeDisabled(disabledRaw)
+        if isOn { disabled.remove(section) } else { disabled.insert(section) }
+        return encodeDisabled(disabled)
     }
 
-    /// Parse the comma-separated raw value into sections, dropping any token
-    /// that doesn't name a known section.
-    static func decode(_ raw: String) -> [HomeSection] {
-        raw.split(separator: ",").compactMap { HomeSection(rawValue: String($0)) }
+    /// Decode the stored order into a complete, de-duplicated row list, falling
+    /// back to the declaration order when nothing has been stored yet. `custom`
+    /// is the user's current custom sections: refs to sections they've since
+    /// deleted drop out, and newly added ones land at the end.
+    static func resolve(orderRaw: String, custom: [CustomHomeSection]) -> [HomeSectionRef] {
+        normalized(decode(orderRaw), custom: custom)
     }
 
-    static func encode(_ list: [HomeSection]) -> String {
-        list.map(\.rawValue).joined(separator: ",")
+    /// Parse the comma-separated raw value into rows, dropping any token that
+    /// doesn't name a known section.
+    static func decode(_ raw: String) -> [HomeSectionRef] {
+        raw.split(separator: ",").compactMap { HomeSectionRef(token: String($0)) }
     }
 
-    /// Keep the given order but ensure every section appears exactly once: drop
-    /// duplicates, then append any section missing from the list in declaration
-    /// order. Guarantees the order is always complete even after a new section
-    /// is added to `HomeSection` once the user has stored their order.
-    static func normalized(_ order: [HomeSection]) -> [HomeSection] {
-        var seen = Set<HomeSection>()
-        var result: [HomeSection] = []
-        for section in order where seen.insert(section).inserted {
-            result.append(section)
+    static func encode(_ list: [HomeSectionRef]) -> String {
+        list.map(\.token).joined(separator: ",")
+    }
+
+    /// Keep the given order but ensure every row appears exactly once: drop
+    /// duplicates and custom refs with no matching section, then append any row
+    /// missing from the list — built-ins in declaration order, then custom
+    /// sections in the order they were added. Guarantees the order is always
+    /// complete even after a new case is added to `HomeSection`, or a section is
+    /// added on another device, once the user has stored their order.
+    static func normalized(_ order: [HomeSectionRef], custom: [CustomHomeSection]) -> [HomeSectionRef] {
+        let customIDs = Set(custom.map(\.id))
+        var seen = Set<HomeSectionRef>()
+        var result: [HomeSectionRef] = []
+        for ref in order where seen.insert(ref).inserted {
+            if let id = ref.customID, !customIDs.contains(id) { continue }
+            result.append(ref)
         }
-        for section in HomeSection.allCases where seen.insert(section).inserted {
-            result.append(section)
+        for section in HomeSection.allCases where seen.insert(.builtin(section)).inserted {
+            result.append(.builtin(section))
+        }
+        for section in custom where seen.insert(.custom(section.id)).inserted {
+            result.append(.custom(section.id))
         }
         return result
     }

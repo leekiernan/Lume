@@ -13,7 +13,9 @@ import SwiftUI
 // MARK: - Row
 
 struct HomeRow: View {
-    let title: LocalizedStringKey
+    /// A `Text` rather than a `LocalizedStringKey` so custom rows can pass their
+    /// user-typed header verbatim while the built-in rows stay localized.
+    let title: Text
     let items: [HomeMediaItem]
     /// Resume fractions keyed by series id, resolved once for the whole screen
     /// (`SeriesResumeLoader`) rather than per card — see `HomeMediaItem`.
@@ -31,7 +33,7 @@ struct HomeRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(title)
+            title
                 .font(.subheadline)
                 .fontWeight(.bold)
                 .foregroundStyle(.secondary)
@@ -169,7 +171,7 @@ struct ForYouRow: View {
             }
         } else {
             HomeRow(
-                title: "For You",
+                title: Text("For You"),
                 items: items,
                 seriesResume: seriesResume,
                 onPlayLive: onPlayLive,
