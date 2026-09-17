@@ -168,12 +168,25 @@ nonisolated struct TraktClient {
 
     /// The user's full watchlist (movies and shows), each carrying its external
     /// ids so the home screen can match against the local library by TMDB id.
+    /// Trakt's default response follows watchlist rank, so explicitly order the
+    /// completed page walk by addition time for the Home rail.
     func watchlist(accessToken: String) async throws -> [TraktWatchlistItem] {
-        try await allPages(
+        let items: [TraktWatchlistItem] = try await allPages(
             "/sync/watchlist",
             query: [URLQueryItem(name: "extended", value: "full")],
             accessToken: accessToken
         )
+        return items.enumerated()
+            .sorted { lhs, rhs in
+                let lhsDate = lhs.element.listedAt
+                let rhsDate = rhs.element.listedAt
+                if lhsDate == rhsDate { return lhs.offset < rhs.offset }
+                guard let lhsDate, let rhsDate else { return lhsDate != nil }
+                // Trakt emits UTC ISO-8601 values in one normalized format, so
+                // lexical and chronological order are equivalent here.
+                return lhsDate > rhsDate
+            }
+            .map(\.element)
     }
 
     /// Adds movies/shows to the user's watchlist.
@@ -476,9 +489,15 @@ struct TraktWatchlistSyncItems: Encodable {
 /// One watchlist entry. `type` is "movie" or "show"; the matching child carries
 /// the title and ids.
 struct TraktWatchlistItem: Decodable {
+    let listedAt: String?
     let type: String
     let movie: TraktWatchlistMedia?
     let show: TraktWatchlistMedia?
+
+    enum CodingKeys: String, CodingKey {
+        case listedAt = "listed_at"
+        case type, movie, show
+    }
 }
 
 struct TraktWatchlistMedia: Decodable {
