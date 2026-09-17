@@ -25,6 +25,8 @@ struct MainTabView: View {
     /// Areas switched off in Settings › Library. A disabled area has no tab —
     /// and `ContentSyncManager` skips its content entirely. See `AppAreaSettings`.
     @AppStorage(AppAreaSettings.disabledAreasKey) private var disabledAreasRaw: String = ""
+    /// Changes when the viewer switches profile — see `activeProfileToken`.
+    @AppStorage(ActiveProfileStore.key) private var activeProfileToken: String = ""
     @AppStorage(PlaylistSelectionStore.key) private var selectedPlaylistID: String = ""
     /// Whether the Sports tab appears in the tab bar (Settings toggle). When off,
     /// the hub is still reachable from the Home rail header.
@@ -120,6 +122,11 @@ struct MainTabView: View {
     var body: some View {
         @Bindable var router = router
         return tabView(selection: $router.selectedTab)
+            // Layout preferences are keyed by the active profile, and
+            // @AppStorage binds its key when the view is created — so the tabs
+            // are rebuilt on a switch to re-read under the new profile. The
+            // router lives outside this id, so navigation paths survive.
+            .id(activeProfileToken)
             .onChange(of: disabledAreasRaw) { _, _ in repairSelectionIfNeeded() }
         #if os(tvOS)
             .disabled(blockingOverlayOwnsScreen || router.isQuickSwitchPresented)
