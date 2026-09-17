@@ -36,6 +36,7 @@ nonisolated enum ProfileScopedPreferences {
         for surface in SectionSurface.allCases {
             keys.append(HomeLayoutSettings.baseSectionOrderKey(surface))
             keys.append(HomeLayoutSettings.baseDisabledSectionsKey(surface))
+            keys.append(HomeLayoutSettings.baseHeroSectionKey(surface))
             keys.append(CustomHomeSections.baseStorageKey(surface))
         }
         return keys
