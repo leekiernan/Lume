@@ -2,8 +2,8 @@
 //  LiveTVView.swift
 //  Lume
 //
-//  Main view for browsing live TV channels — categories sidebar; channels
-//  for the selected category are loaded lazily via @Query.
+//  Main view for browsing live TV channels. Categories live in an overlay
+//  sidebar; channels for the selected category are loaded lazily via @Query.
 //
 
 import SwiftData
@@ -40,7 +40,7 @@ struct LiveTVView: View {
     @Query(filter: #Predicate<Category> { $0.typeRaw == "live" && $0.isHidden == false })
     private var categories: [Category]
 
-    /// Keeps the rail's categories from being filtered and sorted on every body
+    /// Keeps the sidebar's categories from being filtered and sorted on every body
     /// pass — see `LiveTVCategoryMemo`. Whether the two virtual sections appear
     /// is `LiveTVSections`' job; it owns the bounded probes that answer it.
     @State private var categoryMemo = LiveTVCategoryMemo()
@@ -52,8 +52,10 @@ struct LiveTVView: View {
     @State private var showingSync = false
     @State private var playingMedia: PlayableMedia?
     @State private var showingSettings = false
+    @State private var showingBrowse = false
     #if os(tvOS)
         @Environment(DeepLinkRouter.self) private var router
+        @State private var guideFocusToken = 0
     #else
         /// Non-nil while Multi-View is up; carries the channels it opened with,
         /// when it was started from a channel rather than the toolbar.
@@ -116,6 +118,7 @@ struct LiveTVView: View {
                 scope: section.scope,
                 playlistPrefix: playlistPrefix,
                 sort: contentSort,
+                onLeadingLeft: { showingBrowse = true },
                 onStartMultiView: { startMultiView(with: $0) },
                 onPlay: { playChannel($0, scope: section.scope) }
             )
@@ -160,53 +163,44 @@ struct LiveTVView: View {
                     ) { sections in
                         layout(for: sections)
                             .task(id: playlistPrefix) { seedSelection(from: sections) }
+                            .overlay(alignment: .leading) {
+                                LiveTVBrowseSidebar(
+                                    isPresented: $showingBrowse,
+                                    sections: sections,
+                                    selectedSection: displayedSection(in: sections),
+                                    onSelect: selectSection
+                                )
+                            }
                     }
                 }
             }
             .platformNavigationTitle("Live TV")
             #if os(iOS)
-                // Inline title: the category selector sits directly below the
-                // nav bar, so a large title would rubber-band down and float
-                // behind the selector when the channel list is overscrolled.
+                // Keep the compact content controls visually attached to the
+                // navigation bar when the channel list is overscrolled.
                 .navigationBarTitleDisplayMode(.inline)
             #endif
-            #if os(iOS) || os(macOS)
-            .toolbar {
-                if !playlists.isEmpty, !categories.isEmpty {
-                    ToolbarItem(placement: .principal) {
-                        layoutModePicker
-                            .frame(maxWidth: 240)
-                    }
-                    // Its own ToolbarItem with a titled Label, for the same
-                    // reason `LibraryToolbar` splits its buttons up: an item
-                    // pushed into the "..." overflow needs a menu representation.
-                    ToolbarItem(placement: .automatic) {
-                        Button {
-                            openMultiView()
-                        } label: {
-                            Label("Multi-View", systemImage: "rectangle.split.2x2")
-                        }
-                    }
-                }
-            }
-            #endif
-            .libraryToolbar(config: LibraryToolbarConfiguration(
-                playlists: playlists,
-                selectedPlaylistID: $selectedPlaylistID,
-                categorySortRaw: $categorySortRaw,
-                contentSortRaw: $contentSortRaw,
-                showingSync: $showingSync,
-                showingSettings: $showingSettings,
-                activePlaylist: activePlaylist
-            ))
+                .libraryToolbar(config: LibraryToolbarConfiguration(
+                    playlists: playlists,
+                    selectedPlaylistID: $selectedPlaylistID,
+                    categorySortRaw: $categorySortRaw,
+                    contentSortRaw: $contentSortRaw,
+                    showingSync: $showingSync,
+                    showingSettings: $showingSettings,
+                    activePlaylist: activePlaylist
+                ))
+                .browseSidebarToolbar(
+                    isPresented: $showingBrowse,
+                    isEnabled: !playlists.isEmpty && !categories.isEmpty
+                )
             #if os(iOS) || os(tvOS)
-            .fullScreenCover(item: $playingMedia) { media in
-                FullScreenPlayerView(media: media)
-            }
+                .fullScreenCover(item: $playingMedia) { media in
+                    FullScreenPlayerView(media: media)
+                }
             #endif
             #if os(iOS)
-            .fullScreenCover(item: $multiViewLaunch) { launch in
-                MultiViewScreen(seed: launch.seed)
+                .fullScreenCover(item: $multiViewLaunch) { launch in
+                    MultiViewScreen(seed: launch.seed)
             }
             #endif
             .paywall(isPresented: $showingPaywall, highlight: .multiView)
@@ -215,27 +209,43 @@ struct LiveTVView: View {
 
     // MARK: - Platform-specific layouts
 
-    /// This platform's browse layout for the resolved rail. The displayed
-    /// section resolves here, once per render — rail and detail pane both need it.
+    /// This platform's browse layout for the resolved sections. The displayed
+    /// section resolves here once per render.
     @ViewBuilder
     private func layout(for sections: [LiveTVSection]) -> some View {
         let displayed = displayedSection(in: sections)
-        #if os(iOS)
-            iOSLayout(sections: sections, displayed: displayed)
-        #elseif os(tvOS)
-            tvOSLayout(sections: sections, displayed: displayed)
-        #else
-            macOSLayout(sections: sections, displayed: displayed)
-        #endif
+        VStack(spacing: 0) {
+            #if os(tvOS)
+                tvOSLayout(displayed: displayed)
+            #else
+                contentLayout(displayed: displayed)
+            #endif
+
+            BrowseCategoriesButton(isPresented: $showingBrowse)
+                .padding(.bottom, PosterCardMetrics.sectionVerticalPadding)
+        }
     }
 
-    #if os(iOS)
-        private func iOSLayout(sections: [LiveTVSection], displayed: LiveTVSection?) -> some View {
+    #if !os(tvOS)
+        private func contentLayout(displayed: LiveTVSection?) -> some View {
             VStack(spacing: 0) {
-                CategoryBar(
-                    sections: sections,
-                    selectedSection: $selectedSection
-                )
+                HStack(spacing: 12) {
+                    layoutModePicker
+                        .frame(maxWidth: 240)
+
+                    Spacer(minLength: 0)
+
+                    Button {
+                        openMultiView()
+                    } label: {
+                        Label("Multi-View", systemImage: "rectangle.split.2x2")
+                    }
+                }
+                .padding(.horizontal)
+                .padding(.vertical, 10)
+                .background(.bar)
+
+                Divider()
 
                 if let displayed {
                     detail(for: displayed)
@@ -243,55 +253,37 @@ struct LiveTVView: View {
                     ContentUnavailableView(
                         "Select a Category",
                         systemImage: "list.bullet",
-                        description: Text("Choose a category from the list")
+                        description: Text("Choose a category from the sidebar")
                     )
                 }
             }
         }
     #endif
 
-    private func macOSLayout(sections: [LiveTVSection], displayed: LiveTVSection?) -> some View {
-        HStack(spacing: 0) {
-            CategorySidebar(
-                sections: sections,
-                selectedSection: $selectedSection
-            )
-            .frame(width: 200)
-
-            Divider()
-
-            if let displayed {
-                detail(for: displayed)
-            } else {
-                ContentUnavailableView(
-                    "Select a Category",
-                    systemImage: "list.bullet",
-                    description: Text("Choose a category from the sidebar")
-                )
-            }
-        }
-    }
-
     #if os(tvOS)
-        /// One shape for both modes: a slim category rail on the leading edge —
-        /// topped by a single List/Guide switch — beside the content area, which
-        /// shows either the channel list or the programme guide. Sharing one rail
-        /// and one switch keeps moving between the two views consistent.
-        private func tvOSLayout(sections: [LiveTVSection], displayed: LiveTVSection?) -> some View {
+        private func tvOSLayout(displayed: LiveTVSection?) -> some View {
             TVLiveTVScreen(
-                sections: sections,
-                selectedSection: $selectedSection,
                 displayedSection: displayed,
                 layoutModeRaw: $layoutModeRaw,
                 contentSort: contentSort,
+                onOpenBrowse: { showingBrowse = true },
                 onPlay: { playChannel($0, scope: displayed?.scope) },
                 onPlayCatchup: { playCatchup($0, cell: $1) },
                 onOpenMultiView: { openMultiView() },
                 onStartMultiView: { startMultiView(with: $0) },
-                playlistPrefix: playlistPrefix
+                playlistPrefix: playlistPrefix,
+                guideFocusToken: $guideFocusToken
             )
         }
     #endif
+
+    private func selectSection(_ section: LiveTVSection) {
+        selectedSection = section
+        showingBrowse = false
+        #if os(tvOS)
+            guideFocusToken += 1
+        #endif
+    }
 
     /// The playlist whose content is currently shown, resolved from the global
     /// selection. Falls back to the first playlist until the user picks one.

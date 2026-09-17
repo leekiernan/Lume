@@ -35,10 +35,12 @@ struct EPGGridScroller: View {
     let onPlayCatchup: (LiveStream, EPGProgramCell) -> Void
     /// Seeds Multi-View from a channel's long-press menu in the column.
     var onStartMultiView: (LiveStream) -> Void = { _ in }
-    /// tvOS: non-zero asks the guide to take real focus (a rail category was
+    /// tvOS: non-zero asks the guide to take real focus (a sidebar category was
     /// just activated); `onDidClaimFocus` resets it once claimed.
     var focusToken = 0
     var onDidClaimFocus: () -> Void = {}
+    /// tvOS: opens the category sidebar from the leftmost virtual item.
+    var onLeadingLeft: () -> Void = {}
 
     private let metrics = EPGMetrics.current
     private let now = Date()
@@ -59,11 +61,9 @@ struct EPGGridScroller: View {
         /// The x a run of vertical cell moves keeps aiming at, so rows with
         /// different programme boundaries don't make focus drift sideways.
         @State private var preferredX: CGFloat?
-        /// Bumped to hand real focus to the rail (Menu from the hub).
-        @State private var railExitToken = 0
         /// SwiftUI-side focus binding for the strip. Written to claim focus
-        /// after a rail category activation — at that moment SwiftUI owns
-        /// focus (the rail button), so a focus-state write is honoured, where
+        /// after a sidebar category activation — at that moment SwiftUI owns
+        /// focus (the sidebar button), so a focus-state write is honoured, where
         /// a raw `UIFocusSystem.requestFocusUpdate` is silently ignored.
         @FocusState private var surfaceClaimsFocus: Bool
     #endif
@@ -100,11 +100,8 @@ struct EPGGridScroller: View {
                 grid
             }
             // On tvOS the focus strip overlays the channel column — the
-            // guide's leftmost band, directly beside the rail. Being adjacent
-            // to the rail is what makes entry (right from a category) and exit
-            // (left back to it) land naturally, without guessing where focus
-            // came from. The focus section wrapping the whole body wins the
-            // directional entry contest against the rail's mode switch.
+            // guide's leftmost band. Its focus section makes the guide one
+            // deterministic target while virtual focus moves within the grid.
             #if os(tvOS)
             .overlay(alignment: .leading) { focusSurface }
             .focusSection()
@@ -121,7 +118,7 @@ struct EPGGridScroller: View {
                     landOnChannel()
                 }
             } else if selection == nil {
-                // Focus left towards the rail or the tab bar. A presented
+                // Focus left towards the sidebar or the tab bar. A presented
                 // details sheet also steals real focus, but the user returns
                 // to the guide — keep their place for that round-trip.
                 virtualFocus = nil
@@ -275,7 +272,7 @@ struct EPGGridScroller: View {
                 onLongSelect: {
                     longSelectVirtualFocus()
                 },
-                railExitToken: railExitToken
+                onExitLeft: onLeadingLeft
             )
             .frame(width: metrics.channelColumnWidth)
             .frame(maxHeight: .infinity)
@@ -314,8 +311,8 @@ struct EPGGridScroller: View {
             }
         }
 
-        /// Left from the channel hub leaves the guide towards the rail; from
-        /// a programme it navigates back towards the column.
+        /// Left from the channel hub opens the sidebar; from a programme it
+        /// navigates back towards the column.
         private var exitsLeft: Bool {
             guard case .cell = virtualFocus else { return true }
             return false
@@ -330,12 +327,12 @@ struct EPGGridScroller: View {
         }
 
         /// Menu steps back one level: from a programme it collapses to the
-        /// channel hub; from the hub it hands focus to the category rail.
+        /// channel hub; from the hub it opens the category sidebar.
         private func handleMenu() {
             if case .cell = virtualFocus {
                 handleExitCommand()
             } else {
-                railExitToken += 1
+                Task { onLeadingLeft() }
             }
         }
 
@@ -345,7 +342,7 @@ struct EPGGridScroller: View {
             return max(0, min(rows.count - 1, Int((sync.offset.y / rowStride).rounded())))
         }
 
-        /// Entering the guide (from the rail or the tab bar) lands on the top
+        /// Entering the guide (from the sidebar or the tab bar) lands on the top
         /// visible channel, reading as "now" on a channel.
         private func landOnChannel() {
             guard !rows.isEmpty else { return }
@@ -367,7 +364,7 @@ struct EPGGridScroller: View {
         private func moveFromChannel(rowIndex: Int, direction: MoveCommandDirection) {
             switch direction {
             case .left:
-                // Filtered by decideMove: the engine exits to the rail.
+                // Filtered by decideMove: the sidebar opens instead.
                 break
             case .right:
                 landVirtualFocus(onRow: rowIndex)
