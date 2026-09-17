@@ -21,6 +21,9 @@ struct LibrarySectionsView<CollectionRow: View>: View {
     /// Identity of the catalog the rows are matched against: changes when the
     /// playlist, its last sync or the viewer's hidden categories change.
     let catalogKey: String
+    /// Owned by the page rather than here: the hero above these rows renders
+    /// from the same feed, and on tvOS it sits outside them entirely.
+    let feed: SectionFeed
     let feedContext: SectionFeed.Context
     /// Resume fractions keyed by series id, resolved once for the screen.
     var seriesResume: [String: Double] = [:]
@@ -32,7 +35,6 @@ struct LibrarySectionsView<CollectionRow: View>: View {
     /// The caller's @Query-backed row for one of the local collections.
     @ViewBuilder let collectionRow: (LibraryCollection.Kind) -> CollectionRow
 
-    @State private var feed: SectionFeed
     @State private var trakt = TraktService.shared
     @AppStorage private var sectionOrderRaw: String
     @AppStorage private var disabledSectionsRaw: String
@@ -41,6 +43,7 @@ struct LibrarySectionsView<CollectionRow: View>: View {
     init(
         surface: SectionSurface,
         catalogKey: String,
+        feed: SectionFeed,
         feedContext: SectionFeed.Context,
         seriesResume: [String: Double] = [:],
         animationNamespace: Namespace.ID? = nil,
@@ -49,12 +52,12 @@ struct LibrarySectionsView<CollectionRow: View>: View {
     ) {
         self.surface = surface
         self.catalogKey = catalogKey
+        self.feed = feed
         self.feedContext = feedContext
         self.seriesResume = seriesResume
         self.animationNamespace = animationNamespace
         self.onRevealBrowse = onRevealBrowse
         self.collectionRow = collectionRow
-        _feed = State(wrappedValue: SectionFeed(surface: surface))
         _sectionOrderRaw = AppStorage(wrappedValue: "", HomeLayoutSettings.sectionOrderKey(surface))
         _disabledSectionsRaw = AppStorage(wrappedValue: "", HomeLayoutSettings.disabledSectionsKey(surface))
         _customSectionsRaw = AppStorage(wrappedValue: "", CustomHomeSections.storageKey(surface))
