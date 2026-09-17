@@ -14,7 +14,7 @@ struct LumeApp: App {
     /// The CloudKit private-database container backing iCloud sync. Must match
     /// the id in `Lume.entitlements` and exist in the Apple Developer portal /
     /// CloudKit Console (schema deployed to Production before App Store release).
-    static let cloudKitContainerIdentifier = "iCloud.bilipp.Lume"
+    static let cloudKitContainerIdentifier = "iCloud.com.leekiernan.lume"
 
     /// The local-only catalog store. The app's environment container — every
     /// browse `@Query` binds to it, so CloudKit's churn (which only touches the
@@ -155,7 +155,7 @@ struct LumeApp: App {
     static let isCloudKitEnvironment: Bool = {
         #if SIDE_LOAD
             // Sideloaded / self-compiled builds are re-signed with an identity that
-            // doesn't own the `iCloud.bilipp.Lume` container, so the CloudKit
+            // doesn't own the `iCloud.com.leekiernan.lume` container, so the CloudKit
             // entitlement is stripped at install time. Touching CloudKit then hard-
             // crashes at launch — the un-catchable `_os_crash` in
             // `containerWithIdentifier:` documented above. Keep all user data
