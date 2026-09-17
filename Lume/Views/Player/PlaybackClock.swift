@@ -16,11 +16,16 @@ import Observation
 final class PlaybackClock {
     var current: TimeInterval = 0
     var duration: TimeInterval = 0
+    /// Low-frequency transport state shared with the host for lifecycle work
+    /// such as Trakt scrobbling. Unlike the time fields, this changes only at
+    /// play/pause boundaries.
+    var isPlaying = false
 
     /// Reset to zero when the host swaps to a different stream.
     func reset() {
         current = 0
         duration = 0
+        isPlaying = false
     }
 }
 

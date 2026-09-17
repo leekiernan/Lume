@@ -164,6 +164,23 @@ nonisolated struct TraktClient {
         let _: TraktSyncResponse = try await post("/sync/history/remove", body: items, accessToken: accessToken)
     }
 
+    // MARK: - Scrobbling
+
+    /// Reports a playback lifecycle transition. Calling `.start` again resumes
+    /// a paused session; `.stop` also lets Trakt settle completed playback into
+    /// watched history according to its own completion threshold.
+    func scrobble(
+        _ target: TraktScrobbleTarget,
+        action: TraktScrobbleAction,
+        progress: Double,
+        accessToken: String
+    ) async throws {
+        let request = TraktScrobbleRequest(target: target, progress: progress)
+        let _: TraktScrobbleResponse = try await post(
+            "/scrobble/\(action.rawValue)", body: request, accessToken: accessToken
+        )
+    }
+
     // MARK: - Watchlist
 
     /// The user's full watchlist (movies and shows), each carrying its external
