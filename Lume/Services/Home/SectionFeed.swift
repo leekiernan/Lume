@@ -88,8 +88,10 @@ final class SectionFeed {
             let matched = matchTrending(movies: movies, tvSeries: tvSeries, context: context)
             trendingMovies = Array(matched.movies.prefix(Self.itemLimit))
             trendingSeries = Array(matched.series.prefix(Self.itemLimit))
-            // Only Home has a hero carousel.
-            heroItems = surface == .home ? Array(matched.heroes.prefix(Self.heroLimit)) : []
+            // Every surface carries a hero. A scoped surface skips the other
+            // medium's trending feed above, so its heroes are already filtered
+            // to movies or series without any extra work here.
+            heroItems = Array(matched.heroes.prefix(Self.heroLimit))
             trendingState = .loaded
             SectionFeedCache.shared.storeTrending(surface, key: cacheKey, entry: .init(
                 heroes: heroItems, movies: trendingMovies, series: trendingSeries

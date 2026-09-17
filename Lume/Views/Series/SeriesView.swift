@@ -26,6 +26,10 @@ struct SeriesView: View {
     @State private var showingSync = false
     @State private var showingSettings = false
     @State private var showingBrowse = false
+    /// The remote-backed rows and the hero above them, shared with Home — see
+    /// `SectionFeed`. Owned here rather than by `LibrarySectionsView` because on
+    /// tvOS the hero sits outside the rows, wrapping them.
+    @State private var feed = SectionFeed(surface: .series)
     @State private var genres: [String] = []
     /// Resume fractions for partially-watched series, resolved off the main
     /// thread so the rails don't fault each series' episodes — see
@@ -99,42 +103,69 @@ struct SeriesView: View {
     }
 
     private var sections: some View {
-        ScrollView {
-            LibrarySectionsView(
-                surface: .series,
-                catalogKey: catalogKey,
-                feedContext: SectionFeed.Context(
-                    modelContext: modelContext,
-                    restriction: restriction,
-                    playlistPrefix: playlistPrefix.isEmpty ? nil : playlistPrefix
-                ),
-                seriesResume: seriesResume,
-                animationNamespace: animationNamespace,
-                onRevealBrowse: { showingBrowse = true },
-                collectionRow: { kind in
-                    SeriesCollectionRow(
-                        kind: kind,
-                        playlistPrefix: playlistPrefix,
-                        animationNamespace: animationNamespace,
-                        onLeadingLeft: { showingBrowse = true }
-                    )
-                }
-            )
-            .padding(.vertical, PosterCardMetrics.sectionVerticalPadding)
+        heroAndRows
+            .browseActivity()
+            .task(id: playlistPrefix) {
+                genres = await GenreDerivation.seriesGenres(in: modelContext.container, playlistPrefix: playlistPrefix, restriction: restriction)
+            }
+    }
 
-            BrowseCategoriesButton(isPresented: $showingBrowse)
+    /// The same slideshow Home shows, filtered to this page's medium, above the
+    /// page's rows. tvOS keeps the immersive treatment (`TVHomeScreen` wraps the
+    /// rows in the fold); everywhere else it is the standard carousel.
+    @ViewBuilder
+    private var heroAndRows: some View {
+        #if os(tvOS)
+            TVHomeScreen(heroItems: feed.heroItems, onSelectHero: open(hero:)) {
+                rowsContent
+            }
+        #else
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: PosterCardMetrics.sectionSpacing) {
+                    if !feed.heroItems.isEmpty {
+                        HomeHeroCarousel(items: feed.heroItems)
+                    }
+                    rowsContent
+                }
+                // The hero fills the top inset itself when it's showing.
+                .padding(.top, feed.heroItems.isEmpty ? PosterCardMetrics.sectionVerticalPadding : 0)
                 .padding(.bottom, PosterCardMetrics.sectionVerticalPadding)
-        }
-        .browseActivity()
-        .task(id: playlistPrefix) {
-            genres = await GenreDerivation.seriesGenres(in: modelContext.container, playlistPrefix: playlistPrefix, restriction: restriction)
-        }
-        .task(id: playlistPrefix) {
-            let container = modelContext.container
-            seriesResume = await Task.detached(priority: .userInitiated) {
-                SeriesResumeLoader.load(container: container)
-            }.value
-        }
+            }
+            .ignoresSafeArea(edges: feed.heroItems.isEmpty ? [] : .top)
+        #endif
+    }
+
+    @ViewBuilder
+    private var rowsContent: some View {
+        LibrarySectionsView(
+            surface: .series,
+            catalogKey: catalogKey,
+            feed: feed,
+            feedContext: SectionFeed.Context(
+                modelContext: modelContext,
+                restriction: restriction,
+                playlistPrefix: playlistPrefix.isEmpty ? nil : playlistPrefix
+            ),
+            seriesResume: seriesResume,
+            animationNamespace: animationNamespace,
+            onRevealBrowse: { showingBrowse = true },
+            collectionRow: { kind in
+                SeriesCollectionRow(
+                    kind: kind,
+                    playlistPrefix: playlistPrefix,
+                    animationNamespace: animationNamespace,
+                    onLeadingLeft: { showingBrowse = true }
+                )
+            }
+        )
+
+        BrowseCategoriesButton(isPresented: $showingBrowse)
+            .task(id: playlistPrefix) {
+                let container = modelContext.container
+                seriesResume = await Task.detached(priority: .userInitiated) {
+                    SeriesResumeLoader.load(container: container)
+                }.value
+            }
     }
 
     // MARK: - Navigation
@@ -144,6 +175,13 @@ struct SeriesView: View {
     private var navigationPath: Binding<NavigationPath> {
         guard let router else { return $fallbackPath }
         return Binding(get: { router.seriesPath }, set: { router.seriesPath = $0 })
+    }
+
+    /// Selecting the hero opens that title.
+    private func open(hero: HeroItem) {
+        if let item = hero.series {
+            navigationPath.wrappedValue.append(item)
+        }
     }
 
     /// Picking from the sidebar navigates rather than filtering the page behind
