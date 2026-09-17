@@ -166,7 +166,7 @@ struct MovieCollectionRow: View {
     }
 
     private var visible: [Movie] {
-        movies.excludingRestricted(restriction)
+        movies.excludingRestricted(restriction).deduplicatedByTitle()
     }
 
     var body: some View {
@@ -204,7 +204,7 @@ struct MovieCollectionView: View {
     }
 
     private var visible: [Movie] {
-        movies.excludingRestricted(restriction)
+        movies.excludingRestricted(restriction).deduplicatedByTitle()
     }
 
     var body: some View {
@@ -302,7 +302,7 @@ struct SeriesCollectionRow: View {
     }
 
     private var visible: [Series] {
-        series.excludingRestricted(restriction)
+        series.excludingRestricted(restriction).deduplicatedByTitle()
     }
 
     var body: some View {
@@ -340,7 +340,7 @@ struct SeriesCollectionView: View {
     }
 
     private var visible: [Series] {
-        series.excludingRestricted(restriction)
+        series.excludingRestricted(restriction).deduplicatedByTitle()
     }
 
     var body: some View {
