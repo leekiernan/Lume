@@ -156,6 +156,18 @@ enum HomeLayoutSettings {
     /// section. `.forYou` is intentionally NOT tracked here — its on/off state
     /// is the opt-in `RecommendationSettings.enabledKey`, which also gates the
     /// (expensive) recommendation recompute on Home.
+    /// The custom section promoted to this surface's hero, stored as its UUID.
+    /// Empty means the hero shows the default trending picks. A promoted section
+    /// is shown *only* as the hero — never also as a row.
+    static func heroSectionKey(_ surface: SectionSurface) -> String {
+        ProfileScopedPreferences.key(baseHeroSectionKey(surface))
+    }
+
+    /// The unscoped form — see `baseSectionOrderKey`.
+    static func baseHeroSectionKey(_ surface: SectionSurface) -> String {
+        "\(surface.storagePrefix).heroSection.v1"
+    }
+
     static func disabledSectionsKey(_ surface: SectionSurface) -> String {
         ProfileScopedPreferences.key(baseDisabledSectionsKey(surface))
     }

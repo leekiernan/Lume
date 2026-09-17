@@ -51,6 +51,8 @@ struct HomeView: View {
     @AppStorage(HomeLayoutSettings.disabledSectionsKey(.home)) private var disabledSectionsRaw = ""
     /// The user's custom list-backed rows (Settings › Layout › Home › Add Section).
     @AppStorage(CustomHomeSections.storageKey(.home)) private var customSectionsRaw = ""
+    /// The custom section promoted to Home's hero, if any — see `SectionFeed`.
+    @AppStorage(HomeLayoutSettings.heroSectionKey(.home)) private var heroSectionRaw = ""
     /// Bumped by the DEBUG "Recalculate" action in Settings (always 0 otherwise);
     /// part of the task id so the row recomputes on demand.
     @AppStorage(RecommendationSettings.manualRecalculationKey) var recommendationsRecalcToken = 0
@@ -227,6 +229,7 @@ struct HomeView: View {
                 await loadRecommendations()
             }
             .task(id: customSectionsKey) {
+                feed.heroSectionID = heroSectionID
                 feed.update(context: feedContext)
                 await feed.loadCustomSections(cacheKey: customSectionsKey, sections: visibleCustomSections)
             }
@@ -350,11 +353,19 @@ struct HomeView: View {
     /// sync / visibility inputs — the match is against the same catalog — plus a
     /// signature of the sections themselves, so adding a row or editing its URL
     /// reloads while renaming one doesn't.
+    /// Includes the promoted section: choosing a hero changes neither the
+    /// catalog nor the section list, so without it the load never re-runs and
+    /// the feed is never told which section to build the hero from.
     var customSectionsKey: String {
-        "custom-\(trendingKey)-\(CustomHomeSections.contentSignature(visibleCustomSections))"
+        "custom-\(trendingKey)-\(heroSectionRaw)-\(CustomHomeSections.contentSignature(visibleCustomSections))"
     }
 
     /// The user's custom rows for this surface, decoded from their stored JSON.
+    /// The section promoted to Home's hero, if any.
+    private var heroSectionID: UUID? {
+        UUID(uuidString: heroSectionRaw)
+    }
+
     private var customSections: [CustomHomeSection] {
         CustomHomeSections.decode(customSectionsRaw)
     }
@@ -363,7 +374,10 @@ struct HomeView: View {
     /// minus the ones they've hidden. A hidden row costs no network.
     private var visibleCustomSections: [CustomHomeSection] {
         customSections.filter {
-            HomeLayoutSettings.isEnabled(.custom($0.id), disabledRaw: disabledSectionsRaw)
+            // The promoted section is always fetched — it feeds the hero even
+            // though it draws no row.
+            $0.id == heroSectionID
+                || HomeLayoutSettings.isEnabled(.custom($0.id), disabledRaw: disabledSectionsRaw)
         }
     }
 

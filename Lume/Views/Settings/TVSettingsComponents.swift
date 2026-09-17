@@ -164,6 +164,8 @@
         private let onMove: (Int) -> Void
         private let onEdit: (() -> Void)?
         private let onRemove: (() -> Void)?
+        private let onPromote: (() -> Void)?
+        private let isPromoted: Bool
         private let leading: Leading
 
         init(
@@ -173,6 +175,8 @@
             onMove: @escaping (Int) -> Void,
             onEdit: (() -> Void)? = nil,
             onRemove: (() -> Void)? = nil,
+            onPromote: (() -> Void)? = nil,
+            isPromoted: Bool = false,
             @ViewBuilder leading: () -> Leading
         ) {
             self.name = name
@@ -181,6 +185,8 @@
             self.onMove = onMove
             self.onEdit = onEdit
             self.onRemove = onRemove
+            self.onPromote = onPromote
+            self.isPromoted = isPromoted
             self.leading = leading()
         }
 
@@ -189,6 +195,16 @@
                 leading
 
                 Spacer(minLength: 0)
+
+                if let onPromote {
+                    Button(action: onPromote) {
+                        // Filled while this row *is* the hero, so the state is
+                        // readable without moving focus onto it.
+                        Image(systemName: isPromoted ? "photo.fill" : "photo")
+                    }
+                    .buttonStyle(TVContentIconButtonStyle())
+                    .accessibilityLabel(isPromoted ? "Show \(name) as a row" : "Show \(name) as the hero")
+                }
 
                 if let onEdit {
                     Button(action: onEdit) {

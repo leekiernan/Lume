@@ -80,7 +80,7 @@ nonisolated protocol HomeListProvider: Sendable {
 /// The providers Lume knows about, and the entry point Home and the section
 /// editor both go through.
 nonisolated enum HomeListCatalog {
-    static let providers: [any HomeListProvider] = [MDBListProvider()]
+    static let providers: [any HomeListProvider] = [MDBListProvider(), TMDBListProvider()]
 
     /// The provider for a raw URL string, or nil when nothing handles it.
     static func provider(for raw: String) -> (any HomeListProvider)? {

@@ -54,6 +54,16 @@ enum HeroItem: Identifiable, Hashable {
         }
     }
 
+    /// Whether this hero has genuine wide artwork rather than falling back to
+    /// portrait cover art. A poster blown up to fill the hero's letterbox reads
+    /// as a stretched crop, so a title without a backdrop is skipped instead.
+    var hasWideArtwork: Bool {
+        switch self {
+        case let .movie(_, backdrop, _): backdrop != nil
+        case let .series(_, backdrop, _): backdrop != nil
+        }
+    }
+
     var movie: Movie? {
         if case let .movie(movie, _, _) = self { return movie }
         return nil
@@ -62,5 +72,30 @@ enum HeroItem: Identifiable, Hashable {
     var series: Series? {
         if case let .series(series, _, _) = self { return series }
         return nil
+    }
+}
+
+extension HeroItem {
+    /// Builds a hero from a row item, using the wide artwork and copy TMDB
+    /// enrichment stored on the catalog model. That is what lets a promoted
+    /// custom section look like the trending hero rather than a stretched
+    /// poster. Live channels have no hero treatment, so they yield nil.
+    init?(item: HomeMediaItem) {
+        switch item {
+        case let .movie(movie):
+            self = .movie(
+                movie,
+                backdropURL: TMDBClient.backdropURL(movie.backdropPath),
+                overview: movie.plot ?? ""
+            )
+        case let .series(series):
+            self = .series(
+                series,
+                backdropURL: TMDBClient.backdropURL(series.backdropPath),
+                overview: series.plot ?? ""
+            )
+        case .live:
+            return nil
+        }
     }
 }

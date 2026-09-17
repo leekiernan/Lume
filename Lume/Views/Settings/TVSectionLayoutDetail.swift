@@ -43,6 +43,7 @@ import SwiftUI
         @AppStorage private var sectionOrderRaw: String
         @AppStorage private var disabledSectionsRaw: String
         @AppStorage private var customSectionsRaw: String
+        @AppStorage private var heroSectionRaw: String
 
         @State private var premium = PremiumManager.shared
         @State private var showPaywall = false
@@ -57,6 +58,7 @@ import SwiftUI
             _sectionOrderRaw = AppStorage(wrappedValue: "", HomeLayoutSettings.sectionOrderKey(surface))
             _disabledSectionsRaw = AppStorage(wrappedValue: "", HomeLayoutSettings.disabledSectionsKey(surface))
             _customSectionsRaw = AppStorage(wrappedValue: "", CustomHomeSections.storageKey(surface))
+            _heroSectionRaw = AppStorage(wrappedValue: "", HomeLayoutSettings.heroSectionKey(surface))
         }
 
         var body: some View {
@@ -102,6 +104,17 @@ import SwiftUI
             disabledSectionsRaw = HomeLayoutSettings.settingEnabled(
                 !isEnabled(ref), for: ref, disabledRaw: disabledSectionsRaw
             )
+        }
+
+        /// Whether this section is the surface's hero.
+        private func isPromoted(_ id: UUID) -> Bool {
+            UUID(uuidString: heroSectionRaw) == id
+        }
+
+        /// Promote a section to the hero, or demote it back to a row. Only one
+        /// can be the hero, so promoting replaces whatever held it.
+        private func togglePromoted(_ id: UUID) {
+            heroSectionRaw = isPromoted(id) ? "" : id.uuidString
         }
 
         /// Move the section at `index` one slot up or down, persisting the new
@@ -160,6 +173,8 @@ import SwiftUI
                 onMove: { move(at: index, by: $0) },
                 onEdit: custom.map { section in { beginEditing(section) } },
                 onRemove: custom.map { section in { remove(id: section.id) } },
+                onPromote: custom.map { section in { togglePromoted(section.id) } },
+                isPromoted: custom.map { isPromoted($0.id) } ?? false,
                 leading: {
                     Button {
                         toggle(ref)
@@ -338,6 +353,7 @@ import SwiftUI
         /// section added with a fresh id can't inherit its slot.
         private func remove(id: UUID) {
             if editor?.editingID == id { closeEditor() }
+            if isPromoted(id) { heroSectionRaw = "" }
             let remaining = CustomHomeSections.remove(id: id, from: customSections)
             let order = sections.filter { $0 != .custom(id) }
             customSectionsRaw = CustomHomeSections.encode(remaining)

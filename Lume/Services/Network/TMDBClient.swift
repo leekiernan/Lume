@@ -257,7 +257,9 @@ nonisolated struct TMDBClient {
 
     // MARK: - Networking
 
-    private func get<T: Decodable>(_ path: String) async throws -> T {
+    /// Internal (not private) so `TMDBClient+Lists` can reuse the same
+    /// authenticated request path rather than rebuilding it.
+    func get<T: Decodable>(_ path: String) async throws -> T {
         guard isConfigured, let token else { throw TMDBError.missingToken }
         let localizedPath = TMDBClient.pathWithLanguage(path, language: language)
         guard let url = URL(string: baseURL + localizedPath) else { throw TMDBError.invalidURL }

@@ -36,7 +36,14 @@ final class SectionFeed {
 
     let surface: SectionSurface
 
-    private(set) var heroItems: [HeroItem] = []
+    /// The hero the trending feed produced. `heroItems` prefers a promoted
+    /// custom section over this when one is set.
+    private(set) var trendingHeroes: [HeroItem] = []
+    /// The custom section promoted to the hero, if any — set by the surface
+    /// from its stored preference before each load.
+    var heroSectionID: UUID?
+    /// Bumped when hero artwork lands — see `enrichPromotedHero`.
+    private(set) var heroArtworkRevision = 0
     private(set) var trendingMovies: [HomeMediaItem] = []
     private(set) var trendingSeries: [HomeMediaItem] = []
     private(set) var watchlist: [HomeMediaItem] = []
@@ -52,6 +59,26 @@ final class SectionFeed {
         self.surface = surface
     }
 
+    /// What the surface's hero shows: the promoted custom section when one is
+    /// set and has resolved to something, otherwise the trending picks. Computed
+    /// rather than assigned so the two loads can finish in either order without
+    /// one clobbering the other.
+    var heroItems: [HeroItem] {
+        // Observed so the hero recomputes once enrichment fills in backdrops.
+        _ = heroArtworkRevision
+        if let heroSectionID, let items = customItems[heroSectionID], !items.isEmpty {
+            // Titles whose backdrop hasn't been fetched yet are held back rather
+            // than shown as a stretched poster; `enrichHeroArtwork` fills them
+            // in and they appear on the next pass.
+            let promoted = items
+                .compactMap(HeroItem.init(item:))
+                .filter(\.hasWideArtwork)
+                .prefix(Self.heroLimit)
+            if !promoted.isEmpty { return Array(promoted) }
+        }
+        return trendingHeroes
+    }
+
     /// True once every remote row has settled, so a surface can tell "still
     /// loading" from "genuinely empty" before showing an empty state.
     var isSettled: Bool {
@@ -63,7 +90,7 @@ final class SectionFeed {
     func loadTrending(cacheKey: String) async {
         // Session cache: see `SectionFeedCache`.
         if let cached = SectionFeedCache.shared.trendingEntry(surface, for: cacheKey) {
-            heroItems = cached.heroes
+            trendingHeroes = cached.heroes
             trendingMovies = cached.movies
             trendingSeries = cached.series
             trendingState = .loaded
@@ -91,10 +118,10 @@ final class SectionFeed {
             // Every surface carries a hero. A scoped surface skips the other
             // medium's trending feed above, so its heroes are already filtered
             // to movies or series without any extra work here.
-            heroItems = Array(matched.heroes.prefix(Self.heroLimit))
+            trendingHeroes = Array(matched.heroes.prefix(Self.heroLimit))
             trendingState = .loaded
             SectionFeedCache.shared.storeTrending(surface, key: cacheKey, entry: .init(
-                heroes: heroItems, movies: trendingMovies, series: trendingSeries
+                heroes: trendingHeroes, movies: trendingMovies, series: trendingSeries
             ))
             await enrichHeroLogos(context: context)
         } catch {
@@ -122,22 +149,19 @@ final class SectionFeed {
                 let title = movies[index]
                 if let movie = moviesByTmdbId[title.id] {
                     movieItems.append(.movie(movie))
-                    heroes.append(.movie(
-                        movie,
-                        backdropURL: TMDBClient.backdropURL(title.backdropPath),
-                        overview: title.overview
-                    ))
+                    // No backdrop means no hero — the row still carries it.
+                    if let backdrop = TMDBClient.backdropURL(title.backdropPath) {
+                        heroes.append(.movie(movie, backdropURL: backdrop, overview: title.overview))
+                    }
                 }
             }
             if index < tvSeries.count {
                 let title = tvSeries[index]
                 if let series = seriesByTmdbId[title.id] {
                     seriesItems.append(.series(series))
-                    heroes.append(.series(
-                        series,
-                        backdropURL: TMDBClient.backdropURL(title.backdropPath),
-                        overview: title.overview
-                    ))
+                    if let backdrop = TMDBClient.backdropURL(title.backdropPath) {
+                        heroes.append(.series(series, backdropURL: backdrop, overview: title.overview))
+                    }
                 }
             }
         }
@@ -145,38 +169,54 @@ final class SectionFeed {
     }
 
     /// The TMDB trending feed carries no logo artwork, so a hero title shows
-    /// only its backdrop until its full details are fetched. That fetch used to
+    /// only its backdrop until its full details are fetched.
+    /// A promoted section has neither: its entries are just ids, so the hero
+    /// depends entirely on what enrichment has stored on the catalog model. That fetch used to
     /// happen only on the detail screen, so logos "popped in" after visiting
     /// Details and coming back. Enrich the visible hero titles up front via the
     /// same TMDB detail path. Runs after the carousel is shown so backdrops
     /// aren't blocked.
     private func enrichHeroLogos(context: Context) async {
-        guard !heroItems.isEmpty else { return }
+        await enrichHeroArtwork(trendingHeroes, context: context)
+    }
+
+    /// Fetches the wide artwork, logo and copy for hero candidates that are
+    /// missing any of it, on the sync manager's background context. The saves
+    /// auto-merge, so the hero picks them up without a main-thread store write.
+    private func enrichHeroArtwork(_ heroes: [HeroItem], context: Context) async {
+        guard !heroes.isEmpty else { return }
         // Enrich on the manager's background context; the saves auto-merge back
         // so the hero models pick up their logos without a main-thread store
         // write blocking the carousel.
         let manager = ContentSyncManager(modelContainer: context.modelContext.container)
-        for hero in heroItems {
+        for hero in heroes {
             switch hero {
             case let .movie(movie, _, _):
-                guard Self.heroNeedsLogo(logoPath: movie.logoPath, enrichedAt: movie.tmdbEnrichedAt),
-                      let tmdbId = movie.tmdbId
-                else { continue }
+                guard Self.heroNeedsArtwork(
+                    backdropPath: movie.backdropPath,
+                    logoPath: movie.logoPath,
+                    enrichedAt: movie.tmdbEnrichedAt
+                ), let tmdbId = movie.tmdbId else { continue }
                 await manager.enrichMovie(id: movie.id, tmdbId: tmdbId)
             case let .series(series, _, _):
-                guard Self.heroNeedsLogo(logoPath: series.logoPath, enrichedAt: series.tmdbEnrichedAt),
-                      let tmdbId = series.tmdbId
-                else { continue }
+                guard Self.heroNeedsArtwork(
+                    backdropPath: series.backdropPath,
+                    logoPath: series.logoPath,
+                    enrichedAt: series.tmdbEnrichedAt
+                ), let tmdbId = series.tmdbId else { continue }
                 await manager.enrichSeries(id: series.id, tmdbId: tmdbId)
             }
         }
     }
 
-    /// A hero needs a logo fetch when it has none yet and hasn't been enriched
-    /// recently. The recency guard mirrors the detail screen's 14-day window so
-    /// titles TMDB simply has no logo for aren't refetched on every appearance.
-    private static func heroNeedsLogo(logoPath: String?, enrichedAt: Date?) -> Bool {
-        guard (logoPath ?? "").isEmpty else { return false }
+    /// A hero needs a fetch when it is missing its wide artwork or its logo and
+    /// hasn't been enriched recently. The recency guard mirrors the detail
+    /// screen's 14-day window so titles TMDB simply has no backdrop or logo for
+    /// aren't refetched on every appearance — `tmdbEnrichedAt` is stamped only
+    /// on a successful fetch, so "enriched but still no backdrop" genuinely
+    /// means TMDB has none, which is the only case the hero holds back.
+    private static func heroNeedsArtwork(backdropPath: String?, logoPath: String?, enrichedAt: Date?) -> Bool {
+        guard (backdropPath ?? "").isEmpty || (logoPath ?? "").isEmpty else { return false }
         guard let enrichedAt else { return true }
         return Date().timeIntervalSince(enrichedAt) >= 14 * 24 * 3600
     }
@@ -237,6 +277,11 @@ final class SectionFeed {
         }
         if let cached = SectionFeedCache.shared.customEntry(surface, for: cacheKey) {
             customItems = cached
+            // The memo holds matched rows, not artwork. A promoted section still
+            // needs its backdrops, or the hero would show only those titles that
+            // happened to be enriched already — which is most of them missing on
+            // a fresh catalog.
+            await enrichPromotedHero()
             return
         }
         guard let context else { return }
@@ -265,11 +310,28 @@ final class SectionFeed {
         }
         customItems = matched
 
+        await enrichPromotedHero()
+
         // Only memo a complete pass. Caching a row that failed to load (offline
         // at launch, provider down) would leave it empty for the whole session,
         // since the cache key doesn't change until the catalog or the sections do.
         guard sections.allSatisfy({ (lists[$0.id] ?? nil) != nil }) else { return }
         SectionFeedCache.shared.storeCustom(surface, key: cacheKey, items: matched)
+    }
+
+    /// A promoted section's hero has no TMDB payload behind it — only the ids it
+    /// matched — so its artwork has to be fetched. Across the whole matched set,
+    /// not just the first few: the hero picks its slides from all of them, so a
+    /// title is only ever held back for want of a backdrop once TMDB has
+    /// actually been asked for one. The set is capped at `itemLimit`, and only
+    /// titles missing artwork cost a request.
+    private func enrichPromotedHero() async {
+        guard let context, let heroSectionID, let promoted = customItems[heroSectionID] else { return }
+        await enrichHeroArtwork(promoted.compactMap(HeroItem.init(item:)), context: context)
+        // Enrichment saves on a background context; the merge back doesn't
+        // reliably re-notify this surface, and `customItems` hasn't changed —
+        // only the models it points at have. Bump so `heroItems` recomputes.
+        heroArtworkRevision &+= 1
     }
 
     /// Resolves list entries to local models, preserving the list's own order,

@@ -21,6 +21,7 @@
         @AppStorage private var sectionOrderRaw: String
         @AppStorage private var disabledSectionsRaw: String
         @AppStorage private var customSectionsRaw: String
+        @AppStorage private var heroSectionRaw: String
         @State private var premium = PremiumManager.shared
         @State private var showPaywall = false
         @State private var editorMode: CustomHomeSectionEditor.Mode?
@@ -33,6 +34,7 @@
             _sectionOrderRaw = AppStorage(wrappedValue: "", HomeLayoutSettings.sectionOrderKey(surface))
             _disabledSectionsRaw = AppStorage(wrappedValue: "", HomeLayoutSettings.disabledSectionsKey(surface))
             _customSectionsRaw = AppStorage(wrappedValue: "", CustomHomeSections.storageKey(surface))
+            _heroSectionRaw = AppStorage(wrappedValue: "", HomeLayoutSettings.heroSectionKey(surface))
         }
 
         private var customSections: [CustomHomeSection] {
@@ -134,14 +136,14 @@
                     Label {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(verbatim: section.title)
-                            Text(verbatim: section.provider?.displayName ?? section.sourceURL)
+                            Text(verbatim: subtitle(for: section))
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                                 .lineLimit(1)
                                 .truncationMode(.middle)
                         }
                     } icon: {
-                        Image(systemName: "list.bullet.rectangle")
+                        Image(systemName: isPromoted(section.id) ? "photo.fill" : "list.bullet.rectangle")
                     }
                 }
 
@@ -155,8 +157,31 @@
             }
             .contextMenu {
                 Button("Edit", systemImage: "pencil") { editorMode = .edit(section) }
+                if isPromoted(section.id) {
+                    Button("Show as Row", systemImage: "list.bullet.rectangle") { togglePromoted(section.id) }
+                } else {
+                    Button("Show as Hero", systemImage: "photo") { togglePromoted(section.id) }
+                }
                 Button("Remove", systemImage: "trash", role: .destructive) { delete(id: section.id) }
             }
+        }
+
+        /// A promoted section says so in place of its provider, since it no
+        /// longer appears as a row at all.
+        private func subtitle(for section: CustomHomeSection) -> String {
+            isPromoted(section.id)
+                ? String(localized: "Hero")
+                : (section.provider?.displayName ?? section.sourceURL)
+        }
+
+        private func isPromoted(_ id: UUID) -> Bool {
+            UUID(uuidString: heroSectionRaw) == id
+        }
+
+        /// Promote a section to the hero, or demote it back to a row. Only one
+        /// can be the hero, so promoting replaces whatever held it.
+        private func togglePromoted(_ id: UUID) {
+            heroSectionRaw = isPromoted(id) ? "" : id.uuidString
         }
 
         @ViewBuilder
@@ -233,6 +258,7 @@
         /// Drops the section and its entry in the stored order, so a later
         /// section added with a fresh id can't inherit its slot.
         private func delete(id: UUID) {
+            if isPromoted(id) { heroSectionRaw = "" }
             let remaining = CustomHomeSections.remove(id: id, from: customSections)
             customSectionsRaw = CustomHomeSections.encode(remaining)
             sectionOrderRaw = HomeLayoutSettings.encode(
