@@ -108,6 +108,7 @@ nonisolated extension PerfSignpost {
     // Home
     static let homeTrendingLoad = PerfSignpost("HomeTrendingLoad")
     static let homeRecommendations = PerfSignpost("HomeRecommendations")
+    static let homeCustomSections = PerfSignpost("HomeCustomSections")
 
     // Player
     static let playerStartup = PerfSignpost("PlayerStartup")

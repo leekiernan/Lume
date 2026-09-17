@@ -178,13 +178,7 @@ actor ContentSyncManager {
 
         try await syncAllCategories(for: playlist, playlistId: playlistId, progress: progress, full: full)
 
-        // Serialized and spaced apart on purpose — see
-        // `spaceContentPhaseRequests` for the connection-cap reason.
-        try await syncMovies(for: playlist, playlistId: playlistId, progress: progress)
-        try await spaceContentPhaseRequests()
-        try await syncSeries(for: playlist, playlistId: playlistId, progress: progress)
-        try await spaceContentPhaseRequests()
-        try await syncLiveStreams(for: playlist, playlistId: playlistId, progress: progress)
+        try await syncEnabledContent(for: playlist, playlistId: playlistId, progress: progress)
     }
 
     func syncAllCategories(for playlist: Playlist, playlistId: UUID, progress: SyncProgress? = nil, full _: Bool = false) async throws {

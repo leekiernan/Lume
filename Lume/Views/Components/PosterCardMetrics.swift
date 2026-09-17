@@ -47,6 +47,28 @@ enum PosterCardMetrics {
     /// Poster proportions, used to derive a card's height from a grid cell's
     /// width so grid artwork keeps the same shape as the rails' fixed cards.
     static let posterAspectRatio: CGFloat = posterWidth / posterHeight
+
+    // MARK: - Section surfaces
+
+    // Home, Movies and Series are all built from the same rails, so their
+    // rhythm is defined once here. Home used a smaller header and no top inset
+    // while the library pages used a larger one and padded both ends, which
+    // read as two different screens for what is the same layout.
+
+    /// The header above a browse rail. One treatment everywhere.
+    static let railTitleFont: Font = .headline
+
+    /// Vertical gap between rails. `TVHomeMetrics.rowSpacing` derives from this
+    /// — the tvOS fold's peek height is measured against it.
+    static let sectionSpacing: CGFloat = 28
+
+    // Inset above the first rail and below the last. The tvOS hero replaces
+    // the top inset when it is showing, since it fills that space itself.
+    #if os(tvOS)
+        static let sectionVerticalPadding: CGFloat = 60
+    #else
+        static let sectionVerticalPadding: CGFloat = 16
+    #endif
 }
 
 extension View {

@@ -82,6 +82,12 @@ final class EPGSyncService {
     }
 
     private func kick() {
+        // The guide only feeds Live TV, so it follows that area's switch — the
+        // single funnel for every trigger, manual included.
+        guard AppAreaSettings.isEnabled(.liveTV) else {
+            Logger.database.info("EPG refresh skipped: Live TV is switched off")
+            return
+        }
         guard let container, task == nil else { return }
         isSyncing = true
         let manager = EPGSyncManager(modelContainer: container)

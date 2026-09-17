@@ -22,6 +22,9 @@ struct MainTabView: View {
     @Query(filter: #Predicate<Category> { $0.isHidden }) private var hiddenCategories: [Category]
 
     @AppStorage(SyncFrequency.storageKey) private var syncFrequencyRaw: String = SyncFrequency.defaultValue.rawValue
+    /// Areas switched off in Settings › Library. A disabled area has no tab —
+    /// and `ContentSyncManager` skips its content entirely. See `AppAreaSettings`.
+    @AppStorage(AppAreaSettings.disabledAreasKey) private var disabledAreasRaw: String = ""
     @AppStorage(PlaylistSelectionStore.key) private var selectedPlaylistID: String = ""
 
     /// Selected tab and the Movies/Series navigation stacks, shared so an
@@ -97,9 +100,24 @@ struct MainTabView: View {
         )
     }
 
+    private func isOn(_ area: AppArea) -> Bool {
+        AppAreaSettings.isEnabled(area, disabledRaw: disabledAreasRaw)
+    }
+
+    /// Move off a tab the user has just switched off, so the selection can
+    /// never point at a tab that is no longer in the bar.
+    private func repairSelectionIfNeeded() {
+        guard let area = AppArea.allCases.first(where: { $0.tab == router.selectedTab }),
+              !isOn(area),
+              let fallback = AppAreaSettings.enabledAreas(disabledRaw: disabledAreasRaw).first
+        else { return }
+        router.selectedTab = fallback.tab
+    }
+
     var body: some View {
         @Bindable var router = router
         return tabView(selection: $router.selectedTab)
+            .onChange(of: disabledAreasRaw) { _, _ in repairSelectionIfNeeded() }
         #if os(tvOS)
             .disabled(blockingOverlayOwnsScreen || router.isQuickSwitchPresented)
             // Attached OUTSIDE `.disabled` so the same button closes the modal it
@@ -201,28 +219,36 @@ struct MainTabView: View {
                     Image(systemName: "magnifyingglass")
                 }
 
-                Tab(value: AppTab.home) {
-                    activeOnly(.home, selection: selection.wrappedValue) { HomeView() }
-                } label: {
-                    Text("Home")
+                if isOn(.home) {
+                    Tab(value: AppTab.home) {
+                        activeOnly(.home, selection: selection.wrappedValue) { HomeView() }
+                    } label: {
+                        Text("Home")
+                    }
                 }
 
-                Tab(value: AppTab.movies) {
-                    activeOnly(.movies, selection: selection.wrappedValue) { MoviesView() }
-                } label: {
-                    Text("Movies")
+                if isOn(.movies) {
+                    Tab(value: AppTab.movies) {
+                        activeOnly(.movies, selection: selection.wrappedValue) { MoviesView() }
+                    } label: {
+                        Text("Movies")
+                    }
                 }
 
-                Tab(value: AppTab.series) {
-                    activeOnly(.series, selection: selection.wrappedValue) { SeriesView() }
-                } label: {
-                    Text("Series")
+                if isOn(.series) {
+                    Tab(value: AppTab.series) {
+                        activeOnly(.series, selection: selection.wrappedValue) { SeriesView() }
+                    } label: {
+                        Text("Series")
+                    }
                 }
 
-                Tab(value: AppTab.liveTV) {
-                    activeOnly(.liveTV, selection: selection.wrappedValue) { LiveTVView() }
-                } label: {
-                    Text("Live TV")
+                if isOn(.liveTV) {
+                    Tab(value: AppTab.liveTV) {
+                        activeOnly(.liveTV, selection: selection.wrappedValue) { LiveTVView() }
+                    } label: {
+                        Text("Live TV")
+                    }
                 }
 
                 Tab(value: AppTab.settings) {
@@ -275,20 +301,28 @@ struct MainTabView: View {
     #else
         private func tabView(selection: Binding<AppTab>) -> some View {
             TabView(selection: selection) {
-                Tab("Home", systemImage: "house", value: AppTab.home) {
-                    HomeView()
+                if isOn(.home) {
+                    Tab("Home", systemImage: "house", value: AppTab.home) {
+                        HomeView()
+                    }
                 }
 
-                Tab("Movies", systemImage: "film", value: AppTab.movies) {
-                    MoviesView()
+                if isOn(.movies) {
+                    Tab("Movies", systemImage: "film", value: AppTab.movies) {
+                        MoviesView()
+                    }
                 }
 
-                Tab("Series", systemImage: "tv", value: AppTab.series) {
-                    SeriesView()
+                if isOn(.series) {
+                    Tab("Series", systemImage: "tv", value: AppTab.series) {
+                        SeriesView()
+                    }
                 }
 
-                Tab("Live TV", systemImage: "antenna.radiowaves.left.and.right", value: AppTab.liveTV) {
-                    LiveTVView()
+                if isOn(.liveTV) {
+                    Tab("Live TV", systemImage: "antenna.radiowaves.left.and.right", value: AppTab.liveTV) {
+                        LiveTVView()
+                    }
                 }
 
                 // macOS 15's tab bar drops a `role: .search` tab entirely — even

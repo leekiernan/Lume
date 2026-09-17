@@ -2854,6 +2854,58 @@
         }
       }
     },
+    "Add Section" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bereich hinzufügen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Añadir sección"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajouter une section"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aggiungi sezione"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "セクションを追加"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "섹션 추가"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Adicionar Seção"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "添加栏目"
+          }
+        }
+      }
+    },
     "Add Source" : {
       "localizations" : {
         "de" : {
@@ -3274,6 +3326,7 @@
       }
     },
     "All Categories" : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -3895,6 +3948,110 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "将在下次播放开始时生效。"
+          }
+        }
+      }
+    },
+    "Area" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bereich"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Área"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Espace"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Area"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "エリア"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "영역"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Área"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "区域"
+          }
+        }
+      }
+    },
+    "Areas" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bereiche"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Áreas"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Espaces"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aree"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "エリア"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "영역"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Áreas"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "区域"
           }
         }
       }
@@ -5215,6 +5372,58 @@
         }
       }
     },
+    "Back to Playlists" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zurück zu Playlists"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Volver a Listas"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retour aux playlists"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Torna alle playlist"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "プレイリストに戻る"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "재생목록으로 돌아가기"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Voltar para Playlists"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "返回播放列表"
+          }
+        }
+      }
+    },
     "Billed monthly, cancel anytime" : {
       "localizations" : {
         "de" : {
@@ -5319,6 +5528,110 @@
         }
       }
     },
+    "Browse" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Durchsuchen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Explorar"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Parcourir"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esplora"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "見つける"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "둘러보기"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Explorar"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "浏览"
+          }
+        }
+      }
+    },
+    "Browse All Categories" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alle Kategorien durchsuchen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Explorar todas las categorías"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Parcourir toutes les catégories"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esplora tutte le categorie"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "すべてのカテゴリを見つける"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "모든 카테고리 둘러보기"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Explorar todas as categorias"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "浏览全部分类"
+          }
+        }
+      }
+    },
     "Browse by Genre" : {
       "localizations" : {
         "de" : {
@@ -5367,6 +5680,110 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "按类型浏览"
+          }
+        }
+      }
+    },
+    "Browse Categories" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kategorien durchsuchen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Explorar categorías"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Parcourir les catégories"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esplora le categorie"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "カテゴリを見つける"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "카테고리 둘러보기"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Explorar categorias"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "浏览分类"
+          }
+        }
+      }
+    },
+    "Build your own row from a public list, like a site's most-popular chart. Lume matches the list against your playlist and shows the titles you have." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Erstelle eine eigene Reihe aus einer öffentlichen Liste, etwa der Beliebtheits-Charts einer Website. Lume gleicht die Liste mit deiner Playlist ab und zeigt die Titel, die du hast."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Crea tu propia fila a partir de una lista pública, como el ranking de popularidad de un sitio. Lume compara la lista con tu lista de reproducción y muestra los títulos que tienes."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Créez votre propre rangée à partir d'une liste publique, comme le classement des plus populaires d'un site. Lume compare la liste à votre playlist et affiche les titres que vous possédez."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Crea una riga personalizzata da un elenco pubblico, come la classifica dei più popolari di un sito. Lume confronta l'elenco con la tua playlist e mostra i titoli che hai."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "サイトの人気ランキングなど、公開リストから独自の行を作成できます。Lume がリストをプレイリストと照合し、所有しているタイトルを表示します。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "사이트의 인기 차트처럼 공개 목록으로 나만의 줄을 만들어 보세요. Lume가 목록을 재생목록과 대조해 보유한 제목을 표시합니다."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Crie sua própria fileira a partir de uma lista pública, como o ranking de mais populares de um site. O Lume compara a lista com sua playlist e mostra os títulos que você tem."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你可以基于公开列表（例如某网站的热门榜单）创建自己的内容行。Lume 会将列表与你的播放列表进行匹配，并显示你拥有的影片。"
           }
         }
       }
@@ -6734,7 +7151,113 @@
         }
       }
     },
+    "Choose which areas appear, the sections on each, and which of your provider's categories they show." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lege fest, welche Bereiche erscheinen, welche Abschnitte sie enthalten und welche Kategorien deines Anbieters sie zeigen."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Elige qué áreas aparecen, las secciones de cada una y qué categorías de tu proveedor muestran."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choisissez les espaces affichés, les sections de chacun et les catégories de votre fournisseur qu'ils montrent."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scegli quali aree appaiono, le sezioni di ciascuna e quali categorie del tuo provider mostrano."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "表示するエリア、各エリアのセクション、そしてプロバイダのどのカテゴリを表示するかを選択します。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "표시할 영역과 각 영역의 섹션, 그리고 제공자의 어떤 카테고리를 표시할지 선택하세요."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Escolha quais áreas aparecem, as seções de cada uma e quais categorias do seu provedor elas mostram."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "选择显示哪些区域、每个区域包含哪些栏目，以及显示服务商的哪些分类。"
+          }
+        }
+      }
+    },
+    "Choose which sections appear on each page and in what order." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lege fest, welche Bereiche auf jeder Seite erscheinen und in welcher Reihenfolge."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Elige qué secciones aparecen en cada página y en qué orden."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choisissez les sections affichées sur chaque page et leur ordre."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scegli quali sezioni appaiono in ogni pagina e in che ordine."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "各ページに表示するセクションと並び順を選択します。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "각 페이지에 표시할 섹션과 순서를 선택하세요."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Escolha quais seções aparecem em cada página e em que ordem."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "选择每个页面显示哪些栏目及其排列顺序。"
+          }
+        }
+      }
+    },
     "Choose which sections appear on Home and in what order." : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -7992,6 +8515,7 @@
       }
     },
     "Content Management" : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -8406,6 +8930,58 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "自定义指南"
+          }
+        }
+      }
+    },
+    "Custom Sections" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eigene Bereiche"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Secciones personalizadas"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sections personnalisées"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sezioni personalizzate"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "カスタムセクション"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "사용자 설정 섹션"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Seções Personalizadas"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "自定义栏目"
           }
         }
       }
@@ -11246,6 +11822,58 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "编辑个人资料"
+          }
+        }
+      }
+    },
+    "Edit Section" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bereich bearbeiten"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Editar sección"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Modifier la section"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Modifica sezione"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "セクションを編集"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "섹션 편집"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Editar Seção"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "编辑栏目"
           }
         }
       }
@@ -14393,6 +15021,58 @@
         }
       }
     },
+    "Give the section a title." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gib dem Bereich einen Titel."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ponle un título a la sección."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Donnez un titre à la section."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Assegna un titolo alla sezione."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "セクションにタイトルを付けてください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "섹션에 제목을 지정하세요."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dê um título à seção."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请为该栏目取一个标题。"
+          }
+        }
+      }
+    },
     "Guide" : {
       "comment" : "Label for the channel guide layout mode.",
       "isCommentAutoGenerated" : true,
@@ -14760,6 +15440,7 @@
       }
     },
     "Hide and reorder categories and channels for the active playlist." : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -14807,6 +15488,110 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "隐藏和重新排列当前播放列表的类别与频道。"
+          }
+        }
+      }
+    },
+    "Hide and reorder the categories your provider supplies, and choose what appears in the browse sidebar." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Blende die Kategorien deines Anbieters aus, ordne sie neu an und lege fest, was in der Seitenleiste erscheint."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Oculta y reordena las categorías que ofrece tu proveedor, y elige qué aparece en la barra lateral."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Masquez et réorganisez les catégories fournies par votre fournisseur, et choisissez ce qui apparaît dans la barre latérale."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nascondi e riordina le categorie fornite dal tuo provider e scegli cosa appare nella barra laterale."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "プロバイダが提供するカテゴリを非表示にしたり並べ替えたりして、サイドバーに表示する内容を選択します。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "제공자가 제공하는 카테고리를 숨기거나 순서를 바꾸고, 사이드바에 표시할 항목을 선택하세요."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Oculte e reordene as categorias fornecidas pelo seu provedor e escolha o que aparece na barra lateral."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "隐藏并重新排列服务商提供的分类，并选择在浏览侧边栏中显示的内容。"
+          }
+        }
+      }
+    },
+    "Hide Categories" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kategorien ausblenden"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ocultar categorías"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Masquer les catégories"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nascondi categorie"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "カテゴリを隠す"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "카테고리 숨기기"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ocultar categorias"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "隐藏分类"
           }
         }
       }
@@ -15015,6 +15800,58 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "主页"
+          }
+        }
+      }
+    },
+    "Home draws on the other areas, so switching it off removes its tab without changing what syncs." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Start greift auf die anderen Bereiche zu. Wird es ausgeschaltet, verschwindet nur der Tab — an der Synchronisierung ändert sich nichts."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inicio se nutre de las demás áreas, así que desactivarlo solo quita su pestaña; no cambia lo que se sincroniza."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L'accueil puise dans les autres espaces : le désactiver retire seulement son onglet, sans rien changer à la synchronisation."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La Home attinge dalle altre aree, quindi disattivarla rimuove solo la sua scheda senza cambiare ciò che viene sincronizzato."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ホームは他のエリアの内容を表示しているため、オフにしてもタブが消えるだけで、同期の内容は変わりません。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "홈은 다른 영역의 콘텐츠를 보여 주므로, 끄더라도 탭만 사라질 뿐 동기화 대상은 바뀌지 않습니다."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O Início se baseia nas outras áreas, então desativá-lo apenas remove sua aba, sem mudar o que é sincronizado."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "主页的内容来自其他区域，因此关闭它只会移除其标签页，不会改变同步的内容。"
           }
         }
       }
@@ -17422,6 +18259,58 @@
         }
       }
     },
+    "List URL" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Listen-URL"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "URL de la lista"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "URL de la liste"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "URL dell'elenco"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "リストのURL"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "목록 URL"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "URL da Lista"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "列表网址"
+          }
+        }
+      }
+    },
     "Live" : {
       "localizations" : {
         "de" : {
@@ -18308,6 +19197,58 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Lume 诊断 — %@"
+          }
+        }
+      }
+    },
+    "Lume doesn't recognise that site. Paste a list URL from MDBList." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lume kennt diese Website nicht. Füge eine Listen-URL von MDBList ein."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lume no reconoce ese sitio. Pega la URL de una lista de MDBList."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lume ne reconnaît pas ce site. Collez l'URL d'une liste MDBList."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lume non riconosce questo sito. Incolla l'URL di un elenco di MDBList."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lume はこのサイトに対応していません。MDBList のリストの URL を貼り付けてください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lume가 인식할 수 없는 사이트입니다. MDBList의 목록 URL을 붙여넣으세요."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O Lume não reconhece esse site. Cole a URL de uma lista do MDBList."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lume 无法识别该网站。请粘贴 MDBList 的列表网址。"
           }
         }
       }
@@ -19203,6 +20144,58 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "MAC 地址"
+          }
+        }
+      }
+    },
+    "Manage Categories" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kategorien verwalten"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gestionar categorías"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gérer les catégories"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gestisci categorie"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "カテゴリを管理"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "카테고리 관리"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gerenciar categorias"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "管理分类"
           }
         }
       }
@@ -22550,6 +23543,58 @@
         }
       }
     },
+    "No list found at that address. Check the link and try again." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unter dieser Adresse wurde keine Liste gefunden. Prüfe den Link und versuche es erneut."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se encontró ninguna lista en esa dirección. Comprueba el enlace e inténtalo de nuevo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aucune liste trouvée à cette adresse. Vérifiez le lien et réessayez."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nessun elenco trovato a questo indirizzo. Controlla il link e riprova."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "そのアドレスにリストが見つかりませんでした。リンクを確認して、もう一度お試しください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "해당 주소에서 목록을 찾을 수 없습니다. 링크를 확인한 후 다시 시도하세요."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nenhuma lista encontrada nesse endereço. Verifique o link e tente novamente."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未在该地址找到列表。请检查链接后重试。"
+          }
+        }
+      }
+    },
     "No Movies" : {
       "localizations" : {
         "de" : {
@@ -24590,6 +25635,59 @@
         }
       }
     },
+    "Page" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Seite"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Página"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Page"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pagina"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ページ"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "페이지"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Página"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "页面"
+          }
+        }
+      }
+    },
     "Parental Controls" : {
       "localizations" : {
         "de" : {
@@ -24796,6 +25894,214 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "密码（可选）"
+          }
+        }
+      }
+    },
+    "Paste the address of a public list, for example %@." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Füge die Adresse einer öffentlichen Liste ein, zum Beispiel %@."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pega la dirección de una lista pública, por ejemplo %@."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Collez l'adresse d'une liste publique, par exemple %@."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Incolla l'indirizzo di un elenco pubblico, ad esempio %@."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "公開リストのアドレスを貼り付けてください（例: %@）。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "공개 목록의 주소를 붙여넣으세요. 예: %@."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cole o endereço de uma lista pública, por exemplo %@."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请粘贴公开列表的地址，例如 %@。"
+          }
+        }
+      }
+    },
+    "Paste the address of a public list. Lume matches the titles on it against your playlist and shows the movies you have." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Füge die Adresse einer öffentlichen Liste ein. Lume gleicht die Titel darauf mit deiner Playlist ab und zeigt die Filme, die du hast."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pega la dirección de una lista pública. Lume compara sus títulos con tu lista de reproducción y muestra las películas que tienes."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Collez l'adresse d'une liste publique. Lume compare ses titres à votre playlist et affiche les films que vous possédez."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Incolla l'indirizzo di un elenco pubblico. Lume confronta i titoli con la tua playlist e mostra i film che hai."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "公開リストのアドレスを貼り付けてください。Lume がそのタイトルをプレイリストと照合し、所有している映画を表示します。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "공개 목록의 주소를 붙여넣으세요. Lume가 목록의 제목을 재생목록과 대조해 보유한 영화를 표시합니다."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cole o endereço de uma lista pública. O Lume compara os títulos dela com sua playlist e mostra os filmes que você tem."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请粘贴公开列表的地址。Lume 会将其中的影片与你的播放列表进行匹配，并显示你拥有的电影。"
+          }
+        }
+      }
+    },
+    "Paste the address of a public list. Lume matches the titles on it against your playlist and shows the ones you have." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Füge die Adresse einer öffentlichen Liste ein. Lume gleicht die Titel darauf mit deiner Playlist ab und zeigt die, die du hast."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pega la dirección de una lista pública. Lume compara sus títulos con tu lista de reproducción y muestra los que tienes."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Collez l'adresse d'une liste publique. Lume compare ses titres à votre playlist et affiche ceux que vous possédez."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Incolla l'indirizzo di un elenco pubblico. Lume confronta i titoli con la tua playlist e mostra quelli che hai."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "公開リストのアドレスを貼り付けてください。Lume がそのタイトルをプレイリストと照合し、所有しているものを表示します。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "공개 목록의 주소를 붙여넣으세요. Lume가 목록의 제목을 재생목록과 대조해 보유한 항목을 표시합니다."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cole o endereço de uma lista pública. O Lume compara os títulos dela com sua playlist e mostra os que você tem."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请粘贴公开列表的地址。Lume 会将其中的影片与你的播放列表进行匹配，并显示你拥有的内容。"
+          }
+        }
+      }
+    },
+    "Paste the address of a public list. Lume matches the titles on it against your playlist and shows the series you have." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Füge die Adresse einer öffentlichen Liste ein. Lume gleicht die Titel darauf mit deiner Playlist ab und zeigt die Serien, die du hast."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pega la dirección de una lista pública. Lume compara sus títulos con tu lista de reproducción y muestra las series que tienes."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Collez l'adresse d'une liste publique. Lume compare ses titres à votre playlist et affiche les séries que vous possédez."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Incolla l'indirizzo di un elenco pubblico. Lume confronta i titoli con la tua playlist e mostra le serie che hai."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "公開リストのアドレスを貼り付けてください。Lume がそのタイトルをプレイリストと照合し、所有しているシリーズを表示します。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "공개 목록의 주소를 붙여넣으세요. Lume가 목록의 제목을 재생목록과 대조해 보유한 시리즈를 표시합니다."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cole o endereço de uma lista pública. O Lume compara os títulos dela com sua playlist e mostra as séries que você tem."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请粘贴公开列表的地址。Lume 会将其中的影片与你的播放列表进行匹配，并显示你拥有的剧集。"
           }
         }
       }
@@ -28373,6 +29679,58 @@
         }
       }
     },
+    "Remove Section" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bereich entfernen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quitar sección"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retirer la section"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rimuovi sezione"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "セクションを削除"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "섹션 제거"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remover Seção"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "移除栏目"
+          }
+        }
+      }
+    },
     "Removes watch progress and the watched status of every title, and empties your Continue Watching and Recently Watched lists. Favorites and your watchlist aren't affected." : {
       "localizations" : {
         "de" : {
@@ -29741,6 +31099,162 @@
         }
       }
     },
+    "Save Section" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bereich sichern"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Guardar sección"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enregistrer la section"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Salva sezione"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "セクションを保存"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "섹션 저장"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Salvar Seção"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "存储栏目"
+          }
+        }
+      }
+    },
+    "Saved. That list has no movies on it, so this row will stay empty on the Movies page." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gesichert. Auf dieser Liste stehen keine Filme, daher bleibt diese Reihe auf der Filme-Seite leer."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Guardado. Esa lista no tiene películas, así que esta fila quedará vacía en la página Películas."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enregistré. Cette liste ne contient aucun film, cette rangée restera donc vide sur la page Films."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Salvato. Quell'elenco non contiene film, quindi questa riga resterà vuota nella pagina Film."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "保存しました。このリストには映画が含まれていないため、映画ページではこの行は空のままになります。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "저장했습니다. 해당 목록에는 영화가 없어 영화 페이지에서 이 줄은 비어 있습니다."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Salvo. Essa lista não tem filmes, então esta fileira ficará vazia na página Filmes."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已存储。该列表中没有电影，因此该内容行在“电影”页面上将保持为空。"
+          }
+        }
+      }
+    },
+    "Saved. That list has no series on it, so this row will stay empty on the Series page." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gesichert. Auf dieser Liste stehen keine Serien, daher bleibt diese Reihe auf der Serien-Seite leer."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Guardado. Esa lista no tiene series, así que esta fila quedará vacía en la página Series."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enregistré. Cette liste ne contient aucune série, cette rangée restera donc vide sur la page Séries."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Salvato. Quell'elenco non contiene serie, quindi questa riga resterà vuota nella pagina Serie."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "保存しました。このリストにはシリーズが含まれていないため、シリーズページではこの行は空のままになります。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "저장했습니다. 해당 목록에는 시리즈가 없어 시리즈 페이지에서 이 줄은 비어 있습니다."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Salvo. Essa lista não tem séries, então esta fileira ficará vazia na página Séries."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已存储。该列表中没有剧集，因此该内容行在“剧集”页面上将保持为空。"
+          }
+        }
+      }
+    },
     "Scan the code with your phone to open our Discord." : {
       "localizations" : {
         "de" : {
@@ -30624,6 +32138,110 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "季"
+          }
+        }
+      }
+    },
+    "Section" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bereich"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sección"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Section"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sezione"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "セクション"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "섹션"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Seção"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "栏目"
+          }
+        }
+      }
+    },
+    "Section title" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bereichstitel"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Título de la sección"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Titre de la section"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Titolo della sezione"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "セクションのタイトル"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "섹션 제목"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Título da seção"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "栏目标题"
           }
         }
       }
@@ -34288,6 +35906,58 @@
         }
       }
     },
+    "Supported: %@." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unterstützt: %@."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Compatibles: %@."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pris en charge : %@."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Supportati: %@."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "対応サービス: %@。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "지원: %@."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Compatíveis: %@."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "支持：%@。"
+          }
+        }
+      }
+    },
     "Swipe Gestures" : {
       "localizations" : {
         "de" : {
@@ -34388,6 +36058,58 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "在遥控器触控面上轻扫可控制播放器：上下切换频道，向左打开频道浏览器，向右返回上一个频道。关闭后，这些操作只能通过点按遥控器的方向键完成，轻触触控面不会有任何反应。"
+          }
+        }
+      }
+    },
+    "Switch an area off to remove it from the navigation and stop syncing it. Anything already downloaded is kept, so turning it back on restores it straight away." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Schalte einen Bereich aus, um ihn aus der Navigation zu entfernen und nicht mehr zu synchronisieren. Bereits geladene Inhalte bleiben erhalten, sodass er beim Einschalten sofort wieder da ist."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Desactiva un área para quitarla de la navegación y dejar de sincronizarla. Lo ya descargado se conserva, así que al volver a activarla aparece de inmediato."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Désactivez un espace pour le retirer de la navigation et cesser de le synchroniser. Ce qui est déjà téléchargé est conservé : il revient immédiatement à la réactivation."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Disattiva un'area per rimuoverla dalla navigazione e smettere di sincronizzarla. Ciò che è già stato scaricato viene conservato, quindi riattivandola torna subito disponibile."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "エリアをオフにすると、ナビゲーションから消え、同期も行われなくなります。ダウンロード済みの内容は保持されるため、オンに戻せばすぐに元どおりになります。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "영역을 끄면 내비게이션에서 사라지고 동기화도 중단됩니다. 이미 받은 내용은 유지되므로 다시 켜면 곧바로 복원됩니다."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Desative uma área para removê-la da navegação e parar de sincronizá-la. O que já foi baixado é mantido, então reativá-la a restaura imediatamente."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "关闭某个区域会将其从导航中移除并停止同步。已下载的内容会保留，因此重新开启后会立即恢复。"
           }
         }
       }
@@ -35695,6 +37417,110 @@
         }
       }
     },
+    "That doesn't look like a valid link." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Das sieht nicht nach einem gültigen Link aus."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esto no parece un enlace válido."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ce lien ne semble pas valide."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Non sembra un link valido."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "有効なリンクではないようです。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "올바른 링크가 아닌 것 같습니다."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Isso não parece um link válido."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这似乎不是有效的链接。"
+          }
+        }
+      }
+    },
+    "That list is empty." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diese Liste ist leer."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esa lista está vacía."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cette liste est vide."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Questo elenco è vuoto."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "このリストは空です。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "해당 목록이 비어 있습니다."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Essa lista está vazia."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "该列表为空。"
+          }
+        }
+      }
+    },
     "The buffers set how much decoded media is held before playback starts or resumes — raise them if high-bitrate 4K streams stutter. " : {
       "localizations" : {
         "de" : {
@@ -35905,6 +37731,58 @@
         }
       }
     },
+    "The list provider returned an error (%lld)." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der Listenanbieter hat einen Fehler zurückgegeben (%lld)."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El proveedor de la lista devolvió un error (%lld)."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le fournisseur de la liste a renvoyé une erreur (%lld)."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Il fornitore dell'elenco ha restituito un errore (%lld)."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "リストの提供元がエラーを返しました（%lld）。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "목록 제공자가 오류를 반환했습니다(%lld)."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O provedor da lista retornou um erro (%lld)."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "列表提供方返回了错误（%lld）。"
+          }
+        }
+      }
+    },
     "The Movie Database (TMDB)" : {
       "localizations" : {
         "de" : {
@@ -36110,6 +37988,58 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "电视指南会按此间隔在后台自动刷新。"
+          }
+        }
+      }
+    },
+    "This area is switched off. It has no tab, and its content is skipped when playlists sync." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dieser Bereich ist ausgeschaltet. Er hat keinen Tab, und seine Inhalte werden beim Synchronisieren übersprungen."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esta área está desactivada. No tiene pestaña y su contenido se omite al sincronizar las listas."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cet espace est désactivé. Il n'a pas d'onglet et son contenu est ignoré lors de la synchronisation."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quest'area è disattivata. Non ha una scheda e i suoi contenuti vengono ignorati durante la sincronizzazione."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "このエリアはオフになっています。タブは表示されず、プレイリストの同期時にも内容は処理されません。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이 영역은 꺼져 있습니다. 탭이 표시되지 않으며 재생목록 동기화 시 콘텐츠도 건너뜁니다."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esta área está desativada. Não tem aba, e seu conteúdo é ignorado quando as playlists sincronizam."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "该区域已关闭。它不会显示标签页，播放列表同步时也会跳过其内容。"
           }
         }
       }
@@ -36634,6 +38564,58 @@
         }
       }
     },
+    "This removes the row from Home. Nothing in your library changes." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dadurch wird die Reihe von „Start“ entfernt. An deiner Mediathek ändert sich nichts."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esto quita la fila de Inicio. Nada de tu biblioteca cambia."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cela retire la rangée de l'accueil. Rien ne change dans votre bibliothèque."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Questa azione rimuove la riga dalla Home. Nulla cambia nella tua libreria."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ホームからこの行を削除します。ライブラリの内容は変わりません。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "홈에서 해당 줄을 제거합니다. 라이브러리는 변경되지 않습니다."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Isso remove a fileira do Início. Nada na sua biblioteca é alterado."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这会从主页移除该内容行，你的媒体库不会有任何改动。"
+          }
+        }
+      }
+    },
     "This stream couldn’t be loaded. It may be offline or temporarily unavailable." : {
       "localizations" : {
         "de" : {
@@ -36739,7 +38721,6 @@
       }
     },
     "Title" : {
-      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -37363,6 +39344,110 @@
         }
       }
     },
+    "Turn sections on or off and reorder them. Each appears only when it has something to show, and only ever shows movies." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Schalte Bereiche ein oder aus und ordne sie neu an. Jeder erscheint nur, wenn er etwas zu zeigen hat, und zeigt ausschließlich Filme."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Activa o desactiva secciones y reordénalas. Cada una aparece solo cuando tiene algo que mostrar, y siempre muestra únicamente películas."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Activez ou désactivez des sections et réorganisez-les. Chacune n'apparaît que lorsqu'elle a du contenu, et n'affiche que des films."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Attiva o disattiva le sezioni e riordinale. Ognuna appare solo quando ha qualcosa da mostrare e mostra esclusivamente film."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "セクションのオン/オフと並べ替えができます。表示する内容がある場合のみ表示され、映画のみが表示されます。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "섹션을 켜거나 끄고 순서를 바꿀 수 있습니다. 표시할 항목이 있을 때만 나타나며, 영화만 표시합니다."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ative ou desative seções e reordene-as. Cada uma aparece apenas quando tem algo a mostrar e exibe somente filmes."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你可以开关栏目并调整顺序。每个栏目仅在有内容时显示，且只会显示电影。"
+          }
+        }
+      }
+    },
+    "Turn sections on or off and reorder them. Each appears only when it has something to show, and only ever shows series." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Schalte Bereiche ein oder aus und ordne sie neu an. Jeder erscheint nur, wenn er etwas zu zeigen hat, und zeigt ausschließlich Serien."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Activa o desactiva secciones y reordénalas. Cada una aparece solo cuando tiene algo que mostrar, y siempre muestra únicamente series."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Activez ou désactivez des sections et réorganisez-les. Chacune n'apparaît que lorsqu'elle a du contenu, et n'affiche que des séries."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Attiva o disattiva le sezioni e riordinale. Ognuna appare solo quando ha qualcosa da mostrare e mostra esclusivamente serie."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "セクションのオン/オフと並べ替えができます。表示する内容がある場合のみ表示され、シリーズのみが表示されます。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "섹션을 켜거나 끄고 순서를 바꿀 수 있습니다. 표시할 항목이 있을 때만 나타나며, 시리즈만 표시합니다."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ative ou desative seções e reordene-as. Cada uma aparece apenas quando tem algo a mostrar e exibe somente séries."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你可以开关栏目并调整顺序。每个栏目仅在有内容时显示，且只会显示剧集。"
+          }
+        }
+      }
+    },
     "TV guide" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -37464,6 +39549,58 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "电视指南"
+          }
+        }
+      }
+    },
+    "TV Guide Sources" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quellen für das TV-Programm"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fuentes de la guía de TV"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sources du Guide TV"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sorgenti Guida TV"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "番組表のソース"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "편성표 소스"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fontes do Guia de TV"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "电视指南来源"
           }
         }
       }

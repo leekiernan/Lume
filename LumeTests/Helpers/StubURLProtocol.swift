@@ -32,14 +32,28 @@ final nonisolated class StubURLProtocol: URLProtocol {
         let queryValue: String
     }
 
+    /// Routes for requests that carry no query at all (the MDBList list feed is
+    /// one), keyed by host plus exact path — still distinct per test.
+    private struct PathKey: Hashable {
+        let host: String
+        let path: String
+    }
+
     private static let lock = NSLock()
     private nonisolated(unsafe) static var routes: [RouteKey: Response] = [:]
+    private nonisolated(unsafe) static var pathRoutes: [PathKey: Response] = [:]
 
     /// Registers `response` for requests to `host` carrying `query`, which is
     /// how tests sharing a host stay isolated from each other.
     static func register(host: String, query: (name: String, value: String), response: Response) {
         let key = RouteKey(host: host, queryName: query.name, queryValue: query.value)
         lock.withLock { routes[key] = response }
+    }
+
+    /// Registers `response` for requests to `host` at exactly `path`.
+    static func register(host: String, path: String, response: Response) {
+        let key = PathKey(host: host, path: path)
+        lock.withLock { pathRoutes[key] = response }
     }
 
     static func makeSession() -> URLSession {
@@ -73,7 +87,7 @@ final nonisolated class StubURLProtocol: URLProtocol {
         let match = Self.lock.withLock {
             Self.routes.first { key, _ in
                 key.host == host && items.contains { $0.name == key.queryName && $0.value == key.queryValue }
-            }?.value
+            }?.value ?? Self.pathRoutes[PathKey(host: host, path: components.path)]
         }
 
         guard let match, let response = HTTPURLResponse(

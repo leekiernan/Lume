@@ -13,7 +13,9 @@ import SwiftUI
 // MARK: - Row
 
 struct HomeRow: View {
-    let title: LocalizedStringKey
+    /// A `Text` rather than a `LocalizedStringKey` so custom rows can pass their
+    /// user-typed header verbatim while the built-in rows stay localized.
+    let title: Text
     let items: [HomeMediaItem]
     /// Resume fractions keyed by series id, resolved once for the whole screen
     /// (`SeriesResumeLoader`) rather than per card — see `HomeMediaItem`.
@@ -27,19 +29,22 @@ struct HomeRow: View {
     var onVote: ((HomeMediaItem, RecommendationVote) -> Void)?
     /// Seeds Multi-View from a channel card's long-press menu.
     var onStartMultiView: ((LiveStream) -> Void)?
+    /// tvOS: pressing left on the row's first card. The Movies/Series pages use
+    /// it to reveal the browse sidebar; Home leaves it nil.
+    var onLeadingLeft: (() -> Void)?
     var animationNamespace: Namespace.ID?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(title)
-                .font(.subheadline)
+            title
+                .font(PosterCardMetrics.railTitleFont)
                 .fontWeight(.bold)
                 .foregroundStyle(.secondary)
                 .padding(.horizontal)
 
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: PosterCardMetrics.railSpacing) {
-                    ForEach(items) { item in
+                    ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
                         HomeItemCell(
                             item: item,
                             seriesResume: seriesResume,
@@ -49,6 +54,7 @@ struct HomeRow: View {
                             onStartMultiView: onStartMultiView,
                             animationNamespace: animationNamespace
                         )
+                        .onLeadingEdgeLeft(index == 0 ? onLeadingLeft : nil)
                     }
                 }
                 .padding(.horizontal)
@@ -160,7 +166,7 @@ struct ForYouRow: View {
         if items.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
                 Text("For You")
-                    .font(.subheadline)
+                    .font(PosterCardMetrics.railTitleFont)
                     .fontWeight(.bold)
                     .foregroundStyle(.secondary)
                     .padding(.horizontal)
@@ -169,7 +175,7 @@ struct ForYouRow: View {
             }
         } else {
             HomeRow(
-                title: "For You",
+                title: Text("For You"),
                 items: items,
                 seriesResume: seriesResume,
                 onPlayLive: onPlayLive,

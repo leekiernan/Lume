@@ -17,10 +17,26 @@ import SwiftData
 import SwiftUI
 
 struct ContentManagementView: View {
+    /// When set, the screen manages only this type and hides its own type
+    /// picker — the caller (Settings › Library › <area>) has already chosen.
+    /// Nil keeps the standalone behaviour, with the picker shown.
+    var fixedType: CategoryType?
+
+    /// tvOS: render just the category list, for embedding inside a pane that
+    /// already scrolls (Settings › Library). Its own ScrollView, background and
+    /// title are dropped — nesting them would break scrolling and focus. The
+    /// caller supplies the proxy its ScrollViewReader owns, which the reorder
+    /// list needs to keep a lifted row on screen.
+    var embeddedProxy: ScrollViewProxy?
+
     @Query private var playlists: [Playlist]
     @AppStorage(PlaylistSelectionStore.key) private var selectedPlaylistID: String = ""
 
-    @State private var selectedType: CategoryType = .live
+    @State private var pickedType: CategoryType = .live
+
+    private var selectedType: CategoryType {
+        fixedType ?? pickedType
+    }
 
     /// True while a category is lifted for placement on tvOS — used to disable
     /// the type picker and the bulk actions so they can't steal focus mid-move.
@@ -212,7 +228,19 @@ struct ContentManagementView: View {
     // MARK: - Platform bodies
 
     #if os(tvOS)
+        @ViewBuilder
         private var content: some View {
+            if let embeddedProxy {
+                VStack(alignment: .leading, spacing: 8) {
+                    tvCategoryList(proxy: embeddedProxy)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                standaloneContent
+            }
+        }
+
+        private var standaloneContent: some View {
             ScrollViewReader { proxy in
                 ScrollView {
                     VStack(alignment: .leading, spacing: 28) {
@@ -240,7 +268,7 @@ struct ContentManagementView: View {
                             .focusSection()
                         }
 
-                        tvTypePicker
+                        if fixedType == nil { tvTypePicker }
 
                         tvCategoryList(proxy: proxy)
                     }
@@ -257,7 +285,7 @@ struct ContentManagementView: View {
             HStack(spacing: 12) {
                 ForEach(CategoryType.allCases) { type in
                     Button {
-                        selectedType = type
+                        pickedType = type
                     } label: {
                         Text(type.label)
                     }
@@ -335,15 +363,17 @@ struct ContentManagementView: View {
                     Text("Reorder all your favorite channels, movies, and series in one list.")
                 }
 
-                Section {
-                    Picker("Type", selection: $selectedType) {
-                        ForEach(CategoryType.allCases) { type in
-                            Text(type.label).tag(type)
+                if fixedType == nil {
+                    Section {
+                        Picker("Type", selection: $pickedType) {
+                            ForEach(CategoryType.allCases) { type in
+                                Text(type.label).tag(type)
+                            }
                         }
+                        .pickerStyle(.segmented)
+                        .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0))
+                        .listRowBackground(Color.clear)
                     }
-                    .pickerStyle(.segmented)
-                    .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0))
-                    .listRowBackground(Color.clear)
                 }
 
                 if !categories.isEmpty {
@@ -387,7 +417,9 @@ struct ContentManagementView: View {
             .listStyle(.inset(alternatesRowBackgrounds: true))
             #endif
             .searchable(text: $searchText, prompt: Text("Search Categories"))
-            .platformNavigationTitle("Content")
+            // Embedded under an area, the screen *is* that area's categories, so
+            // it takes the area's name; standalone it keeps its own.
+            .platformNavigationTitle(fixedType.map(\.localizedLabel) ?? "Content")
             #if os(iOS)
                 .navigationBarTitleDisplayMode(.inline)
             #endif

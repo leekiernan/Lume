@@ -111,12 +111,16 @@ struct SettingsView: View {
             case list, add
         }
 
-        /// Home layout preferences, shown in the Home category. Not `private`: read
-        /// by the SettingsView+TVHome extension (separate file). The iOS/macOS build
-        /// has its own `HomeLayoutSettingsView`, so these live in the tvOS block.
-        @AppStorage(RecommendationSettings.enabledKey) var recommendationsEnabled = RecommendationSettings.enabledDefault
-        @AppStorage(HomeLayoutSettings.sectionOrderKey) var homeSectionOrderRaw = ""
-        @AppStorage(HomeLayoutSettings.disabledSectionsKey) var homeDisabledSectionsRaw = ""
+        /// Which area the Library category is configuring, and whether it has
+        /// drilled into that area's categories. The rows pane is
+        /// `TVSectionLayoutDetail`, which owns that surface's stored order,
+        /// hidden set and custom rows. Not `private`: read by the
+        /// SettingsView+TVHome extension (separate file).
+        @State var layoutArea: AppArea = .home
+        @State var showingAreaCategories = false
+        /// Whether the Playlists pane has drilled into the guide's sources.
+        @State var showingEPGSources = false
+        @AppStorage(AppAreaSettings.disabledAreasKey) var disabledAreasRaw = ""
     #endif
 
     /// The user's ordered engine fallback list (migrates the legacy single-engine
@@ -144,11 +148,9 @@ struct SettingsView: View {
                     profilesSection
                     playlistsSection
                     librarySection
-                    layoutSection
                     appearanceSection
                     searchSection
                     autoSyncSection
-                    epgSection
                     CloudSyncSection()
                     if trakt.isConfigured {
                         integrationsSection
@@ -239,6 +241,15 @@ struct SettingsView: View {
                     } label: {
                         Label("Add Playlist", systemImage: canAddPlaylist ? "plus" : "crown")
                     }
+
+                    // The guide's sources are playlist-shaped — a URL with a
+                    // sync status, usually created by a playlist — so they live
+                    // here rather than in their own top-level entry.
+                    NavigationLink {
+                        EPGSettingsView()
+                    } label: {
+                        Label("TV Guide Sources", systemImage: "list.clipboard")
+                    }
                 }
             } header: {
                 Text("Playlists")
@@ -256,29 +267,15 @@ struct SettingsView: View {
         private var librarySection: some View {
             Section {
                 NavigationLink {
-                    ParentalGateView { ContentManagementView() }
+                    ParentalGateView { LibrarySettingsView() }
                 } label: {
-                    Label("Content Management", systemImage: "slider.horizontal.3")
+                    Label("Library", systemImage: "square.stack")
                 }
                 .disabled(playlists.isEmpty)
             } header: {
                 Text("Library")
             } footer: {
-                Text("Hide and reorder categories and channels for the active playlist.")
-            }
-        }
-
-        private var layoutSection: some View {
-            Section {
-                NavigationLink {
-                    HomeLayoutSettingsView()
-                } label: {
-                    Label("Home", systemImage: "house")
-                }
-            } header: {
-                Text("Layout")
-            } footer: {
-                Text("Choose which sections appear on Home and in what order.")
+                Text("Choose which areas appear, the sections on each, and which of your provider's categories they show.")
             }
         }
 
@@ -449,6 +446,8 @@ struct SettingsView: View {
                         selectedPlaylist = nil
                         selectedEngineOptions = nil
                         preferredLanguagePane = nil
+                        showingAreaCategories = false
+                        showingEPGSources = false
                     }
                 }
                 .fullScreenCover(isPresented: $showingAddPlaylist) {
@@ -494,55 +493,51 @@ struct SettingsView: View {
             }
         }
 
-        /// Content Management brings its own scroll/background, so it replaces the
-        /// detail pane wholesale rather than nesting inside the scrolling detail.
-        @ViewBuilder
         private var tvDetailContainer: some View {
-            switch selectedCategory {
-            case .content:
-                ParentalGateView { ContentManagementView() }
-                    .focusSection()
-            default:
-                tvDetail
-            }
+            tvDetail
         }
 
+        /// The detail pane scrolls, and owns the `ScrollViewReader` the Library
+        /// pane's embedded category list needs to keep a lifted row on screen
+        /// while it is being repositioned.
         private var tvDetail: some View {
             ScrollView {
-                VStack(alignment: .leading, spacing: 36) {
-                    switch selectedCategory {
-                    case .premium:
-                        tvPremiumDetail
-                    case .playlists:
-                        if let selectedPlaylist {
-                            PlaylistDetailView(playlist: selectedPlaylist) {
-                                self.selectedPlaylist = nil
+                ScrollViewReader { proxy in
+                    VStack(alignment: .leading, spacing: 36) {
+                        switch selectedCategory {
+                        case .premium:
+                            tvPremiumDetail
+                        case .playlists:
+                            if let selectedPlaylist {
+                                PlaylistDetailView(playlist: selectedPlaylist) {
+                                    self.selectedPlaylist = nil
+                                }
+                            } else if showingEPGSources {
+                                EPGSettingsView()
+                            } else {
+                                tvPlaylistsDetail
                             }
-                        } else {
-                            tvPlaylistsDetail
+                        case .profiles: TVProfilesSettingsView()
+                        case .library: tvLibraryDetail(proxy: proxy)
+                        case .search: tvSearchDetail
+                        case .storage: StorageManagementView()
+                        case .integrations: tvIntegrationsDetail
+                        case .player:
+                            if let selectedEngineOptions {
+                                tvEngineOptionsDetail(for: selectedEngineOptions)
+                            } else if let preferredLanguagePane {
+                                tvPreferredLanguageDetail(preferredLanguagePane)
+                            } else {
+                                tvPlayerDetail
+                            }
+                        case .about: tvAboutDetail
                         }
-                    case .profiles: TVProfilesSettingsView()
-                    case .home: tvHomeLayoutDetail
-                    case .epg: EPGSettingsView()
-                    case .search: tvSearchDetail
-                    case .storage: StorageManagementView()
-                    case .integrations: tvIntegrationsDetail
-                    case .player:
-                        if let selectedEngineOptions {
-                            tvEngineOptionsDetail(for: selectedEngineOptions)
-                        } else if let preferredLanguagePane {
-                            tvPreferredLanguageDetail(preferredLanguagePane)
-                        } else {
-                            tvPlayerDetail
-                        }
-                    case .about: tvAboutDetail
-                    case .content: EmptyView() // handled by tvDetailContainer
                     }
+                    .frame(maxWidth: TVSettingsMetrics.detailMaxWidth, alignment: .leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 48)
+                    .padding(.vertical, 72)
                 }
-                .frame(maxWidth: TVSettingsMetrics.detailMaxWidth, alignment: .leading)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 48)
-                .padding(.vertical, 72)
             }
             .focusSection()
         }

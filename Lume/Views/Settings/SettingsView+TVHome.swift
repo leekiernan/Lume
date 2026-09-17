@@ -2,9 +2,12 @@
 //  SettingsView+TVHome.swift
 //  Lume
 //
-//  The tvOS Home settings pane: each Home row can be switched on or off and
-//  reordered with up / down controls. Mirrors the engine priority pane
-//  (SettingsView+TVPlayer) and the iOS HomeLayoutSettingsView.
+//  The tvOS Library pane: picks an area (Home, Movies, Series, Live TV), lets
+//  it be switched off entirely, and shows whatever that area has to configure —
+//  its rows via `TVSectionLayoutDetail`, its categories via Content Management.
+//  Mirrors the iOS/macOS `LibrarySettingsView`, which uses a list and drill-ins
+//  instead; the tvOS sidebar is already long, so the areas share one category
+//  here.
 //
 
 import SwiftUI
@@ -12,99 +15,126 @@ import SwiftUI
 #if os(tvOS)
 
     extension SettingsView {
-        /// The user's resolved Home row order (falls back to the declaration
-        /// order until they reorder). See `HomeLayoutSettings`.
-        private var homeSections: [HomeSection] {
-            HomeLayoutSettings.resolve(orderRaw: homeSectionOrderRaw)
-        }
+        func tvLibraryDetail(proxy: ScrollViewProxy) -> some View {
+            VStack(alignment: .leading, spacing: 28) {
+                tvAreaPicker
+                tvAreaEnableRow
+                tvAreaEnableNote
 
-        /// Whether `section` is switched on. "For You" maps to the recommendations
-        /// flag; every other section is tracked by the disabled set.
-        private func isHomeSectionEnabled(_ section: HomeSection) -> Bool {
-            section == .forYou
-                ? recommendationsEnabled
-                : HomeLayoutSettings.isEnabled(section, disabledRaw: homeDisabledSectionsRaw)
-        }
+                if AppAreaSettings.isEnabled(layoutArea, disabledRaw: disabledAreasRaw) {
+                    if let surface = layoutArea.sectionSurface {
+                        TVSectionLayoutDetail(surface: surface)
+                            // Rebuild on switch: the pane's @AppStorage keys are
+                            // fixed at init, so it has to be a new view per area.
+                            .id(surface)
+                    }
 
-        private func toggleHomeSection(_ section: HomeSection) {
-            if section == .forYou {
-                // "For You" is a Lume Pro feature — gate turning it on behind the
-                // paywall (disabling it is always allowed).
-                if !recommendationsEnabled, !premium.isPremium {
-                    presentPaywall(.recommendations)
-                    return
+                    if let type = layoutArea.categoryType {
+                        tvAreaCategoriesRow(type: type, proxy: proxy)
+                    }
+                } else {
+                    Text("This area is switched off. It has no tab, and its content is skipped when playlists sync.")
+                        .font(.system(size: 20))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, TVSettingsMetrics.rowHPadding)
                 }
-                recommendationsEnabled.toggle()
-                return
             }
-            var disabled = HomeLayoutSettings.decodeDisabled(homeDisabledSectionsRaw)
-            if disabled.contains(section) {
-                disabled.remove(section)
-            } else {
-                disabled.insert(section)
-            }
-            homeDisabledSectionsRaw = HomeLayoutSettings.encodeDisabled(disabled)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
 
-        /// Move the section at `index` one slot up or down, persisting the new
-        /// order. Mirrors `moveEngine` in the player pane.
-        private func moveSection(at index: Int, by offset: Int) {
-            var list = homeSections
-            guard list.move(at: index, by: offset) else { return }
-            homeSectionOrderRaw = HomeLayoutSettings.encode(HomeLayoutSettings.normalized(list))
-        }
-
-        var tvHomeLayoutDetail: some View {
+        /// Mirrors Content Management's type picker: plain text in
+        /// `TVSettingsActionButtonStyle`, which carries the focus highlight and
+        /// the prominent resting fill for the current one.
+        private var tvAreaPicker: some View {
             VStack(alignment: .leading, spacing: 8) {
-                TVSettingsSectionLabel("Sections")
+                TVSettingsSectionLabel("Area")
 
-                VStack(spacing: 2) {
-                    ForEach(Array(homeSections.enumerated()), id: \.element) { index, section in
-                        tvHomeSectionRow(section: section, index: index)
+                HStack(spacing: 12) {
+                    ForEach(AppArea.allCases) { area in
+                        Button {
+                            layoutArea = area
+                        } label: {
+                            Text(area.title)
+                        }
+                        .buttonStyle(TVSettingsActionButtonStyle(prominent: layoutArea == area))
+                        .accessibilityAddTraits(layoutArea == area ? [.isSelected] : [])
                     }
                 }
+                .focusSection()
+            }
+        }
 
-                Text("Turn sections on or off and reorder them. Each appears on Home only when it has something to show. \"For You\" is built on-device from your library and what you watch.")
+        private var tvAreaEnableRow: some View {
+            let enabled = AppAreaSettings.isEnabled(layoutArea, disabledRaw: disabledAreasRaw)
+            let canDisable = AppAreaSettings.canDisable(layoutArea, disabledRaw: disabledAreasRaw)
+            return Button {
+                disabledAreasRaw = AppAreaSettings.settingEnabled(
+                    !enabled, for: layoutArea, disabledRaw: disabledAreasRaw
+                )
+            } label: {
+                HStack(spacing: 16) {
+                    Image(systemName: enabled ? "checkmark.circle.fill" : "circle")
+                    Text("Show \(layoutArea.displayName)")
+                    Spacer(minLength: 0)
+                    Text(enabled ? "On" : "Off")
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .buttonStyle(TVSettingsRowButtonStyle())
+            // The last area standing can't be switched off — there would be no
+            // navigation left.
+            .disabled(enabled && !canDisable)
+            .accessibilityValue(enabled ? Text("On") : Text("Off"))
+        }
+
+        /// Home has no content of its own — it draws on the other areas — so
+        /// switching it off is purely a navigation change.
+        @ViewBuilder
+        private var tvAreaEnableNote: some View {
+            if layoutArea == .home {
+                Text("Home draws on the other areas, so switching it off removes its tab without changing what syncs.")
                     .font(.system(size: 20))
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, TVSettingsMetrics.rowHPadding)
-                    .padding(.top, 6)
             }
         }
 
-        /// One row of the tvOS Home section list: an on/off control, the section
-        /// name, and up / down controls that reorder the list. Mirrors
-        /// `tvEnginePriorityRow`.
-        private func tvHomeSectionRow(section: HomeSection, index: Int) -> some View {
-            let enabled = isHomeSectionEnabled(section)
-            return TVSettingsReorderRow(
-                name: section.displayName,
-                index: index,
-                count: homeSections.count,
-                onMove: { moveSection(at: index, by: $0) },
-                leading: {
-                    Button {
-                        toggleHomeSection(section)
-                    } label: {
-                        Image(systemName: enabled ? "checkmark.circle.fill" : "circle")
-                    }
-                    .buttonStyle(TVContentIconButtonStyle())
-                    .accessibilityLabel(section.displayName)
-                    .accessibilityValue(enabled ? Text("On") : Text("Off"))
+        /// The categories fold open under the button rather than replacing the
+        /// pane. Swapping the whole detail destroyed the focused button, so tvOS
+        /// handed focus back to the sidebar — which reverts any drill-in, closing
+        /// the categories again the instant they opened.
+        private func tvAreaCategoriesRow(type: CategoryType, proxy: ScrollViewProxy) -> some View {
+            VStack(alignment: .leading, spacing: 8) {
+                TVSettingsSectionLabel("Categories")
 
-                    Label(section.title, systemImage: section.systemImage)
-                        .font(.system(size: TVSettingsMetrics.rowFontSize))
-                        .foregroundStyle(enabled ? .primary : .secondary)
-
-                    // "For You" is a Lume Pro feature; badge it for free users
-                    // (Sideload/owned builds are always premium, so this never shows).
-                    if section == .forYou, !premium.isPremium {
-                        Image(systemName: "crown.fill")
-                            .font(.system(size: 20))
-                            .foregroundStyle(.tint)
+                Button {
+                    showingAreaCategories.toggle()
+                } label: {
+                    HStack(spacing: 16) {
+                        Image(systemName: "square.grid.2x2")
+                            .font(.system(size: 22, weight: .medium))
+                        Text(showingAreaCategories ? "Hide Categories" : "Manage Categories")
+                        Spacer(minLength: 0)
+                        Image(systemName: showingAreaCategories ? "chevron.down" : "chevron.right")
                     }
                 }
-            )
+                .buttonStyle(TVSettingsRowButtonStyle())
+
+                if showingAreaCategories {
+                    // Still gated: this is the surface the standalone Content
+                    // Management screen protected before the two were merged.
+                    ParentalGateView {
+                        ContentManagementView(fixedType: type, embeddedProxy: proxy)
+                    }
+                    .focusSection()
+                } else {
+                    Text("Hide and reorder the categories your provider supplies, and choose what appears in the browse sidebar.")
+                        .font(.system(size: 20))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, TVSettingsMetrics.rowHPadding)
+                        .padding(.top, 6)
+                }
+            }
         }
     }
 
