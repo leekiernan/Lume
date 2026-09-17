@@ -138,8 +138,16 @@ enum HomeSectionRef: Hashable, Identifiable {
 /// comma-separated list of `HomeSectionRef` tokens, one key per surface.
 enum HomeLayoutSettings {
     /// Stored section order for `surface`. Empty until the user reorders, in
-    /// which case `resolve` falls back to the surface's default order.
+    /// which case `resolve` falls back to the surface's default order. Scoped to
+    /// the active profile — layout belongs to a person, see
+    /// `ProfileScopedPreferences`.
     static func sectionOrderKey(_ surface: SectionSurface) -> String {
+        ProfileScopedPreferences.key(baseSectionOrderKey(surface))
+    }
+
+    /// The unscoped form, which is also the key installs used before layout
+    /// became per-profile. Only the scoping layer and its migration read it.
+    static func baseSectionOrderKey(_ surface: SectionSurface) -> String {
         "\(surface.storagePrefix).sectionOrder.v1"
     }
 
@@ -149,6 +157,11 @@ enum HomeLayoutSettings {
     /// is the opt-in `RecommendationSettings.enabledKey`, which also gates the
     /// (expensive) recommendation recompute on Home.
     static func disabledSectionsKey(_ surface: SectionSurface) -> String {
+        ProfileScopedPreferences.key(baseDisabledSectionsKey(surface))
+    }
+
+    /// The unscoped form — see `baseSectionOrderKey`.
+    static func baseDisabledSectionsKey(_ surface: SectionSurface) -> String {
         "\(surface.storagePrefix).disabledSections.v1"
     }
 

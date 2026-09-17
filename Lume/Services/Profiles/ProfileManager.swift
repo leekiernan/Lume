@@ -113,6 +113,10 @@ final class ProfileManager {
         )
         ActiveProfileStore.current = result.activeProfileID
         activeProfileID = result.activeProfileID
+        // The active profile is settled, so the layout someone had before
+        // layout became per-profile can now be adopted as theirs. Runs before
+        // `isReady`, and so before any view reads a layout key.
+        ProfileScopedPreferences.migrateLegacyValuesIfNeeded()
         isReady = true
         refreshProfiles()
     }
