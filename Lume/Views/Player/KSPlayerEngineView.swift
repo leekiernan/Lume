@@ -206,6 +206,7 @@ struct KSPlayerEngineView: View {
                         // changes from within view updates" runtime warnings.
                         DispatchQueue.main.async {
                             isPlaying = (state == .bufferFinished)
+                            clock.isPlaying = isPlaying
                             updateLoadingState(state)
                             engine.syncState(state)
                             handleState(state)
@@ -429,6 +430,7 @@ struct KSPlayerEngineView: View {
                     .onStateChanged { _, state in
                         DispatchQueue.main.async {
                             isPlaying = (state == .bufferFinished)
+                            clock.isPlaying = isPlaying
                             updateLoadingState(state)
                             refreshVideoInfo()
                             handleState(state)

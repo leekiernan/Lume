@@ -211,7 +211,8 @@ struct LumeEngineEngineView: View {
             NowPlayingService.shared.detachTransport(owner: coordinator)
             coordinator.tearDown()
         }
-        .onChange(of: coordinator.isPlaying) { _, _ in
+        .onChange(of: coordinator.isPlaying) { _, playing in
+            clock.isPlaying = playing
             resetHideTimer()
         }
         .onChange(of: coordinator.hasStartedPlayback) { _, started in
@@ -313,7 +314,7 @@ struct LumeEngineEngineView: View {
             Button(action: showControls) {
                 Color.clear.contentShape(Rectangle())
             }
-            .buttonStyle(InvisibleButtonStyle())
+            .buttonStyle(LumeEngineInvisibleButtonStyle())
             // Yield focus to the failure overlay's buttons when a stream dies.
             .disabled(isControlsVisible || isChannelBrowserOpen || loadFailed)
             .focused($catcherFocused)
@@ -531,49 +532,6 @@ struct LumeEngineEngineView: View {
         coordinator.reload()
     }
 }
-
-// MARK: - Engine-rendered subtitles
-
-/// Draws the engine's active subtitle cues over the video. A leaf that observes
-/// only the standalone `SubtitleCueModel`, so per-cue changes invalidate this
-/// view alone — never the engine view above it, and never the controls overlay
-/// (both of which observe the coordinator, whose `objectWillChange` therefore
-/// no longer fires at tick rate). Keeping the cue text off the coordinator is
-/// what stops an open track menu flickering and dropping taps.
-private struct LumeEngineSubtitleOverlay: View {
-    @ObservedObject var cues: SubtitleCueModel
-    /// Lifts the cues above the controls' scrubber while they're showing.
-    let controlsVisible: Bool
-
-    var body: some View {
-        if let text = cues.text, !text.isEmpty {
-            VStack {
-                Spacer()
-                Text(text)
-                    .font(.title3.weight(.medium))
-                    .multilineTextAlignment(.center)
-                    .foregroundStyle(.white)
-                    .shadow(color: .black.opacity(0.9), radius: 2, x: 0, y: 1)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(.black.opacity(0.45), in: RoundedRectangle(cornerRadius: 8))
-                    .padding(.bottom, controlsVisible ? 120 : 40)
-            }
-            .allowsHitTesting(false)
-        }
-    }
-}
-
-#if os(tvOS)
-    /// Draws only its (clear) label — no focus highlight, scale or background —
-    /// so the full-screen tap-catcher stays invisible even while it holds focus
-    /// with the controls hidden.
-    private struct InvisibleButtonStyle: ButtonStyle {
-        func makeBody(configuration: Configuration) -> some View {
-            configuration.label
-        }
-    }
-#endif
 
 private extension View {
     /// Runs `action` on the Siri remote's Menu/back press (tvOS only); a no-op
