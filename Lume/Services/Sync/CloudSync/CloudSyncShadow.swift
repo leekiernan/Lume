@@ -19,6 +19,7 @@ final nonisolated class CloudSyncShadow {
     private let epgSourcesKey = "cloudsync.shadow.epgsources.v1"
     private let parentalPINKey = "cloudsync.shadow.parentalpin.v1"
     private let categoryRestrictionsKey = "cloudsync.shadow.categoryrestrictions.v1"
+    private let traktCredentialsKey = "cloudsync.shadow.traktCredentials.v1"
 
     private var playlists: [String: PlaylistConfigValues]
     private var content: [String: ContentStateValues]
@@ -27,6 +28,8 @@ final nonisolated class CloudSyncShadow {
     /// in a dictionary. `nil` means "no PIN last time we looked".
     private var parentalPIN: ParentalPINValues?
     private var categoryRestrictions: [String: CategoryRestrictionValues]
+    /// Fingerprint-only baseline; OAuth secrets are never persisted here.
+    private var traktCredentials: TraktCredentialValues?
 
     /// Set whenever a setter actually changes the baseline; cleared on `persist()`.
     /// A steady-state reconcile (every verdict `.noChange`) mutates nothing, so
@@ -40,6 +43,7 @@ final nonisolated class CloudSyncShadow {
         epgSources = Self.decode(defaults.data(forKey: epgSourcesKey)) ?? [:]
         parentalPIN = Self.decode(defaults.data(forKey: parentalPINKey))
         categoryRestrictions = Self.decode(defaults.data(forKey: categoryRestrictionsKey)) ?? [:]
+        traktCredentials = Self.decode(defaults.data(forKey: traktCredentialsKey))
     }
 
     // MARK: Playlists (keyed by UUID string)
@@ -118,6 +122,18 @@ final nonisolated class CloudSyncShadow {
         Set(categoryRestrictions.keys)
     }
 
+    // MARK: Trakt authorization
+
+    func traktCredentialShadow() -> TraktCredentialValues? {
+        traktCredentials
+    }
+
+    func setTraktCredentialShadow(_ value: TraktCredentialValues?) {
+        guard traktCredentials != value else { return }
+        traktCredentials = value
+        isDirty = true
+    }
+
     /// Drop the entire content baseline. Called on a profile switch: the catalog
     /// has been re-projected to a different profile, so the previous baseline no
     /// longer describes it. The next reconcile rebuilds it (a one-time union
@@ -132,13 +148,12 @@ final nonisolated class CloudSyncShadow {
         isDirty = true
     }
 
-    /// Drop the entire baseline — both playlists and content. Called when the
-    /// local catalog store has come up empty after previously holding data (a
-    /// lost or recreated `default.store`): with no baseline, the next reconcile
-    /// reads the surviving cloud records as values to *pull back*, never as local
-    /// deletions to push — so a vanished store recovers from the cloud instead of
-    /// wiping it. Safe by this type's contract (degrades to a one-time union
-    /// merge, never data loss).
+    /// Drop every catalog-backed baseline. Called when the local catalog store
+    /// has come up empty after previously holding data (a lost or recreated
+    /// `default.store`): with no baseline, the next reconcile reads the surviving
+    /// cloud records as values to *pull back*, never as local deletions to push —
+    /// so a vanished store recovers from the cloud instead of wiping it. Safe by
+    /// this type's contract (degrades to a one-time union merge, never data loss).
     func reset() {
         guard !playlists.isEmpty || !content.isEmpty || !epgSources.isEmpty
             || !categoryRestrictions.isEmpty else { return }
@@ -155,6 +170,9 @@ final nonisolated class CloudSyncShadow {
         // PIN on another device" (local hash, cloud empty, no baseline) into a
         // local edit to push — re-arming the very PIN the shadow exists to let
         // us delete.
+        // The Trakt baseline is likewise kept: its local side is the keychain,
+        // not the catalog store, and forgetting it could resurrect credentials
+        // that another device deliberately disconnected.
         isDirty = true
     }
 
@@ -177,6 +195,11 @@ final nonisolated class CloudSyncShadow {
             defaults.set(Self.encode(parentalPIN), forKey: parentalPINKey)
         } else {
             defaults.removeObject(forKey: parentalPINKey)
+        }
+        if let traktCredentials {
+            defaults.set(Self.encode(traktCredentials), forKey: traktCredentialsKey)
+        } else {
+            defaults.removeObject(forKey: traktCredentialsKey)
         }
         isDirty = false
     }

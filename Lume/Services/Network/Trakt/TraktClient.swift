@@ -176,6 +176,16 @@ nonisolated struct TraktClient {
         )
     }
 
+    /// Adds movies/shows to the user's watchlist.
+    func addToWatchlist(_ items: TraktWatchlistSyncItems, accessToken: String) async throws {
+        let _: TraktSyncResponse = try await post("/sync/watchlist", body: items, accessToken: accessToken)
+    }
+
+    /// Removes movies/shows from the user's watchlist.
+    func removeFromWatchlist(_ items: TraktWatchlistSyncItems, accessToken: String) async throws {
+        let _: TraktSyncResponse = try await post("/sync/watchlist/remove", body: items, accessToken: accessToken)
+    }
+
     // MARK: - Watched history (import)
 
     /// Every movie in the user's watched history, each carrying its TMDB id so
@@ -429,6 +439,39 @@ struct TraktSyncItems: Encodable {
 private struct TraktSyncResponse: Decodable {} // We don't act on the add/remove summary.
 
 // MARK: - Watchlist
+
+struct TraktWatchlistShowPayload: Encodable {
+    let ids: TraktIDs
+}
+
+/// Body for `/sync/watchlist` (add and remove). Trakt expects whole movies and
+/// shows here, unlike history sync where a show payload can select episodes.
+struct TraktWatchlistSyncItems: Encodable {
+    var movies: [TraktMoviePayload] = []
+    var shows: [TraktWatchlistShowPayload] = []
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        if !movies.isEmpty {
+            try container.encode(movies, forKey: .movies)
+        }
+        if !shows.isEmpty {
+            try container.encode(shows, forKey: .shows)
+        }
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case movies, shows
+    }
+
+    static func movie(tmdbID: Int) -> TraktWatchlistSyncItems {
+        TraktWatchlistSyncItems(movies: [TraktMoviePayload(ids: TraktIDs(tmdb: tmdbID))])
+    }
+
+    static func show(tmdbID: Int) -> TraktWatchlistSyncItems {
+        TraktWatchlistSyncItems(shows: [TraktWatchlistShowPayload(ids: TraktIDs(tmdb: tmdbID))])
+    }
+}
 
 /// One watchlist entry. `type` is "movie" or "show"; the matching child carries
 /// the title and ids.
