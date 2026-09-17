@@ -13,7 +13,8 @@ struct FullScreenPlayerView: View {
     let media: PlayableMedia
 
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.modelContext) private var modelContext
+    /// Not `private`: read by the FullScreenPlayerView+Trakt extension (separate file).
+    @Environment(\.modelContext) var modelContext
     @Environment(\.scenePhase) private var scenePhase
     /// Optional so previews (which don't inject it) don't crash.
     @Environment(ProfileManager.self) private var profileManager: ProfileManager?
@@ -71,6 +72,10 @@ struct FullScreenPlayerView: View {
     /// scrubber/time labels rather than re-rendering the whole player tree. See
     /// `PlaybackClock`.
     @State var clock = PlaybackClock()
+
+    /// De-duplicates the low-frequency engine state changes into one ordered
+    /// Trakt start/pause/stop lifecycle for the active movie or episode.
+    @State var traktScrobbler = TraktPlaybackScrobbler()
 
     /// Writes watch progress on a private background `ModelContext`. Saving on
     /// the main context mid-playback hitches KSPlayer's render loop, so the
@@ -328,6 +333,9 @@ struct FullScreenPlayerView: View {
                 if phase == .background { closePlayer() }
             #endif
         }
+        .onChange(of: clock.isPlaying) { _, isPlaying in
+            updateTraktScrobble(isPlaying: isPlaying)
+        }
         .onChange(of: castService.isAirPlayActive) { _, isActive in
             // While the audio-only sentinel is set the engine stays on the
             // user's choice for both route directions — reassigning the media
@@ -347,6 +355,7 @@ struct FullScreenPlayerView: View {
             resumeActiveMedia(at: clock.current)
         }
         .onDisappear {
+            stopTraktScrobble()
             // Capture the clock synchronously, then flush off the main thread.
             persistProgressDetached(force: true)
             NowPlayingService.shared.endSession()

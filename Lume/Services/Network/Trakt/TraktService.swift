@@ -14,6 +14,7 @@
 //
 
 import Foundation
+import OSLog
 import SwiftData
 import SwiftUI
 
@@ -45,6 +46,9 @@ final class TraktService {
     private var tokens: TraktTokens?
     private var pollingTask: Task<Void, Never>?
     private var refreshTask: Task<String?, Never>?
+    /// Serialises playback events so a slow start request can never arrive
+    /// after the pause or stop that followed it.
+    private var scrobbleTask: Task<Void, Never>?
     /// A refresh token that Trakt rejected. Another device may have consumed
     /// this single-use token and be exporting its replacement through CloudKit,
     /// so suppress repeated retries until a different token arrives.
@@ -177,6 +181,8 @@ final class TraktService {
     func disconnect() async {
         pollingTask?.cancel()
         pollingTask = nil
+        scrobbleTask?.cancel()
+        scrobbleTask = nil
         if let accessToken = tokens?.accessToken {
             try? await client.revokeToken(accessToken)
         }
@@ -225,8 +231,39 @@ final class TraktService {
                     try await client.removeFromHistory(items, accessToken: accessToken)
                 }
             } catch {
-                // Scrobbling is best-effort; a failed sync shouldn't disrupt
-                // playback or the UI.
+                // Watched-state mirroring is best-effort; a failed sync
+                // shouldn't disrupt playback or the UI.
+            }
+        }
+    }
+
+    // MARK: - Playback scrobbling
+
+    /// Queues a start, pause or stop event for the connected account. Events
+    /// are ordered globally because Trakt exposes one active watching status
+    /// per account, even when Lume has more than one scene.
+    func scrobble(
+        _ target: TraktScrobbleTarget,
+        action: TraktScrobbleAction,
+        progress: Double
+    ) {
+        guard isConnected else { return }
+        let previous = scrobbleTask
+        scrobbleTask = Task { [weak self] in
+            await previous?.value
+            guard !Task.isCancelled, let self,
+                  let accessToken = await validAccessToken()
+            else { return }
+
+            do {
+                try await client.scrobble(
+                    target, action: action, progress: progress, accessToken: accessToken
+                )
+            } catch {
+                let detail = LogRedaction.describe(error)
+                Logger.network.warning(
+                    "Trakt scrobble \(action.rawValue, privacy: .public) failed: \(detail, privacy: .public)"
+                )
             }
         }
     }
