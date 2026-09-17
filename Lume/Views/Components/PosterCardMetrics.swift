@@ -47,6 +47,13 @@ enum PosterCardMetrics {
     /// Poster proportions, used to derive a card's height from a grid cell's
     /// width so grid artwork keeps the same shape as the rails' fixed cards.
     static let posterAspectRatio: CGFloat = posterWidth / posterHeight
+
+    // Inset below the final entry point on a section-based browse screen.
+    #if os(tvOS)
+        static let sectionVerticalPadding: CGFloat = 60
+    #else
+        static let sectionVerticalPadding: CGFloat = 16
+    #endif
 }
 
 extension View {

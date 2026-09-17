@@ -25,6 +25,8 @@ struct EPGGuideView: View {
     /// just activated); `onDidClaimFocus` resets it once claimed.
     let focusToken: Int
     let onDidClaimFocus: () -> Void
+    /// tvOS: opens the category sidebar from the guide's channel hub.
+    let onLeadingLeft: () -> Void
 
     @Environment(\.modelContext) private var modelContext
     /// The guide is a channel list like any other, so it owes the viewer the same
@@ -59,7 +61,8 @@ struct EPGGuideView: View {
         onPlayCatchup: @escaping (LiveStream, EPGProgramCell) -> Void = { _, _ in },
         onStartMultiView: @escaping (LiveStream) -> Void = { _ in },
         focusToken: Int = 0,
-        onDidClaimFocus: @escaping () -> Void = {}
+        onDidClaimFocus: @escaping () -> Void = {},
+        onLeadingLeft: @escaping () -> Void = {}
     ) {
         self.scope = scope
         self.playlistPrefix = playlistPrefix
@@ -68,6 +71,7 @@ struct EPGGuideView: View {
         self.onStartMultiView = onStartMultiView
         self.focusToken = focusToken
         self.onDidClaimFocus = onDidClaimFocus
+        self.onLeadingLeft = onLeadingLeft
 
         // A longer reach into the past than the default: aired programmes on
         // archive channels are replayable from here, so the window doubles as a
@@ -102,7 +106,8 @@ struct EPGGuideView: View {
                     onPlayCatchup: onPlayCatchup,
                     onStartMultiView: onStartMultiView,
                     focusToken: focusToken,
-                    onDidClaimFocus: onDidClaimFocus
+                    onDidClaimFocus: onDidClaimFocus,
+                    onLeadingLeft: onLeadingLeft
                 )
             }
         }

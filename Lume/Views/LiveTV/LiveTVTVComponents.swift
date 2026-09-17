@@ -2,7 +2,7 @@
 //  LiveTVTVComponents.swift
 //  Lume
 //
-//  tvOS-only Live TV browsing components: the wide category rail and the large,
+//  tvOS-only Live TV browsing components: the content controls and the large,
 //  focusable channel list with inline now/next EPG. Split out from LiveTVView
 //  to keep that file focused on cross-platform composition.
 //
@@ -19,6 +19,8 @@
         /// The active playlist's source, so an empty list can say *why* it is
         /// empty rather than tell a WebDAV user to sync again.
         let sourceType: PlaylistSourceType?
+        /// Opens the category sidebar when the viewer presses left from a row.
+        let onLeadingLeft: () -> Void
         /// Seeds Multi-View with this channel, gated on Lume Pro by the host.
         let onStartMultiView: (LiveStream) -> Void
         let onPlay: (LiveStream) -> Void
@@ -44,12 +46,14 @@
             playlistPrefix: String,
             sort: ContentSortOption,
             sourceType: PlaylistSourceType?,
+            onLeadingLeft: @escaping () -> Void,
             onStartMultiView: @escaping (LiveStream) -> Void,
             onPlay: @escaping (LiveStream) -> Void
         ) {
             self.scope = scope
             self.playlistPrefix = playlistPrefix
             self.sourceType = sourceType
+            self.onLeadingLeft = onLeadingLeft
             self.onStartMultiView = onStartMultiView
             self.onPlay = onPlay
             _streams = Query(LiveChannelQuery.descriptor(for: scope, sort: sort))
@@ -79,6 +83,7 @@
                     } else {
                         if scope == .recentlyWatched {
                             clearButton
+                                .onLeadingEdgeLeft(onLeadingLeft)
                         }
                         ForEach(visible) { stream in
                             TVChannelRow(
@@ -88,6 +93,7 @@
                                 onStartMultiView: { onStartMultiView(stream) },
                                 onPlay: { onPlay(stream) }
                             )
+                            .onLeadingEdgeLeft(onLeadingLeft)
                             .onAppear {
                                 if stream.id == visible.last?.id, visibleCount < channels.count {
                                     visibleCount = min(visibleCount + LiveChannelQuery.pageSize, channels.count)
@@ -115,7 +121,7 @@
 
         /// A full-width focusable "Clear" pill pinned above the Recently Watched
         /// rows. Full-width so the focus engine reliably catches a "down" move
-        /// into it from the category rail and out of it into the first channel.
+        /// into it from the controls and out of it into the first channel.
         private var clearButton: some View {
             Button(role: .destructive) {
                 confirmingClear = true
@@ -345,7 +351,8 @@
                         onPlayCatchup: onPlayCatchup,
                         onStartMultiView: onStartMultiView,
                         focusToken: guideFocusToken,
-                        onDidClaimFocus: { guideFocusToken = 0 }
+                        onDidClaimFocus: { guideFocusToken = 0 },
+                        onLeadingLeft: onOpenBrowse
                     )
                     .id("\(section.id)-\(contentSort.rawValue)-guide")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -355,6 +362,7 @@
                         playlistPrefix: playlistPrefix,
                         sort: contentSort,
                         sourceType: sourceType,
+                        onLeadingLeft: onOpenBrowse,
                         onStartMultiView: onStartMultiView,
                         onPlay: onPlay
                     )
@@ -430,6 +438,7 @@
             }
             .buttonStyle(TVCardButtonStyle(focusScale: 1.04))
             .focused($focused, equals: .browse)
+            .onLeadingEdgeLeft(onOpenBrowse)
             .accessibilityLabel("Browse Categories")
             .animation(.easeOut(duration: 0.18), value: isItemFocused)
         }

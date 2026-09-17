@@ -119,6 +119,7 @@ struct LiveTVView: View {
                 playlistPrefix: playlistPrefix,
                 sort: contentSort,
                 sourceType: activePlaylist?.knownSourceType,
+                onLeadingLeft: { showingBrowse = true },
                 onStartMultiView: { startMultiView(with: $0) },
                 onPlay: { playChannel($0, scope: section.scope) }
             )
@@ -210,11 +211,16 @@ struct LiveTVView: View {
     @ViewBuilder
     private func layout(for sections: [LiveTVSection]) -> some View {
         let displayed = displayedSection(in: sections)
-        #if os(tvOS)
-            tvOSLayout(displayed: displayed)
-        #else
-            contentLayout(displayed: displayed)
-        #endif
+        VStack(spacing: 0) {
+            #if os(tvOS)
+                tvOSLayout(displayed: displayed)
+            #else
+                contentLayout(displayed: displayed)
+            #endif
+
+            BrowseCategoriesButton(isPresented: $showingBrowse)
+                .padding(.bottom, PosterCardMetrics.sectionVerticalPadding)
+        }
     }
 
     #if !os(tvOS)
