@@ -159,7 +159,7 @@ actor CloudSyncEngine {
             // 3-way merge is idempotent).
             try saveStores()
             shadow.persist()
-Logger.sync.info("Reconcile pl +\(result.playlistsPushed) new \(result.playlistsCreatedLocally) ct +\(result.contentPushed)/\(result.contentPulled) pend \(result.contentPending) epg +\(result.epgSourcesPushed)/\(result.epgSourcesPulled) par +\(result.parentalPushed)/\(result.parentalPulled) pend \(result.parentalPending) trakt +\(result.traktPushed)/\(result.traktPulled) pend \(result.traktPending) sports \(result.sportsFollowsKept)-\(result.sportsFollowsDeduped)") // swiftlint:disable:this line_length
+            Logger.sync.info("Reconcile pl +\(result.playlistsPushed) new \(result.playlistsCreatedLocally) ct +\(result.contentPushed)/\(result.contentPulled) pend \(result.contentPending) epg +\(result.epgSourcesPushed)/\(result.epgSourcesPulled) par +\(result.parentalPushed)/\(result.parentalPulled) pend \(result.parentalPending) trakt +\(result.traktPushed)/\(result.traktPulled) pend \(result.traktPending) sports \(result.sportsFollowsKept)-\(result.sportsFollowsDeduped)") // swiftlint:disable:this line_length
         } catch {
             Logger.sync.error("Reconcile failed: \(error.localizedDescription)")
         }

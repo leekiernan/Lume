@@ -128,7 +128,7 @@ struct LumeApp: App {
             SyncedPlaylist.self, UserContentState.self, UserProfile.self, SyncedEPGSource.self,
             // Parental controls. Not profile-scoped, unlike `UserContentState` —
             // see `CloudSyncEngine+Parental` for why that distinction matters.
-            SyncedParentalPIN.self, SyncedCategoryRestriction.self,
+            SyncedParentalPIN.self, SyncedCategoryRestriction.self, SyncedTraktAccount.self,
             // Followed sports leagues/teams — per-profile, ordered, no local
             // counterpart (read through `SportsFollowService`).
             SyncedSportsFollow.self
