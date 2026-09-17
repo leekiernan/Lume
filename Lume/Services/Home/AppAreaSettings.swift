@@ -19,7 +19,13 @@ import Foundation
 nonisolated enum AppAreaSettings {
     /// Areas the user has switched off, as a comma-separated list of raw
     /// values. Absence means enabled, so the default (empty) shows everything.
-    static let disabledAreasKey = "nav.disabledAreas.v1"
+    /// Scoped to the active profile — see `ProfileScopedPreferences`.
+    static var disabledAreasKey: String {
+        ProfileScopedPreferences.key(baseDisabledAreasKey)
+    }
+
+    /// The unscoped form — see `HomeLayoutSettings.baseSectionOrderKey`.
+    static let baseDisabledAreasKey = "nav.disabledAreas.v1"
 
     static func decodeDisabled(_ raw: String) -> Set<AppArea> {
         Set(raw.split(separator: ",").compactMap { AppArea(rawValue: String($0)) })

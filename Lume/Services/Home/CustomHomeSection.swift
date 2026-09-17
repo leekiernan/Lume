@@ -40,6 +40,11 @@ nonisolated struct CustomHomeSection: Codable, Identifiable, Hashable {
 /// page never appears on another.
 enum CustomHomeSections {
     static func storageKey(_ surface: SectionSurface) -> String {
+        ProfileScopedPreferences.key(baseStorageKey(surface))
+    }
+
+    /// The unscoped form — see `HomeLayoutSettings.baseSectionOrderKey`.
+    static func baseStorageKey(_ surface: SectionSurface) -> String {
         "\(surface.storagePrefix).customSections.v1"
     }
 
