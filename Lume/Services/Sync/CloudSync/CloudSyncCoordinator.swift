@@ -68,6 +68,7 @@ final class CloudSyncCoordinator {
         observeCloudKitEvents()
         observeRemoteChanges()
         observeContentSyncCompletion()
+        observeTraktCredentialChanges()
     }
 
     // No `deinit`: this coordinator is created once in `LumeApp` and lives for
@@ -177,6 +178,14 @@ final class CloudSyncCoordinator {
             // Back on the main actor (this closure is main-actor isolated).
             status.lastReconcile = Date()
             status.lastResult = result
+
+            // The engine may have replaced (or removed) the keychain token from
+            // CloudKit. Refresh TraktService's in-memory connection state; run it
+            // independently because fetching the username is a network request
+            // and must not hold the reconcile coalescing gate closed.
+            if result.traktPulled > 0 {
+                Task { await TraktService.shared.restore() }
+            }
 
             isReconciling = false
             if pendingReconcile {
@@ -439,6 +448,23 @@ final class CloudSyncCoordinator {
         ) { [weak self] _ in
             MainActor.assumeIsolated {
                 self?.reconcile(reason: .contentSync)
+            }
+        }
+        observers.append(observer)
+    }
+
+    /// A local Trakt connect, refresh, or disconnect changed the keychain. Push
+    /// it promptly to the encrypted CloudKit mirror rather than waiting for the
+    /// next scene transition. Pulls do not post this notification, so there is
+    /// no export/import feedback loop.
+    private func observeTraktCredentialChanges() {
+        let observer = NotificationCenter.default.addObserver(
+            forName: .lumeTraktCredentialsDidChange,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.reconcile(reason: .queued)
             }
         }
         observers.append(observer)

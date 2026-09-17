@@ -234,6 +234,94 @@ nonisolated struct CategoryRestrictionValues: Codable, Equatable {
     }
 }
 
+// MARK: - Trakt credentials
+
+/// A Trakt token pair as seen by the three-way CloudKit merge.
+///
+/// Only a SHA-256 fingerprint and the server-issued creation time are encoded
+/// into the `CloudSyncShadow`; the OAuth secrets themselves stay in the
+/// keychain and CloudKit's encrypted fields. A value decoded from the shadow
+/// therefore has no token payload, just enough identity to determine which side
+/// changed since the last successful reconcile.
+nonisolated struct TraktCredentialValues: Codable, Equatable {
+    /// Present for values read from the keychain or CloudKit; nil only after
+    /// decoding the non-secret shadow baseline.
+    var tokens: TraktTokens?
+    private var fingerprint: String
+    private var createdAt: TimeInterval
+
+    init(tokens: TraktTokens) {
+        self.tokens = tokens
+        createdAt = tokens.createdAt
+        fingerprint = Self.fingerprint(for: tokens)
+    }
+
+    static func == (lhs: TraktCredentialValues, rhs: TraktCredentialValues) -> Bool {
+        lhs.fingerprint == rhs.fingerprint
+    }
+
+    /// Newest server-issued token wins a concurrent refresh. A tie favors the
+    /// cloud because it is the value other devices have already converged on.
+    static func mergeConflict(local: TraktCredentialValues, cloud: TraktCredentialValues) -> TraktCredentialValues {
+        local.createdAt > cloud.createdAt ? local : cloud
+    }
+
+    /// Trakt disconnect is stronger than the generic sync policy's "preserve an
+    /// edit over a delete": disconnect revokes the authorization server-side,
+    /// so a concurrent refresh cannot be a usable resurrection. If both sides
+    /// changed and either deleted its credentials, propagate the deletion.
+    static func reconcile(
+        local: TraktCredentialValues?,
+        cloud: TraktCredentialValues?,
+        shadow: TraktCredentialValues?
+    ) -> MergeVerdict<TraktCredentialValues> {
+        let localChanged = local != shadow
+        let cloudChanged = cloud != shadow
+        if localChanged, cloudChanged, local == nil {
+            return .pushToCloud(nil)
+        }
+        if localChanged, cloudChanged, cloud == nil {
+            return .pullToLocal(nil)
+        }
+        return CloudSyncMerge.reconcile(
+            local: local,
+            cloud: cloud,
+            shadow: shadow,
+            mergeConflict: mergeConflict
+        )
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case fingerprint, createdAt
+    }
+
+    nonisolated init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        fingerprint = try container.decode(String.self, forKey: .fingerprint)
+        createdAt = try container.decode(TimeInterval.self, forKey: .createdAt)
+        tokens = nil
+    }
+
+    private static func fingerprint(for tokens: TraktTokens) -> String {
+        // Length-prefix every component so embedded separators cannot produce
+        // the same byte stream for two different token sets.
+        let components = [
+            tokens.accessToken,
+            tokens.refreshToken,
+            String(tokens.createdAt.bitPattern),
+            String(tokens.expiresIn.bitPattern),
+            tokens.scope ?? "",
+            tokens.tokenType ?? ""
+        ]
+        let canonical = components
+            .map { "\($0.utf8.count):\($0)" }
+            .joined(separator: "|")
+        return SHA256.hash(data: Data(canonical.utf8))
+            .map { String(format: "%02x", $0) }
+            .joined()
+    }
+}
+
 // MARK: - Per-content user state
 
 /// The syncable user state of a single catalog item. Fields irrelevant to a
