@@ -427,6 +427,8 @@ struct HomeView: View {
             + watchedStreams.filter { belongsToActivePlaylist($0.id) }.excludingRestricted(restriction).map(HomeMediaItem.live)
         return items
             .sorted { ($0.lastWatchedDate ?? .distantPast) > ($1.lastWatchedDate ?? .distantPast) }
+            // After sorting, so the copy kept is the one watched most recently.
+            .deduplicatedByTitle()
             .prefix(10)
             .map(\.self)
     }
@@ -449,6 +451,7 @@ struct HomeView: View {
         return entries
             .sorted { ($0.order ?? Int.max, $0.rank, $0.name) < ($1.order ?? Int.max, $1.rank, $1.name) }
             .map(\.item)
+            .deduplicatedByTitle()
     }
 
     /// Truly empty home — only show the empty state once trending has settled
