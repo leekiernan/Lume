@@ -53,6 +53,8 @@ extension FullScreenPlayerView {
     /// (a use-after-free in KSPlayer's decode threads).
     func switchMedia(to newMedia: PlayableMedia) {
         guard newMedia.id != activeMedia.id else { return }
+        // Settle Trakt against the outgoing identity while its clock is intact.
+        stopTraktScrobble()
         // Flush the outgoing stream's progress before the clock resets — capture
         // happens synchronously inside `persistProgressDetached`.
         persistProgressDetached(force: true)
@@ -131,7 +133,6 @@ extension FullScreenPlayerView {
             let completion = await writer.markWatched(ref: ref, duration: total)
             WatchProgressBuffer.remove(ref: ref)
             if let completion {
-                syncTraktWatched(ref: completion.ref)
                 AppStoreReviewPrompt.shared.noteCompletedTitle()
             }
         }

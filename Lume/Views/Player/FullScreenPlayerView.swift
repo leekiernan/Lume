@@ -72,6 +72,10 @@ struct FullScreenPlayerView: View {
     /// `PlaybackClock`.
     @State var clock = PlaybackClock()
 
+    /// De-duplicates the low-frequency engine state changes into one ordered
+    /// Trakt start/pause/stop lifecycle for the active movie or episode.
+    @State var traktScrobbler = TraktPlaybackScrobbler()
+
     /// Writes watch progress on a private background `ModelContext`. Saving on
     /// the main context mid-playback hitches KSPlayer's render loop, so the
     /// sampler below only reads the clock and hands `Sendable` values to this
@@ -328,6 +332,9 @@ struct FullScreenPlayerView: View {
                 if phase == .background { closePlayer() }
             #endif
         }
+        .onChange(of: clock.isPlaying) { _, isPlaying in
+            updateTraktScrobble(isPlaying: isPlaying)
+        }
         .onChange(of: castService.isAirPlayActive) { _, isActive in
             // While the audio-only sentinel is set the engine stays on the
             // user's choice for both route directions — reassigning the media
@@ -347,6 +354,7 @@ struct FullScreenPlayerView: View {
             resumeActiveMedia(at: clock.current)
         }
         .onDisappear {
+            stopTraktScrobble()
             // Capture the clock synchronously, then flush off the main thread.
             persistProgressDetached(force: true)
             NowPlayingService.shared.endSession()
@@ -542,30 +550,67 @@ struct FullScreenPlayerView: View {
             )
             WatchProgressBuffer.remove(ref: ref)
             if let completion {
-                syncTraktWatched(ref: completion.ref)
                 AppStoreReviewPrompt.shared.noteCompletedTitle()
             }
         }
     }
 
-    /// One-time "watched" sync on Trakt. Runs at most once per title (when it
-    /// crosses 90%), so the main-context fetch here is off the playback hot path.
-    /// `TraktService` is `@MainActor`, hence this stays on the main actor.
-    func syncTraktWatched(ref: PlayableMedia.ContentRef) {
+    /// The Trakt identity and catalog duration for a playable item. This is
+    /// resolved only at transport boundaries, never on the playback tick path.
+    private func traktPlaybackDetails(
+        for ref: PlayableMedia.ContentRef
+    ) -> (target: TraktScrobbleTarget, duration: TimeInterval)? {
         switch ref {
         case let .movie(id):
             var descriptor = FetchDescriptor<Movie>(predicate: #Predicate { $0.id == id })
             descriptor.fetchLimit = 1
-            guard let movie = try? modelContext.fetch(descriptor).first else { return }
-            TraktService.shared.syncWatched(movie: movie, watched: true)
+            guard let movie = try? modelContext.fetch(descriptor).first,
+                  let tmdbID = movie.tmdbId
+            else { return nil }
+            return (.movie(tmdbID: tmdbID), TimeInterval(movie.durationSecs ?? 0))
         case let .episode(id):
             var descriptor = FetchDescriptor<Episode>(predicate: #Predicate { $0.id == id })
             descriptor.fetchLimit = 1
-            guard let episode = try? modelContext.fetch(descriptor).first else { return }
-            TraktService.shared.syncWatched(episode: episode, watched: true)
+            guard let episode = try? modelContext.fetch(descriptor).first,
+                  let showTMDBID = episode.series?.tmdbId
+            else { return nil }
+            return (
+                .episode(
+                    showTMDBID: showTMDBID,
+                    season: episode.seasonNum,
+                    episode: episode.episodeNum
+                ),
+                TimeInterval(episode.durationSecs ?? 0)
+            )
         case .live:
-            break
+            return nil
         }
+    }
+
+    /// Converts the shared playback clock into Trakt's percentage and emits a
+    /// start/resume or pause transition. The model duration is a fallback for
+    /// engines whose first playing state arrives before their duration callback.
+    private func updateTraktScrobble(isPlaying: Bool) {
+        guard let details = traktPlaybackDetails(for: activeMedia.contentRef) else { return }
+        let elapsed = max(clock.current, activeMedia.startTime)
+        let duration = clock.duration > 0 ? clock.duration : details.duration
+        let progress = TraktPlaybackScrobbler.progress(elapsed: elapsed, duration: duration)
+
+        if isPlaying {
+            traktScrobbler.playbackStarted(target: details.target, progress: progress)
+        } else {
+            traktScrobbler.playbackPaused(target: details.target, progress: progress)
+        }
+    }
+
+    /// Ends the outgoing item's Trakt session before the clock/media identity is
+    /// reset by a close or in-player stream change.
+    func stopTraktScrobble() {
+        guard let details = traktPlaybackDetails(for: activeMedia.contentRef) else { return }
+        let elapsed = max(clock.current, activeMedia.startTime)
+        let duration = clock.duration > 0 ? clock.duration : details.duration
+        let progress = TraktPlaybackScrobbler.progress(elapsed: elapsed, duration: duration)
+        traktScrobbler.playbackStopped(target: details.target, progress: progress)
     }
 }
 

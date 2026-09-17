@@ -19,6 +19,11 @@ nonisolated struct CloudSyncReconcileResult: Equatable {
     /// Restrictions whose category hasn't synced to this device yet — left
     /// pending (shadow untouched) so a later pass applies them.
     var parentalPending = 0
+    /// Trakt authorization changes moved through the CloudKit encrypted mirror.
+    var traktPushed = 0
+    var traktPulled = 0
+    /// Credential merge deferred because the local keychain was unavailable.
+    var traktPending = 0
     /// Cloud states whose local catalog item hasn't synced yet — left pending
     /// (shadow untouched) so a later pass applies them once the catalog lands.
     var contentPending = 0
@@ -130,6 +135,10 @@ actor CloudSyncEngine {
             // Parental controls: the PIN and category restrictions. Neither is
             // profile-scoped, so this runs once per pass rather than per profile.
             try reconcileParentalControls(livePrefixes: livePrefixes, into: &result)
+            // The Trakt account is app-wide rather than profile-scoped. Its
+            // secrets stay in the keychain locally and CloudKit-encrypted fields
+            // are used only to transport the latest rotating token pair.
+            try reconcileTraktCredentials(into: &result)
             // Manual EPG sources sync as their own lightweight mirror; each
             // playlist's derived (linked) source is regenerated locally so it
             // appears on every device that has the playlist.
@@ -142,7 +151,7 @@ actor CloudSyncEngine {
             // 3-way merge is idempotent).
             try saveStores()
             shadow.persist()
-            Logger.sync.info("Reconcile pl +\(result.playlistsPushed) new \(result.playlistsCreatedLocally) ct +\(result.contentPushed)/\(result.contentPulled) pend \(result.contentPending) epg +\(result.epgSourcesPushed)/\(result.epgSourcesPulled) par +\(result.parentalPushed)/\(result.parentalPulled) pend \(result.parentalPending)") // swiftlint:disable:this line_length
+            Logger.sync.info("Reconcile pl +\(result.playlistsPushed) new \(result.playlistsCreatedLocally) ct +\(result.contentPushed)/\(result.contentPulled) pend \(result.contentPending) epg +\(result.epgSourcesPushed)/\(result.epgSourcesPulled) par +\(result.parentalPushed)/\(result.parentalPulled) pend \(result.parentalPending) trakt +\(result.traktPushed)/\(result.traktPulled) pend \(result.traktPending)") // swiftlint:disable:this line_length
         } catch {
             Logger.sync.error("Reconcile failed: \(error.localizedDescription)")
         }

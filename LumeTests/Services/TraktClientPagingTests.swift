@@ -172,4 +172,26 @@ struct TraktClientPagingTests {
         #expect(queries.count == 2)
         #expect(queries.allSatisfy { $0["extended"] == "full" })
     }
+
+    @Test func `watchlist is ordered by newest addition across every page`() async throws {
+        TraktStubProtocol.register(host: "api.trakt.tv", endpoint: .init(
+            pages: [
+                1: """
+                [
+                  {"listed_at":"2026-07-01T12:00:00.000Z","type":"movie","movie":{"ids":{"tmdb":1}}},
+                  {"listed_at":"2026-08-01T12:00:00.000Z","type":"movie","movie":{"ids":{"tmdb":2}}}
+                ]
+                """,
+                2: """
+                [{"listed_at":"2026-09-01T12:00:00.000Z","type":"show","show":{"ids":{"tmdb":3}}}]
+                """
+            ],
+            pageCount: 2
+        ))
+
+        let items = try await makeClient().watchlist(accessToken: "token")
+        let tmdbIDs = items.compactMap { $0.movie?.ids.tmdb ?? $0.show?.ids.tmdb }
+
+        #expect(tmdbIDs == [3, 2, 1])
+    }
 }

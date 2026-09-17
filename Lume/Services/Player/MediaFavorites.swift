@@ -28,9 +28,10 @@ enum MediaFavorites {
             model.isFavorite = true
             model.addedToWatchlistDate = Date()
         } else {
-            clearFavoriteState(model)
+            clearFavoriteFields(model)
         }
         try? context.save()
+        syncTraktWatchlist(model, watchlisted: favorited)
         return favorited
     }
 
@@ -49,8 +50,23 @@ enum MediaFavorites {
     /// Saving is the caller's business, since the favorites manager mutates
     /// under its own `@Query` context.
     static func clearFavoriteState(_ model: any FavoriteOrderable) {
+        clearFavoriteFields(model)
+        syncTraktWatchlist(model, watchlisted: false)
+    }
+
+    private static func clearFavoriteFields(_ model: any FavoriteOrderable) {
         model.isFavorite = false
         model.favoriteOrder = nil
         (model as? any WatchlistFavoritable)?.addedToWatchlistDate = nil
+    }
+
+    /// Trakt has no representation for IPTV channels, so only the VOD model
+    /// types are mirrored. `TraktService` handles the connected/id guards.
+    private static func syncTraktWatchlist(_ model: any FavoriteOrderable, watchlisted: Bool) {
+        if let movie = model as? Movie {
+            TraktService.shared.syncWatchlist(movie: movie, watchlisted: watchlisted)
+        } else if let series = model as? Series {
+            TraktService.shared.syncWatchlist(series: series, watchlisted: watchlisted)
+        }
     }
 }

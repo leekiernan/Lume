@@ -128,7 +128,7 @@ struct LumeApp: App {
             SyncedPlaylist.self, UserContentState.self, UserProfile.self, SyncedEPGSource.self,
             // Parental controls. Not profile-scoped, unlike `UserContentState` —
             // see `CloudSyncEngine+Parental` for why that distinction matters.
-            SyncedParentalPIN.self, SyncedCategoryRestriction.self
+            SyncedParentalPIN.self, SyncedCategoryRestriction.self, SyncedTraktAccount.self
         ])
         let cloudConfiguration = ModelConfiguration(
             ContentSyncManager.cloudMirrorConfigurationName,

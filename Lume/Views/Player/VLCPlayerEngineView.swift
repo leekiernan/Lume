@@ -214,7 +214,8 @@ struct VLCPlayerEngineView: View {
             NowPlayingService.shared.detachTransport(owner: coordinator)
             coordinator.tearDown()
         }
-        .onChange(of: coordinator.isPlaying) { _, _ in
+        .onChange(of: coordinator.isPlaying) { _, playing in
+            clock.isPlaying = playing
             resetHideTimer()
         }
         .onChange(of: scenePhase) { _, phase in

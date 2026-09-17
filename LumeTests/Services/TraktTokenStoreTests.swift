@@ -73,6 +73,83 @@ struct TraktTokensTests {
     }
 }
 
+// MARK: - Cloud merge values
+
+struct TraktCredentialValuesTests {
+    private func makeTokens(
+        accessToken: String,
+        refreshToken: String,
+        createdAt: TimeInterval
+    ) -> TraktTokens {
+        TraktTokens(
+            accessToken: accessToken,
+            refreshToken: refreshToken,
+            createdAt: createdAt,
+            expiresIn: 604_800,
+            scope: "public",
+            tokenType: "Bearer"
+        )
+    }
+
+    @Test func `shadow encoding contains a fingerprint but no OAuth secrets`() throws {
+        let value = TraktCredentialValues(tokens: makeTokens(
+            accessToken: "secret-access",
+            refreshToken: "secret-refresh",
+            createdAt: 100
+        ))
+
+        let data = try JSONEncoder().encode(value)
+        let encoded = try #require(String(data: data, encoding: .utf8))
+        #expect(encoded.contains("fingerprint"))
+        #expect(!encoded.contains("secret-access"))
+        #expect(!encoded.contains("secret-refresh"))
+        #expect(try JSONDecoder().decode(TraktCredentialValues.self, from: data) == value)
+    }
+
+    @Test func `a concurrent refresh keeps the newest server-issued token`() {
+        let older = TraktCredentialValues(tokens: makeTokens(
+            accessToken: "older",
+            refreshToken: "older-refresh",
+            createdAt: 100
+        ))
+        let newer = TraktCredentialValues(tokens: makeTokens(
+            accessToken: "newer",
+            refreshToken: "newer-refresh",
+            createdAt: 200
+        ))
+
+        let verdict = TraktCredentialValues.reconcile(local: newer, cloud: older, shadow: nil)
+        #expect(verdict == .writeBoth(newer))
+    }
+
+    @Test func `a concurrent disconnect wins over a token refresh`() {
+        let original = TraktCredentialValues(tokens: makeTokens(
+            accessToken: "original",
+            refreshToken: "original-refresh",
+            createdAt: 100
+        ))
+        let refreshed = TraktCredentialValues(tokens: makeTokens(
+            accessToken: "refreshed",
+            refreshToken: "refreshed-refresh",
+            createdAt: 200
+        ))
+
+        let verdict = TraktCredentialValues.reconcile(local: nil, cloud: refreshed, shadow: original)
+        #expect(verdict == .pushToCloud(nil))
+    }
+
+    @Test func `a fresh device pulls the cloud authorization`() {
+        let cloud = TraktCredentialValues(tokens: makeTokens(
+            accessToken: "cloud",
+            refreshToken: "cloud-refresh",
+            createdAt: 100
+        ))
+
+        let verdict = TraktCredentialValues.reconcile(local: nil, cloud: cloud, shadow: nil)
+        #expect(verdict == .pullToLocal(cloud))
+    }
+}
+
 // MARK: - TraktTokenStore (keychain)
 
 /// Serialized because every test touches the single shared keychain item
@@ -97,6 +174,7 @@ struct TraktTokenStoreTests {
 
     @Test func `load returns nil when nothing stored`() {
         #expect(TraktTokenStore.load() == nil)
+        #expect(TraktTokenStore.storedTokens() == .notSet)
     }
 
     @Test func `save then load returns the same tokens`() {

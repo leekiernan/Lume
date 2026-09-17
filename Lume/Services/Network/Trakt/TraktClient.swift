@@ -164,16 +164,56 @@ nonisolated struct TraktClient {
         let _: TraktSyncResponse = try await post("/sync/history/remove", body: items, accessToken: accessToken)
     }
 
+    // MARK: - Scrobbling
+
+    /// Reports a playback lifecycle transition. Calling `.start` again resumes
+    /// a paused session; `.stop` also lets Trakt settle completed playback into
+    /// watched history according to its own completion threshold.
+    func scrobble(
+        _ target: TraktScrobbleTarget,
+        action: TraktScrobbleAction,
+        progress: Double,
+        accessToken: String
+    ) async throws {
+        let request = TraktScrobbleRequest(target: target, progress: progress)
+        let _: TraktScrobbleResponse = try await post(
+            "/scrobble/\(action.rawValue)", body: request, accessToken: accessToken
+        )
+    }
+
     // MARK: - Watchlist
 
     /// The user's full watchlist (movies and shows), each carrying its external
     /// ids so the home screen can match against the local library by TMDB id.
+    /// Trakt's default response follows watchlist rank, so explicitly order the
+    /// completed page walk by addition time for the Home rail.
     func watchlist(accessToken: String) async throws -> [TraktWatchlistItem] {
-        try await allPages(
+        let items: [TraktWatchlistItem] = try await allPages(
             "/sync/watchlist",
             query: [URLQueryItem(name: "extended", value: "full")],
             accessToken: accessToken
         )
+        return items.enumerated()
+            .sorted { lhs, rhs in
+                let lhsDate = lhs.element.listedAt
+                let rhsDate = rhs.element.listedAt
+                if lhsDate == rhsDate { return lhs.offset < rhs.offset }
+                guard let lhsDate, let rhsDate else { return lhsDate != nil }
+                // Trakt emits UTC ISO-8601 values in one normalized format, so
+                // lexical and chronological order are equivalent here.
+                return lhsDate > rhsDate
+            }
+            .map(\.element)
+    }
+
+    /// Adds movies/shows to the user's watchlist.
+    func addToWatchlist(_ items: TraktWatchlistSyncItems, accessToken: String) async throws {
+        let _: TraktSyncResponse = try await post("/sync/watchlist", body: items, accessToken: accessToken)
+    }
+
+    /// Removes movies/shows from the user's watchlist.
+    func removeFromWatchlist(_ items: TraktWatchlistSyncItems, accessToken: String) async throws {
+        let _: TraktSyncResponse = try await post("/sync/watchlist/remove", body: items, accessToken: accessToken)
     }
 
     // MARK: - Watched history (import)
@@ -430,12 +470,51 @@ private struct TraktSyncResponse: Decodable {} // We don't act on the add/remove
 
 // MARK: - Watchlist
 
+struct TraktWatchlistShowPayload: Encodable {
+    let ids: TraktIDs
+}
+
+/// Body for `/sync/watchlist` (add and remove). Trakt expects whole movies and
+/// shows here, unlike history sync where a show payload can select episodes.
+struct TraktWatchlistSyncItems: Encodable {
+    var movies: [TraktMoviePayload] = []
+    var shows: [TraktWatchlistShowPayload] = []
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        if !movies.isEmpty {
+            try container.encode(movies, forKey: .movies)
+        }
+        if !shows.isEmpty {
+            try container.encode(shows, forKey: .shows)
+        }
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case movies, shows
+    }
+
+    static func movie(tmdbID: Int) -> TraktWatchlistSyncItems {
+        TraktWatchlistSyncItems(movies: [TraktMoviePayload(ids: TraktIDs(tmdb: tmdbID))])
+    }
+
+    static func show(tmdbID: Int) -> TraktWatchlistSyncItems {
+        TraktWatchlistSyncItems(shows: [TraktWatchlistShowPayload(ids: TraktIDs(tmdb: tmdbID))])
+    }
+}
+
 /// One watchlist entry. `type` is "movie" or "show"; the matching child carries
 /// the title and ids.
 struct TraktWatchlistItem: Decodable {
+    let listedAt: String?
     let type: String
     let movie: TraktWatchlistMedia?
     let show: TraktWatchlistMedia?
+
+    enum CodingKeys: String, CodingKey {
+        case listedAt = "listed_at"
+        case type, movie, show
+    }
 }
 
 struct TraktWatchlistMedia: Decodable {
