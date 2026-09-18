@@ -49,6 +49,7 @@ import SwiftUI
         @AppStorage private var disabledSectionsRaw: String
         @AppStorage private var customSectionsRaw: String
         @AppStorage private var heroSectionRaw: String
+        @AppStorage private var heroSeeded: Bool
 
         @State private var premium = PremiumManager.shared
         @State private var showPaywall = false
@@ -65,6 +66,7 @@ import SwiftUI
             _disabledSectionsRaw = AppStorage(wrappedValue: "", HomeLayoutSettings.disabledSectionsKey(surface))
             _customSectionsRaw = AppStorage(wrappedValue: "", CustomHomeSections.storageKey(surface))
             _heroSectionRaw = AppStorage(wrappedValue: "", HomeLayoutSettings.heroSectionKey(surface))
+            _heroSeeded = AppStorage(wrappedValue: false, HomeLayoutSettings.heroSeededKey(surface))
         }
 
         var body: some View {
@@ -73,6 +75,9 @@ import SwiftUI
                 customSection
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+            // Seeded here as well as on the page itself, so the starting hero is
+            // in the list the first time someone opens this pane.
+            .onAppear(perform: seedDefaultHeroIfNeeded)
             .paywall(isPresented: $showPaywall, highlight: .recommendations)
         }
 
@@ -112,19 +117,41 @@ import SwiftUI
             )
         }
 
-        /// Whether this section is the surface's hero.
-        private func isPromoted(_ id: UUID) -> Bool {
-            UUID(uuidString: heroSectionRaw) == id
-        }
-
-        /// Promote a section to the hero, or demote it back to a row. Only one
-        /// can be the hero, so promoting replaces whatever held it.
-        private func togglePromoted(_ id: UUID) {
-            heroSectionRaw = isPromoted(id) ? "" : id.uuidString
-        }
-
         /// Move the section at `index` one slot up or down, persisting the new
         /// order. Mirrors `moveEngine` in the player pane.
+        /// Creates this surface's starting hero if it has none, as an ordinary
+        /// section at the top of the list. Runs once: deleting it leaves it
+        /// deleted. Mirrors the pages, which seed it too.
+        private func seedDefaultHeroIfNeeded() {
+            switch CustomHomeSections.seedingDefaultHero(
+                surface: surface,
+                sections: customSections,
+                heroRaw: heroSectionRaw,
+                orderRaw: sectionOrderRaw,
+                seeded: heroSeeded
+            ) {
+            case let .seed(sections, heroToken, orderRaw):
+                customSectionsRaw = CustomHomeSections.encode(sections)
+                sectionOrderRaw = orderRaw
+                heroSectionRaw = heroToken
+                heroSeeded = true
+            case .alreadyHasHero:
+                heroSeeded = true
+            case .nothingToDo:
+                break
+            }
+        }
+
+        private func isHero(_ ref: HomeSectionRef) -> Bool {
+            HomeLayoutSettings.heroRef(heroSectionRaw) == ref
+        }
+
+        /// Promote a row to the hero, or demote it back. Only one row can be the
+        /// hero, so promoting replaces whatever held it.
+        private func togglePromoted(_ ref: HomeSectionRef) {
+            heroSectionRaw = isHero(ref) ? "" : ref.token
+        }
+
         private func move(at index: Int, by offset: Int) {
             var list = sections
             guard list.move(at: index, by: offset) else { return }
@@ -179,8 +206,8 @@ import SwiftUI
                 onMove: { move(at: index, by: $0) },
                 onEdit: custom.map { section in { beginEditing(section) } },
                 onRemove: custom.map { section in { remove(id: section.id) } },
-                onPromote: custom.map { section in { togglePromoted(section.id) } },
-                isPromoted: custom.map { isPromoted($0.id) } ?? false,
+                onPromote: ref.isPromotable ? { togglePromoted(ref) } : nil,
+                isPromoted: isHero(ref),
                 leading: {
                     Button {
                         toggle(ref)
@@ -385,7 +412,6 @@ import SwiftUI
                 closeEditor()
                 restoreFocus(to: .addSection)
             }
-            if isPromoted(id) { heroSectionRaw = "" }
             let remaining = CustomHomeSections.remove(id: id, from: customSections)
             let order = sections.filter { $0 != .custom(id) }
             customSectionsRaw = CustomHomeSections.encode(remaining)

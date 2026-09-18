@@ -36,13 +36,11 @@ final class SectionFeed {
 
     let surface: SectionSurface
 
-    /// The hero the trending feed produced. `heroItems` prefers a promoted
-    /// custom section over this when one is set.
-    private(set) var trendingHeroes: [HeroItem] = []
-    /// The custom section promoted to the hero, if any — set by the surface
-    /// from its stored preference before each load.
-    var heroSectionID: UUID?
-    /// Bumped when hero artwork lands — see `enrichPromotedHero`.
+    /// Which row the surface shows as its hero, set from its stored preference
+    /// before each load. Nothing stands in for it while that row loads, so the
+    /// hero opens on its own content or on nothing, never on someone else's.
+    var heroRef: HomeSectionRef?
+    /// Bumped when hero artwork lands — see `refreshHeroArtwork`.
     private(set) var heroArtworkRevision = 0
     private(set) var trendingMovies: [HomeMediaItem] = []
     private(set) var trendingSeries: [HomeMediaItem] = []
@@ -59,24 +57,31 @@ final class SectionFeed {
         self.surface = surface
     }
 
-    /// What the surface's hero shows: the promoted custom section when one is
-    /// set and has resolved to something, otherwise the trending picks. Computed
-    /// rather than assigned so the two loads can finish in either order without
-    /// one clobbering the other.
+    /// The promoted row's titles, as hero slides. Titles whose backdrop hasn't
+    /// been fetched yet are held back rather than shown as a stretched poster;
+    /// `refreshHeroArtwork` fills them in and they appear on the next pass.
     var heroItems: [HeroItem] {
         // Observed so the hero recomputes once enrichment fills in backdrops.
         _ = heroArtworkRevision
-        if let heroSectionID, let items = customItems[heroSectionID], !items.isEmpty {
-            // Titles whose backdrop hasn't been fetched yet are held back rather
-            // than shown as a stretched poster; `enrichHeroArtwork` fills them
-            // in and they appear on the next pass.
-            let promoted = items
-                .compactMap(HeroItem.init(item:))
-                .filter(\.hasWideArtwork)
-                .prefix(Self.heroLimit)
-            if !promoted.isEmpty { return Array(promoted) }
+        return heroCandidates
+            .filter(\.hasWideArtwork)
+            .prefix(Self.heroLimit)
+            .map(\.self)
+    }
+
+    /// Everything the promoted row resolved to, artwork or not.
+    private var heroCandidates: [HeroItem] {
+        guard let heroRef else { return [] }
+        let items: [HomeMediaItem] = switch heroRef {
+        case let .custom(id): customItems[id] ?? []
+        case .builtin(.trendingMovies): trendingMovies
+        case .builtin(.trendingSeries): trendingSeries
+        case .builtin(.traktWatchlist): watchlist
+        // Every other row is assembled by the page from its own @Query, so the
+        // feed has nothing to build a hero from — see `HomeSection.isPromotable`.
+        case .builtin: []
         }
-        return trendingHeroes
+        return items.compactMap(HeroItem.init(item:))
     }
 
     /// True once every remote row has settled, so a surface can tell "still
@@ -90,7 +95,6 @@ final class SectionFeed {
     func loadTrending(cacheKey: String) async {
         // Session cache: see `SectionFeedCache`.
         if let cached = SectionFeedCache.shared.trendingEntry(surface, for: cacheKey) {
-            trendingHeroes = cached.heroes
             trendingMovies = cached.movies
             trendingSeries = cached.series
             trendingState = .loaded
@@ -115,57 +119,29 @@ final class SectionFeed {
             let matched = matchTrending(movies: movies, tvSeries: tvSeries, context: context)
             trendingMovies = Array(matched.movies.prefix(Self.itemLimit))
             trendingSeries = Array(matched.series.prefix(Self.itemLimit))
-            // Every surface carries a hero. A scoped surface skips the other
-            // medium's trending feed above, so its heroes are already filtered
-            // to movies or series without any extra work here.
-            trendingHeroes = Array(matched.heroes.prefix(Self.heroLimit))
             trendingState = .loaded
             SectionFeedCache.shared.storeTrending(surface, key: cacheKey, entry: .init(
-                heroes: trendingHeroes, movies: trendingMovies, series: trendingSeries
+                movies: trendingMovies, series: trendingSeries
             ))
-            await enrichHeroLogos(context: context)
+            await refreshHeroArtwork()
         } catch {
             trendingState = .failed
         }
     }
 
-    /// Matches the trending titles against the local catalog (two batched
-    /// queries instead of one indexed fetch per title) and interleaves the
-    /// hero candidates.
+    /// Matches the trending titles against the local catalog — two batched
+    /// queries instead of one indexed fetch per title.
     private func matchTrending(
         movies: [TrendingTitle],
         tvSeries: [TrendingTitle],
         context: Context
-    ) -> (movies: [HomeMediaItem], series: [HomeMediaItem], heroes: [HeroItem]) {
+    ) -> (movies: [HomeMediaItem], series: [HomeMediaItem]) {
         let moviesByTmdbId = fetchMovies(tmdbIds: movies.map(\.id), context: context)
         let seriesByTmdbId = fetchSeries(tmdbIds: tvSeries.map(\.id), context: context)
-
-        var movieItems: [HomeMediaItem] = []
-        var seriesItems: [HomeMediaItem] = []
-        var heroes: [HeroItem] = []
-        let maxCount = max(movies.count, tvSeries.count)
-        for index in 0 ..< maxCount {
-            if index < movies.count {
-                let title = movies[index]
-                if let movie = moviesByTmdbId[title.id] {
-                    movieItems.append(.movie(movie))
-                    // No backdrop means no hero — the row still carries it.
-                    if let backdrop = TMDBClient.backdropURL(title.backdropPath) {
-                        heroes.append(.movie(movie, backdropURL: backdrop, overview: title.overview))
-                    }
-                }
-            }
-            if index < tvSeries.count {
-                let title = tvSeries[index]
-                if let series = seriesByTmdbId[title.id] {
-                    seriesItems.append(.series(series))
-                    if let backdrop = TMDBClient.backdropURL(title.backdropPath) {
-                        heroes.append(.series(series, backdropURL: backdrop, overview: title.overview))
-                    }
-                }
-            }
-        }
-        return (movieItems, seriesItems, heroes)
+        return (
+            movies.compactMap { moviesByTmdbId[$0.id].map(HomeMediaItem.movie) },
+            tvSeries.compactMap { seriesByTmdbId[$0.id].map(HomeMediaItem.series) }
+        )
     }
 
     /// The TMDB trending feed carries no logo artwork, so a hero title shows
@@ -176,10 +152,6 @@ final class SectionFeed {
     /// Details and coming back. Enrich the visible hero titles up front via the
     /// same TMDB detail path. Runs after the carousel is shown so backdrops
     /// aren't blocked.
-    private func enrichHeroLogos(context: Context) async {
-        await enrichHeroArtwork(trendingHeroes, context: context)
-    }
-
     /// Fetches the wide artwork, logo and copy for hero candidates that are
     /// missing any of it, on the sync manager's background context. The saves
     /// auto-merge, so the hero picks them up without a main-thread store write.
@@ -262,6 +234,7 @@ final class SectionFeed {
         }
         watchlist = Array(matched.prefix(Self.itemLimit))
         SectionFeedCache.shared.storeWatchlist(surface, key: cacheKey, items: watchlist)
+        await refreshHeroArtwork()
     }
 
     // MARK: - Custom sections
@@ -281,7 +254,6 @@ final class SectionFeed {
             // needs its backdrops, or the hero would show only those titles that
             // happened to be enriched already — which is most of them missing on
             // a fresh catalog.
-            await enrichPromotedHero()
             return
         }
         guard let context else { return }
@@ -309,8 +281,7 @@ final class SectionFeed {
             matched[section.id] = match(entries: (lists[section.id] ?? nil) ?? [], context: context)
         }
         customItems = matched
-
-        await enrichPromotedHero()
+        await refreshHeroArtwork()
 
         // Only memo a complete pass. Caching a row that failed to load (offline
         // at launch, provider down) would leave it empty for the whole session,
@@ -319,18 +290,18 @@ final class SectionFeed {
         SectionFeedCache.shared.storeCustom(surface, key: cacheKey, items: matched)
     }
 
-    /// A promoted section's hero has no TMDB payload behind it — only the ids it
-    /// matched — so its artwork has to be fetched. Across the whole matched set,
-    /// not just the first few: the hero picks its slides from all of them, so a
-    /// title is only ever held back for want of a backdrop once TMDB has
-    /// actually been asked for one. The set is capped at `itemLimit`, and only
-    /// titles missing artwork cost a request.
-    private func enrichPromotedHero() async {
-        guard let context, let heroSectionID, let promoted = customItems[heroSectionID] else { return }
-        await enrichHeroArtwork(promoted.compactMap(HeroItem.init(item:)), context: context)
+    /// Fetches the wide artwork for the promoted row's titles. Across the whole
+    /// set, not just the first few: the hero picks its slides from all of them,
+    /// so a title is only ever held back for want of a backdrop once TMDB has
+    /// actually been asked for one. Only titles missing artwork cost a request.
+    private func refreshHeroArtwork() async {
+        guard let context, heroRef != nil else { return }
+        let candidates = heroCandidates
+        guard !candidates.isEmpty else { return }
+        await enrichHeroArtwork(candidates, context: context)
         // Enrichment saves on a background context; the merge back doesn't
-        // reliably re-notify this surface, and `customItems` hasn't changed —
-        // only the models it points at have. Bump so `heroItems` recomputes.
+        // reliably re-notify this surface, and the arrays haven't changed — only
+        // the models they point at have. Bump so `heroItems` recomputes.
         heroArtworkRevision &+= 1
     }
 

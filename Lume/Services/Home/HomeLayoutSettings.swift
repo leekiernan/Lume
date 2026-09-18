@@ -71,6 +71,16 @@ enum HomeSection: String, CaseIterable, Identifiable {
         }
     }
 
+    /// Whether this row can be the hero. Only rows the shared feed resolves
+    /// from a list qualify: the @Query-backed local rows are assembled by each
+    /// page, so the feed that builds the hero never sees their items.
+    var isPromotable: Bool {
+        switch self {
+        case .trendingMovies, .trendingSeries, .traktWatchlist: true
+        case .recentlyWatched, .favorites, .recentlyAdded, .forYou: false
+        }
+    }
+
     var systemImage: String {
         switch self {
         case .recentlyWatched: "clock.arrow.circlepath"
@@ -130,6 +140,11 @@ enum HomeSectionRef: Hashable, Identifiable {
         if case let .custom(id) = self { return id }
         return nil
     }
+
+    /// Custom rows always qualify — they are a list by definition.
+    var isPromotable: Bool {
+        builtin?.isPromotable ?? true
+    }
 }
 
 /// The order of a surface's rows, top to bottom. Each section still only
@@ -156,9 +171,18 @@ enum HomeLayoutSettings {
     /// section. `.forYou` is intentionally NOT tracked here — its on/off state
     /// is the opt-in `RecommendationSettings.enabledKey`, which also gates the
     /// (expensive) recommendation recompute on Home.
-    /// The custom section promoted to this surface's hero, stored as its UUID.
-    /// Empty means the hero shows the default trending picks. A promoted section
-    /// is shown *only* as the hero — never also as a row.
+    static func disabledSectionsKey(_ surface: SectionSurface) -> String {
+        ProfileScopedPreferences.key(baseDisabledSectionsKey(surface))
+    }
+
+    /// The unscoped form — see `baseSectionOrderKey`.
+    static func baseDisabledSectionsKey(_ surface: SectionSurface) -> String {
+        "\(surface.storagePrefix).disabledSections.v1"
+    }
+
+    /// Which row this surface shows as its hero, as a `HomeSectionRef` token.
+    /// Empty means no hero. A promoted row is shown *only* as the hero, never
+    /// also as a row.
     static func heroSectionKey(_ surface: SectionSurface) -> String {
         ProfileScopedPreferences.key(baseHeroSectionKey(surface))
     }
@@ -168,13 +192,19 @@ enum HomeLayoutSettings {
         "\(surface.storagePrefix).heroSection.v1"
     }
 
-    static func disabledSectionsKey(_ surface: SectionSurface) -> String {
-        ProfileScopedPreferences.key(baseDisabledSectionsKey(surface))
+    /// Set once the surface's starting hero has been created, so deleting it
+    /// stays deleted rather than reappearing on the next launch.
+    static func heroSeededKey(_ surface: SectionSurface) -> String {
+        ProfileScopedPreferences.key(baseHeroSeededKey(surface))
     }
 
     /// The unscoped form — see `baseSectionOrderKey`.
-    static func baseDisabledSectionsKey(_ surface: SectionSurface) -> String {
-        "\(surface.storagePrefix).disabledSections.v1"
+    static func baseHeroSeededKey(_ surface: SectionSurface) -> String {
+        "\(surface.storagePrefix).heroSeeded.v1"
+    }
+
+    static func heroRef(_ raw: String) -> HomeSectionRef? {
+        HomeSectionRef(token: raw)
     }
 
     static func decodeDisabled(_ raw: String) -> Set<HomeSectionRef> {

@@ -213,12 +213,11 @@
                     Button(action: onPromote) {
                         // Filled while this row *is* the hero, so the state is
                         // readable without moving focus onto it.
-                        Image(systemName: isPromoted ? "photo.fill" : "photo")
-                            .foregroundStyle(isPromoted ? Color.yellow : Color.primary)
+                        Image(systemName: isPromoted ? "star.fill" : "star")
                     }
                     .buttonStyle(TVContentIconButtonStyle())
                     .accessibilityAddTraits(isPromoted ? .isSelected : [])
-                    .accessibilityLabel(isPromoted ? "Show \(name) as a row" : "Show \(name) as the hero")
+                    .accessibilityLabel(isPromoted ? "Stop showing \(name) as the hero" : "Show \(name) as the hero")
                 }
 
                 if let onEdit {

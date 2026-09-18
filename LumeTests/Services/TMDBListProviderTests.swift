@@ -97,6 +97,41 @@ struct TMDBListProviderTests {
         }
     }
 
+    // MARK: - API URLs
+
+    /// The trending feeds have no page on the website, and they are what a
+    /// surface's hero defaults to — so API URLs have to resolve as well.
+    @Test func `maps api urls, version prefix and all`() throws {
+        let cases = [
+            ("https://api.themoviedb.org/3/trending/all/week", "trending/all/week", nil as HomeListEntry.MediaType?),
+            ("https://api.themoviedb.org/3/trending/movie/week", "trending/movie/week", .movie),
+            ("https://api.themoviedb.org/3/trending/tv/week", "trending/tv/week", .series),
+            ("https://api.themoviedb.org/3/movie/top_rated", "movie/top_rated", .movie),
+            ("https://api.themoviedb.org/3/tv/popular", "tv/popular", .series),
+            ("https://api.themoviedb.org/3/list/1", "list/1", nil)
+        ]
+        for (url, path, media) in cases {
+            let feed = try TMDBListProvider.feed(for: self.url(url))
+            #expect(feed?.path == path, "\(url)")
+            #expect(feed?.media == media, "\(url)")
+        }
+    }
+
+    /// A mixed feed names each row's medium itself, which is what lets Home
+    /// carry both media from a single source.
+    @Test func `a mixed feed claims no medium of its own`() throws {
+        #expect(try TMDBListProvider.feed(for: url("https://api.themoviedb.org/3/trending/all/day"))?.media == nil)
+    }
+
+    @Test func `paging is ours, so a query is dropped`() throws {
+        let feed = try TMDBListProvider.feed(for: url("https://api.themoviedb.org/3/movie/popular?page=4"))
+        #expect(feed?.path == "movie/popular")
+    }
+
+    @Test func `the api host is claimed`() throws {
+        #expect(try TMDBListProvider().canHandle(url("https://api.themoviedb.org/3/trending/all/week")))
+    }
+
     // MARK: - Titles
 
     @Test func `suggests a title from a curated feed`() throws {

@@ -53,6 +53,7 @@ struct ProfileScopedPreferencesTests {
                 expected.insert(HomeLayoutSettings.sectionOrderKey(surface))
                 expected.insert(HomeLayoutSettings.disabledSectionsKey(surface))
                 expected.insert(HomeLayoutSettings.heroSectionKey(surface))
+                expected.insert(HomeLayoutSettings.heroSeededKey(surface))
                 expected.insert(CustomHomeSections.storageKey(surface))
             }
             let listed = Set(ProfileScopedPreferences.scopedBaseKeys.map(ProfileScopedPreferences.key))

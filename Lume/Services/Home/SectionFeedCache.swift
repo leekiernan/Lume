@@ -23,7 +23,6 @@ final class SectionFeedCache {
     static let shared = SectionFeedCache()
 
     struct TrendingEntry {
-        let heroes: [HeroItem]
         let movies: [HomeMediaItem]
         let series: [HomeMediaItem]
     }
