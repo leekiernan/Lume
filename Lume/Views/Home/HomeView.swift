@@ -48,13 +48,16 @@ struct HomeView: View {
     @AppStorage(HomeLayoutSettings.sectionOrderKey(.home)) private var sectionOrderRaw = ""
     /// Sections the user switched off (Settings › Layout › Home). "For You" is
     /// gated by `recommendationsEnabled` instead — see `HomeLayoutSettings`.
-    @AppStorage(HomeLayoutSettings.disabledSectionsKey(.home)) private var disabledSectionsRaw = ""
+    @AppStorage(HomeLayoutSettings.disabledSectionsKey(.home)) var disabledSectionsRaw = ""
     /// The user's custom list-backed rows (Settings › Layout › Home › Add Section).
     @AppStorage(CustomHomeSections.storageKey(.home)) private var customSectionsRaw = ""
     /// Which row Home shows as its hero, and whether its starting hero has been
     /// created yet — see `CustomHomeSections.seedingDefaultHero`.
-    @AppStorage(HomeLayoutSettings.heroSectionKey(.home)) private var heroSectionRaw = ""
+    @AppStorage(HomeLayoutSettings.heroSectionKey(.home)) var heroSectionRaw = ""
     @AppStorage(HomeLayoutSettings.heroSeededKey(.home)) private var heroSeeded = false
+    /// Device-local pointer to one already-cached backdrop, used while the
+    /// promoted section resolves on a cold launch. See `HeroWarmStartState`.
+    @State var heroWarmStart = HeroWarmStartState(surface: .home)
     /// Areas switched off for this profile (Settings › Library). Live TV is the
     /// one that reaches Home: its channels sit inside the mixed rows below.
     @AppStorage(AppAreaSettings.disabledAreasKey) private var disabledAreasRaw = ""
@@ -164,6 +167,8 @@ struct HomeView: View {
                         // `TVHomeScreen.swift`.
                         TVHomeScreen(
                             heroItems: feed.heroItems,
+                            reservesHero: heroRef != nil,
+                            warmStartBackdropURL: heroWarmStartBackdropURL,
                             onSelectHero: { selectedHero = $0 },
                             rows: { homeRows }
                         )
@@ -173,13 +178,15 @@ struct HomeView: View {
                             LazyVStack(alignment: .leading, spacing: PosterCardMetrics.sectionSpacing) {
                                 if !feed.heroItems.isEmpty {
                                     HomeHeroCarousel(items: feed.heroItems)
+                                } else if heroRef != nil {
+                                    HomeHeroWarmStart(backdropURL: heroWarmStartBackdropURL)
                                 }
                                 homeRows
                             }
                             // The hero fills the top inset itself when it's
                             // showing; without one, Home takes the same inset as
                             // the Movies and Series pages.
-                            .padding(.top, feed.heroItems.isEmpty ? PosterCardMetrics.sectionVerticalPadding : 0)
+                            .padding(.top, heroRef == nil ? PosterCardMetrics.sectionVerticalPadding : 0)
                             .padding(.bottom, PosterCardMetrics.sectionVerticalPadding)
                         }
                         .browseActivity()
@@ -187,7 +194,7 @@ struct HomeView: View {
                         // Only let content run under the nav bar when the hero
                         // backdrop is there to fill it; otherwise the first row
                         // would sit hidden behind the bar.
-                        .ignoresSafeArea(edges: feed.heroItems.isEmpty ? [] : .top)
+                        .ignoresSafeArea(edges: heroRef == nil ? [] : .top)
                     #endif
                 }
             }
@@ -243,6 +250,9 @@ struct HomeView: View {
             }
             .task(id: seriesResumeKey) {
                 await loadSeriesResume()
+            }
+            .onChange(of: feed.heroItems.first?.imageURL, initial: true) { _, backdropURL in
+                rememberHeroWarmStart(backdropURL)
             }
             #if os(iOS) || os(tvOS)
             .fullScreenCover(item: $playingMedia) { media in
@@ -370,15 +380,6 @@ struct HomeView: View {
         "custom-\(trendingKey)-\(heroSectionRaw)-\(CustomHomeSections.contentSignature(visibleCustomSections))"
     }
 
-    /// The user's custom rows for this surface, decoded from their stored JSON.
-    /// The promoted row, if the surface has one and it is still switched on.
-    private var heroRef: HomeSectionRef? {
-        guard let ref = HomeLayoutSettings.heroRef(heroSectionRaw),
-              HomeLayoutSettings.isEnabled(ref, disabledRaw: disabledSectionsRaw)
-        else { return nil }
-        return ref
-    }
-
     /// Creates Home's starting hero the first time it is needed, as an ordinary
     /// section. Runs once: deleting it leaves it deleted.
     private func seedDefaultHeroIfNeeded() {
@@ -435,12 +436,6 @@ struct HomeView: View {
     }
 
     // MARK: - Playlist scoping
-
-    /// The playlist whose content is currently shown, resolved from the global
-    /// selection. Falls back to the first playlist until the user picks one.
-    private var activePlaylist: Playlist? {
-        playlists.active(for: selectedPlaylistID)
-    }
 
     /// The id prefix every Movie/Series/LiveStream belonging to the active
     /// playlist shares (ids are stored as `"\(playlistID)-…"`). The `@Query`
