@@ -69,6 +69,13 @@ final class ProfileManager {
     private let coordinator: CloudSyncCoordinator
     /// Process-lifetime; never removed (this manager lives for the whole app).
     private var remoteChangeObserver: NSObjectProtocol?
+    private var cloudImportObserver: NSObjectProtocol?
+    private var preferencesChangeObserver: NSObjectProtocol?
+    private var preferencesSaveTask: Task<Void, Never>?
+    private var lastPreferencesSnapshot: ProfilePreferencesSnapshot?
+    private var lastPreferencesJSON: String?
+    private var isApplyingPreferences = false
+    private static let preferencesSaveDelay: Duration = .milliseconds(250)
 
     init(catalogContainer: ModelContainer, cloudContainer: ModelContainer, coordinator: CloudSyncCoordinator) {
         self.catalogContainer = catalogContainer
@@ -92,7 +99,30 @@ final class ProfileManager {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            MainActor.assumeIsolated { self?.refreshProfiles() }
+            MainActor.assumeIsolated {
+                self?.refreshProfiles()
+                self?.applyImportedPreferencesIfNeeded()
+            }
+        }
+        // A generic store-change can be an export acknowledgement or an early
+        // import batch. Only a completed successful import proves that an empty
+        // `preferencesJSON` is genuinely empty in CloudKit and safe to seed.
+        cloudImportObserver = NotificationCenter.default.addObserver(
+            forName: .lumeCloudImportDidComplete,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.cloudImportDidComplete() }
+        }
+        // `@AppStorage` writes straight to UserDefaults, so mirror relevant
+        // changes back onto the active cloud profile. The notification is broad;
+        // snapshot comparison below filters out every device-only preference.
+        preferencesChangeObserver = NotificationCenter.default.addObserver(
+            forName: UserDefaults.didChangeNotification,
+            object: UserDefaults.standard,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.preferencesDidChange() }
         }
     }
 
@@ -117,6 +147,10 @@ final class ProfileManager {
         // layout became per-profile can now be adopted as theirs. Runs before
         // `isReady`, and so before any view reads a layout key.
         ProfileScopedPreferences.migrateLegacyValuesIfNeeded()
+        synchronizePreferences(
+            for: result.activeProfileID,
+            allowCloudSeed: coordinator.canSeedProfilePreferences
+        )
         isReady = true
         refreshProfiles()
     }
@@ -184,6 +218,9 @@ final class ProfileManager {
         guard id != activeProfileID, !isSwitching else { return }
         let from = activeProfileID
         switchingToProfileID = id
+        preferencesSaveTask?.cancel()
+        preferencesSaveTask = nil
+        persistPreferencesIfChanged(for: from)
         // Flush any pending catalog edits (e.g. a favorite toggled moments ago,
         // not yet autosaved) so the engine — which reads the catalog through its
         // own background context — exports the outgoing profile's *current* state
@@ -195,6 +232,9 @@ final class ProfileManager {
         // no window where the catalog and the active-profile pointer disagree.
         await coordinator.switchProfile(from: from, to: id)
         activeProfileID = id
+        lastPreferencesSnapshot = nil
+        lastPreferencesJSON = nil
+        synchronizePreferences(for: id, allowCloudSeed: coordinator.canSeedProfilePreferences)
         switchingToProfileID = nil
         // Re-baseline the freshly projected state against the cloud.
         coordinator.reconcile()
@@ -217,5 +257,102 @@ final class ProfileManager {
         context.delete(profile)
         try? context.save()
         refreshProfiles()
+    }
+
+    // MARK: - Synced preferences
+
+    /// First use on a device is asymmetric on purpose: a non-empty CloudKit
+    /// snapshot always wins. Existing local values can seed an empty snapshot
+    /// only after a successful import has established that the empty field is
+    /// current, rather than a stale pre-import copy of another device's profile.
+    private func synchronizePreferences(for profileID: UUID, allowCloudSeed: Bool) {
+        guard let profile = profile(with: profileID) else { return }
+        let local = ProfileScopedPreferences.snapshot(profileID: profileID)
+        guard !profile.preferencesJSON.isEmpty else {
+            lastPreferencesSnapshot = local
+            lastPreferencesJSON = ""
+            if ProfileScopedPreferences.shouldSeedCloudSnapshot(
+                cloudJSON: profile.preferencesJSON,
+                hasCompletedCloudImport: allowCloudSeed,
+                hasStoredLocalValues: ProfileScopedPreferences.hasStoredValues(profileID: profileID)
+            ) {
+                persistPreferences(local, to: profile)
+            }
+            return
+        }
+        guard let imported = ProfileScopedPreferences.decode(profile.preferencesJSON) else {
+            Logger.sync.error("Ignoring malformed synced preferences for profile \(profileID.uuidString, privacy: .public)")
+            lastPreferencesSnapshot = local
+            lastPreferencesJSON = profile.preferencesJSON
+            return
+        }
+        isApplyingPreferences = true
+        ProfileScopedPreferences.apply(imported, profileID: profileID)
+        isApplyingPreferences = false
+        lastPreferencesSnapshot = ProfileScopedPreferences.snapshot(profileID: profileID)
+        lastPreferencesJSON = profile.preferencesJSON
+    }
+
+    /// A remote-store notification can also concern playlists, Trakt or an
+    /// inactive profile. Apply only when the active profile's payload changed.
+    private func applyImportedPreferencesIfNeeded() {
+        guard isReady, !isSwitching,
+              let profile = profile(with: activeProfileID),
+              profile.preferencesJSON != lastPreferencesJSON
+        else { return }
+        preferencesSaveTask?.cancel()
+        preferencesSaveTask = nil
+        synchronizePreferences(
+            for: activeProfileID,
+            allowCloudSeed: coordinator.canSeedProfilePreferences
+        )
+    }
+
+    private func cloudImportDidComplete() {
+        guard isReady, !isSwitching else { return }
+        preferencesSaveTask?.cancel()
+        preferencesSaveTask = nil
+        synchronizePreferences(for: activeProfileID, allowCloudSeed: true)
+    }
+
+    private func preferencesDidChange() {
+        guard isReady, !isSwitching, !isApplyingPreferences else { return }
+        let current = ProfileScopedPreferences.snapshot(profileID: activeProfileID)
+        guard current != lastPreferencesSnapshot else { return }
+        preferencesSaveTask?.cancel()
+        let profileID = activeProfileID
+        preferencesSaveTask = Task { [weak self] in
+            try? await Task.sleep(for: Self.preferencesSaveDelay)
+            guard !Task.isCancelled, self?.activeProfileID == profileID else { return }
+            self?.persistPreferencesIfChanged(for: profileID)
+        }
+    }
+
+    private func persistPreferencesIfChanged(for profileID: UUID) {
+        let current = ProfileScopedPreferences.snapshot(profileID: profileID)
+        guard current != lastPreferencesSnapshot,
+              let profile = profile(with: profileID)
+        else { return }
+        persistPreferences(current, to: profile)
+    }
+
+    private func persistPreferences(_ current: ProfilePreferencesSnapshot, to profile: UserProfile) {
+        let previous = ProfileScopedPreferences.decode(profile.preferencesJSON)
+        let merged = ProfileScopedPreferences.preservingUnknownValues(in: previous, updating: current)
+        guard let encoded = ProfileScopedPreferences.encode(merged) else { return }
+        guard encoded != profile.preferencesJSON else {
+            lastPreferencesSnapshot = current
+            lastPreferencesJSON = encoded
+            return
+        }
+        profile.preferencesJSON = encoded
+        profile.updatedAt = Date()
+        do {
+            try context.save()
+            lastPreferencesSnapshot = current
+            lastPreferencesJSON = encoded
+        } catch {
+            Logger.sync.error("Saving synced profile preferences failed: \(error.localizedDescription)")
+        }
     }
 }

@@ -38,7 +38,7 @@ enum CloudSyncStatusText {
         }
         switch status.account {
         case .available:
-            if let date = status.lastReconcile {
+            if let date = status.lastSuccessfulCloudSync {
                 return Text("Last synced \(Text(date, format: .relative(presentation: .named)))")
             }
             return Text("Waiting for first sync…")

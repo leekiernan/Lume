@@ -29,6 +29,13 @@ final class CloudSyncCoordinator {
     /// are skipped; the engine still reconciles the local user-data store.
     private let cloudKitEnabled: Bool
 
+    /// Seeding a previously-empty profile snapshot is safe only after CloudKit
+    /// has completed an import cycle. Until then the local row may merely be an
+    /// old cached copy that has not received another device's snapshot yet.
+    var canSeedProfilePreferences: Bool {
+        !cloudKitEnabled || status.lastSuccessfulImport != nil
+    }
+
     /// Coalescing guard: a reconcile requested while one is running sets
     /// `pendingReconcile` instead of overlapping, then runs once afterwards.
     private var isReconciling = false
@@ -320,9 +327,17 @@ final class CloudSyncCoordinator {
             // Runs on the main queue; hop to the isolated actor to mutate state.
             let type = event.type
             let inProgress = event.endDate == nil
+            let succeeded = event.succeeded
+            let completedAt = event.endDate
             let errorText = Self.describe(event.error, eventType: type)
             MainActor.assumeIsolated {
-                self?.applyCloudKitEvent(type: type, inProgress: inProgress, error: errorText)
+                self?.applyCloudKitEvent(
+                    type: type,
+                    inProgress: inProgress,
+                    succeeded: succeeded,
+                    completedAt: completedAt,
+                    error: errorText
+                )
             }
         }
         observers.append(observer)
@@ -331,6 +346,8 @@ final class CloudSyncCoordinator {
     private func applyCloudKitEvent(
         type: NSPersistentCloudKitContainer.EventType,
         inProgress: Bool,
+        succeeded: Bool,
+        completedAt: Date?,
         error: String?
     ) {
         status.isSyncing = inProgress
@@ -343,6 +360,22 @@ final class CloudSyncCoordinator {
             status.lastError = error
         } else if !inProgress {
             status.lastError = nil
+        }
+        if !inProgress, succeeded {
+            let completion = completedAt ?? Date()
+            switch type {
+            case .import:
+                status.lastSuccessfulImport = completion
+                Logger.sync.info("CloudKit import completed successfully")
+                NotificationCenter.default.post(name: .lumeCloudImportDidComplete, object: nil)
+            case .export:
+                status.lastSuccessfulExport = completion
+                Logger.sync.info("CloudKit export completed successfully")
+            case .setup:
+                break
+            @unknown default:
+                break
+            }
         }
         // An import means remote data is actually landing in the local store — arm
         // the gate so the foreground / remote-change passes know to pull, and run
@@ -496,4 +529,8 @@ enum ReconcileReason {
 extension Notification.Name {
     /// Posted by `ContentSyncManager` after a playlist's catalog sync succeeds.
     static let lumeContentSyncDidComplete = Notification.Name("LumeContentSyncDidComplete")
+    /// Posted only after CloudKit reports a successful import event. Profile
+    /// preference migration uses this as the point at which an empty cloud field
+    /// is known not to be an as-yet-unimported value from another device.
+    static let lumeCloudImportDidComplete = Notification.Name("LumeCloudImportDidComplete")
 }
