@@ -443,7 +443,23 @@ struct SettingsView: View {
                 .tvSettingsBackground()
                 .paywall(isPresented: $showPaywall, highlight: paywallHighlight)
                 .defaultFocus($focusedCategory, .premium)
-                .onChange(of: focusedCategory) { _, newValue in
+                .onChange(of: focusedCategory) { oldValue, newValue in
+                    // Backstop for the `defaultFocus` above: if the engine
+                    // lands on the geometrically nearest row anyway, correct it
+                    // rather than treat it as a choice, which would switch
+                    // category and throw away any drill-in on the way past.
+                    // Moving *within* the sidebar (`oldValue != nil`) is a real
+                    // choice and stands.
+                    // Not while the area toggle is putting focus back: tvOS
+                    // brushes the sidebar as rows insert, and a second
+                    // assertion racing that one leaves the engine on neither.
+                    if oldValue == nil, !restoringLibraryAreaToggleFocus,
+                       let newValue, newValue != selectedCategory,
+                       availableCategories.contains(selectedCategory)
+                    {
+                        Task { focusedCategory = selectedCategory }
+                        return
+                    }
                     // Follow focus so the detail pane mirrors the highlighted
                     // category. Ignore nil (focus moved into the detail pane),
                     // which keeps the current selection visible.
@@ -492,6 +508,11 @@ struct SettingsView: View {
             .padding(.trailing, 24)
             .padding(.vertical, 72)
             .focusSection()
+            // Where focus goes when it enters the sidebar. Stating it means the
+            // engine picks the selected row *instead of* the geometrically
+            // nearest one, rather than landing on that one and being corrected
+            // afterwards — which is visible as the highlight jumping.
+            .defaultFocus($focusedCategory, selectedCategory, priority: .userInitiated)
         }
 
         /// The sidebar categories. Integrations is hidden unless the build has
