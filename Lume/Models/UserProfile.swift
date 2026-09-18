@@ -28,6 +28,11 @@ final class UserProfile {
     /// Salted hash of the optional PIN required to switch into this profile.
     /// The PIN itself is never persisted or synced.
     var pinHash: String = ""
+    /// CloudKit-backed snapshot of the small, profile-scoped layout preferences
+    /// that are consumed through `@AppStorage` (areas, rows and custom sections).
+    /// Keeping the live values in UserDefaults preserves immediate SwiftUI
+    /// updates; `ProfileManager` mirrors them into this field across devices.
+    var preferencesJSON: String = ""
 
     init(
         id: UUID = UUID(),
@@ -37,6 +42,7 @@ final class UserProfile {
         sortOrder: Int = 0,
         isChild: Bool = false,
         pinHash: String = "",
+        preferencesJSON: String = "",
         createdAt: Date = Date(),
         updatedAt: Date = Date()
     ) {
@@ -47,6 +53,7 @@ final class UserProfile {
         self.sortOrder = sortOrder
         self.isChild = isChild
         self.pinHash = pinHash
+        self.preferencesJSON = preferencesJSON
         self.createdAt = createdAt
         self.updatedAt = updatedAt
     }

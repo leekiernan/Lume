@@ -47,7 +47,7 @@ struct ProfileScopedPreferencesTests {
         withActiveProfile(Self.profileA) {
             var expected: Set<String> = [
                 AppAreaSettings.disabledAreasKey,
-                ProfileScopedPreferences.key(RecommendationSettings.enabledKey)
+                RecommendationSettings.enabledKey
             ]
             for surface in SectionSurface.allCases {
                 expected.insert(HomeLayoutSettings.sectionOrderKey(surface))
@@ -65,6 +65,87 @@ struct ProfileScopedPreferencesTests {
             let keys = ProfileScopedPreferences.scopedBaseKeys
             #expect(Set(keys).count == keys.count)
         }
+    }
+
+    // MARK: - Cloud snapshot
+
+    @Test func `snapshot round trips string and boolean preferences`() throws {
+        let sourceName = "ProfileScopedPreferencesTests.snapshot.source"
+        let destinationName = "ProfileScopedPreferencesTests.snapshot.destination"
+        let source = try #require(UserDefaults(suiteName: sourceName))
+        let destination = try #require(UserDefaults(suiteName: destinationName))
+        source.removePersistentDomain(forName: sourceName)
+        destination.removePersistentDomain(forName: destinationName)
+
+        let order = HomeLayoutSettings.baseSectionOrderKey(.home)
+        source.set("favorites,trendingMovies", forKey: ProfileScopedPreferences.key(order, profileID: Self.profileA))
+        source.set(true, forKey: ProfileScopedPreferences.key(
+            RecommendationSettings.baseEnabledKey,
+            profileID: Self.profileA
+        ))
+
+        let captured = ProfileScopedPreferences.snapshot(profileID: Self.profileA, defaults: source)
+        let json = try #require(ProfileScopedPreferences.encode(captured))
+        let decoded = try #require(ProfileScopedPreferences.decode(json))
+        ProfileScopedPreferences.apply(decoded, profileID: Self.profileB, defaults: destination)
+
+        #expect(destination.string(forKey: ProfileScopedPreferences.key(order, profileID: Self.profileB)) == "favorites,trendingMovies")
+        #expect(destination.bool(forKey: ProfileScopedPreferences.key(
+            RecommendationSettings.baseEnabledKey,
+            profileID: Self.profileB
+        )))
+    }
+
+    @Test func `pristine profile does not claim an empty cloud snapshot`() throws {
+        let suiteName = "ProfileScopedPreferencesTests.pristine"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defaults.removePersistentDomain(forName: suiteName)
+
+        #expect(!ProfileScopedPreferences.hasStoredValues(profileID: Self.profileA, defaults: defaults))
+        defaults.set("", forKey: ProfileScopedPreferences.key(
+            AppAreaSettings.baseDisabledAreasKey,
+            profileID: Self.profileA
+        ))
+        #expect(ProfileScopedPreferences.hasStoredValues(profileID: Self.profileA, defaults: defaults))
+    }
+
+    @Test func `local snapshot waits for a successful cloud import before seeding`() {
+        #expect(!ProfileScopedPreferences.shouldSeedCloudSnapshot(
+            cloudJSON: "",
+            hasCompletedCloudImport: false,
+            hasStoredLocalValues: true
+        ))
+        #expect(ProfileScopedPreferences.shouldSeedCloudSnapshot(
+            cloudJSON: "",
+            hasCompletedCloudImport: true,
+            hasStoredLocalValues: true
+        ))
+        #expect(!ProfileScopedPreferences.shouldSeedCloudSnapshot(
+            cloudJSON: "",
+            hasCompletedCloudImport: true,
+            hasStoredLocalValues: false
+        ))
+    }
+
+    @Test func `existing cloud snapshot is never replaced by migration seeding`() {
+        #expect(!ProfileScopedPreferences.shouldSeedCloudSnapshot(
+            cloudJSON: "{\"strings\":{},\"booleans\":{}}",
+            hasCompletedCloudImport: true,
+            hasStoredLocalValues: true
+        ))
+    }
+
+    @Test func `unknown future values survive a local update`() {
+        let previous = ProfilePreferencesSnapshot(
+            strings: ["future.layout.key": "value"],
+            booleans: ["future.toggle.key": true]
+        )
+        let current = ProfilePreferencesSnapshot(strings: [:], booleans: [:])
+
+        let merged = ProfileScopedPreferences.preservingUnknownValues(in: previous, updating: current)
+
+        #expect(merged.strings["future.layout.key"] == "value")
+        #expect(merged.booleans["future.toggle.key"] == true)
     }
 
     /// The device's own setup stays device-wide: a second profile shouldn't have
@@ -134,5 +215,27 @@ struct ProfileScopedPreferencesTests {
             ProfileScopedPreferences.migrateLegacyValuesIfNeeded(defaults: defaults)
         }
         #expect(!defaults.bool(forKey: ProfileScopedPreferences.migrationFlagKey))
+    }
+
+    @Test func `latest legacy recommendation value repairs the first scoped copy`() throws {
+        let suiteName = "ProfileScopedPreferencesTests.recommendationRepair"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defaults.removePersistentDomain(forName: suiteName)
+        defaults.set(true, forKey: ProfileScopedPreferences.migrationFlagKey)
+        defaults.set(false, forKey: ProfileScopedPreferences.key(
+            RecommendationSettings.baseEnabledKey,
+            profileID: Self.profileA
+        ))
+        defaults.set(true, forKey: RecommendationSettings.baseEnabledKey)
+
+        withActiveProfile(Self.profileA) {
+            ProfileScopedPreferences.migrateLegacyValuesIfNeeded(defaults: defaults)
+        }
+
+        #expect(defaults.bool(forKey: ProfileScopedPreferences.key(
+            RecommendationSettings.baseEnabledKey,
+            profileID: Self.profileA
+        )))
+        #expect(defaults.bool(forKey: ProfileScopedPreferences.recommendationMigrationFlagKey))
     }
 }

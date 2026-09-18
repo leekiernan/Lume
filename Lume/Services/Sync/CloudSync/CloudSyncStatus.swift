@@ -40,6 +40,17 @@ final class CloudSyncStatus {
     /// When the local reconcile last completed successfully.
     var lastReconcile: Date?
 
+    /// Successful CloudKit transfers, tracked separately from the local
+    /// reconcile above. A reconcile only updates Lume's mirror/catalog state;
+    /// it is not proof that CloudKit accepted an upload.
+    var lastSuccessfulImport: Date?
+    var lastSuccessfulExport: Date?
+
+    /// Most recent server-confirmed transfer, used by the Settings summary.
+    var lastSuccessfulCloudSync: Date? {
+        [lastSuccessfulImport, lastSuccessfulExport].compactMap(\.self).max()
+    }
+
     /// The most recent CloudKit sync error, if any (cleared on the next success).
     var lastError: String?
 

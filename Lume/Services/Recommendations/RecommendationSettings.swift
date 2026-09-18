@@ -11,7 +11,13 @@ import Foundation
 nonisolated enum RecommendationSettings {
     /// Whether the "For You" row is built and shown on Home. Off by default; the
     /// user opts in from the Home layout settings (Settings › Layout › Home).
-    static let enabledKey = "recommendations.enabled.v1"
+    /// Scoped to the active profile, like the row layout it controls.
+    static var enabledKey: String {
+        ProfileScopedPreferences.key(baseEnabledKey)
+    }
+
+    /// The unscoped form used by the profile migration/cloud snapshot.
+    static let baseEnabledKey = "recommendations.enabled.v1"
     static let enabledDefault = false
 
     /// A counter bumped by the DEBUG-only "Recalculate" action to force an
