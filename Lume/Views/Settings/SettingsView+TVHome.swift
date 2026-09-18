@@ -71,6 +71,13 @@ import SwiftUI
                 disabledAreasRaw = AppAreaSettings.settingEnabled(
                     !enabled, for: layoutArea, disabledRaw: disabledAreasRaw
                 )
+                // The enabled area's detail is added/removed in this update.
+                // Restore focus after that layout transaction has settled so
+                // the focus engine doesn't fall back to the Settings sidebar.
+                Task {
+                    await Task.yield()
+                    libraryAreaToggleFocused = true
+                }
             } label: {
                 HStack(spacing: 16) {
                     Image(systemName: enabled ? "checkmark.circle.fill" : "circle")
@@ -81,6 +88,7 @@ import SwiftUI
                 }
             }
             .buttonStyle(TVSettingsRowButtonStyle())
+            .focused($libraryAreaToggleFocused)
             // The last area standing can't be switched off — there would be no
             // navigation left.
             .disabled(enabled && !canDisable)

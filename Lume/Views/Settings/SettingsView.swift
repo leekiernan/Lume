@@ -119,6 +119,10 @@ struct SettingsView: View {
         /// SettingsView+TVHome extension (separate file).
         @State var layoutArea: AppArea = .home
         @State var showingAreaCategories = false
+        /// Reasserted after the area's enabled state changes. The rows below the
+        /// toggle are inserted/removed by that mutation; without an explicit
+        /// anchor tvOS can hand focus back to the Settings sidebar.
+        @FocusState var libraryAreaToggleFocused: Bool
         /// Whether the Playlists pane has drilled into the guide's sources.
         @State var showingEPGSources = false
         @AppStorage(AppAreaSettings.disabledAreasKey) var disabledAreasRaw = ""

@@ -37,6 +37,11 @@ import SwiftUI
     }
 
     struct TVSectionLayoutDetail: View {
+        private enum FocusTarget: Hashable {
+            case addSection
+            case section(HomeSectionRef)
+        }
+
         let surface: SectionSurface
 
         @AppStorage(RecommendationSettings.enabledKey) private var recommendationsEnabled = RecommendationSettings.enabledDefault
@@ -51,6 +56,7 @@ import SwiftUI
         @State private var editorURL = ""
         @State private var editorError: String?
         @State private var editorChecking = false
+        @FocusState private var focusedControl: FocusTarget?
 
         init(surface: SectionSurface) {
             self.surface = surface
@@ -167,6 +173,7 @@ import SwiftUI
                         Image(systemName: enabled ? "checkmark.circle.fill" : "circle")
                     }
                     .buttonStyle(TVContentIconButtonStyle())
+                    .focused($focusedControl, equals: .section(ref))
                     .accessibilityLabel(Text(verbatim: name))
                     .accessibilityValue(enabled ? Text("On") : Text("Off"))
 
@@ -213,6 +220,7 @@ import SwiftUI
                         }
                     }
                     .buttonStyle(TVSettingsRowButtonStyle())
+                    .focused($focusedControl, equals: .addSection)
                     .disabled(customSections.count >= CustomHomeSections.maximumCount)
 
                     Text("Build your own row from a public list, like a site's most-popular chart. Lume matches the list against your playlist and shows the titles you have.")
@@ -233,7 +241,12 @@ import SwiftUI
 
         private var editorForm: some View {
             VStack(alignment: .leading, spacing: 18) {
-                TVSettingsField(title: "Title", placeholder: "Section title", text: $editorTitle)
+                TVSettingsField(
+                    title: "Title",
+                    placeholder: "Section title",
+                    text: $editorTitle,
+                    requestsFocusOnAppear: true
+                )
                 TVSettingsField(title: "List URL", placeholder: "List URL", text: $editorURL, contentType: .URL)
 
                 if let editorError {
@@ -250,7 +263,7 @@ import SwiftUI
                     .buttonStyle(TVSettingsRowButtonStyle())
                     .disabled(editorChecking || editorURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
 
-                    Button("Cancel") { closeEditor() }
+                    Button("Cancel") { cancelEditor() }
                         .buttonStyle(TVSettingsRowButtonStyle())
                 }
 
@@ -291,6 +304,21 @@ import SwiftUI
             editorError = nil
         }
 
+        private func cancelEditor() {
+            let returnTarget = editor?.editingID.map { FocusTarget.section(.custom($0)) } ?? .addSection
+            closeEditor()
+            restoreFocus(to: returnTarget)
+        }
+
+        /// Focus restoration is deferred until the inline editor has left the
+        /// hierarchy and its replacement control has a stable focus geometry.
+        private func restoreFocus(to target: FocusTarget) {
+            Task {
+                await Task.yield()
+                focusedControl = target
+            }
+        }
+
         /// Verifies the list resolves before storing it — a section that can't be
         /// read would otherwise just never appear, with nothing to say why. A list
         /// carrying none of this page's medium is allowed but called out.
@@ -322,6 +350,7 @@ import SwiftUI
                     entries.contains { $0.mediaType == wanted }
                 } ?? true
                 closeEditor()
+                restoreFocus(to: .section(.custom(id)))
                 if !matchesSurface { editorError = mismatchWarning }
             }
         }
@@ -337,7 +366,10 @@ import SwiftUI
         /// Drops the section and its entry in the stored order, so a later
         /// section added with a fresh id can't inherit its slot.
         private func remove(id: UUID) {
-            if editor?.editingID == id { closeEditor() }
+            if editor?.editingID == id {
+                closeEditor()
+                restoreFocus(to: .addSection)
+            }
             let remaining = CustomHomeSections.remove(id: id, from: customSections)
             let order = sections.filter { $0 != .custom(id) }
             customSectionsRaw = CustomHomeSections.encode(remaining)

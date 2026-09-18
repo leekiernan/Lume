@@ -52,7 +52,7 @@ final nonisolated class StubURLProtocol: URLProtocol {
         lock.withLock { routes[key] = response }
     }
 
-/// Registers `response` for requests to `host` whose path ends in
+    /// Registers `response` for requests to `host` whose path ends in
     /// `pathSuffix`, for endpoints that carry no query item to discriminate on.
     static func register(host: String, pathSuffix: String, response: Response) {
         let key = RouteKey(host: host, queryName: "", queryValue: "", pathSuffix: pathSuffix)
@@ -95,7 +95,7 @@ final nonisolated class StubURLProtocol: URLProtocol {
 
         let match = Self.lock.withLock {
             Self.routes.first { key, _ in
-guard key.host == host else { return false }
+                guard key.host == host else { return false }
                 if let suffix = key.pathSuffix { return components.path.hasSuffix(suffix) }
                 return items.contains { $0.name == key.queryName && $0.value == key.queryValue }
             }?.value ?? Self.pathRoutes[PathKey(host: host, path: components.path)]

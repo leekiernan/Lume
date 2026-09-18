@@ -120,6 +120,11 @@
         @Binding var text: String
         var isSecure: Bool = false
         var contentType: UITextContentType?
+        /// Inline editors replace the control that opened them. Requesting
+        /// initial focus makes that transition visible and lets tvOS scroll the
+        /// newly-revealed field into view instead of jumping to the page top.
+        var requestsFocusOnAppear = false
+        @FocusState private var isFocused: Bool
 
         var body: some View {
             VStack(alignment: .leading, spacing: 8) {
@@ -140,6 +145,14 @@
                 .font(.system(size: TVSettingsMetrics.rowFontSize))
                 .textContentType(contentType)
                 .autocorrectionDisabled()
+                .focused($isFocused)
+                .onAppear {
+                    guard requestsFocusOnAppear else { return }
+                    Task {
+                        await Task.yield()
+                        isFocused = true
+                    }
+                }
             }
         }
     }
