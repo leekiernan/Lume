@@ -38,6 +38,17 @@ nonisolated enum SectionSurface: String, CaseIterable, Identifiable {
         }
     }
 
+    /// Where this surface's hero draws from before anyone edits it. Single URLs
+    /// throughout: Home takes TMDB's mixed trending feed, which names each row's
+    /// medium itself, so one source covers both media rather than needing two.
+    var defaultHeroSourceURL: String {
+        switch self {
+        case .home: "https://api.themoviedb.org/3/trending/all/week"
+        case .movies: "https://api.themoviedb.org/3/trending/movie/week"
+        case .series: "https://api.themoviedb.org/3/trending/tv/week"
+        }
+    }
+
     var title: LocalizedStringKey {
         switch self {
         case .home: "Home"

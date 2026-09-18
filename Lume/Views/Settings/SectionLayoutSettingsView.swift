@@ -22,6 +22,7 @@
         @AppStorage private var disabledSectionsRaw: String
         @AppStorage private var customSectionsRaw: String
         @AppStorage private var heroSectionRaw: String
+        @AppStorage private var heroSeeded: Bool
         @State private var premium = PremiumManager.shared
         @State private var showPaywall = false
         @State private var editorMode: CustomHomeSectionEditor.Mode?
@@ -35,6 +36,7 @@
             _disabledSectionsRaw = AppStorage(wrappedValue: "", HomeLayoutSettings.disabledSectionsKey(surface))
             _customSectionsRaw = AppStorage(wrappedValue: "", CustomHomeSections.storageKey(surface))
             _heroSectionRaw = AppStorage(wrappedValue: "", HomeLayoutSettings.heroSectionKey(surface))
+            _heroSeeded = AppStorage(wrappedValue: false, HomeLayoutSettings.heroSeededKey(surface))
         }
 
         private var customSections: [CustomHomeSection] {
@@ -83,6 +85,10 @@
                     }
                 }
             }
+            // Seeded here as well as on the page itself, so the starting hero is
+            // in the list the first time someone opens this screen — even if
+            // they come here before visiting the page.
+            .onAppear(perform: seedDefaultHeroIfNeeded)
             .platformNavigationTitle(surface.title)
             #if os(iOS)
                 // Keep the list permanently in edit mode so the rows are always
@@ -116,8 +122,11 @@
         private func row(for ref: HomeSectionRef) -> some View {
             switch ref {
             case let .builtin(section):
-                Toggle(isOn: enabledBinding(for: section)) {
-                    rowLabel(for: section)
+                HStack {
+                    Toggle(isOn: enabledBinding(for: section)) {
+                        rowLabel(for: section)
+                    }
+                    promoteButton(for: ref, name: section.displayName)
                 }
             case let .custom(id):
                 if let section = customSections.first(where: { $0.id == id }) {
@@ -136,17 +145,18 @@
                     Label {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(verbatim: section.title)
-                            Text(verbatim: subtitle(for: section))
+                            Text(verbatim: section.provider?.displayName ?? section.sourceURL)
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                                 .lineLimit(1)
                                 .truncationMode(.middle)
                         }
                     } icon: {
-                        Image(systemName: isPromoted(section.id) ? "photo.fill" : "list.bullet.rectangle")
-                            .foregroundStyle(isPromoted(section.id) ? Color.yellow : Color.primary)
+                        Image(systemName: "list.bullet.rectangle")
                     }
                 }
+
+                promoteButton(for: .custom(section.id), name: section.title)
 
                 Button {
                     editorMode = .edit(section)
@@ -158,31 +168,57 @@
             }
             .contextMenu {
                 Button("Edit", systemImage: "pencil") { editorMode = .edit(section) }
-                if isPromoted(section.id) {
-                    Button("Show as Row", systemImage: "list.bullet.rectangle") { togglePromoted(section.id) }
-                } else {
-                    Button("Show as Hero", systemImage: "photo") { togglePromoted(section.id) }
-                }
                 Button("Remove", systemImage: "trash", role: .destructive) { delete(id: section.id) }
             }
         }
 
-        /// A promoted section says so in place of its provider, since it no
-        /// longer appears as a row at all.
-        private func subtitle(for section: CustomHomeSection) -> String {
-            isPromoted(section.id)
-                ? String(localized: "Hero")
-                : (section.provider?.displayName ?? section.sourceURL)
+        /// Creates this surface's starting hero if it has none, as an ordinary
+        /// section at the top of the list. Runs once: deleting it leaves it
+        /// deleted. Mirrors the pages, which seed it too.
+        private func seedDefaultHeroIfNeeded() {
+            switch CustomHomeSections.seedingDefaultHero(
+                surface: surface,
+                sections: customSections,
+                heroRaw: heroSectionRaw,
+                orderRaw: sectionOrderRaw,
+                seeded: heroSeeded
+            ) {
+            case let .seed(sections, heroToken, orderRaw):
+                customSectionsRaw = CustomHomeSections.encode(sections)
+                sectionOrderRaw = orderRaw
+                heroSectionRaw = heroToken
+                heroSeeded = true
+            case .alreadyHasHero:
+                heroSeeded = true
+            case .nothingToDo:
+                break
+            }
         }
 
-        private func isPromoted(_ id: UUID) -> Bool {
-            UUID(uuidString: heroSectionRaw) == id
+        private func isHero(_ ref: HomeSectionRef) -> Bool {
+            HomeLayoutSettings.heroRef(heroSectionRaw) == ref
         }
 
-        /// Promote a section to the hero, or demote it back to a row. Only one
-        /// can be the hero, so promoting replaces whatever held it.
-        private func togglePromoted(_ id: UUID) {
-            heroSectionRaw = isPromoted(id) ? "" : id.uuidString
+        /// Promote a row to the hero, or demote it back. Only one row can be the
+        /// hero, so promoting replaces whatever held it.
+        private func togglePromoted(_ ref: HomeSectionRef) {
+            heroSectionRaw = isHero(ref) ? "" : ref.token
+        }
+
+        /// The star that promotes a row. Only rows the feed resolves from a list
+        /// can be the hero — see `HomeSection.isPromotable`.
+        @ViewBuilder
+        private func promoteButton(for ref: HomeSectionRef, name: String) -> some View {
+            if ref.isPromotable {
+                Button {
+                    togglePromoted(ref)
+                } label: {
+                    Image(systemName: isHero(ref) ? "star.fill" : "star")
+                        .foregroundStyle(isHero(ref) ? Color.yellow : Color.secondary)
+                }
+                .buttonStyle(.borderless)
+                .accessibilityLabel(isHero(ref) ? "Stop showing \(name) as the hero" : "Show \(name) as the hero")
+            }
         }
 
         @ViewBuilder
@@ -259,7 +295,7 @@
         /// Drops the section and its entry in the stored order, so a later
         /// section added with a fresh id can't inherit its slot.
         private func delete(id: UUID) {
-            if isPromoted(id) { heroSectionRaw = "" }
+            if isHero(.custom(id)) { heroSectionRaw = "" }
             let remaining = CustomHomeSections.remove(id: id, from: customSections)
             customSectionsRaw = CustomHomeSections.encode(remaining)
             sectionOrderRaw = HomeLayoutSettings.encode(

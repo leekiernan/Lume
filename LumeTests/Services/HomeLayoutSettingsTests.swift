@@ -232,6 +232,162 @@ struct HomeLayoutSettingsTests {
         }
     }
 
+    // MARK: - Hero
+
+    /// Only rows the shared feed resolves from a list can be the hero; the
+    /// @Query-backed local rows are assembled by each page, so the feed never
+    /// sees their items.
+    @Test func `only list-backed rows are promotable`() {
+        #expect(HomeSection.trendingMovies.isPromotable)
+        #expect(HomeSection.trendingSeries.isPromotable)
+        #expect(HomeSection.traktWatchlist.isPromotable)
+
+        #expect(!HomeSection.recentlyWatched.isPromotable)
+        #expect(!HomeSection.favorites.isPromotable)
+        #expect(!HomeSection.recentlyAdded.isPromotable)
+        #expect(!HomeSection.forYou.isPromotable)
+    }
+
+    /// A custom row is a list by definition, so it always qualifies.
+    @Test func `custom rows are always promotable`() {
+        #expect(HomeSectionRef.custom(Self.alpha.id).isPromotable)
+        #expect(HomeSectionRef.builtin(.trendingMovies).isPromotable)
+        #expect(!HomeSectionRef.builtin(.favorites).isPromotable)
+    }
+
+    /// The designation is a section token, so it can name a built-in row or a
+    /// custom one, and round-trips through storage.
+    @Test func `the hero designation round trips`() {
+        for ref in [HomeSectionRef.custom(Self.alpha.id), .builtin(.trendingMovies)] {
+            #expect(HomeLayoutSettings.heroRef(ref.token) == ref)
+        }
+        #expect(HomeLayoutSettings.heroRef("") == nil)
+        #expect(HomeLayoutSettings.heroRef("nonsense") == nil)
+    }
+
+    // MARK: - The starting hero
+
+    /// A fresh surface gets its hero as an ordinary section holding a real URL —
+    /// editable, demotable and deletable like any other.
+    @Test func `a fresh surface is seeded with a hero`() throws {
+        for surface in SectionSurface.allCases {
+            let outcome = CustomHomeSections.seedingDefaultHero(
+                surface: surface, sections: [], heroRaw: "", orderRaw: "", seeded: false
+            )
+            guard case let .seed(sections, heroToken, _) = outcome else {
+                Issue.record("\(surface) was not seeded"); continue
+            }
+            let seeded = (sections: sections, heroToken: heroToken)
+            let section = try #require(seeded.sections.first)
+            #expect(seeded.sections.count == 1)
+            #expect(section.sourceURL == surface.defaultHeroSourceURL)
+            #expect(!section.sourceURL.isEmpty)
+            #expect(seeded.heroToken == HomeSectionRef.custom(section.id).token)
+            // The URL has to be one a provider can actually read.
+            #expect(HomeListCatalog.provider(for: section.sourceURL)?.displayName == "TMDB")
+        }
+    }
+
+    /// It leads the list, so the settings screen opens on the hero rather than
+    /// burying it under every built-in row — and a new user can see, and change,
+    /// where their hero comes from on the first visit.
+    @Test func `the seeded hero leads the order`() throws {
+        guard case let .seed(sections, _, orderRaw) = CustomHomeSections.seedingDefaultHero(
+            surface: .movies, sections: [], heroRaw: "", orderRaw: "", seeded: false
+        ) else { Issue.record("expected a seed"); return }
+        let section = try #require(sections.first)
+        let order = HomeLayoutSettings.decode(orderRaw)
+        #expect(order.first == .custom(section.id))
+    }
+
+    /// Seeding into an existing layout keeps that order, just with the hero in
+    /// front of it.
+    @Test func `seeding preserves an order the user already set`() {
+        let existing = HomeLayoutSettings.encode([.builtin(.favorites), .builtin(.recentlyWatched)])
+        guard case let .seed(_, _, orderRaw) = CustomHomeSections.seedingDefaultHero(
+            surface: .movies, sections: [], heroRaw: "", orderRaw: existing, seeded: false
+        ) else { Issue.record("expected a seed"); return }
+        let order = HomeLayoutSettings.decode(orderRaw)
+        #expect(order.dropFirst().prefix(2) == [.builtin(.favorites), .builtin(.recentlyWatched)])
+    }
+
+    /// Home mixes media and a section carries one URL, so its default is the
+    /// feed whose rows name their own medium.
+    @Test func `each surface seeds the right feed`() {
+        #expect(SectionSurface.home.defaultHeroSourceURL.contains("trending/all"))
+        #expect(SectionSurface.movies.defaultHeroSourceURL.contains("trending/movie"))
+        #expect(SectionSurface.series.defaultHeroSourceURL.contains("trending/tv"))
+    }
+
+    /// Deleting the starting hero has to stick — seeding runs once, not on
+    /// every launch.
+    @Test func `seeding does not run twice`() {
+        #expect(CustomHomeSections.seedingDefaultHero(
+            surface: .home, sections: [], heroRaw: "", orderRaw: "", seeded: true
+        ).isSeed == false)
+    }
+
+    /// Someone who removes their hero keeps it removed. Seeding is for a first
+    /// install, not a default that reasserts itself.
+    @Test func `removing the hero does not bring one back`() {
+        let outcome = CustomHomeSections.seedingDefaultHero(
+            surface: .home, sections: [], heroRaw: "", orderRaw: "", seeded: true
+        )
+        #expect(!outcome.isSeed)
+    }
+
+    /// A hero token an older build wrote in a different format — a bare UUID,
+    /// before the designation could also name a built-in row — resolves to
+    /// nothing. That has to count as "no hero" and seed, or the surface is left
+    /// with neither a hero nor the row that would restore one.
+    @Test func `an unreadable hero token seeds anyway`() {
+        let legacy = UUID().uuidString
+        #expect(HomeLayoutSettings.heroRef(legacy) == nil)
+        let outcome = CustomHomeSections.seedingDefaultHero(
+            surface: .home, sections: [], heroRaw: legacy, orderRaw: "", seeded: false
+        )
+        guard case let .seed(_, heroToken, _) = outcome else {
+            Issue.record("expected a seed"); return
+        }
+        #expect(heroToken != legacy)
+    }
+
+    /// Likewise a token naming a section that has since been deleted.
+    @Test func `a hero naming a missing section seeds anyway`() {
+        let token = HomeSectionRef.custom(Self.alpha.id).token
+        #expect(!CustomHomeSections.heroResolves(token, sections: [], surface: .home))
+        #expect(CustomHomeSections.seedingDefaultHero(
+            surface: .home, sections: [], heroRaw: token, orderRaw: "", seeded: false
+        ).isSeed)
+    }
+
+    /// A promoted built-in row is a perfectly good hero, so it blocks seeding.
+    @Test func `a promoted built-in row counts as a hero`() {
+        let token = HomeSectionRef.builtin(.trendingMovies).token
+        #expect(CustomHomeSections.heroResolves(token, sections: [], surface: .movies))
+        // ...but not one this surface doesn't offer.
+        #expect(!CustomHomeSections.heroResolves(token, sections: [], surface: .series))
+        // ...nor one the feed can't build a hero from.
+        #expect(!CustomHomeSections.heroResolves(
+            HomeSectionRef.builtin(.favorites).token, sections: [], surface: .movies
+        ))
+    }
+
+    /// Nor does it run when the surface already has a hero.
+    @Test func `seeding leaves an existing hero alone`() {
+        let outcome = CustomHomeSections.seedingDefaultHero(
+            surface: .home,
+            sections: [Self.alpha],
+            heroRaw: HomeSectionRef.custom(Self.alpha.id).token,
+            orderRaw: "",
+            seeded: false
+        )
+        // Reported so the caller can record it: a surface that already has a
+        // hero has had one, and removing it later must not bring a new one back.
+        #expect(!outcome.isSeed)
+        if case .alreadyHasHero = outcome {} else { Issue.record("expected alreadyHasHero") }
+    }
+
     // MARK: - Surfaces
 
     /// Each page offers the rows that make sense there: Home mixes both media

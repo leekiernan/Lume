@@ -17,7 +17,11 @@ import Foundation
 nonisolated struct TMDBListProvider: HomeListProvider {
     static let id = "tmdb"
 
-    private static let hosts: Set<String> = ["themoviedb.org", "www.themoviedb.org"]
+    /// The site people browse, and the API itself. Accepting API URLs means any
+    /// TMDB collection is addressable — including the trending feeds, which have
+    /// no page on the website and are what a surface's hero defaults to.
+    private static let siteHosts: Set<String> = ["themoviedb.org", "www.themoviedb.org"]
+    private static let apiHost = "api.themoviedb.org"
 
     /// The curated feeds, keyed by the website path that shows them. TMDB's own
     /// URLs hyphenate where the API underscores.
@@ -50,7 +54,7 @@ nonisolated struct TMDBListProvider: HomeListProvider {
 
     func canHandle(_ url: URL) -> Bool {
         guard let host = url.host?.lowercased() else { return false }
-        return Self.hosts.contains(host)
+        return Self.siteHosts.contains(host) || host == Self.apiHost
     }
 
     func entries(for url: URL) async throws -> [HomeListEntry] {
@@ -90,6 +94,8 @@ nonisolated struct TMDBListProvider: HomeListProvider {
     /// Resolves a themoviedb.org URL to the API path behind it, and the media
     /// kind its rows are (nil for a user list, whose rows say for themselves).
     static func feed(for url: URL) -> (path: String, media: HomeListEntry.MediaType?)? {
+        if url.host?.lowercased() == apiHost { return apiFeed(for: url) }
+
         var components = url.path.split(separator: "/").map(String.init)
         // Titles carry a slug after the id — "/movie/603-the-matrix" — but those
         // are single titles, not lists, and are rejected below.
@@ -109,6 +115,30 @@ nonisolated struct TMDBListProvider: HomeListProvider {
         let key = components.joined(separator: "/").lowercased()
         guard let feed = curatedFeeds[key] else { return nil }
         return (feed.path, feed.media)
+    }
+
+    /// An `api.themoviedb.org/3/…` URL, taken as the API path it already is.
+    /// The media kind is read off the path so single-medium feeds don't have to
+    /// carry it per row; a mixed feed (`trending/all`, a user list) reports nil
+    /// and each row says for itself.
+    private static func apiFeed(for url: URL) -> (path: String, media: HomeListEntry.MediaType?)? {
+        var components = url.path.split(separator: "/").map(String.init)
+        // The version prefix is ours to supply, not the caller's.
+        if components.first == "3" { components.removeFirst() }
+        guard components.count >= 2 else { return nil }
+
+        let media: HomeListEntry.MediaType?
+        switch (components[0].lowercased(), components[1].lowercased()) {
+        case ("trending", "movie"): media = .movie
+        case ("trending", "tv"): media = .series
+        case ("trending", _): media = nil
+        case ("movie", _): media = .movie
+        case ("tv", _): media = .series
+        case ("list", _): media = nil
+        default: return nil
+        }
+        // Query is dropped: paging is ours to drive.
+        return (components.joined(separator: "/"), media)
     }
 
     /// TMDB's own errors, in the section editor's vocabulary.

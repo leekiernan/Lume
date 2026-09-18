@@ -51,8 +51,10 @@ struct HomeView: View {
     @AppStorage(HomeLayoutSettings.disabledSectionsKey(.home)) private var disabledSectionsRaw = ""
     /// The user's custom list-backed rows (Settings › Layout › Home › Add Section).
     @AppStorage(CustomHomeSections.storageKey(.home)) private var customSectionsRaw = ""
-    /// The custom section promoted to Home's hero, if any — see `SectionFeed`.
+    /// Which row Home shows as its hero, and whether its starting hero has been
+    /// created yet — see `CustomHomeSections.seedingDefaultHero`.
     @AppStorage(HomeLayoutSettings.heroSectionKey(.home)) private var heroSectionRaw = ""
+    @AppStorage(HomeLayoutSettings.heroSeededKey(.home)) private var heroSeeded = false
     /// Areas switched off for this profile (Settings › Library). Live TV is the
     /// one that reaches Home: its channels sit inside the mixed rows below.
     @AppStorage(AppAreaSettings.disabledAreasKey) private var disabledAreasRaw = ""
@@ -221,10 +223,12 @@ struct HomeView: View {
             }
             #endif
             .task(id: trendingKey) {
+                feed.heroRef = heroRef
                 feed.update(context: feedContext)
                 await feed.loadTrending(cacheKey: trendingKey)
             }
             .task(id: watchlistKey) {
+                feed.heroRef = heroRef
                 feed.update(context: feedContext)
                 await feed.loadWatchlist(cacheKey: watchlistKey)
             }
@@ -232,7 +236,8 @@ struct HomeView: View {
                 await loadRecommendations()
             }
             .task(id: customSectionsKey) {
-                feed.heroSectionID = heroSectionID
+                seedDefaultHeroIfNeeded()
+                feed.heroRef = heroRef
                 feed.update(context: feedContext)
                 await feed.loadCustomSections(cacheKey: customSectionsKey, sections: visibleCustomSections)
             }
@@ -270,7 +275,9 @@ struct HomeView: View {
         case let .custom(id):
             // A custom row's header is the user's own text, so it goes through
             // verbatim; the items are resolved in `HomeView+CustomSections`.
-            if let section = customSections.first(where: { $0.id == id }),
+            // A promoted row is the hero, so it never also draws as a row.
+            if ref != heroRef,
+               let section = customSections.first(where: { $0.id == id }),
                HomeLayoutSettings.isEnabled(ref, disabledRaw: disabledSectionsRaw)
             {
                 rail(Text(verbatim: section.title), feed.customItems[id] ?? [])
@@ -280,7 +287,7 @@ struct HomeView: View {
 
     @ViewBuilder
     private func builtinRow(for section: HomeSection) -> some View {
-        if isSectionEnabled(section) {
+        if isSectionEnabled(section), .builtin(section) != heroRef {
             switch section {
             case .recentlyWatched:
                 rail(Text("Recently Watched"), recentlyWatched, onRemove: removeFromRecentlyWatched)
@@ -364,9 +371,34 @@ struct HomeView: View {
     }
 
     /// The user's custom rows for this surface, decoded from their stored JSON.
-    /// The section promoted to Home's hero, if any.
-    private var heroSectionID: UUID? {
-        UUID(uuidString: heroSectionRaw)
+    /// The promoted row, if the surface has one and it is still switched on.
+    private var heroRef: HomeSectionRef? {
+        guard let ref = HomeLayoutSettings.heroRef(heroSectionRaw),
+              HomeLayoutSettings.isEnabled(ref, disabledRaw: disabledSectionsRaw)
+        else { return nil }
+        return ref
+    }
+
+    /// Creates Home's starting hero the first time it is needed, as an ordinary
+    /// section. Runs once: deleting it leaves it deleted.
+    private func seedDefaultHeroIfNeeded() {
+        switch CustomHomeSections.seedingDefaultHero(
+            surface: .home,
+            sections: customSections,
+            heroRaw: heroSectionRaw,
+            orderRaw: sectionOrderRaw,
+            seeded: heroSeeded
+        ) {
+        case let .seed(sections, heroToken, orderRaw):
+            customSectionsRaw = CustomHomeSections.encode(sections)
+            sectionOrderRaw = orderRaw
+            heroSectionRaw = heroToken
+            heroSeeded = true
+        case .alreadyHasHero:
+            heroSeeded = true
+        case .nothingToDo:
+            break
+        }
     }
 
     private var customSections: [CustomHomeSection] {
@@ -377,9 +409,9 @@ struct HomeView: View {
     /// minus the ones they've hidden. A hidden row costs no network.
     private var visibleCustomSections: [CustomHomeSection] {
         customSections.filter {
-            // The promoted section is always fetched — it feeds the hero even
+            // The promoted section is still fetched — it feeds the hero even
             // though it draws no row.
-            $0.id == heroSectionID
+            .custom($0.id) == heroRef
                 || HomeLayoutSettings.isEnabled(.custom($0.id), disabledRaw: disabledSectionsRaw)
         }
     }
