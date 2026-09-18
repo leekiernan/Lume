@@ -45,7 +45,7 @@ struct HomeHeroCarousel: View {
     private static let headCloneID = "hero-clone-head"
     private static let tailCloneID = "hero-clone-tail"
 
-    private let heroHeight: CGFloat = 800
+    private let heroHeight = HomeHeroMetrics.height
 
     /// The rendered pages: the real items padded with a clone of the LAST item
     /// at the front and the FIRST at the back. Paging onto a clone is one slide;
@@ -304,6 +304,31 @@ struct HomeHeroCarousel: View {
             }
         }
     }
+}
+
+/// Holds the page geometry steady while its promoted section resolves, using
+/// only the last lead backdrop. The real carousel replaces it at the same
+/// height once titles and actions are ready.
+struct HomeHeroWarmStart: View {
+    let backdropURL: URL?
+
+    var body: some View {
+        ZStack(alignment: .bottomLeading) {
+            HeroBackdrop(url: backdropURL)
+            LinearGradient(
+                colors: [.clear, .black.opacity(0.15), .black.opacity(0.85)],
+                startPoint: .center,
+                endPoint: .bottom
+            )
+            .allowsHitTesting(false)
+        }
+        .frame(height: HomeHeroMetrics.height)
+        .clipped()
+    }
+}
+
+private enum HomeHeroMetrics {
+    static let height: CGFloat = 800
 }
 
 /// One rendered page in the carousel. Real items use their own `HeroItem.id`;

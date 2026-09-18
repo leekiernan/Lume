@@ -31,10 +31,14 @@ struct CachedAsyncImage<Content: View>: View {
 
     @Environment(\.displayScale) private var displayScale
     @State private var phase: AsyncImagePhase = .empty
+    /// The request that produced `phase`. SwiftUI can preserve this view's state
+    /// while changing its URL, so an unkeyed success would draw the previous
+    /// image for one frame before the new `.task` resets it.
+    @State private var phaseTaskID: String?
 
     /// Fades artwork in once it arrives from the network so posters don't hard-cut
-    /// from placeholder to image. Cache hits are unaffected — `load()` resolves
-    /// those synchronously outside the transaction, so they still appear instantly.
+    /// from placeholder to image. Memory-cache hits are rendered directly by
+    /// `body`, outside the transaction, so they still appear instantly.
     static var defaultTransaction: Transaction {
         Transaction(animation: .easeIn(duration: 0.2))
     }
@@ -52,13 +56,22 @@ struct CachedAsyncImage<Content: View>: View {
     }
 
     var body: some View {
-        // Bypass @State entirely when there is no URL: regardless of any stale
-        // phase the SwiftUI state system might have preserved, callers always
-        // receive .failure so they show a static placeholder immediately without
-        // any spinner. The .task still fires so that a later URL change is picked
-        // up, but load() exits immediately for nil URL.
-        content(url == nil ? .failure(URLError(.badURL)) : phase)
+        // Resolve decoded-memory hits while building the view. Waiting for the
+        // `.task` below gives even a cache hit one placeholder frame first, which
+        // is especially visible as a black flash across a full-screen hero.
+        content(renderPhase)
             .task(id: taskID) { await load() }
+    }
+
+    private var renderPhase: AsyncImagePhase {
+        guard let url else { return .failure(URLError(.badURL)) }
+        if let cached = ImagePipeline.cachedImage(for: url, maxPixelSize: pixelSize) {
+            return .success(Image(platformImage: cached))
+        }
+        // Never reuse a prior URL's phase while SwiftUI is waiting to start the
+        // new keyed task. A disk-only hit remains empty until its off-main-thread
+        // read and decode completes.
+        return phaseTaskID == taskID ? phase : .empty
     }
 
     /// Restart the load whenever the URL or target size changes (e.g. cell reuse).
@@ -74,21 +87,28 @@ struct CachedAsyncImage<Content: View>: View {
     }
 
     private func load() async {
+        let requestID = taskID
         guard let url else {
+            phaseTaskID = requestID
             phase = .failure(URLError(.badURL))
             return
         }
 
-        // Synchronous cache hit: render immediately, no placeholder flash.
+        // The body has already rendered a memory-cache hit synchronously. Keep
+        // it in state too, so an unrelated cache eviction does not blank a live
+        // view on its next update.
         if let cached = ImagePipeline.cachedImage(for: url, maxPixelSize: pixelSize) {
+            phaseTaskID = requestID
             phase = .success(Image(platformImage: cached))
             return
         }
 
-        if case .success = phase { phase = .empty }
+        phaseTaskID = requestID
+        phase = .empty
 
         do {
             let image = try await ImagePipeline.shared.image(for: url, maxPixelSize: pixelSize)
+            guard !Task.isCancelled, taskID == requestID else { return }
             withTransaction(transaction) {
                 phase = .success(Image(platformImage: image))
             }
@@ -99,7 +119,7 @@ struct CachedAsyncImage<Content: View>: View {
             // a stored .failure would show the broken-artwork placeholder for a
             // beat if it comes back. `URLSession` reports a cancelled request as
             // `URLError.cancelled` rather than `CancellationError`, hence the helper.
-            guard !ImagePipeline.isCancellation(error) else { return }
+            guard !ImagePipeline.isCancellation(error), taskID == requestID else { return }
             withTransaction(transaction) {
                 phase = .failure(error)
             }

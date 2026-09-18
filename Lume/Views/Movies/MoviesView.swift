@@ -32,6 +32,10 @@ struct MoviesView: View {
     @State private var feed = SectionFeed(surface: .movies)
     @State private var genres: [String] = []
 
+    @AppStorage(HomeLayoutSettings.heroSectionKey(.movies)) private var heroSectionRaw = ""
+    @AppStorage(HomeLayoutSettings.disabledSectionsKey(.movies)) private var disabledSectionsRaw = ""
+    @State private var heroWarmStart = HeroWarmStartState(surface: .movies)
+
     @AppStorage(SortStorageKey.movieCategories) private var categorySortRaw: String = CategorySortOption.playlist.rawValue
     @AppStorage(SortStorageKey.movieContent) private var contentSortRaw: String = ContentSortOption.playlist.rawValue
 
@@ -101,6 +105,9 @@ struct MoviesView: View {
     private var sections: some View {
         heroAndRows
             .browseActivity()
+            .onChange(of: feed.heroItems.first?.imageURL, initial: true) { _, backdropURL in
+                rememberHeroWarmStart(backdropURL)
+            }
             .task(id: playlistPrefix) {
                 genres = await GenreDerivation.movieGenres(in: modelContext.container, playlistPrefix: playlistPrefix, restriction: restriction)
             }
@@ -112,7 +119,12 @@ struct MoviesView: View {
     @ViewBuilder
     private var heroAndRows: some View {
         #if os(tvOS)
-            TVHomeScreen(heroItems: feed.heroItems, onSelectHero: open(hero:)) {
+            TVHomeScreen(
+                heroItems: feed.heroItems,
+                reservesHero: heroRef != nil,
+                warmStartBackdropURL: heroWarmStartBackdropURL,
+                onSelectHero: open(hero:)
+            ) {
                 rowsContent
             }
         #else
@@ -120,14 +132,16 @@ struct MoviesView: View {
                 LazyVStack(alignment: .leading, spacing: PosterCardMetrics.sectionSpacing) {
                     if !feed.heroItems.isEmpty {
                         HomeHeroCarousel(items: feed.heroItems)
+                    } else if heroRef != nil {
+                        HomeHeroWarmStart(backdropURL: heroWarmStartBackdropURL)
                     }
                     rowsContent
                 }
                 // The hero fills the top inset itself when it's showing.
-                .padding(.top, feed.heroItems.isEmpty ? PosterCardMetrics.sectionVerticalPadding : 0)
+                .padding(.top, heroRef == nil ? PosterCardMetrics.sectionVerticalPadding : 0)
                 .padding(.bottom, PosterCardMetrics.sectionVerticalPadding)
             }
-            .ignoresSafeArea(edges: feed.heroItems.isEmpty ? [] : .top)
+            .ignoresSafeArea(edges: heroRef == nil ? [] : .top)
         #endif
     }
 
@@ -204,6 +218,25 @@ struct MoviesView: View {
     private var catalogKey: String {
         let synced = activePlaylist?.lastSyncDate?.timeIntervalSince1970 ?? 0
         return "movies-\(playlists.count)-\(selectedPlaylistID)-\(synced)-\(restriction.visibilityToken)"
+    }
+
+    private var heroRef: HomeSectionRef? {
+        guard let ref = HomeLayoutSettings.heroRef(heroSectionRaw),
+              HomeLayoutSettings.isEnabled(ref, disabledRaw: disabledSectionsRaw)
+        else { return nil }
+        return ref
+    }
+
+    private var heroWarmStartScope: String {
+        activePlaylist?.id.uuidString ?? "none"
+    }
+
+    private var heroWarmStartBackdropURL: URL? {
+        heroWarmStart.backdropURL(hero: heroRef, catalogScope: heroWarmStartScope)
+    }
+
+    private func rememberHeroWarmStart(_ backdropURL: URL?) {
+        heroWarmStart.remember(backdropURL, hero: heroRef, catalogScope: heroWarmStartScope)
     }
 
     /// Categories scoped to the active playlist. The `@Query` fetches every
