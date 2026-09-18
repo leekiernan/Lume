@@ -68,6 +68,10 @@ import SwiftUI
             let enabled = AppAreaSettings.isEnabled(layoutArea, disabledRaw: disabledAreasRaw)
             let canDisable = AppAreaSettings.canDisable(layoutArea, disabledRaw: disabledAreasRaw)
             return Button {
+                // Mark this before changing AppStorage. Removing or inserting
+                // the area detail can otherwise make tvOS briefly focus the
+                // sidebar, whose focus-follow behaviour would navigate away.
+                restoringLibraryAreaToggleFocus = true
                 disabledAreasRaw = AppAreaSettings.settingEnabled(
                     !enabled, for: layoutArea, disabledRaw: disabledAreasRaw
                 )
@@ -81,6 +85,20 @@ import SwiftUI
                 }
             }
             .buttonStyle(TVSettingsRowButtonStyle())
+            .focused($libraryAreaToggleFocused)
+            .onChange(of: disabledAreasRaw) { _, _ in
+                guard restoringLibraryAreaToggleFocus else { return }
+
+                // This callback belongs to the updated view hierarchy. Yield
+                // once more so inserted/removed rows finish their layout before
+                // asking the focus engine to return to this stable row.
+                Task { @MainActor in
+                    await Task.yield()
+                    libraryAreaToggleFocused = true
+                    await Task.yield()
+                    restoringLibraryAreaToggleFocus = false
+                }
+            }
             // The last area standing can't be switched off — there would be no
             // navigation left.
             .disabled(enabled && !canDisable)

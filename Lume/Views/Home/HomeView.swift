@@ -53,6 +53,9 @@ struct HomeView: View {
     @AppStorage(CustomHomeSections.storageKey(.home)) private var customSectionsRaw = ""
     /// The custom section promoted to Home's hero, if any — see `SectionFeed`.
     @AppStorage(HomeLayoutSettings.heroSectionKey(.home)) private var heroSectionRaw = ""
+    /// Areas switched off for this profile (Settings › Library). Live TV is the
+    /// one that reaches Home: its channels sit inside the mixed rows below.
+    @AppStorage(AppAreaSettings.disabledAreasKey) private var disabledAreasRaw = ""
     /// Bumped by the DEBUG "Recalculate" action in Settings (always 0 otherwise);
     /// part of the task id so the row recomputes on demand.
     @AppStorage(RecommendationSettings.manualRecalculationKey) var recommendationsRecalcToken = 0
@@ -421,10 +424,20 @@ struct HomeView: View {
 
     // MARK: - Derived content
 
+    /// The channels Home may show: none when this profile has Live TV switched
+    /// off. That area leaves the navigation and stops syncing, so its channels
+    /// shouldn't keep turning up inside Home's mixed rows either — and unlike
+    /// movies and series, they have no row of their own to switch off, because
+    /// they only ever appear alongside other media.
+    private func visibleChannels(_ streams: [LiveStream]) -> [LiveStream] {
+        guard AppAreaSettings.isEnabled(.liveTV, disabledRaw: disabledAreasRaw) else { return [] }
+        return streams.filter { belongsToActivePlaylist($0.id) }.excludingRestricted(restriction)
+    }
+
     private var recentlyWatched: [HomeMediaItem] {
         let items = watchedMovies.filter { belongsToActivePlaylist($0.id) }.excludingRestricted(restriction).map(HomeMediaItem.movie)
             + watchedSeries.filter { belongsToActivePlaylist($0.id) }.excludingRestricted(restriction).map(HomeMediaItem.series)
-            + watchedStreams.filter { belongsToActivePlaylist($0.id) }.excludingRestricted(restriction).map(HomeMediaItem.live)
+            + visibleChannels(watchedStreams).map(HomeMediaItem.live)
         return items
             .sorted { ($0.lastWatchedDate ?? .distantPast) > ($1.lastWatchedDate ?? .distantPast) }
             // After sorting, so the copy kept is the one watched most recently.
@@ -436,7 +449,7 @@ struct HomeView: View {
     private var favorites: [HomeMediaItem] {
         let movies = favoriteMovies.filter { belongsToActivePlaylist($0.id) }.excludingRestricted(restriction)
         let series = favoriteSeries.filter { belongsToActivePlaylist($0.id) }.excludingRestricted(restriction)
-        let streams = favoriteStreams.filter { belongsToActivePlaylist($0.id) }.excludingRestricted(restriction)
+        let streams = visibleChannels(favoriteStreams)
 
         // Interleave the three types by the cross-type `favoriteOrder` set in
         // Content Management → Favorites, so a movie placed above a channel shows
