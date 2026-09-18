@@ -144,6 +144,7 @@
                         }
                     } icon: {
                         Image(systemName: isPromoted(section.id) ? "photo.fill" : "list.bullet.rectangle")
+                            .foregroundStyle(isPromoted(section.id) ? Color.yellow : Color.primary)
                     }
                 }
 

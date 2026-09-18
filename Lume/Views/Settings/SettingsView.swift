@@ -118,6 +118,15 @@ struct SettingsView: View {
         /// SettingsView+TVHome extension (separate file).
         @State var layoutArea: AppArea = .home
         @State var showingAreaCategories = false
+        /// Reasserted after the area's enabled state changes. The rows below the
+        /// toggle are inserted/removed by that mutation; without an explicit
+        /// anchor tvOS can hand focus back to the Settings sidebar.
+        @FocusState var libraryAreaToggleFocused: Bool
+        /// An area toggle rebuilds the Library detail below its enable row. The
+        /// focus engine can briefly nominate a sidebar item while that happens;
+        /// don't interpret that transient focus as user navigation before the
+        /// enable row has reclaimed focus.
+        @State var restoringLibraryAreaToggleFocus = false
         /// Whether the Playlists pane has drilled into the guide's sources.
         @State var showingEPGSources = false
         @AppStorage(AppAreaSettings.disabledAreasKey) var disabledAreasRaw = ""
@@ -438,7 +447,7 @@ struct SettingsView: View {
                     // Follow focus so the detail pane mirrors the highlighted
                     // category. Ignore nil (focus moved into the detail pane),
                     // which keeps the current selection visible.
-                    if let newValue {
+                    if let newValue, !restoringLibraryAreaToggleFocus {
                         selectedCategory = newValue
                         // Returning focus to the sidebar leaves any drilled-in
                         // detail (a playlist, or an engine's options), so the
