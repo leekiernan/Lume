@@ -36,9 +36,8 @@ struct LibraryBrowseSidebar: View {
         }
 
         @FocusState private var focusedItem: Item?
-        /// Focus arrives a beat after the panel appears; until it has, a nil
-        /// `focusedItem` means "not yet", not "focus left".
-        @State private var didTakeFocus = false
+        /// The row the panel was last left on, so reopening returns there.
+        @State private var lastFocusedItem: Item?
     #endif
 
     /// Margin from the screen edge. The panel deliberately escapes the safe
@@ -121,29 +120,6 @@ struct LibraryBrowseSidebar: View {
         }
         .ignoresSafeArea()
         .animation(.snappy(duration: 0.28), value: isPresented)
-        #if os(tvOS)
-            // Menu closes the panel rather than leaving the tab.
-            .onExitCommand { if isPresented { isPresented = false } }
-            .onChange(of: isPresented) { _, presented in
-                guard presented else { didTakeFocus = false; return }
-                focusedItem = firstItem
-            }
-            .onChange(of: focusedItem) { _, item in
-                guard isPresented else { return }
-                if item != nil {
-                    didTakeFocus = true
-                    return
-                }
-                // Focus left the panel — the user pressed right into the page,
-                // or navigated away. Confirm a hop later: focus briefly reads
-                // nil while it moves between rows inside the panel too.
-                guard didTakeFocus else { return }
-                Task {
-                    guard focusedItem == nil, isPresented else { return }
-                    isPresented = false
-                }
-            }
-        #endif
     }
 
     private var scrim: some View {
@@ -162,32 +138,42 @@ struct LibraryBrowseSidebar: View {
         VStack(alignment: .leading, spacing: 0) {
             header
 
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 2) {
-                    ForEach(categories) { category in
-                        row(name: category.name, id: category.id, isGenre: false) {
-                            onSelectCategory(category)
+            ScrollViewReader { proxy in
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 2) {
+                        ForEach(categories) { category in
+                            row(name: category.name, id: category.id, isGenre: false) {
+                                onSelectCategory(category)
+                            }
                         }
-                    }
 
-                    if !genres.isEmpty {
-                        Text("Browse by Genre")
-                            .font(sectionLabelFont)
-                            .foregroundStyle(.secondary)
-                            .padding(.horizontal, contentPadding)
-                            .padding(.top, 20)
-                            .padding(.bottom, 6)
+                        if !genres.isEmpty {
+                            Text("Browse by Genre")
+                                .font(sectionLabelFont)
+                                .foregroundStyle(.secondary)
+                                .padding(.horizontal, contentPadding)
+                                .padding(.top, 20)
+                                .padding(.bottom, 6)
 
-                        ForEach(genres, id: \.self) { genre in
-                            row(name: genre, id: genre, isGenre: true) {
-                                onSelectGenre(genre)
+                            ForEach(genres, id: \.self) { genre in
+                                row(name: genre, id: genre, isGenre: true) {
+                                    onSelectGenre(genre)
+                                }
                             }
                         }
                     }
+                    .padding(.vertical, 12)
                 }
-                .padding(.vertical, 12)
+                .scrollIndicators(.hidden)
+                #if os(tvOS)
+                    .browseSidebarFocus(
+                        isPresented: $isPresented,
+                        focus: $focusedItem,
+                        scrollProxy: proxy,
+                        lastFocused: $lastFocusedItem
+                    ) { landingItem }
+                #endif
             }
-            .scrollIndicators(.hidden)
         }
         .frame(width: panelWidth)
         .frame(maxHeight: .infinity)
@@ -201,6 +187,9 @@ struct LibraryBrowseSidebar: View {
         #if os(tvOS)
             // One focus region, so the remote doesn't wander back out mid-list.
             .focusSection()
+            // States the landing target; `browseSidebarFocus` then asserts it
+            // once the rows exist — declaration alone doesn't move focus here.
+            .defaultFocus($focusedItem, landingItem, priority: .userInitiated)
         #endif
     }
 
@@ -246,14 +235,32 @@ struct LibraryBrowseSidebar: View {
         .buttonStyle(LibraryBrowseRowButtonStyle())
         #if os(tvOS)
             .focused($focusedItem, equals: isGenre ? .genre(id) : .category(id))
+            // Same value as the scroll id, so `landTVFocus` can bring a row
+            // below the fold on screen before asking for focus.
+            .id(isGenre ? Item.genre(id) : Item.category(id))
         #endif
     }
 
     #if os(tvOS)
+        /// Where focus lands when the panel opens: the row it was last left on,
+        /// then the top. The remembered row is checked against the current
+        /// lists, since either can change between opens.
+        private var landingItem: Item? {
+            if let lastFocusedItem, contains(lastFocusedItem) { return lastFocusedItem }
+            return firstItem
+        }
+
         private var firstItem: Item? {
             if let first = categories.first { return .category(first.id) }
             if let genre = genres.first { return .genre(genre) }
             return nil
+        }
+
+        private func contains(_ item: Item) -> Bool {
+            switch item {
+            case let .category(id): categories.contains { $0.id == id }
+            case let .genre(name): genres.contains(name)
+            }
         }
     #endif
 }

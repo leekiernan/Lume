@@ -17,7 +17,9 @@
         let scope: LiveChannelScope
         let playlistPrefix: String
         /// Opens the category sidebar when the viewer presses left from a row.
-        let onLeadingLeft: () -> Void
+        /// Opens the browse panel, naming the channel focus is leaving so it
+        /// can be returned to. Nil when the press came from the clear button.
+        let onLeadingLeft: (String?) -> Void
         /// Seeds Multi-View with this channel, gated on Lume Pro by the host.
         let onStartMultiView: (LiveStream) -> Void
         let onPlay: (LiveStream) -> Void
@@ -38,19 +40,35 @@
         /// Drives the "Clear Recently Watched" confirmation alert.
         @State private var confirmingClear = false
 
+        /// Non-zero asks the list to take focus on its first channel — see
+        /// `LiveTVView.contentFocusToken`. `onDidClaimFocus` resets it.
+        let focusToken: Int
+        /// The channel to land on, or nil for the top of the list — which is
+        /// what a newly-picked category gets, having no position to return to.
+        let focusTarget: String?
+        let onDidClaimFocus: () -> Void
+
+        @FocusState private var focusedChannelID: String?
+
         init(
             scope: LiveChannelScope,
             playlistPrefix: String,
             sort: ContentSortOption,
-            onLeadingLeft: @escaping () -> Void,
+            onLeadingLeft: @escaping (String?) -> Void,
             onStartMultiView: @escaping (LiveStream) -> Void,
-            onPlay: @escaping (LiveStream) -> Void
+            onPlay: @escaping (LiveStream) -> Void,
+            focusToken: Int = 0,
+            focusTarget: String? = nil,
+            onDidClaimFocus: @escaping () -> Void = {}
         ) {
             self.scope = scope
             self.playlistPrefix = playlistPrefix
             self.onLeadingLeft = onLeadingLeft
             self.onStartMultiView = onStartMultiView
             self.onPlay = onPlay
+            self.focusToken = focusToken
+            self.focusTarget = focusTarget
+            self.onDidClaimFocus = onDidClaimFocus
             _streams = Query(LiveChannelQuery.descriptor(for: scope, sort: sort))
         }
 
@@ -61,41 +79,55 @@
         var body: some View {
             let channels = scopedStreams
             let visible = Array(channels.prefix(visibleCount))
-            ScrollView {
-                LazyVStack(spacing: 14) {
-                    if channels.isEmpty {
-                        ContentUnavailableView(
-                            "No Channels",
-                            systemImage: "antenna.radiowaves.left.and.right",
-                            description: Text("This category has no channels")
-                        )
-                        .padding(.top, 80)
-                    } else {
-                        if scope == .recentlyWatched {
-                            clearButton
-                                .onLeadingEdgeLeft(onLeadingLeft)
-                        }
-                        ForEach(visible) { stream in
-                            TVChannelRow(
-                                stream: stream,
-                                epg: epgByChannel[stream.epgChannelId ?? ""],
-                                onRemove: scope == .recentlyWatched ? { removeFromRecentlyWatched(stream) } : nil,
-                                onStartMultiView: { onStartMultiView(stream) },
-                                onPlay: { onPlay(stream) }
+            ScrollViewReader { proxy in
+                ScrollView {
+                    LazyVStack(spacing: 14) {
+                        if channels.isEmpty {
+                            ContentUnavailableView(
+                                "No Channels",
+                                systemImage: "antenna.radiowaves.left.and.right",
+                                description: Text("This category has no channels")
                             )
-                            .onLeadingEdgeLeft(onLeadingLeft)
-                            .onAppear {
-                                if stream.id == visible.last?.id, visibleCount < channels.count {
-                                    visibleCount = min(visibleCount + LiveChannelQuery.pageSize, channels.count)
+                            .padding(.top, 80)
+                        } else {
+                            if scope == .recentlyWatched {
+                                clearButton
+                                    .onLeadingEdgeLeft { onLeadingLeft(nil) }
+                            }
+                            ForEach(visible) { stream in
+                                TVChannelRow(
+                                    stream: stream,
+                                    epg: epgByChannel[stream.epgChannelId ?? ""],
+                                    onRemove: scope == .recentlyWatched ? { removeFromRecentlyWatched(stream) } : nil,
+                                    onStartMultiView: { onStartMultiView(stream) },
+                                    onPlay: { onPlay(stream) }
+                                )
+                                .onLeadingEdgeLeft { onLeadingLeft(stream.id) }
+                                .focused($focusedChannelID, equals: stream.id)
+                                .onAppear {
+                                    if stream.id == visible.last?.id, visibleCount < channels.count {
+                                        visibleCount = min(visibleCount + LiveChannelQuery.pageSize, channels.count)
+                                    }
                                 }
                             }
                         }
                     }
+                    .padding(.horizontal, 60)
+                    .padding(.vertical, 40)
                 }
-                .padding(.horizontal, 60)
-                .padding(.vertical, 40)
+                .focusSection()
+                // Coming back from the browse panel, focus returns to the
+                // channel it left. A new category is a new list with no such
+                // position, so that starts at the top. Either way it is said
+                // explicitly — the old rows are gone and the engine would be
+                // left to guess.
+                .task(id: focusToken) {
+                    guard focusToken != 0 else { return }
+                    let landing = focusTarget ?? visible.first?.id
+                    await landTVFocus($focusedChannelID, on: landing, scrollingTo: proxy)
+                    onDidClaimFocus()
+                }
             }
-            .focusSection()
             // Reload when the visible window or channel set changes, or a guide
             // import settles — EPG is resolved only for the channels on screen.
             .task(id: "\(channels.count)-\(visible.count)-\(epgSync.isSyncing)") {
@@ -292,7 +324,7 @@
         let displayedSection: LiveTVSection?
         @Binding var layoutModeRaw: String
         let contentSort: ContentSortOption
-        let onOpenBrowse: () -> Void
+        let onOpenBrowse: (String?) -> Void
         let onPlay: (LiveStream) -> Void
         let onPlayCatchup: (LiveStream, EPGProgramCell) -> Void
         /// Raises Multi-View (or the paywall) from the header.
@@ -308,16 +340,19 @@
             LiveTVLayoutMode(rawValue: layoutModeRaw) ?? .list
         }
 
-        /// Bumped when the user selects a sidebar category, asking the guide to
-        /// take focus on the first channel. Reset once the guide claims it.
-        @Binding var guideFocusToken: Int
+        /// Bumped when the user selects a sidebar category, asking whichever
+        /// view is showing to take focus on its first channel. Reset once
+        /// claimed.
+        @Binding var contentFocusToken: Int
+        /// The channel the content should land on when it next claims focus.
+        let contentFocusTarget: String?
 
         var body: some View {
             VStack(spacing: 0) {
                 TVLiveTVControlsRow(
                     sectionTitle: displayedSection?.titleText ?? Text("Browse Categories"),
                     layoutModeRaw: $layoutModeRaw,
-                    onOpenBrowse: onOpenBrowse,
+                    onOpenBrowse: { onOpenBrowse(nil) },
                     onOpenMultiView: onOpenMultiView
                 )
                 content
@@ -336,9 +371,9 @@
                         onPlay: onPlay,
                         onPlayCatchup: onPlayCatchup,
                         onStartMultiView: onStartMultiView,
-                        focusToken: guideFocusToken,
-                        onDidClaimFocus: { guideFocusToken = 0 },
-                        onLeadingLeft: onOpenBrowse
+                        focusToken: contentFocusToken,
+                        onDidClaimFocus: { contentFocusToken = 0 },
+                        onLeadingLeft: { onOpenBrowse(nil) }
                     )
                     .id("\(section.id)-\(contentSort.rawValue)-guide")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -349,7 +384,10 @@
                         sort: contentSort,
                         onLeadingLeft: onOpenBrowse,
                         onStartMultiView: onStartMultiView,
-                        onPlay: onPlay
+                        onPlay: onPlay,
+                        focusToken: contentFocusToken,
+                        focusTarget: contentFocusTarget,
+                        onDidClaimFocus: { contentFocusToken = 0 }
                     )
                     .id("\(section.id)-\(contentSort.rawValue)-list")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
