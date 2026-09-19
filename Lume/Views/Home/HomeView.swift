@@ -290,7 +290,7 @@ struct HomeView: View {
                let section = customSections.first(where: { $0.id == id }),
                HomeLayoutSettings.isEnabled(ref, disabledRaw: disabledSectionsRaw)
             {
-                rail(Text(verbatim: section.title), feed.customItems[id] ?? [])
+                rail(Text(verbatim: section.title), feed.items(for: ref))
             }
         }
     }
@@ -313,11 +313,11 @@ struct HomeView: View {
                     animationNamespace: animationNamespace
                 )
             case .trendingMovies:
-                rail(Text("Trending Movies"), feed.trendingMovies)
+                rail(Text("Trending Movies"), feed.items(for: .builtin(section)))
             case .trendingSeries:
-                rail(Text("Trending Series"), feed.trendingSeries)
+                rail(Text("Trending Series"), feed.items(for: .builtin(section)))
             case .traktWatchlist:
-                rail(Text("From Your Trakt Watchlist"), feed.watchlist)
+                rail(Text("From Your Trakt Watchlist"), feed.items(for: .builtin(section)))
             case .recentlyAdded:
                 // Movies/Series only — `HomeSection.cases(for: .home)` never
                 // yields it, so Home has no row to draw.
@@ -499,10 +499,10 @@ struct HomeView: View {
     private var isEmpty: Bool {
         recentlyWatched.isEmpty
             && favorites.isEmpty
-            && feed.trendingMovies.isEmpty
-            && feed.trendingSeries.isEmpty
-            && feed.watchlist.isEmpty
-            && feed.customItems.values.allSatisfy(\.isEmpty)
+            && feed.items(for: .builtin(.trendingMovies)).isEmpty
+            && feed.items(for: .builtin(.trendingSeries)).isEmpty
+            && feed.items(for: .builtin(.traktWatchlist)).isEmpty
+            && visibleCustomSections.allSatisfy { feed.items(for: .custom($0.id)).isEmpty }
             && feed.isSettled
     }
 

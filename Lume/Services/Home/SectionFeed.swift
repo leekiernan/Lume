@@ -42,10 +42,11 @@ final class SectionFeed {
     var heroRef: HomeSectionRef?
     /// Bumped when hero artwork lands — see `refreshHeroArtwork`.
     private(set) var heroArtworkRevision = 0
-    private(set) var trendingMovies: [HomeMediaItem] = []
-    private(set) var trendingSeries: [HomeMediaItem] = []
-    private(set) var watchlist: [HomeMediaItem] = []
-    private(set) var customItems: [UUID: [HomeMediaItem]] = [:]
+    /// Every remote-backed row shares one representation: its lightweight
+    /// ordered source plus a bounded catalog preview. The source tail remains
+    /// available for an incrementally-loaded full grid without keeping all of
+    /// its SwiftData models alive on the browse screen.
+    private(set) var collections: [HomeSectionRef: SectionCollectionSnapshot] = [:]
     private(set) var trendingState: HomeLoadState = .idle
 
     /// How many matched titles a remote-backed row shows.
@@ -55,6 +56,33 @@ final class SectionFeed {
 
     init(surface: SectionSurface) {
         self.surface = surface
+    }
+
+    func items(for section: HomeSectionRef) -> [HomeMediaItem] {
+        collections[section]?.preview ?? []
+    }
+
+    func collection(for section: HomeSectionRef) -> SectionCollectionSnapshot? {
+        collections[section]
+    }
+
+    /// Resolves another local-catalog window from the retained source list.
+    /// Nothing calls this from the 20-card rail; it is the common continuation
+    /// path a full collection grid can use without refetching its remote list.
+    func page(
+        for section: HomeSectionRef,
+        from cursor: Int,
+        limit: Int = 100
+    ) -> SectionCollectionPage {
+        guard let collection = collections[section], let context else {
+            return SectionCollectionPage(items: [], nextOffset: cursor, hasMoreCandidates: false)
+        }
+        return SectionCollectionResolver.page(
+            entries: collection.entries,
+            from: cursor,
+            limit: limit,
+            context: context
+        )
     }
 
     /// The promoted row's titles, as hero slides. Titles whose backdrop hasn't
@@ -72,16 +100,7 @@ final class SectionFeed {
     /// Everything the promoted row resolved to, artwork or not.
     private var heroCandidates: [HeroItem] {
         guard let heroRef else { return [] }
-        let items: [HomeMediaItem] = switch heroRef {
-        case let .custom(id): customItems[id] ?? []
-        case .builtin(.trendingMovies): trendingMovies
-        case .builtin(.trendingSeries): trendingSeries
-        case .builtin(.traktWatchlist): watchlist
-        // Every other row is assembled by the page from its own @Query, so the
-        // feed has nothing to build a hero from — see `HomeSection.isPromotable`.
-        case .builtin: []
-        }
-        return items.compactMap(HeroItem.init(item:))
+        return items(for: heroRef).compactMap(HeroItem.init(item:))
     }
 
     /// True once every remote row has settled, so a surface can tell "still
@@ -95,8 +114,8 @@ final class SectionFeed {
     func loadTrending(cacheKey: String) async {
         // Session cache: see `SectionFeedCache`.
         if let cached = SectionFeedCache.shared.trendingEntry(surface, for: cacheKey) {
-            trendingMovies = cached.movies
-            trendingSeries = cached.series
+            collections[.builtin(.trendingMovies)] = cached.movies
+            collections[.builtin(.trendingSeries)] = cached.series
             trendingState = .loaded
             return
         }
@@ -116,32 +135,29 @@ final class SectionFeed {
             async let tvTitles = surface.mediaType == .movie ? [] : client.trending(.tvShow)
             let (movies, tvSeries) = try await (movieTitles, tvTitles)
 
-            let matched = matchTrending(movies: movies, tvSeries: tvSeries, context: context)
-            trendingMovies = Array(matched.movies.prefix(Self.itemLimit))
-            trendingSeries = Array(matched.series.prefix(Self.itemLimit))
+            let movieCollection = makeCollection(
+                entries: movies.map {
+                    HomeListEntry(tmdbId: $0.id, mediaType: .movie, title: $0.title)
+                },
+                context: context
+            )
+            let seriesCollection = makeCollection(
+                entries: tvSeries.map {
+                    HomeListEntry(tmdbId: $0.id, mediaType: .series, title: $0.title)
+                },
+                context: context
+            )
+            collections[.builtin(.trendingMovies)] = movieCollection
+            collections[.builtin(.trendingSeries)] = seriesCollection
             trendingState = .loaded
             SectionFeedCache.shared.storeTrending(surface, key: cacheKey, entry: .init(
-                movies: trendingMovies, series: trendingSeries
+                movies: movieCollection,
+                series: seriesCollection
             ))
             await refreshHeroArtwork()
         } catch {
             trendingState = .failed
         }
-    }
-
-    /// Matches the trending titles against the local catalog — two batched
-    /// queries instead of one indexed fetch per title.
-    private func matchTrending(
-        movies: [TrendingTitle],
-        tvSeries: [TrendingTitle],
-        context: Context
-    ) -> (movies: [HomeMediaItem], series: [HomeMediaItem]) {
-        let moviesByTmdbId = fetchMovies(tmdbIds: movies.map(\.id), context: context)
-        let seriesByTmdbId = fetchSeries(tmdbIds: tvSeries.map(\.id), context: context)
-        return (
-            movies.compactMap { moviesByTmdbId[$0.id].map(HomeMediaItem.movie) },
-            tvSeries.compactMap { seriesByTmdbId[$0.id].map(HomeMediaItem.series) }
-        )
     }
 
     /// The TMDB trending feed carries no logo artwork, so a hero title shows
@@ -200,60 +216,47 @@ final class SectionFeed {
     /// way the trending rows work, and narrowed to the surface's medium.
     func loadWatchlist(cacheKey: String) async {
         if let cached = SectionFeedCache.shared.watchlistEntry(surface, for: cacheKey) {
-            watchlist = cached
+            collections[.builtin(.traktWatchlist)] = cached
             return
         }
         guard let context else { return }
         guard TraktService.shared.isConnected else {
-            watchlist = []
+            collections[.builtin(.traktWatchlist)] = .empty
             return
         }
         let items = await TraktService.shared.fetchWatchlist()
-        let wantsMovies = surface.mediaType != .series
-        let wantsSeries = surface.mediaType != .movie
-        let moviesByTmdbId = wantsMovies
-            ? fetchMovies(tmdbIds: items.compactMap { $0.movie?.ids.tmdb }, context: context)
-            : [:]
-        let seriesByTmdbId = wantsSeries
-            ? fetchSeries(tmdbIds: items.compactMap { $0.show?.ids.tmdb }, context: context)
-            : [:]
-        var matched: [HomeMediaItem] = []
-        for item in items {
+        let entries = items.compactMap { item -> HomeListEntry? in
             switch item.type {
             case "movie":
-                if wantsMovies, let tmdbID = item.movie?.ids.tmdb, let movie = moviesByTmdbId[tmdbID] {
-                    matched.append(.movie(movie))
-                }
+                guard let media = item.movie, let tmdbId = media.ids.tmdb else { return nil }
+                return HomeListEntry(tmdbId: tmdbId, mediaType: .movie, title: media.title ?? "")
             case "show":
-                if wantsSeries, let tmdbID = item.show?.ids.tmdb, let series = seriesByTmdbId[tmdbID] {
-                    matched.append(.series(series))
-                }
+                guard let media = item.show, let tmdbId = media.ids.tmdb else { return nil }
+                return HomeListEntry(tmdbId: tmdbId, mediaType: .series, title: media.title ?? "")
             default:
-                break
+                return nil
             }
         }
-        watchlist = Array(matched.prefix(Self.itemLimit))
-        SectionFeedCache.shared.storeWatchlist(surface, key: cacheKey, items: watchlist)
+        let collection = makeCollection(entries: entries, context: context)
+        collections[.builtin(.traktWatchlist)] = collection
+        SectionFeedCache.shared.storeWatchlist(surface, key: cacheKey, collection: collection)
         await refreshHeroArtwork()
     }
 
     // MARK: - Custom sections
 
-    /// Fetches every visible custom list concurrently, then matches each one
-    /// against the local catalog. The fetches are the slow part and are
-    /// independent; the matching is two batched queries per section and stays
-    /// on the main actor with the rest of the surface's model access.
+    /// Fetches every visible custom list concurrently, then resolves only its
+    /// 20-card preview against the local catalog. The full lightweight source
+    /// remains in the snapshot for later pages.
     func loadCustomSections(cacheKey: String, sections: [CustomHomeSection]) async {
         guard !sections.isEmpty else {
-            customItems = [:]
+            replaceCustomCollections(with: [:])
             return
         }
         if let cached = SectionFeedCache.shared.customEntry(surface, for: cacheKey) {
-            customItems = cached
-            // The memo holds matched rows, not artwork. A promoted section still
-            // needs its backdrops, or the hero would show only those titles that
-            // happened to be enriched already — which is most of them missing on
-            // a fresh catalog.
+            replaceCustomCollections(with: cached)
+            // The memo retains both the lightweight source and resolved preview;
+            // ImagePipeline remains responsible for artwork bytes.
             return
         }
         guard let context else { return }
@@ -276,62 +279,35 @@ final class SectionFeed {
             return results
         }
 
-        var matched: [UUID: [HomeMediaItem]] = [:]
+        var resolved: [UUID: SectionCollectionSnapshot] = [:]
         for section in sections {
-            matched[section.id] = match(entries: (lists[section.id] ?? nil) ?? [], context: context)
+            resolved[section.id] = makeCollection(
+                entries: (lists[section.id] ?? nil) ?? [],
+                context: context
+            )
         }
-        customItems = matched
+        replaceCustomCollections(with: resolved)
         await refreshHeroArtwork()
 
         // Only memo a complete pass. Caching a row that failed to load (offline
         // at launch, provider down) would leave it empty for the whole session,
         // since the cache key doesn't change until the catalog or the sections do.
         guard sections.allSatisfy({ (lists[$0.id] ?? nil) != nil }) else { return }
-        SectionFeedCache.shared.storeCustom(surface, key: cacheKey, items: matched)
+        SectionFeedCache.shared.storeCustom(surface, key: cacheKey, collections: resolved)
     }
 
-    /// Fetches the wide artwork for the promoted row's titles. Across the whole
-    /// set, not just the first few: the hero picks its slides from all of them,
-    /// so a title is only ever held back for want of a backdrop once TMDB has
-    /// actually been asked for one. Only titles missing artwork cost a request.
+    /// Fetches wide artwork for at most the carousel's eight visible candidates.
+    /// The rest of the preview — and all retained source entries — remain plain
+    /// catalog/list data until the user asks to see them.
     private func refreshHeroArtwork() async {
         guard let context, heroRef != nil else { return }
-        let candidates = heroCandidates
+        let candidates = Array(heroCandidates.prefix(Self.heroLimit))
         guard !candidates.isEmpty else { return }
         await enrichHeroArtwork(candidates, context: context)
         // Enrichment saves on a background context; the merge back doesn't
         // reliably re-notify this surface, and the arrays haven't changed — only
         // the models they point at have. Bump so `heroItems` recomputes.
         heroArtworkRevision &+= 1
-    }
-
-    /// Resolves list entries to local models, preserving the list's own order,
-    /// dropping anything the active playlist doesn't carry, and — on a scoped
-    /// surface — anything of the wrong medium.
-    private func match(entries: [HomeListEntry], context: Context) -> [HomeMediaItem] {
-        let wanted = entries.filter { surface.mediaType == nil || $0.mediaType == surface.mediaType }
-        guard !wanted.isEmpty else { return [] }
-        let moviesByTmdbId = fetchMovies(
-            tmdbIds: wanted.filter { $0.mediaType == .movie }.map(\.tmdbId), context: context
-        )
-        let seriesByTmdbId = fetchSeries(
-            tmdbIds: wanted.filter { $0.mediaType == .series }.map(\.tmdbId), context: context
-        )
-
-        var items: [HomeMediaItem] = []
-        var seen = Set<String>()
-        for entry in wanted {
-            let item: HomeMediaItem? = switch entry.mediaType {
-            case .movie: moviesByTmdbId[entry.tmdbId].map(HomeMediaItem.movie)
-            case .series: seriesByTmdbId[entry.tmdbId].map(HomeMediaItem.series)
-            }
-            // A list can name the same title twice (or a title can sit in the
-            // catalog under two ids); keep the first placement.
-            guard let item, seen.insert(item.id).inserted else { continue }
-            items.append(item)
-            if items.count >= Self.itemLimit { break }
-        }
-        return items
     }
 
     // MARK: - Context plumbing
@@ -345,38 +321,26 @@ final class SectionFeed {
         self.context = context
     }
 
-    // MARK: - Batched catalog lookup
-
-    /// All active-playlist catalog matches for the given TMDB ids from one
-    /// query, keyed by id. The per-title variant this replaces issued one fetch
-    /// per trending/watchlist row — hundreds of sequential main-context
-    /// round-trips on every load.
-    private func fetchMovies(tmdbIds: [Int], context: Context) -> [Int: Movie] {
-        let ids = Set(tmdbIds)
-        guard !ids.isEmpty else { return [:] }
-        let descriptor = FetchDescriptor<Movie>(predicate: movieTmdbIdPredicate(ids: ids))
-        var byId: [Int: Movie] = [:]
-        for movie in (try? context.modelContext.fetch(descriptor)) ?? []
-            where context.belongsToActivePlaylist(movie.id) && !context.restriction.hides(categoryID: movie.categoryId)
-        {
-            guard let tmdbId = movie.tmdbId, byId[tmdbId] == nil else { continue }
-            byId[tmdbId] = movie
-        }
-        return byId
+    private func makeCollection(
+        entries: [HomeListEntry],
+        context: Context
+    ) -> SectionCollectionSnapshot {
+        SectionCollectionResolver.snapshot(
+            entries: entries,
+            mediaType: surface.mediaType,
+            context: context,
+            previewLimit: Self.itemLimit
+        )
     }
 
-    private func fetchSeries(tmdbIds: [Int], context: Context) -> [Int: Series] {
-        let ids = Set(tmdbIds)
-        guard !ids.isEmpty else { return [:] }
-        let descriptor = FetchDescriptor<Series>(predicate: seriesTmdbIdPredicate(ids: ids))
-        var byId: [Int: Series] = [:]
-        for series in (try? context.modelContext.fetch(descriptor)) ?? []
-            where context.belongsToActivePlaylist(series.id) && !context.restriction.hides(categoryID: series.categoryId)
-        {
-            guard let tmdbId = series.tmdbId, byId[tmdbId] == nil else { continue }
-            byId[tmdbId] = series
+    private func replaceCustomCollections(with custom: [UUID: SectionCollectionSnapshot]) {
+        collections = collections.filter { key, _ in
+            if case .custom = key { return false }
+            return true
         }
-        return byId
+        for (id, collection) in custom {
+            collections[.custom(id)] = collection
+        }
     }
 }
 
