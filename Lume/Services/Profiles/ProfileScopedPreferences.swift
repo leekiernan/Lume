@@ -147,6 +147,26 @@ nonisolated enum ProfileScopedPreferences {
         return merged
     }
 
+    /// Resolves an import that arrives while this device has an unsaved edit.
+    /// Remote values remain authoritative for fields untouched locally; only
+    /// values changed since the last applied/saved snapshot are overlaid. This
+    /// avoids both losing the pending edit and replacing unrelated changes made
+    /// on another device with this device's otherwise-stale snapshot.
+    static func merging(
+        remote: ProfilePreferencesSnapshot,
+        withLocalChanges local: ProfilePreferencesSnapshot,
+        since baseline: ProfilePreferencesSnapshot
+    ) -> ProfilePreferencesSnapshot {
+        var merged = remote
+        for (key, value) in local.strings where value != baseline.strings[key] {
+            merged.strings[key] = value
+        }
+        for (key, value) in local.booleans where value != baseline.booleans[key] {
+            merged.booleans[key] = value
+        }
+        return merged
+    }
+
     /// Set once the pre-profile values have been adopted, so the copy never
     /// runs twice — a second pass after the user had switched profiles would
     /// copy one person's layout onto another's.

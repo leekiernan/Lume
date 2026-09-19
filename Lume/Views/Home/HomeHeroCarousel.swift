@@ -346,16 +346,19 @@ private struct HeroSlot: Identifiable {
         HeroItem.movie(
             Movie(id: "preview-hero-1", streamId: 1, name: "The Matrix"),
             backdropURL: URL(string: "https://image.tmdb.org/t/p/w1280/fNG7i7RqM1T0sP1vQmRIqRnW.jpg"),
+            logoURL: nil,
             overview: "A computer hacker learns about the true nature of reality."
         ),
         HeroItem.series(
             Series(id: "preview-series-1", seriesId: 1, name: "Breaking Bad", num: 1),
             backdropURL: nil,
+            logoURL: nil,
             overview: "A high school chemistry teacher diagnosed with inoperable cancer."
         ),
         HeroItem.movie(
             Movie(id: "preview-hero-2", streamId: 2, name: "Inception"),
             backdropURL: nil,
+            logoURL: nil,
             overview: "A thief who steals corporate secrets through dream-sharing technology."
         )
     ]
@@ -368,6 +371,7 @@ private struct HeroSlot: Identifiable {
         HeroItem.movie(
             Movie(id: "preview-hero-3", streamId: 3, name: "The Dark Knight"),
             backdropURL: nil,
+            logoURL: nil,
             overview: "When the menace known as the Joker wreaks havoc on Gotham."
         )
     ]

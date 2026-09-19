@@ -19,7 +19,7 @@ struct SectionCollectionTests {
         return try ModelContainer(for: schema, configurations: [config])
     }
 
-    @Test func `preview keeps lightweight tail for a later page`() throws {
+    @Test func `preview keeps lightweight tail for a later page`() async throws {
         let container = try makeContainer()
         let context = container.mainContext
         for tmdbId in 1 ... 30 {
@@ -37,7 +37,7 @@ struct SectionCollectionTests {
             restriction: ContentRestriction(),
             playlistPrefix: "mine-"
         )
-        let snapshot = SectionCollectionResolver.snapshot(
+        let snapshot = await SectionCollectionResolver.snapshot(
             entries: entries,
             mediaType: .movie,
             context: scope,
@@ -49,7 +49,7 @@ struct SectionCollectionTests {
         #expect(snapshot.nextOffset == 20)
         #expect(snapshot.hasMoreCandidates)
 
-        let next = SectionCollectionResolver.page(
+        let next = await SectionCollectionResolver.page(
             entries: snapshot.entries,
             from: snapshot.nextOffset,
             limit: 100,
@@ -75,7 +75,7 @@ struct SectionCollectionTests {
         #expect(mixed.map(\.title) == ["First", "Same id, other medium", "Second"])
     }
 
-    @Test func `catalog resolution respects playlist and hidden categories`() throws {
+    @Test func `catalog resolution respects playlist and hidden categories`() async throws {
         let container = try makeContainer()
         let context = container.mainContext
 
@@ -98,7 +98,7 @@ struct SectionCollectionTests {
             restriction: ContentRestriction(isActive: false, hiddenCategoryIDs: ["hidden"]),
             playlistPrefix: "mine-"
         )
-        let snapshot = SectionCollectionResolver.snapshot(
+        let snapshot = await SectionCollectionResolver.snapshot(
             entries: entries,
             mediaType: .movie,
             context: scope,

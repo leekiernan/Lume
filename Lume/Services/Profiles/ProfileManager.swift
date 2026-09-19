@@ -265,32 +265,115 @@ final class ProfileManager {
     /// snapshot always wins. Existing local values can seed an empty snapshot
     /// only after a successful import has established that the empty field is
     /// current, rather than a stale pre-import copy of another device's profile.
-    private func synchronizePreferences(for profileID: UUID, allowCloudSeed: Bool) {
+    private func synchronizePreferences(
+        for profileID: UUID,
+        allowCloudSeed: Bool,
+        preservingPendingLocalChanges: Bool = false
+    ) {
         guard let profile = profile(with: profileID) else { return }
         let local = ProfileScopedPreferences.snapshot(profileID: profileID)
+        let pendingBaseline = pendingPreferencesBaseline(
+            for: local,
+            preservingPendingLocalChanges: preservingPendingLocalChanges
+        )
         guard !profile.preferencesJSON.isEmpty else {
-            lastPreferencesSnapshot = local
-            lastPreferencesJSON = ""
-            if ProfileScopedPreferences.shouldSeedCloudSnapshot(
-                cloudJSON: profile.preferencesJSON,
-                hasCompletedCloudImport: allowCloudSeed,
-                hasStoredLocalValues: ProfileScopedPreferences.hasStoredValues(profileID: profileID)
-            ) {
-                persistPreferences(local, to: profile)
-            }
+            synchronizeEmptyPreferences(
+                local,
+                profile: profile,
+                profileID: profileID,
+                allowCloudSeed: allowCloudSeed,
+                pendingBaseline: pendingBaseline
+            )
             return
         }
         guard let imported = ProfileScopedPreferences.decode(profile.preferencesJSON) else {
             Logger.sync.error("Ignoring malformed synced preferences for profile \(profileID.uuidString, privacy: .public)")
+            // Keep a pending local change dirty so its debounce can replace the
+            // malformed payload with a valid snapshot instead of silently
+            // accepting that it was saved.
+            guard pendingBaseline == nil else { return }
             lastPreferencesSnapshot = local
             lastPreferencesJSON = profile.preferencesJSON
             return
         }
+        applyImportedPreferences(imported, local: local, pendingBaseline: pendingBaseline, to: profile)
+    }
+
+    private func pendingPreferencesBaseline(
+        for local: ProfilePreferencesSnapshot,
+        preservingPendingLocalChanges: Bool
+    ) -> ProfilePreferencesSnapshot? {
+        guard preservingPendingLocalChanges,
+              let lastPreferencesSnapshot,
+              local != lastPreferencesSnapshot
+        else { return nil }
+        return lastPreferencesSnapshot
+    }
+
+    private func synchronizeEmptyPreferences(
+        _ local: ProfilePreferencesSnapshot,
+        profile: UserProfile,
+        profileID: UUID,
+        allowCloudSeed: Bool,
+        pendingBaseline: ProfilePreferencesSnapshot?
+    ) {
+        // A completed import proves the empty payload is current. Preserve an
+        // edit made while that import was running by publishing it now. Before
+        // completion, leave its debounce task alone rather than treating a
+        // possibly-stale empty row as authoritative.
+        if pendingBaseline != nil {
+            guard allowCloudSeed else { return }
+            cancelPendingPreferencesSave()
+            persistPreferences(local, to: profile)
+            return
+        }
+        lastPreferencesSnapshot = local
+        lastPreferencesJSON = ""
+        if ProfileScopedPreferences.shouldSeedCloudSnapshot(
+            cloudJSON: profile.preferencesJSON,
+            hasCompletedCloudImport: allowCloudSeed,
+            hasStoredLocalValues: ProfileScopedPreferences.hasStoredValues(profileID: profileID)
+        ) {
+            persistPreferences(local, to: profile)
+        }
+    }
+
+    private func applyImportedPreferences(
+        _ imported: ProfilePreferencesSnapshot,
+        local: ProfilePreferencesSnapshot,
+        pendingBaseline: ProfilePreferencesSnapshot?,
+        to profile: UserProfile
+    ) {
+        let resolved = if let pendingBaseline {
+            ProfileScopedPreferences.merging(
+                remote: imported,
+                withLocalChanges: local,
+                since: pendingBaseline
+            )
+        } else {
+            imported
+        }
+        if pendingBaseline != nil {
+            cancelPendingPreferencesSave()
+        }
         isApplyingPreferences = true
-        ProfileScopedPreferences.apply(imported, profileID: profileID)
+        ProfileScopedPreferences.apply(resolved, profileID: profile.id)
         isApplyingPreferences = false
-        lastPreferencesSnapshot = ProfileScopedPreferences.snapshot(profileID: profileID)
-        lastPreferencesJSON = profile.preferencesJSON
+        let applied = ProfileScopedPreferences.snapshot(profileID: profile.id)
+        if pendingBaseline != nil {
+            // Publish the merged document so the local edit travels to the other
+            // devices as well. `persistPreferences` retains remote fields from a
+            // newer app version that this build does not understand.
+            persistPreferences(applied, to: profile)
+        } else {
+            lastPreferencesSnapshot = applied
+            lastPreferencesJSON = profile.preferencesJSON
+        }
+    }
+
+    private func cancelPendingPreferencesSave() {
+        preferencesSaveTask?.cancel()
+        preferencesSaveTask = nil
     }
 
     /// A remote-store notification can also concern playlists, Trakt or an
@@ -300,19 +383,20 @@ final class ProfileManager {
               let profile = profile(with: activeProfileID),
               profile.preferencesJSON != lastPreferencesJSON
         else { return }
-        preferencesSaveTask?.cancel()
-        preferencesSaveTask = nil
         synchronizePreferences(
             for: activeProfileID,
-            allowCloudSeed: coordinator.canSeedProfilePreferences
+            allowCloudSeed: coordinator.canSeedProfilePreferences,
+            preservingPendingLocalChanges: true
         )
     }
 
     private func cloudImportDidComplete() {
         guard isReady, !isSwitching else { return }
-        preferencesSaveTask?.cancel()
-        preferencesSaveTask = nil
-        synchronizePreferences(for: activeProfileID, allowCloudSeed: true)
+        synchronizePreferences(
+            for: activeProfileID,
+            allowCloudSeed: true,
+            preservingPendingLocalChanges: true
+        )
     }
 
     private func preferencesDidChange() {
