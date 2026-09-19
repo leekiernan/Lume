@@ -14,6 +14,10 @@ import Foundation
 import SwiftData
 import Testing
 
+private nonisolated enum InjectedProfileSaveError: Error {
+    case forced
+}
+
 /// Serialized: the reconcile-scoping test reads the active profile from
 /// `ActiveProfileStore` (UserDefaults.standard), shared process-wide state.
 @MainActor
@@ -267,9 +271,49 @@ struct ProfileEngineTests {
         return (manager, coordinator)
     }
 
+    @Test func `profile manager reports a failed switch without changing its active profile`() async throws {
+        let container = try makeProfileTestContainer()
+        let ctx = container.mainContext
+        let profileA = UUID()
+        let profileB = UUID()
+        ctx.insert(UserProfile(id: profileA, name: "A"))
+        ctx.insert(UserProfile(id: profileB, name: "B"))
+        try ctx.save()
+
+        let saved = ActiveProfileStore.current
+        ActiveProfileStore.current = profileA
+        defer { ActiveProfileStore.current = saved }
+
+        let engine = CloudSyncEngine(
+            container: container,
+            shadow: freshShadow(),
+            saveFailureInjector: { _ in throw InjectedProfileSaveError.forced }
+        )
+        let coordinator = CloudSyncCoordinator(
+            catalogContainer: container,
+            cloudContainer: container,
+            cloudKitContainerIdentifier: "iCloud.lume.tests.invalid",
+            cloudKitEnabled: false,
+            engine: engine
+        )
+        let manager = ProfileManager(
+            catalogContainer: container,
+            cloudContainer: container,
+            coordinator: coordinator
+        )
+
+        let switched = await manager.switchProfile(to: profileB)
+
+        #expect(!switched)
+        #expect(manager.activeProfileID == profileA)
+        #expect(ActiveProfileStore.current == profileA)
+        #expect(!manager.isSwitching)
+        #expect(manager.pendingProfileName == nil)
+    }
+
     /// Starts a switch and returns once it has reached its first suspension
     /// point, so the caller can observe the in-flight state.
-    private func beginSwitch(_ manager: ProfileManager, to id: UUID) async -> Task<Void, Never> {
+    private func beginSwitch(_ manager: ProfileManager, to id: UUID) async -> Task<Bool, Never> {
         let task = Task { await manager.switchProfile(to: id) }
         var spins = 0
         while !manager.isSwitching, spins < 500 {
