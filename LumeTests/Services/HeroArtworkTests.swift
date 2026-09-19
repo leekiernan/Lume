@@ -36,6 +36,19 @@ struct HeroArtworkTests {
         #expect(!hero.hasWideArtwork)
     }
 
+    @Test func `fresh enrichment can override a stale model presentation`() throws {
+        let hero = try #require(HeroItem(
+            item: .movie(movie(backdropPath: nil)),
+            backdropPath: "/fresh.jpg",
+            logoPath: "/logo.png",
+            overview: "Fresh copy"
+        ))
+        #expect(hero.hasWideArtwork)
+        #expect(hero.imageURL?.absoluteString.contains("/fresh.jpg") == true)
+        #expect(hero.logoURL?.absoluteString.contains("/logo.png") == true)
+        #expect(hero.overview == "Fresh copy")
+    }
+
     /// Live channels carry logos, not backdrops, and have no hero treatment.
     @Test func `live channels make no hero`() {
         let stream = LiveStream(id: "l-1", streamId: 1, name: "A Channel")

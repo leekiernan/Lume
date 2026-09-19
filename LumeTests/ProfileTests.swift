@@ -145,6 +145,58 @@ struct ProfileEngineTests {
         #expect(projected?.watchProgress == 500)
     }
 
+    @Test func `switching profiles preserves state for catalog items not imported on this device`() async throws {
+        let container = try makeProfileTestContainer()
+        let ctx = container.mainContext
+        let profileA = UUID()
+        let profileB = UUID()
+        let missingEpisodeID = "pl-episode-not-imported"
+        ctx.insert(UserContentState(
+            contentId: missingEpisodeID,
+            kind: .episode,
+            profileID: profileA,
+            watchProgress: 900,
+            isWatched: true
+        ))
+        try ctx.save()
+
+        let saved = ActiveProfileStore.current
+        defer { ActiveProfileStore.current = saved }
+
+        let engine = CloudSyncEngine(container: container, shadow: freshShadow())
+        try await engine.switchProfile(from: profileA, to: profileB)
+
+        let states = try ctx.fetch(FetchDescriptor<UserContentState>())
+        let preserved = states.first { $0.profileID == profileA && $0.contentId == missingEpisodeID }
+        #expect(preserved?.watchProgress == 900)
+        #expect(preserved?.isWatched == true)
+    }
+
+    @Test func `switching profiles deletes cleared state when the catalog item exists`() async throws {
+        let container = try makeProfileTestContainer()
+        let ctx = container.mainContext
+        let profileA = UUID()
+        let profileB = UUID()
+        let movieID = "pl-movie-cleared"
+        ctx.insert(Movie(id: movieID, streamId: 1, name: "Film"))
+        ctx.insert(UserContentState(
+            contentId: movieID,
+            kind: .movie,
+            profileID: profileA,
+            isFavorite: true
+        ))
+        try ctx.save()
+
+        let saved = ActiveProfileStore.current
+        defer { ActiveProfileStore.current = saved }
+
+        let engine = CloudSyncEngine(container: container, shadow: freshShadow())
+        try await engine.switchProfile(from: profileA, to: profileB)
+
+        let states = try ctx.fetch(FetchDescriptor<UserContentState>())
+        #expect(!states.contains { $0.profileID == profileA && $0.contentId == movieID })
+    }
+
     @Test func `reconcile only projects the active profile's mirrors`() async throws {
         let container = try makeProfileTestContainer()
         let ctx = container.mainContext
@@ -242,6 +294,61 @@ struct ProfileEngineTests {
             try? await Task.sleep(for: .milliseconds(50))
         }
         return nil
+    }
+
+    @Test func `completed cloud import merges rather than discards a pending local layout edit`() async throws {
+        let container = try makeProfileTestContainer()
+        let context = container.mainContext
+        let profileID = UUID()
+        let defaults = UserDefaults.standard
+        let order = HomeLayoutSettings.baseSectionOrderKey(.home)
+        let disabledAreas = AppAreaSettings.baseDisabledAreasKey
+        let scopedKeys = ProfileScopedPreferences.scopedBaseKeys.map {
+            ProfileScopedPreferences.key($0, profileID: profileID)
+        }
+        for key in scopedKeys {
+            defaults.removeObject(forKey: key)
+        }
+        defer {
+            for key in scopedKeys {
+                defaults.removeObject(forKey: key)
+            }
+        }
+
+        var baseline = ProfileScopedPreferences.snapshot(profileID: profileID, defaults: defaults)
+        baseline.strings[order] = "favorites"
+        baseline.strings[disabledAreas] = ""
+        let baselineJSON = try #require(ProfileScopedPreferences.encode(baseline))
+        let profile = UserProfile(id: profileID, name: "Me", preferencesJSON: baselineJSON)
+        context.insert(profile)
+        try context.save()
+
+        let savedActiveProfile = ActiveProfileStore.current
+        ActiveProfileStore.current = profileID
+        defer { ActiveProfileStore.current = savedActiveProfile }
+
+        let (manager, _) = makeManager(container)
+        await manager.bootstrap()
+
+        // The local reorder is still inside ProfileManager's debounce window
+        // when a different device's area-visibility change finishes importing.
+        defaults.set(
+            "forYou,favorites",
+            forKey: ProfileScopedPreferences.key(order, profileID: profileID)
+        )
+        NotificationCenter.default.post(name: UserDefaults.didChangeNotification, object: defaults)
+
+        var remote = baseline
+        remote.strings[disabledAreas] = "liveTV"
+        profile.preferencesJSON = try #require(ProfileScopedPreferences.encode(remote))
+        try context.save()
+        NotificationCenter.default.post(name: .lumeCloudImportDidComplete, object: nil)
+
+        let merged = try #require(ProfileScopedPreferences.decode(profile.preferencesJSON))
+        #expect(merged.strings[order] == "forYou,favorites")
+        #expect(merged.strings[disabledAreas] == "liveTV")
+        #expect(defaults.string(forKey: ProfileScopedPreferences.key(order, profileID: profileID)) == "forYou,favorites")
+        #expect(defaults.string(forKey: ProfileScopedPreferences.key(disabledAreas, profileID: profileID)) == "liveTV")
     }
 
     @Test func `switching to the already-active profile is a no-op`() async throws {

@@ -149,6 +149,52 @@ struct ProfileScopedPreferencesTests {
         #expect(merged.booleans["future.toggle.key"] == true)
     }
 
+    @Test func `pending local edits merge with unrelated remote changes`() {
+        let order = HomeLayoutSettings.baseSectionOrderKey(.home)
+        let disabled = AppAreaSettings.baseDisabledAreasKey
+        let baseline = ProfilePreferencesSnapshot(
+            strings: [order: "favorites", disabled: ""],
+            booleans: [:]
+        )
+        let local = ProfilePreferencesSnapshot(
+            strings: [order: "forYou,favorites", disabled: ""],
+            booleans: [:]
+        )
+        let remote = ProfilePreferencesSnapshot(
+            strings: [order: "favorites", disabled: "liveTV"],
+            booleans: [:]
+        )
+
+        let merged = ProfileScopedPreferences.merging(
+            remote: remote,
+            withLocalChanges: local,
+            since: baseline
+        )
+
+        #expect(merged.strings[order] == "forYou,favorites")
+        #expect(merged.strings[disabled] == "liveTV")
+    }
+
+    @Test func `pending local edit wins a same-field conflict without dropping future values`() {
+        let order = HomeLayoutSettings.baseSectionOrderKey(.home)
+        let baseline = ProfilePreferencesSnapshot(strings: [order: "favorites"], booleans: [:])
+        let local = ProfilePreferencesSnapshot(strings: [order: "forYou"], booleans: [:])
+        let remote = ProfilePreferencesSnapshot(
+            strings: [order: "trendingMovies", "future.layout.key": "value"],
+            booleans: ["future.toggle.key": true]
+        )
+
+        let merged = ProfileScopedPreferences.merging(
+            remote: remote,
+            withLocalChanges: local,
+            since: baseline
+        )
+
+        #expect(merged.strings[order] == "forYou")
+        #expect(merged.strings["future.layout.key"] == "value")
+        #expect(merged.booleans["future.toggle.key"] == true)
+    }
+
     /// The device's own setup stays device-wide: a second profile shouldn't have
     /// to pick its playlist or re-choose a playback engine.
     @Test func `device preferences are not scoped`() {
