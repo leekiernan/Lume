@@ -55,7 +55,16 @@ struct LiveTVView: View {
     @State private var showingBrowse = false
     #if os(tvOS)
         @Environment(DeepLinkRouter.self) private var router
-        @State private var guideFocusToken = 0
+        /// Bumped whenever the content should take focus deliberately rather
+        /// than let the engine pick: after a category change, and on the way
+        /// back out of the browse panel.
+        @State private var contentFocusToken = 0
+        /// Where that focus should land — the channel the panel was opened
+        /// from, or nil for the top of the list.
+        @State private var contentFocusTarget: String?
+        /// The channel focus left when the browse panel was opened, so closing
+        /// it without picking anything puts the viewer back where they were.
+        @State private var browseReturnChannelID: String?
     #else
         /// Non-nil while Multi-View is up; carries the channels it opened with,
         /// when it was started from a channel rather than the toolbar.
@@ -118,7 +127,7 @@ struct LiveTVView: View {
                 scope: section.scope,
                 playlistPrefix: playlistPrefix,
                 sort: contentSort,
-                onLeadingLeft: { showingBrowse = true },
+                onLeadingLeft: { openBrowse(from: $0) },
                 onStartMultiView: { startMultiView(with: $0) },
                 onPlay: { playChannel($0, scope: section.scope) }
             )
@@ -168,7 +177,8 @@ struct LiveTVView: View {
                                     isPresented: $showingBrowse,
                                     sections: sections,
                                     selectedSection: displayedSection(in: sections),
-                                    onSelect: selectSection
+                                    onSelect: selectSection,
+                                    onReturnToContent: browseReturnHandler
                                 )
                             }
                     }
@@ -266,13 +276,14 @@ struct LiveTVView: View {
                 displayedSection: displayed,
                 layoutModeRaw: $layoutModeRaw,
                 contentSort: contentSort,
-                onOpenBrowse: { showingBrowse = true },
+                onOpenBrowse: { openBrowse(from: $0) },
                 onPlay: { playChannel($0, scope: displayed?.scope) },
                 onPlayCatchup: { playCatchup($0, cell: $1) },
                 onOpenMultiView: { openMultiView() },
                 onStartMultiView: { startMultiView(with: $0) },
                 playlistPrefix: playlistPrefix,
-                guideFocusToken: $guideFocusToken
+                contentFocusToken: $contentFocusToken,
+                contentFocusTarget: contentFocusTarget
             )
         }
     #endif
@@ -281,7 +292,35 @@ struct LiveTVView: View {
         selectedSection = section
         showingBrowse = false
         #if os(tvOS)
-            guideFocusToken += 1
+            // A different category is a different list: nothing to return to,
+            // so the new one takes focus at the top.
+            contentFocusTarget = nil
+            contentFocusToken += 1
+        #endif
+    }
+
+    #if os(tvOS)
+        /// Opens the browse panel, remembering the channel focus is leaving.
+        private func openBrowse(from channelID: String?) {
+            browseReturnChannelID = channelID
+            showingBrowse = true
+        }
+
+        /// Leaving the panel without picking a category: the list is unchanged,
+        /// so focus goes back to the channel it came from.
+        private func returnFromBrowse() {
+            contentFocusTarget = browseReturnChannelID
+            contentFocusToken += 1
+        }
+    #endif
+
+    /// tvOS returns focus to the channel the panel was opened from; elsewhere
+    /// the panel closes with a button or a tap and there is no focus to place.
+    private var browseReturnHandler: (() -> Void)? {
+        #if os(tvOS)
+            returnFromBrowse
+        #else
+            nil
         #endif
     }
 

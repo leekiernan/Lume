@@ -278,9 +278,7 @@ struct EPGGridScroller: View {
             .frame(maxHeight: .infinity)
             .focused($surfaceClaimsFocus)
             .accessibilityLabel(Text(virtualFocusDescription))
-            .onExitCommand {
-                handleMenu()
-            }
+            .onExitCommand(perform: menuAction)
             // The channel actions a long press offers everywhere else through a
             // `contextMenu`. The guide has no focusable channel cell to hang one
             // on — a single strip owns the whole grid's focus — so the hub's
@@ -328,12 +326,15 @@ struct EPGGridScroller: View {
 
         /// Menu steps back one level: from a programme it collapses to the
         /// channel hub; from the hub it opens the category sidebar.
-        private func handleMenu() {
-            if case .cell = virtualFocus {
-                handleExitCommand()
-            } else {
-                Task { onLeadingLeft() }
-            }
+        /// Menu steps out of a programme back to the channel column it belongs
+        /// to. On the column itself there is nothing further to step back to, so
+        /// the press is left unhandled and reaches the tab bar — which is what
+        /// it does on every other page. Handling it there instead used to open
+        /// the browse panel, which the panel's own Menu then closed, so the
+        /// button toggled the sidebar rather than backing out of the page.
+        private var menuAction: (() -> Void)? {
+            guard case .cell = virtualFocus else { return nil }
+            return handleExitCommand
         }
 
         private var topVisibleRowIndex: Int {

@@ -13,10 +13,14 @@ struct LiveTVBrowseSidebar: View {
     let sections: [LiveTVSection]
     let selectedSection: LiveTVSection?
     let onSelect: (LiveTVSection) -> Void
+    /// Hands focus back to the channel the viewer came from — see
+    /// `LiveTVView.returnFromBrowse`.
+    var onReturnToContent: (() -> Void)?
 
     #if os(tvOS)
         @FocusState private var focusedSectionID: String?
-        @State private var didTakeFocus = false
+        /// The row the panel was last left on, so reopening returns there.
+        @State private var lastFocusedSectionID: String?
     #endif
 
     private var virtualSections: [LiveTVSection] {
@@ -99,28 +103,6 @@ struct LiveTVBrowseSidebar: View {
         }
         .ignoresSafeArea()
         .animation(.snappy(duration: 0.28), value: isPresented)
-        #if os(tvOS)
-            .onExitCommand { if isPresented { isPresented = false } }
-            .onChange(of: isPresented) { _, presented in
-                guard presented else {
-                    didTakeFocus = false
-                    return
-                }
-                focusedSectionID = firstFocusedSectionID
-            }
-            .onChange(of: focusedSectionID) { _, sectionID in
-                guard isPresented else { return }
-                if sectionID != nil {
-                    didTakeFocus = true
-                    return
-                }
-                guard didTakeFocus else { return }
-                Task {
-                    guard focusedSectionID == nil, isPresented else { return }
-                    isPresented = false
-                }
-            }
-        #endif
     }
 
     private var scrim: some View {
@@ -138,28 +120,39 @@ struct LiveTVBrowseSidebar: View {
         VStack(alignment: .leading, spacing: 0) {
             header
 
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 2) {
-                    ForEach(virtualSections) { section in
-                        row(section)
-                    }
-
-                    if !categorySections.isEmpty {
-                        Text("Categories")
-                            .font(sectionLabelFont)
-                            .foregroundStyle(.secondary)
-                            .padding(.horizontal, contentPadding)
-                            .padding(.top, virtualSections.isEmpty ? 4 : 20)
-                            .padding(.bottom, 6)
-
-                        ForEach(categorySections) { section in
+            ScrollViewReader { proxy in
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 2) {
+                        ForEach(virtualSections) { section in
                             row(section)
                         }
+
+                        if !categorySections.isEmpty {
+                            Text("Categories")
+                                .font(sectionLabelFont)
+                                .foregroundStyle(.secondary)
+                                .padding(.horizontal, contentPadding)
+                                .padding(.top, virtualSections.isEmpty ? 4 : 20)
+                                .padding(.bottom, 6)
+
+                            ForEach(categorySections) { section in
+                                row(section)
+                            }
+                        }
                     }
+                    .padding(.vertical, 12)
                 }
-                .padding(.vertical, 12)
+                .scrollIndicators(.hidden)
+                #if os(tvOS)
+                    .browseSidebarFocus(
+                        isPresented: $isPresented,
+                        focus: $focusedSectionID,
+                        scrollProxy: proxy,
+                        lastFocused: $lastFocusedSectionID,
+                        onReturnToContent: onReturnToContent
+                    ) { landingSectionID }
+                #endif
             }
-            .scrollIndicators(.hidden)
         }
         .frame(width: panelWidth)
         .frame(maxHeight: .infinity)
@@ -169,6 +162,9 @@ struct LiveTVBrowseSidebar: View {
         .padding(.vertical, margin)
         #if os(tvOS)
             .focusSection()
+            // States the landing target; `browseSidebarFocus` then asserts it
+            // once the rows exist — declaration alone doesn't move focus here.
+            .defaultFocus($focusedSectionID, landingSectionID, priority: .userInitiated)
         #endif
     }
 
@@ -225,13 +221,22 @@ struct LiveTVBrowseSidebar: View {
     }
 
     #if os(tvOS)
-        private var firstFocusedSectionID: String? {
-            if let selectedSection,
-               sections.contains(where: { $0.id == selectedSection.id })
-            {
+        /// Where focus lands when the panel opens: the row it was last left on,
+        /// then the category being watched, then the top. Each is checked
+        /// against the current list, since a category can disappear between
+        /// opens.
+        private var landingSectionID: String? {
+            if let lastFocusedSectionID, contains(lastFocusedSectionID) {
+                return lastFocusedSectionID
+            }
+            if let selectedSection, contains(selectedSection.id) {
                 return selectedSection.id
             }
             return sections.first?.id
+        }
+
+        private func contains(_ sectionID: String) -> Bool {
+            sections.contains { $0.id == sectionID }
         }
     #endif
 }
