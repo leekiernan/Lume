@@ -108,7 +108,7 @@ struct LibrarySectionsView<CollectionRow: View>: View {
                let section = customSections.first(where: { $0.id == id }),
                HomeLayoutSettings.isEnabled(ref, disabledRaw: disabledSectionsRaw)
             {
-                rail(Text(verbatim: section.title), feed.customItems[id] ?? [])
+                rail(Text(verbatim: section.title), feed.items(for: ref))
             }
         }
     }
@@ -123,11 +123,11 @@ struct LibrarySectionsView<CollectionRow: View>: View {
         case .recentlyAdded:
             collectionRow(.recentlyAdded)
         case .trendingMovies:
-            rail(Text("Trending Movies"), feed.trendingMovies)
+            rail(Text("Trending Movies"), feed.items(for: .builtin(section)))
         case .trendingSeries:
-            rail(Text("Trending Series"), feed.trendingSeries)
+            rail(Text("Trending Series"), feed.items(for: .builtin(section)))
         case .traktWatchlist:
-            rail(Text("From Your Trakt Watchlist"), feed.watchlist)
+            rail(Text("From Your Trakt Watchlist"), feed.items(for: .builtin(section)))
         case .forYou:
             // Home only — `HomeSection.cases(for:)` never yields it here.
             EmptyView()
