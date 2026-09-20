@@ -43,7 +43,7 @@ final class TraktService {
     /// Cleared when a new import begins.
     private(set) var lastImport: TraktImportSummary?
 
-    /// Durable watched-history intent waiting to reach the connected account.
+    /// Durable history/watchlist intent waiting to reach the connected account.
     /// Failed mutations remain here until a later retry succeeds.
     private(set) var pendingMutationCount = 0
     private(set) var failedMutationCount = 0
@@ -235,14 +235,19 @@ final class TraktService {
         mutationSyncError = nil
     }
 
-    // MARK: - Durable watched sync
+    // MARK: - Durable mutation sync
 
     /// Syncs a movie's watched state to Trakt. Captures the TMDB id up front so
     /// the model never crosses an actor boundary. No-ops when not connected or
     /// the movie has no TMDB id.
     func syncWatched(movie: Movie, watched: Bool) {
         guard let account = mutationAccount, let tmdbID = movie.tmdbId else { return }
-        mutationOutbox.enqueue(target: .movie(tmdbID: tmdbID), watched: watched, account: account)
+        mutationOutbox.enqueue(
+            kind: .history,
+            target: .movie(tmdbID: tmdbID),
+            isPresent: watched,
+            account: account
+        )
         refreshMutationStatus()
         retryPendingMutations()
     }
@@ -252,12 +257,13 @@ final class TraktService {
     func syncWatched(episode: Episode, watched: Bool) {
         guard let account = mutationAccount, let showTMDBID = episode.series?.tmdbId else { return }
         mutationOutbox.enqueue(
+            kind: .history,
             target: .episode(
                 showTMDBID: showTMDBID,
                 season: episode.seasonNum,
                 episode: episode.episodeNum
             ),
-            watched: watched,
+            isPresent: watched,
             account: account
         )
         refreshMutationStatus()
@@ -305,17 +311,18 @@ final class TraktService {
             }
 
             do {
-                let items = historyItems(for: mutation.target)
-                if mutation.watched {
-                    try await client.addToHistory(items, accessToken: accessToken)
-                } else {
-                    try await client.removeFromHistory(items, accessToken: accessToken)
+                guard try await client.apply(mutation, accessToken: accessToken) else {
+                    Logger.network.error(
+                        "Discarding malformed Trakt \(mutation.kind.rawValue, privacy: .public) mutation"
+                    )
+                    mutationOutbox.acknowledge(id: mutation.id, account: account)
+                    continue
                 }
                 mutationOutbox.acknowledge(id: mutation.id, account: account)
             } catch {
                 mutationOutbox.recordFailure(id: mutation.id, account: account)
                 let reason = error.localizedDescription
-                Logger.network.warning("Trakt history mutation failed: \(reason, privacy: .public)")
+                Logger.network.warning("Trakt mutation failed: \(reason, privacy: .public)")
                 mutationSyncError = "Couldn't sync changes to Trakt. Please try again."
                 // If this intent was replaced while its request was in flight,
                 // it is no longer the queue head. Continue with the new intent;
@@ -355,19 +362,6 @@ final class TraktService {
                     "Trakt scrobble \(action.rawValue, privacy: .public) failed: \(detail, privacy: .public)"
                 )
             }
-        }
-    }
-
-    private func historyItems(for target: TraktHistoryMutation.Target) -> TraktSyncItems {
-        switch target {
-        case let .movie(tmdbID):
-            TraktSyncItems.movie(tmdbID: tmdbID)
-        case let .episode(showTMDBID, season, episode):
-            TraktSyncItems.episode(
-                showTMDBID: showTMDBID,
-                season: season,
-                episode: episode
-            )
         }
     }
 
@@ -419,30 +413,28 @@ final class TraktService {
     /// Captures the TMDB id before starting asynchronous work so the SwiftData
     /// model never crosses an actor boundary.
     func syncWatchlist(movie: Movie, watchlisted: Bool) {
-        guard isConnected, let tmdbID = movie.tmdbId else { return }
-        syncWatchlist(.movie(tmdbID: tmdbID), add: watchlisted)
+        guard let account = mutationAccount, let tmdbID = movie.tmdbId else { return }
+        mutationOutbox.enqueue(
+            kind: .watchlist,
+            target: .movie(tmdbID: tmdbID),
+            isPresent: watchlisted,
+            account: account
+        )
+        refreshMutationStatus()
+        retryPendingMutations()
     }
 
     /// Series counterpart
     func syncWatchlist(series: Series, watchlisted: Bool) {
-        guard isConnected, let tmdbID = series.tmdbId else { return }
-        syncWatchlist(.show(tmdbID: tmdbID), add: watchlisted)
-    }
-
-    private func syncWatchlist(_ items: TraktWatchlistSyncItems, add: Bool) {
-        Task { [weak self] in
-            guard let self, let accessToken = await validAccessToken() else { return }
-            do {
-                if add {
-                    try await client.addToWatchlist(items, accessToken: accessToken)
-                } else {
-                    try await client.removeFromWatchlist(items, accessToken: accessToken)
-                }
-            } catch {
-                // Favorite changes are local-first and Trakt sync is best-effort;
-                // a network failure must not roll back or interrupt the UI.
-            }
-        }
+        guard let account = mutationAccount, let tmdbID = series.tmdbId else { return }
+        mutationOutbox.enqueue(
+            kind: .watchlist,
+            target: .show(tmdbID: tmdbID),
+            isPresent: watchlisted,
+            account: account
+        )
+        refreshMutationStatus()
+        retryPendingMutations()
     }
 
     // MARK: - Watched import
