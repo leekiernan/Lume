@@ -55,6 +55,7 @@ nonisolated enum PlaylistDeletion {
         // playlist.
         SweepSkipDefaults.removeAll(playlistId: playlistID)
         M3UDigestStore.remove(playlistId: playlistID)
+        PlaylistSyncCoverage.remove(playlistID: playlistID)
 
         // Scope each fetch to the playlist in SQLite via the playlist-prefixed
         // id instead of hydrating the whole catalog into memory just to filter

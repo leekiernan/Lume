@@ -7,6 +7,7 @@ struct AppAreaSettingsTests {
 
     @Test func `everything is on by default`() {
         #expect(AppAreaSettings.enabledAreas(disabledRaw: "") == AppArea.allCases)
+        #expect(AppAreaSettings.enabledContentAreas(disabledRaw: "") == [.movies, .series, .liveTV])
         for area in AppArea.allCases {
             #expect(AppAreaSettings.isEnabled(area, disabledRaw: ""))
         }
@@ -38,6 +39,7 @@ struct AppAreaSettingsTests {
         let raw = AppAreaSettings.settingEnabled(false, for: .liveTV, disabledRaw: "")
         #expect(!AppAreaSettings.isEnabled(.liveTV, disabledRaw: raw))
         #expect(AppAreaSettings.enabledAreas(disabledRaw: raw) == [.home, .movies, .series])
+        #expect(AppAreaSettings.enabledContentAreas(disabledRaw: raw) == [.movies, .series])
     }
 
     @Test func `switching an area back on restores its place`() {
