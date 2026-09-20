@@ -144,6 +144,22 @@
                 }
                 .disabled(trakt.isImporting)
 
+                if trakt.pendingMutationCount > 0 {
+                    Button {
+                        trakt.retryPendingMutations()
+                    } label: {
+                        HStack {
+                            Label("Retry Pending Trakt Changes", systemImage: "arrow.clockwise")
+                            if trakt.isSyncingMutations {
+                                Spacer()
+                                ProgressView()
+                                    .controlSize(.small)
+                            }
+                        }
+                    }
+                    .disabled(trakt.isSyncingMutations)
+                }
+
                 Button(role: .destructive) {
                     Task { await trakt.disconnect() }
                 } label: {
@@ -156,6 +172,15 @@
                     Text("Watched movies and episodes sync to your Trakt history. Import marks titles you've already watched on Trakt as watched here.")
                     if let summary = trakt.lastImport {
                         importStatus(summary)
+                    }
+                    if trakt.pendingMutationCount > 0 {
+                        if let error = trakt.mutationSyncError {
+                            Text(error)
+                                .foregroundStyle(.red)
+                        } else {
+                            Text("\(trakt.pendingMutationCount) Trakt change(s) waiting to sync.")
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 }
             }
