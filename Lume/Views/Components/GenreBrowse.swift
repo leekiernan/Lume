@@ -19,7 +19,7 @@ import SwiftUI
 /// so a bounded sample surfaces every genre in practice while keeping the
 /// derivation cheap on libraries with tens of thousands of titles — the same
 /// trade-off `LibraryCollectionRows` makes for "Recently Added".
-private let genreSampleLimit = 5000
+nonisolated let genreSampleLimit = 5000
 
 enum GenreDerivation {
     /// Derives the genre list on a background context. The sample fetch hydrates
@@ -29,40 +29,70 @@ enum GenreDerivation {
     /// invalidates the query. Running it off the main thread (and fetching only
     /// the three columns the derivation reads) removes the hang entirely.
     static func movieGenres(in container: ModelContainer, playlistPrefix: String, restriction: ContentRestriction) async -> [String] {
-        await Task.detached(priority: .userInitiated) {
-            var descriptor = FetchDescriptor<Movie>(predicate: #Predicate { $0.genre != nil })
-            descriptor.fetchLimit = genreSampleLimit
-            descriptor.propertiesToFetch = [\.id, \.genre, \.categoryId]
+        let excludedCategoryIDs = restriction.excludedCategoryIDs
+        return await Task.detached(priority: .userInitiated) {
+            let descriptor = movieGenreSampleDescriptor(
+                playlistPrefix: playlistPrefix,
+                excludedCategoryIDs: excludedCategoryIDs
+            )
             let movies = (try? ModelContext(container).fetch(descriptor)) ?? []
-            return Self.derive(playlistPrefix: playlistPrefix, restriction: restriction, rows: movies)
+            return Self.derive(rows: movies)
         }.value
     }
 
     static func seriesGenres(in container: ModelContainer, playlistPrefix: String, restriction: ContentRestriction) async -> [String] {
-        await Task.detached(priority: .userInitiated) {
-            var descriptor = FetchDescriptor<Series>(predicate: #Predicate { $0.genre != nil })
-            descriptor.fetchLimit = genreSampleLimit
-            descriptor.propertiesToFetch = [\.id, \.genre, \.categoryId]
+        let excludedCategoryIDs = restriction.excludedCategoryIDs
+        return await Task.detached(priority: .userInitiated) {
+            let descriptor = seriesGenreSampleDescriptor(
+                playlistPrefix: playlistPrefix,
+                excludedCategoryIDs: excludedCategoryIDs
+            )
             let series = (try? ModelContext(container).fetch(descriptor)) ?? []
-            return Self.derive(playlistPrefix: playlistPrefix, restriction: restriction, rows: series)
+            return Self.derive(rows: series)
         }.value
     }
 
-    /// Scopes the sampled rows to the active playlist and viewer (the
-    /// `excludingRestricted` filter, inlined so this stays `nonisolated`), then
-    /// derives the distinct genres. Runs on the caller's background context.
-    private nonisolated static func derive(
-        playlistPrefix: String,
-        restriction: ContentRestriction,
-        rows: [some GenreCarrying]
-    ) -> [String] {
-        let excluded = restriction.excludedCategoryIDs
-        let genres = rows.lazy
-            .filter { $0.id.hasPrefix(playlistPrefix) }
-            .filter { excluded.isEmpty || !excluded.contains($0.categoryId ?? "") }
-            .map(\.genre)
-        return GenreParser.distinctByFrequency(Array(genres))
+    /// The fetch already scoped the bounded sample to the active playlist and
+    /// viewer. Keeping that work in SQLite is a correctness requirement: an
+    /// unrelated 5,000-row playlist must not consume the sample before the
+    /// active playlist's genres are reached.
+    private nonisolated static func derive(rows: [some GenreCarrying]) -> [String] {
+        GenreParser.distinctByFrequency(rows.map(\.genre))
     }
+}
+
+/// Sample descriptors are internal so on-disk tests can verify that the
+/// playlist and visibility predicates remain ahead of the 5,000-row cap.
+nonisolated func movieGenreSampleDescriptor(
+    playlistPrefix prefix: String,
+    excludedCategoryIDs: Set<String>
+) -> FetchDescriptor<Movie> {
+    let excluded = Set(excludedCategoryIDs.map(String?.some))
+    let filtersCategories = !excluded.isEmpty
+    var descriptor = FetchDescriptor<Movie>(predicate: #Predicate { movie in
+        movie.genre != nil
+            && movie.id.starts(with: prefix)
+            && (!filtersCategories || movie.categoryId == nil || !excluded.contains(movie.categoryId))
+    })
+    descriptor.fetchLimit = genreSampleLimit
+    descriptor.propertiesToFetch = [\.genre]
+    return descriptor
+}
+
+nonisolated func seriesGenreSampleDescriptor(
+    playlistPrefix prefix: String,
+    excludedCategoryIDs: Set<String>
+) -> FetchDescriptor<Series> {
+    let excluded = Set(excludedCategoryIDs.map(String?.some))
+    let filtersCategories = !excluded.isEmpty
+    var descriptor = FetchDescriptor<Series>(predicate: #Predicate { series in
+        series.genre != nil
+            && series.id.starts(with: prefix)
+            && (!filtersCategories || series.categoryId == nil || !excluded.contains(series.categoryId))
+    })
+    descriptor.fetchLimit = genreSampleLimit
+    descriptor.propertiesToFetch = [\.genre]
+    return descriptor
 }
 
 /// The fields the genre derivation reads off a sampled title. `nonisolated` so

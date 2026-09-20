@@ -126,6 +126,14 @@ struct MainTabView: View {
         router.selectedTab = fallback.tab
     }
 
+    /// Home's local rails are bounded queries, so their playlist scope has to
+    /// be known when the `@Query` wrappers are constructed. Passing the prefix
+    /// from this root keeps the limit behind the SQL selection rather than
+    /// filtering another playlist's capped rows in memory.
+    private var activePlaylistPrefix: String? {
+        playlists.active(for: selectedPlaylistID).map { "\($0.id.uuidString)-" }
+    }
+
     var body: some View {
         @Bindable var router = router
         return tabView(selection: $router.selectedTab)
@@ -239,7 +247,9 @@ struct MainTabView: View {
 
                 if isOn(.home) {
                     Tab(value: AppTab.home) {
-                        activeOnly(.home, selection: selection.wrappedValue) { HomeView() }
+                        activeOnly(.home, selection: selection.wrappedValue) {
+                            HomeView(playlistPrefix: activePlaylistPrefix, restriction: contentRestriction)
+                        }
                     } label: {
                         Text("Home")
                     }
@@ -321,7 +331,7 @@ struct MainTabView: View {
             TabView(selection: selection) {
                 if isOn(.home) {
                     Tab("Home", systemImage: "house", value: AppTab.home) {
-                        HomeView()
+                        HomeView(playlistPrefix: activePlaylistPrefix, restriction: contentRestriction)
                     }
                 }
 
