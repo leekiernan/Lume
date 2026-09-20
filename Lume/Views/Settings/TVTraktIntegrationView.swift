@@ -144,6 +144,29 @@
                     importStatus(summary)
                 }
 
+                if trakt.pendingMutationCount > 0 {
+                    Button {
+                        trakt.retryPendingMutations()
+                    } label: {
+                        HStack(spacing: 16) {
+                            Image(systemName: "arrow.clockwise")
+                                .font(.system(size: 22, weight: .medium))
+                            Text("Retry Pending Trakt Changes")
+                            Spacer(minLength: 0)
+                            if trakt.isSyncingMutations {
+                                ProgressView()
+                            }
+                        }
+                    }
+                    .buttonStyle(TVSettingsRowButtonStyle())
+                    .disabled(trakt.isSyncingMutations)
+
+                    Text(trakt.mutationSyncError ?? "\(trakt.pendingMutationCount) Trakt change(s) waiting to sync.")
+                        .font(.system(size: 22))
+                        .foregroundStyle(trakt.failedMutationCount > 0 ? .red : .secondary)
+                        .padding(.horizontal, TVSettingsMetrics.rowHPadding)
+                }
+
                 Button {
                     Task { await trakt.disconnect() }
                 } label: {
