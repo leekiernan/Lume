@@ -217,11 +217,20 @@ final class TraktService {
 
     // MARK: - Watchlist
 
-    /// Fetches the user's watchlist. Returns an empty array when not connected
-    /// or on error — the home row simply hides.
+    /// Best-effort compatibility wrapper for callers where an unavailable
+    /// watchlist and an empty one are intentionally equivalent.
     func fetchWatchlist() async -> [TraktWatchlistItem] {
-        guard let accessToken = await validAccessToken() else { return [] }
-        return await (try? client.watchlist(accessToken: accessToken)) ?? []
+        await (try? watchlistItems()) ?? []
+    }
+
+    /// Fetches the user's watchlist without collapsing transport/auth failures
+    /// into an authoritative empty list. Caches use this path so a failed
+    /// revalidation can preserve their stale value.
+    func watchlistItems() async throws -> [TraktWatchlistItem] {
+        guard let accessToken = await validAccessToken() else {
+            throw TraktError.notAuthenticated
+        }
+        return try await client.watchlist(accessToken: accessToken)
     }
 
     // MARK: - Watched import

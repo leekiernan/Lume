@@ -59,6 +59,7 @@ struct HomeView: View {
     @State var heroItems: [HeroItem] = []
     @State var trendingState: HomeLoadState = .idle
     @State var trakt = TraktService.shared
+    @State var remoteLoadGate = HomeRemoteLoadGate()
     /// "For You" is a Lume Pro feature; observed so the row appears/disappears
     /// when entitlement changes.
     @State var premium = PremiumManager.shared
@@ -304,7 +305,9 @@ struct HomeView: View {
     }
 
     var watchlistKey: String {
-        "watchlist-\(trakt.isConnected)-\(selectedPlaylistID)-\(restriction.visibilityToken)"
+        let synced = activePlaylist?.lastSyncDate?.timeIntervalSince1970 ?? 0
+        let account = trakt.username ?? "disconnected"
+        return "watchlist-\(account)-\(selectedPlaylistID)-\(synced)-\(restriction.visibilityToken)"
     }
 
     /// Identity of the series resume lookup. Resuming or finishing an episode

@@ -11,44 +11,70 @@ import SwiftData
 import SwiftUI
 
 extension HomeView {
+    private enum CacheRestore {
+        case missing
+        case stale
+        case fresh
+    }
+
     // MARK: - Trending
 
     func loadTrending(cacheKey: String) async {
+        guard cacheKey == trendingKey else { return }
+        let requestID = remoteLoadGate.begin(.trending)
+
         // Session cache: the tab's view (and this state) is torn down on every
         // tvOS tab switch; a matching cache entry restores the hero carousel
-        // instantly instead of refetching TMDB and popping in again.
-        if let cached = HomeTrendingCache.shared.trendingEntry(for: cacheKey) {
-            heroItems = cached.heroes
-            trendingMovies = cached.movies
-            trendingSeries = cached.series
-            trendingState = .loaded
-            return
-        }
+        // instantly instead of refetching TMDB and popping in again. A stale
+        // entry still paints the first frame, but continues to revalidate.
+        let cached = restoreTrending(for: cacheKey)
+        if cached == .fresh { return }
         let client = TMDBClient.shared
         guard client.isConfigured else {
-            trendingState = .loaded
+            if cached == .missing { trendingState = .loaded }
             return
         }
-        trendingState = .loading
+        if cached == .missing { trendingState = .loading }
         let interval = Perf.begin(.homeTrendingLoad)
         defer { Perf.end(interval) }
         do {
             async let movieTitles = client.trending(.movie)
             async let tvTitles = client.trending(.tvShow)
             let (movies, tvSeries) = try await (movieTitles, tvTitles)
+            guard isCurrentTrendingRequest(requestID, cacheKey: cacheKey) else { return }
 
             let (movieItems, seriesItems, heroes) = matchTrending(movies: movies, tvSeries: tvSeries)
-            trendingMovies = Array(movieItems.prefix(20))
-            trendingSeries = Array(seriesItems.prefix(20))
-            heroItems = Array(heroes.prefix(8))
+            let nextMovies = Array(movieItems.prefix(20))
+            let nextSeries = Array(seriesItems.prefix(20))
+            let nextHeroes = Array(heroes.prefix(8))
+            guard isCurrentTrendingRequest(requestID, cacheKey: cacheKey) else { return }
+            trendingMovies = nextMovies
+            trendingSeries = nextSeries
+            heroItems = nextHeroes
             trendingState = .loaded
             HomeTrendingCache.shared.storeTrending(
-                key: cacheKey, heroes: heroItems, movies: trendingMovies, series: trendingSeries
+                key: cacheKey, heroes: nextHeroes, movies: nextMovies, series: nextSeries
             )
             await enrichHeroLogos()
         } catch {
-            trendingState = .failed
+            guard isCurrentTrendingRequest(requestID, cacheKey: cacheKey) else { return }
+            if cached == .missing { trendingState = .failed }
         }
+    }
+
+    private func restoreTrending(for cacheKey: String) -> CacheRestore {
+        guard let cached = HomeTrendingCache.shared.trendingEntry(for: cacheKey) else { return .missing }
+        heroItems = cached.value.heroes
+        trendingMovies = cached.value.movies
+        trendingSeries = cached.value.series
+        trendingState = .loaded
+        return cached.isFresh ? .fresh : .stale
+    }
+
+    private func isCurrentTrendingRequest(_ id: UUID, cacheKey: String) -> Bool {
+        !Task.isCancelled
+            && cacheKey == trendingKey
+            && remoteLoadGate.isCurrent(id, for: .trending)
     }
 
     /// Matches the trending titles against the local catalog (two batched
@@ -134,34 +160,63 @@ extension HomeView {
     /// user actually owns in the active playlist — matched by TMDB id, the same
     /// way the trending rows work.
     func loadWatchlist(cacheKey: String) async {
-        if let cached = HomeTrendingCache.shared.watchlistEntry(for: cacheKey) {
-            watchlist = cached
-            return
-        }
+        guard cacheKey == watchlistKey else { return }
+        let requestID = remoteLoadGate.begin(.watchlist)
+
+        let cached = restoreWatchlist(for: cacheKey)
+        if cached == .fresh { return }
         guard trakt.isConnected else {
             watchlist = []
             return
         }
-        let items = await trakt.fetchWatchlist()
-        let moviesByTmdbId = fetchMovies(tmdbIds: items.compactMap { $0.movie?.ids.tmdb })
-        let seriesByTmdbId = fetchSeries(tmdbIds: items.compactMap { $0.show?.ids.tmdb })
-        var matched: [HomeMediaItem] = []
-        for item in items {
-            switch item.type {
-            case "movie":
-                if let tmdbID = item.movie?.ids.tmdb, let movie = moviesByTmdbId[tmdbID] {
-                    matched.append(.movie(movie))
-                }
-            case "show":
-                if let tmdbID = item.show?.ids.tmdb, let series = seriesByTmdbId[tmdbID] {
-                    matched.append(.series(series))
-                }
-            default:
-                break
+        do {
+            let items = try await trakt.watchlistItems()
+            guard isCurrentWatchlistRequest(requestID, cacheKey: cacheKey) else { return }
+            let moviesByTmdbId = fetchMovies(tmdbIds: items.compactMap { $0.movie?.ids.tmdb })
+            let seriesByTmdbId = fetchSeries(tmdbIds: items.compactMap { $0.show?.ids.tmdb })
+            let matched = matchWatchlist(items, moviesByTmdbId: moviesByTmdbId, seriesByTmdbId: seriesByTmdbId)
+            let nextWatchlist = Array(matched.prefix(20))
+            guard isCurrentWatchlistRequest(requestID, cacheKey: cacheKey) else { return }
+            watchlist = nextWatchlist
+            HomeTrendingCache.shared.storeWatchlist(key: cacheKey, items: nextWatchlist)
+        } catch {
+            // A failed revalidation must not turn a usable stale row into an
+            // authoritative empty result. The next appearance can retry.
+            if cached == .missing, isCurrentWatchlistRequest(requestID, cacheKey: cacheKey) {
+                watchlist = []
             }
         }
-        watchlist = Array(matched.prefix(20))
-        HomeTrendingCache.shared.storeWatchlist(key: cacheKey, items: watchlist)
+    }
+
+    private func restoreWatchlist(for cacheKey: String) -> CacheRestore {
+        guard let cached = HomeTrendingCache.shared.watchlistEntry(for: cacheKey) else { return .missing }
+        watchlist = cached.value
+        return cached.isFresh ? .fresh : .stale
+    }
+
+    private func matchWatchlist(
+        _ items: [TraktWatchlistItem],
+        moviesByTmdbId: [Int: Movie],
+        seriesByTmdbId: [Int: Series]
+    ) -> [HomeMediaItem] {
+        items.compactMap { item in
+            switch item.type {
+            case "movie":
+                guard let tmdbID = item.movie?.ids.tmdb, let movie = moviesByTmdbId[tmdbID] else { return nil }
+                return .movie(movie)
+            case "show":
+                guard let tmdbID = item.show?.ids.tmdb, let series = seriesByTmdbId[tmdbID] else { return nil }
+                return .series(series)
+            default:
+                return nil
+            }
+        }
+    }
+
+    private func isCurrentWatchlistRequest(_ id: UUID, cacheKey: String) -> Bool {
+        !Task.isCancelled
+            && cacheKey == watchlistKey
+            && remoteLoadGate.isCurrent(id, for: .watchlist)
     }
 
     // MARK: - Batched catalog lookup
