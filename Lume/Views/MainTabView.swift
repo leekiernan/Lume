@@ -66,6 +66,16 @@ struct MainTabView: View {
         SyncFrequency.resolve(syncFrequencyRaw)
     }
 
+    /// Re-evaluate auto-sync when the profile or its enabled areas change, even
+    /// though neither operation changes the shared playlist rows themselves.
+    private var autoSyncTrigger: AutoSyncTrigger {
+        AutoSyncTrigger(
+            playlistCount: playlists.count,
+            activeProfileToken: activeProfileToken,
+            disabledAreasRaw: disabledAreasRaw
+        )
+    }
+
     /// UI tests seed a fake playlist; auto-sync would present a blocking cover
     /// that can never succeed against the stub server, so skip it there.
     private var isUITesting: Bool {
@@ -157,9 +167,10 @@ struct MainTabView: View {
                 FullScreenPlayerView(media: media)
             }
         #endif
-            .task(id: playlists.count) {
-                // On launch (and whenever a playlist is added) sync any playlist that
-                // is due per the configured frequency.
+            .task(id: autoSyncTrigger) {
+                // On launch, playlist insertion, profile switch, or area toggle,
+                // sync anything due and repair catalog phases the active profile
+                // enables but the most recent successful sync skipped.
                 enqueueDueSyncs(playlists)
             }
             .onChange(of: selectedPlaylistID) {
@@ -421,20 +432,29 @@ struct MainTabView: View {
     private func enqueueDueSyncs(_ candidates: [Playlist]) {
         guard !isUITesting else { return }
 
-        for playlist in candidates where shouldAutoSync(playlist) {
+        for playlist in candidates where shouldAutoSync(playlist) && !isQueued(playlist) {
             autoSyncAttempted.insert(playlist.id)
             syncQueue.append(playlist)
         }
         promoteNextIfIdle()
     }
 
+    private func isQueued(_ playlist: Playlist) -> Bool {
+        activeSyncPlaylist?.id == playlist.id || syncQueue.contains { $0.id == playlist.id }
+    }
+
     private func shouldAutoSync(_ playlist: Playlist) -> Bool {
-        AutoSync.shouldSync(
+        let requiresCatalogCoverage = PlaylistSyncCoverage.isMissingEnabledArea(
+            playlistID: playlist.id,
+            disabledAreasRaw: disabledAreasRaw
+        )
+        return AutoSync.shouldSync(
             syncEnabled: playlist.syncEnabled,
             status: playlist.syncStatus,
             lastSyncDate: playlist.lastSyncDate,
             frequency: syncFrequency,
-            alreadyStarted: autoSyncAttempted.contains(playlist.id)
+            alreadyStarted: autoSyncAttempted.contains(playlist.id),
+            requiresCatalogCoverage: requiresCatalogCoverage
         )
     }
 
@@ -445,6 +465,12 @@ struct MainTabView: View {
         guard activeSyncPlaylist == nil, !syncQueue.isEmpty else { return }
         activeSyncPlaylist = syncQueue.removeFirst()
     }
+}
+
+private struct AutoSyncTrigger: Hashable {
+    let playlistCount: Int
+    let activeProfileToken: String
+    let disabledAreasRaw: String
 }
 
 // MARK: - Downloads sheet presentation

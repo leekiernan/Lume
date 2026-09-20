@@ -49,6 +49,14 @@ nonisolated enum AppAreaSettings {
         return enabled.isEmpty ? [.home] : enabled
     }
 
+    /// Enabled areas that own a provider catalog phase. Home is navigation and
+    /// layout only, so it never makes a playlist sync incomplete by itself.
+    static func enabledContentAreas(disabledRaw: String) -> Set<AppArea> {
+        Set(AppArea.allCases.filter {
+            $0.categoryType != nil && isEnabled($0, disabledRaw: disabledRaw)
+        })
+    }
+
     /// Flip one area's state, returning the new encoded set. Switching off the
     /// last enabled area is refused — the caller's toggle snaps back, because
     /// the getter still reports it as on.
