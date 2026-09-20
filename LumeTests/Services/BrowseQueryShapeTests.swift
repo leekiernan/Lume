@@ -493,7 +493,7 @@ struct BrowseQueryShapeTests {
 
 private protocol FavoriteHomeFixture: AnyObject {
     var isFavorite: Bool { get set }
-    var favoriteOrder: Int { get set }
+    var favoriteOrder: Int? { get set }
     var lastWatchedDate: Date? { get set }
 }
 
