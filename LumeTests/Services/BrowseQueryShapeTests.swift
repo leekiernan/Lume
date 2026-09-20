@@ -50,6 +50,81 @@ struct BrowseQueryShapeTests {
         #expect(MovieCollectionQuery.gridDescriptor(for: .recentlyAdded, playlistPrefix: prefix).fetchLimit == recentlyAddedFetchLimit)
     }
 
+    // MARK: - Selection precedes bounded fetches
+
+    /// Home used to take the first 20/30 rows globally and only then discard
+    /// other playlists and restricted categories in Swift. Enough irrelevant
+    /// rows could therefore make every local rail appear empty.
+    @Test func `home limits apply after playlist and visibility filters`() throws {
+        let container = try makeSQLiteContainer()
+        let context = ModelContext(container)
+        let mine = "\(UUID().uuidString)-"
+        let theirs = "\(UUID().uuidString)-"
+        let locked = "\(mine)locked"
+        insertIrrelevantHomeRows(mine: mine, theirs: theirs, locked: locked, in: context)
+        let (movie, series, stream) = insertVisibleHomeRows(prefix: mine, in: context)
+        try context.save()
+
+        let excluded = Set([locked])
+        #expect(try context.fetch(HomeQuery.watchedMovies(playlistPrefix: mine, excludedCategoryIDs: excluded)).map(\.id) == [movie.id])
+        #expect(try context.fetch(HomeQuery.favoriteMovies(playlistPrefix: mine, excludedCategoryIDs: excluded)).map(\.id) == [movie.id])
+        #expect(try context.fetch(HomeQuery.watchedSeries(playlistPrefix: mine, excludedCategoryIDs: excluded)).map(\.id) == [series.id])
+        #expect(try context.fetch(HomeQuery.favoriteSeries(playlistPrefix: mine, excludedCategoryIDs: excluded)).map(\.id) == [series.id])
+        #expect(try context.fetch(HomeQuery.watchedStreams(playlistPrefix: mine, excludedCategoryIDs: excluded)).map(\.id) == [stream.id])
+        #expect(try context.fetch(HomeQuery.favoriteStreams(playlistPrefix: mine, excludedCategoryIDs: excluded)).map(\.id) == [stream.id])
+    }
+
+    /// Genre discovery has the same ordering requirement: the 5,000-row sample
+    /// must be drawn from visible titles in the active playlist, not filtered
+    /// down after an unrelated playlist consumed the sample.
+    @Test func `genre samples are scoped before their limit`() throws {
+        let container = try makeSQLiteContainer()
+        let context = ModelContext(container)
+        let mine = "\(UUID().uuidString)-"
+        let theirs = "\(UUID().uuidString)-"
+        let locked = "\(mine)locked"
+
+        let otherMovie = Movie(
+            id: "\(theirs)movie", streamId: 1, name: "Other", categoryId: "\(theirs)category"
+        )
+        otherMovie.genre = "Comedy"
+        context.insert(otherMovie)
+        let lockedMovie = Movie(
+            id: "\(mine)locked-movie", streamId: 2, name: "Locked", categoryId: locked
+        )
+        lockedMovie.genre = "Crime"
+        context.insert(lockedMovie)
+        let movie = Movie(id: "\(mine)movie", streamId: 3, name: "Mine")
+        movie.genre = "Drama"
+        context.insert(movie)
+
+        context.insert(Series(
+            id: "\(theirs)series", seriesId: 1, name: "Other", genre: "Comedy"
+        ))
+        context.insert(Series(
+            id: "\(mine)locked-series", seriesId: 2, name: "Locked", genre: "Crime", categoryId: locked
+        ))
+        context.insert(Series(
+            id: "\(mine)series", seriesId: 3, name: "Mine", genre: "Documentary"
+        ))
+        try context.save()
+
+        let excluded = Set([locked])
+        let movies = try context.fetch(movieGenreSampleDescriptor(
+            playlistPrefix: mine,
+            excludedCategoryIDs: excluded
+        ))
+        let series = try context.fetch(seriesGenreSampleDescriptor(
+            playlistPrefix: mine,
+            excludedCategoryIDs: excluded
+        ))
+
+        #expect(movies.map(\.genre) == ["Drama"])
+        #expect(series.map(\.genre) == ["Documentary"])
+        #expect(movieGenreSampleDescriptor(playlistPrefix: mine, excludedCategoryIDs: excluded).fetchLimit == genreSampleLimit)
+        #expect(seriesGenreSampleDescriptor(playlistPrefix: mine, excludedCategoryIDs: excluded).fetchLimit == genreSampleLimit)
+    }
+
     // MARK: - Live TV gates stay probes
 
     /// Both rail gates answer "is there at least one". They must stay `LIMIT 1`
@@ -319,6 +394,62 @@ struct BrowseQueryShapeTests {
 
     // MARK: - Helpers
 
+    private func insertIrrelevantHomeRows(
+        mine: String,
+        theirs: String,
+        locked: String,
+        in context: ModelContext
+    ) {
+        for index in 0 ..< HomeQuery.favoritesLimit {
+            let movie = Movie(
+                id: "\(theirs)movie-\(index)", streamId: index,
+                name: "Other \(index)", categoryId: "\(theirs)category"
+            )
+            markAsFavoriteAndWatched(movie, order: index)
+            context.insert(movie)
+
+            let series = Series(
+                id: "\(mine)series-locked-\(index)", seriesId: index,
+                name: "Locked \(index)", categoryId: locked
+            )
+            markAsFavoriteAndWatched(series, order: index)
+            context.insert(series)
+
+            let stream = LiveStream(
+                id: "\(mine)live-hidden-\(index)", streamId: index,
+                name: "Hidden \(index)", categoryId: locked
+            )
+            markAsFavoriteAndWatched(stream, order: index)
+            context.insert(stream)
+        }
+    }
+
+    private func insertVisibleHomeRows(
+        prefix: String,
+        in context: ModelContext
+    ) -> (Movie, Series, LiveStream) {
+        let movie = Movie(id: "\(prefix)movie-visible", streamId: 100, name: "Mine")
+        let series = Series(id: "\(prefix)series-visible", seriesId: 100, name: "Mine")
+        let stream = LiveStream(id: "\(prefix)live-visible", streamId: 100, name: "Mine")
+        markAsFavoriteAndWatched(movie, order: 100, date: .distantPast)
+        markAsFavoriteAndWatched(series, order: 100, date: .distantPast)
+        markAsFavoriteAndWatched(stream, order: 100, date: .distantPast)
+        context.insert(movie)
+        context.insert(series)
+        context.insert(stream)
+        return (movie, series, stream)
+    }
+
+    private func markAsFavoriteAndWatched(
+        _ item: some FavoriteHomeFixture,
+        order: Int,
+        date: Date? = nil
+    ) {
+        item.isFavorite = true
+        item.favoriteOrder = order
+        item.lastWatchedDate = date ?? Date().addingTimeInterval(Double(order))
+    }
+
     private func makePlaylist(in context: ModelContext) -> Playlist {
         let playlist = Playlist(
             name: "Test", serverURL: "http://example.com:8080", username: "user", password: "pass"
@@ -393,3 +524,13 @@ struct BrowseQueryShapeTests {
         return try ModelContainer(for: schema, configurations: [config])
     }
 }
+
+private protocol FavoriteHomeFixture: AnyObject {
+    var isFavorite: Bool { get set }
+    var favoriteOrder: Int { get set }
+    var lastWatchedDate: Date? { get set }
+}
+
+extension Movie: FavoriteHomeFixture {}
+extension Series: FavoriteHomeFixture {}
+extension LiveStream: FavoriteHomeFixture {}

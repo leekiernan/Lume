@@ -88,54 +88,37 @@ struct HomeView: View {
         @State private var selectedHero: HeroItem?
     #endif
 
-    init() {
-        // Recently watched: non-nil lastWatchedDate, newest first.
-        var movies = FetchDescriptor<Movie>(
-            predicate: #Predicate { $0.lastWatchedDate != nil },
-            sortBy: [SortDescriptor(\.lastWatchedDate, order: .reverse)]
-        )
-        movies.fetchLimit = 20
-        _watchedMovies = Query(movies)
-
-        var series = FetchDescriptor<Series>(
-            predicate: #Predicate { $0.lastWatchedDate != nil },
-            sortBy: [SortDescriptor(\.lastWatchedDate, order: .reverse)]
-        )
-        series.fetchLimit = 20
-        _watchedSeries = Query(series)
-
-        // Channels hidden in Content Management drop out here, the same way Live
-        // TV drops them; a hidden *category* is handled by `excludingRestricted`.
-        var streams = FetchDescriptor<LiveStream>(
-            predicate: #Predicate { $0.lastWatchedDate != nil && $0.isHidden == false },
-            sortBy: [SortDescriptor(\.lastWatchedDate, order: .reverse)]
-        )
-        streams.fetchLimit = 20
-        _watchedStreams = Query(streams)
-
-        // Favorites: by the unified favorites order (Content Management →
-        // Favorites), falling back to name; capped. The cross-type interleave
-        // happens in the `favorites` accessor.
-        var favMovies = FetchDescriptor<Movie>(
-            predicate: #Predicate { $0.isFavorite },
-            sortBy: [SortDescriptor(\.favoriteOrder), SortDescriptor(\.name)]
-        )
-        favMovies.fetchLimit = 30
-        _favoriteMovies = Query(favMovies)
-
-        var favSeries = FetchDescriptor<Series>(
-            predicate: #Predicate { $0.isFavorite },
-            sortBy: [SortDescriptor(\.favoriteOrder), SortDescriptor(\.name)]
-        )
-        favSeries.fetchLimit = 30
-        _favoriteSeries = Query(favSeries)
-
-        var favStreams = FetchDescriptor<LiveStream>(
-            predicate: #Predicate { $0.isFavorite && $0.isHidden == false },
-            sortBy: [SortDescriptor(\.favoriteOrder), SortDescriptor(\.name)]
-        )
-        favStreams.fetchLimit = 30
-        _favoriteStreams = Query(favStreams)
+    init(playlistPrefix: String? = nil, restriction queryRestriction: ContentRestriction = ContentRestriction()) {
+        // The scope and visibility checks must be part of each SQL predicate,
+        // before its fetch limit. Applying them to the capped result in Swift
+        // lets another playlist (or hidden categories) consume every slot and
+        // makes a populated Home row appear empty.
+        let prefix = playlistPrefix ?? ""
+        let excludedCategoryIDs = queryRestriction.excludedCategoryIDs
+        _watchedMovies = Query(HomeQuery.watchedMovies(
+            playlistPrefix: prefix,
+            excludedCategoryIDs: excludedCategoryIDs
+        ))
+        _watchedSeries = Query(HomeQuery.watchedSeries(
+            playlistPrefix: prefix,
+            excludedCategoryIDs: excludedCategoryIDs
+        ))
+        _watchedStreams = Query(HomeQuery.watchedStreams(
+            playlistPrefix: prefix,
+            excludedCategoryIDs: excludedCategoryIDs
+        ))
+        _favoriteMovies = Query(HomeQuery.favoriteMovies(
+            playlistPrefix: prefix,
+            excludedCategoryIDs: excludedCategoryIDs
+        ))
+        _favoriteSeries = Query(HomeQuery.favoriteSeries(
+            playlistPrefix: prefix,
+            excludedCategoryIDs: excludedCategoryIDs
+        ))
+        _favoriteStreams = Query(HomeQuery.favoriteStreams(
+            playlistPrefix: prefix,
+            excludedCategoryIDs: excludedCategoryIDs
+        ))
     }
 
     var body: some View {
