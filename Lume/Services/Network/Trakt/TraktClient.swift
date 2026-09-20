@@ -398,10 +398,12 @@ private struct TraktSettingsResponse: Decodable {
 struct TraktUser: Decodable {
     let username: String
     let name: String?
+    let ids: TraktIDs?
 
     enum CodingKeys: String, CodingKey {
         case username
         case name
+        case ids
     }
 }
 
