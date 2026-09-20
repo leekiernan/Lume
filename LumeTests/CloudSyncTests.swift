@@ -12,6 +12,10 @@ import Foundation
 import SwiftData
 import Testing
 
+private nonisolated enum InjectedReconcileSaveError: Error {
+    case forced
+}
+
 // MARK: - Pure three-way merge
 
 struct CloudSyncMergeTests {
@@ -216,6 +220,42 @@ struct CloudSyncEngineTests {
         #expect(states.first?.contentId == "\(pid.uuidString)-movie-1")
         #expect(states.first?.isFavorite == true)
         #expect(states.first?.watchProgress == 42)
+    }
+
+    @Test func `failed reconcile restores its shadow so the next pass retries`() async throws {
+        let container = try makeProfileTestContainer()
+        let ctx = container.mainContext
+        let shadow = freshShadow()
+        let playlist = Playlist(
+            name: "My IPTV",
+            serverURL: "http://x",
+            username: "u",
+            password: "p"
+        )
+        let playlistID = playlist.id
+        ctx.insert(playlist)
+        try ctx.save()
+
+        let failingEngine = CloudSyncEngine(
+            container: container,
+            shadow: shadow,
+            saveFailureInjector: { role in
+                if role == .catalog { throw InjectedReconcileSaveError.forced }
+            }
+        )
+        let failed = await failingEngine.reconcile()
+
+        #expect(failed.failed)
+        #expect(shadow.playlistShadow(playlistID.uuidString) == nil)
+        #expect(try ctx.fetch(FetchDescriptor<SyncedPlaylist>()).isEmpty)
+
+        let retryingEngine = CloudSyncEngine(container: container, shadow: shadow)
+        let retried = await retryingEngine.reconcile()
+
+        #expect(!retried.failed)
+        #expect(retried.playlistsPushed == 1)
+        #expect(shadow.playlistShadow(playlistID.uuidString) != nil)
+        #expect(try ctx.fetch(FetchDescriptor<SyncedPlaylist>()).count == 1)
     }
 
     @Test func `cloud playlist creates a local playlist`() async throws {
