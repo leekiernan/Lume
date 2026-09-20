@@ -28,6 +28,11 @@ struct SyncProgressView: View {
     /// action); other source types always sync fully and ignore it.
     let full: Bool
 
+    /// Non-nil only for automatic repair after a profile enables catalog phases
+    /// omitted by the last sync. Keeps a missing Live TV import from walking a
+    /// six-figure movie catalog again.
+    let repairingAreas: Set<AppArea>?
+
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
 
@@ -36,11 +41,19 @@ struct SyncProgressView: View {
     @State private var syncError: String?
     @State private var syncTask: Task<Void, Never>?
 
-    init(playlist: Playlist, autoStart: Bool = false, full: Bool = false) {
+    init(
+        playlist: Playlist,
+        autoStart: Bool = false,
+        full: Bool = false,
+        repairingAreas: Set<AppArea>? = nil
+    ) {
         self.playlist = playlist
         self.autoStart = autoStart
         self.full = full
-        _progress = State(initialValue: SyncProgress(steps: SyncStep.steps(for: playlist.sourceType, full: full)))
+        self.repairingAreas = repairingAreas
+        _progress = State(initialValue: SyncProgress(
+            steps: SyncStep.steps(for: playlist.sourceType, full: full, areas: repairingAreas)
+        ))
         // Start already in the syncing state for auto-sync so the "Ready" screen
         // (with its Start button) never flashes before `.task` kicks off.
         _phase = State(initialValue: autoStart ? .syncing : .ready)
@@ -93,14 +106,19 @@ struct SyncProgressView: View {
 
     private func startSync() {
         // Fresh progress for each attempt so a retry starts clean.
-        progress = SyncProgress(steps: SyncStep.steps(for: playlist.sourceType, full: full))
+        progress = SyncProgress(steps: SyncStep.steps(for: playlist.sourceType, full: full, areas: repairingAreas))
         syncError = nil
         phase = .syncing
 
         syncTask = Task {
             do {
                 let syncManager = ContentSyncManager(modelContainer: modelContext.container)
-                try await syncManager.syncPlaylist(playlist, progress: progress, full: full)
+                try await syncManager.syncPlaylist(
+                    playlist,
+                    progress: progress,
+                    full: full,
+                    repairingAreas: repairingAreas
+                )
                 await MainActor.run {
                     // Newly synced titles need indexing; the launch-time pass
                     // may already be finished, so kick a fresh one — but hold it

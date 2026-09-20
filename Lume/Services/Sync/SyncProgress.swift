@@ -45,14 +45,23 @@ enum SyncStep: Int, CaseIterable, Identifiable {
         .authenticating, .movieCategories, .seriesCategories, .liveCategories, .liveStreams
     ]
 
-    static func steps(for sourceType: PlaylistSourceType, full: Bool = false) -> [SyncStep] {
+    static func steps(
+        for sourceType: PlaylistSourceType,
+        full: Bool = false,
+        areas: Set<AppArea>? = nil
+    ) -> [SyncStep] {
         switch sourceType {
-        case .xtream: xtreamSteps
-        case .m3u: m3uSteps
+        case .xtream:
+            guard let areas else { return xtreamSteps }
+            let orderedAreas = [AppArea.movies, .series, .liveTV].filter(areas.contains)
+            return [.authenticating]
+                + orderedAreas.compactMap(\.categorySyncStep)
+                + orderedAreas.compactMap(\.contentSyncStep)
+        case .m3u: return m3uSteps
         // Stalker maps onto the same catalog kinds as Xtream, but its default
         // sync skips the movie/series content walk (loaded on demand); only a
         // full-catalog download walks everything.
-        case .stalker: full ? xtreamSteps : stalkerDynamicSteps
+        case .stalker: return full ? xtreamSteps : stalkerDynamicSteps
         }
     }
 
@@ -81,6 +90,26 @@ enum SyncStep: Int, CaseIterable, Identifiable {
         case .liveStreams: "antenna.radiowaves.left.and.right"
         case .playlistDownload: "arrow.down.circle"
         case .playlistImport: "square.and.arrow.down.on.square"
+        }
+    }
+}
+
+private extension AppArea {
+    var categorySyncStep: SyncStep? {
+        switch self {
+        case .movies: .movieCategories
+        case .series: .seriesCategories
+        case .liveTV: .liveCategories
+        case .home: nil
+        }
+    }
+
+    var contentSyncStep: SyncStep? {
+        switch self {
+        case .movies: .movies
+        case .series: .series
+        case .liveTV: .liveStreams
+        case .home: nil
         }
     }
 }
