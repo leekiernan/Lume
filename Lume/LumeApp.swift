@@ -286,6 +286,11 @@ struct LumeApp: App {
                 }
                 .onChange(of: scenePhase) { _, phase in
                     cloudSync.handleScenePhaseChange(to: phase)
+                    if phase == .active {
+                        // Durable Trakt history changes survive termination and
+                        // retry whenever the app returns to the foreground.
+                        TraktService.shared.retryPendingMutations()
+                    }
                     #if !os(macOS)
                         // Shrink the resident footprint before the system suspends
                         // the app: a 256 MB decoded-image cache makes it a prime
