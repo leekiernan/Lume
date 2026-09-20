@@ -136,28 +136,6 @@ struct SyncFrequencyTests {
         ))
     }
 
-    @Test func `missing catalog coverage overrides recency and session attempt`() {
-        #expect(AutoSync.shouldSync(
-            syncEnabled: true,
-            status: .idle,
-            lastSyncDate: Date(),
-            frequency: .weekly,
-            alreadyStarted: true,
-            requiresCatalogCoverage: true
-        ))
-    }
-
-    @Test func `missing catalog coverage still respects explicit sync disable`() {
-        #expect(!AutoSync.shouldSync(
-            syncEnabled: false,
-            status: .idle,
-            lastSyncDate: Date(),
-            frequency: .weekly,
-            alreadyStarted: true,
-            requiresCatalogCoverage: true
-        ))
-    }
-
     @Test func `auto sync returns false when not due`() {
         #expect(!AutoSync.shouldSync(
             syncEnabled: true,

@@ -94,7 +94,12 @@ actor ContentSyncManager {
     // MARK: - Playlist Sync
 
     /// Performs a full sync of a playlist (categories and content)
-    func syncPlaylist(_ playlist: Playlist, progress: SyncProgress? = nil, full: Bool = false) async throws {
+    func syncPlaylist(
+        _ playlist: Playlist,
+        progress: SyncProgress? = nil,
+        full: Bool = false,
+        repairingAreas: Set<AppArea>? = nil
+    ) async throws {
         let playlistId = playlist.id
 
         guard !activeSyncPlaylistIDs.contains(playlistId) else {
@@ -108,7 +113,7 @@ actor ContentSyncManager {
             // Run directly in the caller's task — no wrapping unstructured Task —
             // so cancelling the caller (e.g. the user aborting from the progress
             // sheet) propagates here and tears the sync down.
-            try await performSync(playlistId: playlistId, progress: progress, full: full)
+            try await performSync(playlistId: playlistId, progress: progress, full: full, repairingAreas: repairingAreas)
         } catch {
             // An aborted sync isn't a failure: restore the playlist to idle so it
             // can be retried cleanly, rather than wedging it in the error state.
@@ -127,7 +132,12 @@ actor ContentSyncManager {
         NotificationCenter.default.post(name: .lumeContentSyncDidComplete, object: nil)
     }
 
-    private func performSync(playlistId: UUID, progress: SyncProgress?, full: Bool) async throws {
+    private func performSync(
+        playlistId: UUID,
+        progress: SyncProgress?,
+        full: Bool,
+        repairingAreas: Set<AppArea>?
+    ) async throws {
         // Whole-sync interval: the umbrella every phase below nests under, so a
         // trace (or `XCTOSSignpostMetric`) shows both the total and the split.
         let interval = Perf.begin(.playlistSync)
@@ -148,7 +158,12 @@ actor ContentSyncManager {
         let syncedAreas: Set<AppArea>
         switch playlist.sourceType {
         case .xtream:
-            syncedAreas = try await performXtreamSync(playlist: playlist, playlistId: playlistId, progress: progress, full: full)
+            syncedAreas = try await performXtreamSync(
+                playlist: playlist,
+                playlistId: playlistId,
+                progress: progress,
+                areas: repairingAreas
+            )
         case .m3u:
             try await performM3USync(playlist: playlist, playlistId: playlistId, progress: progress)
             syncedAreas = AppAreaSettings.enabledContentAreas(disabledRaw: "")
@@ -166,60 +181,34 @@ actor ContentSyncManager {
             FetchDescriptor<Playlist>(predicate: #Predicate { $0.id == playlistId })
         ).first {
             dpl.syncStatus = .idle
-            dpl.lastSyncDate = Date()
+            if repairingAreas == nil { dpl.lastSyncDate = Date() }
             try doneContext.save()
         }
         // A failed/cancelled run leaves prior coverage intact so its retry is not suppressed.
-        PlaylistSyncCoverage.record(syncedAreas, playlistID: playlistId)
-    }
-
-    /// The Xtream pipeline: authenticate, then pull categories and content
-    /// through the provider's JSON API.
-    private func performXtreamSync(playlist: Playlist, playlistId: UUID, progress: SyncProgress?, full: Bool) async throws -> Set<AppArea> {
-        await progress?.start(.authenticating)
-        let authResponse = try await xtreamClient.getInfo(playlist: playlist)
-        updatePlaylistInfo(playlistId, with: authResponse)
-        await progress?.complete(.authenticating)
-
-        try await syncAllCategories(for: playlist, playlistId: playlistId, progress: progress, full: full)
-
-        return try await syncEnabledContent(for: playlist, playlistId: playlistId, progress: progress)
-    }
-
-    func syncAllCategories(for playlist: Playlist, playlistId: UUID, progress: SyncProgress? = nil, full _: Bool = false) async throws {
-        Logger.database.info("Starting VOD category sync")
-        await progress?.start(.movieCategories)
-        try await syncVODCategories(for: playlist, playlistId: playlistId, progress: progress)
-        await progress?.complete(.movieCategories)
-
-        Logger.database.info("Starting Series category sync")
-        await progress?.start(.seriesCategories)
-        try await syncSeriesCategories(for: playlist, playlistId: playlistId, progress: progress)
-        await progress?.complete(.seriesCategories)
-
-        Logger.database.info("Starting Live TV category sync")
-        await progress?.start(.liveCategories)
-        try await syncLiveCategories(for: playlist, playlistId: playlistId, progress: progress)
-        await progress?.complete(.liveCategories)
+        if repairingAreas == nil {
+            PlaylistSyncCoverage.record(syncedAreas, playlistID: playlistId)
+        } else {
+            PlaylistSyncCoverage.recordMerging(syncedAreas, playlistID: playlistId)
+        }
     }
 
     // MARK: - Category Sync
 
-    private func syncVODCategories(for playlist: Playlist, playlistId: UUID, progress: SyncProgress? = nil) async throws {
+    func syncVODCategories(for playlist: Playlist, playlistId: UUID, progress: SyncProgress? = nil) async throws {
         let categories = try await xtreamClient.getVODCategories(playlist: playlist)
         Logger.database.info("Fetched \(categories.count) VOD categories")
         await progress?.update(detail: "\(categories.count) categories")
         try syncCategories(categories, type: .vod, playlistId: playlistId)
     }
 
-    private func syncSeriesCategories(for playlist: Playlist, playlistId: UUID, progress: SyncProgress? = nil) async throws {
+    func syncSeriesCategories(for playlist: Playlist, playlistId: UUID, progress: SyncProgress? = nil) async throws {
         let categories = try await xtreamClient.getSeriesCategories(playlist: playlist)
         Logger.database.info("Fetched \(categories.count) Series categories")
         await progress?.update(detail: "\(categories.count) categories")
         try syncCategories(categories, type: .series, playlistId: playlistId)
     }
 
-    private func syncLiveCategories(for playlist: Playlist, playlistId: UUID, progress: SyncProgress? = nil) async throws {
+    func syncLiveCategories(for playlist: Playlist, playlistId: UUID, progress: SyncProgress? = nil) async throws {
         let categories = try await xtreamClient.getLiveCategories(playlist: playlist)
         Logger.database.info("Fetched \(categories.count) Live categories")
         await progress?.update(detail: "\(categories.count) categories")
