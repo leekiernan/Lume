@@ -25,7 +25,8 @@ import Testing
 
 @MainActor
 struct BrowseQueryShapeTests {
-    private let prefix = "\(UUID().uuidString)-"
+    /// Not `private`: read by the LibraryCollectionPagingTests extension (separate file).
+    let prefix = "\(UUID().uuidString)-"
 
     // MARK: - Collection rails are bounded
 
@@ -38,16 +39,6 @@ struct BrowseQueryShapeTests {
             #expect(SeriesCollectionQuery.rowDescriptor(for: kind, playlistPrefix: prefix).fetchLimit == collectionRowFetchLimit)
         }
         #expect(collectionRowFetchLimit > collectionPreviewLimit, "the cap has to leave room for `hasMore`")
-    }
-
-    /// "Show All" is the one surface that legitimately shows everything, so
-    /// Recently Watched and Favorites are unbounded there on purpose. Recently
-    /// Added keeps its cap because its predicate matches the whole catalog —
-    /// every title has an `added` stamp.
-    @Test func `show-all grids are unbounded except recently added`() {
-        #expect(MovieCollectionQuery.gridDescriptor(for: .favorites, playlistPrefix: prefix).fetchLimit == nil)
-        #expect(MovieCollectionQuery.gridDescriptor(for: .recentlyWatched, playlistPrefix: prefix).fetchLimit == nil)
-        #expect(MovieCollectionQuery.gridDescriptor(for: .recentlyAdded, playlistPrefix: prefix).fetchLimit == recentlyAddedFetchLimit)
     }
 
     // MARK: - Selection precedes bounded fetches
@@ -508,8 +499,9 @@ struct BrowseQueryShapeTests {
     }
 
     /// The container must be held for the test's duration — see
-    /// `SearchPredicateTests` for what happens when it is not.
-    private func makeSQLiteContainer() throws -> ModelContainer {
+    /// `SearchPredicateTests` for what happens when it is not. Not `private`:
+    /// read by the LibraryCollectionPagingTests extension (separate file).
+    func makeSQLiteContainer() throws -> ModelContainer {
         let schema = Schema([
             Playlist.self, Lume.Category.self, LiveStream.self, Movie.self,
             Series.self, Episode.self, CastMember.self, EPGListing.self, EPGSource.self
