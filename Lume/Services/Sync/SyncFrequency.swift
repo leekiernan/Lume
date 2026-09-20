@@ -123,12 +123,15 @@ enum AutoSync {
         lastSyncDate: Date?,
         frequency: SyncFrequency,
         alreadyStarted: Bool,
+        requiresCatalogCoverage: Bool = false,
         now: Date = Date()
     ) -> Bool {
         syncEnabled
             && status != .syncing
-            && !alreadyStarted
-            && frequency.isDue(lastSyncDate: lastSyncDate, now: now)
+            && (requiresCatalogCoverage || (
+                !alreadyStarted
+                    && frequency.isDue(lastSyncDate: lastSyncDate, now: now)
+            ))
     }
 
     /// Whether a background EPG refresh must stand aside for this playlist:

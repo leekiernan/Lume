@@ -145,13 +145,16 @@ actor ContentSyncManager {
         playlist.syncStatus = .syncing
         try statusContext.save()
 
+        let syncedAreas: Set<AppArea>
         switch playlist.sourceType {
         case .xtream:
-            try await performXtreamSync(playlist: playlist, playlistId: playlistId, progress: progress, full: full)
+            syncedAreas = try await performXtreamSync(playlist: playlist, playlistId: playlistId, progress: progress, full: full)
         case .m3u:
             try await performM3USync(playlist: playlist, playlistId: playlistId, progress: progress)
+            syncedAreas = AppAreaSettings.enabledContentAreas(disabledRaw: "")
         case .stalker:
             try await performStalkerSync(playlist: playlist, playlistId: playlistId, progress: progress, full: full)
+            syncedAreas = AppAreaSettings.enabledContentAreas(disabledRaw: "")
         }
 
         // Every source writes the same unread history rows (see the method).
@@ -166,11 +169,13 @@ actor ContentSyncManager {
             dpl.lastSyncDate = Date()
             try doneContext.save()
         }
+        // A failed/cancelled run leaves prior coverage intact so its retry is not suppressed.
+        PlaylistSyncCoverage.record(syncedAreas, playlistID: playlistId)
     }
 
     /// The Xtream pipeline: authenticate, then pull categories and content
     /// through the provider's JSON API.
-    private func performXtreamSync(playlist: Playlist, playlistId: UUID, progress: SyncProgress?, full: Bool) async throws {
+    private func performXtreamSync(playlist: Playlist, playlistId: UUID, progress: SyncProgress?, full: Bool) async throws -> Set<AppArea> {
         await progress?.start(.authenticating)
         let authResponse = try await xtreamClient.getInfo(playlist: playlist)
         updatePlaylistInfo(playlistId, with: authResponse)
@@ -178,7 +183,7 @@ actor ContentSyncManager {
 
         try await syncAllCategories(for: playlist, playlistId: playlistId, progress: progress, full: full)
 
-        try await syncEnabledContent(for: playlist, playlistId: playlistId, progress: progress)
+        return try await syncEnabledContent(for: playlist, playlistId: playlistId, progress: progress)
     }
 
     func syncAllCategories(for playlist: Playlist, playlistId: UUID, progress: SyncProgress? = nil, full _: Bool = false) async throws {

@@ -24,23 +24,29 @@ extension ContentSyncManager {
         for playlist: Playlist,
         playlistId: UUID,
         progress: SyncProgress? = nil
-    ) async throws {
+    ) async throws -> Set<AppArea> {
         var ranAPhase = false
+        var syncedAreas: Set<AppArea> = []
 
         if AppAreaSettings.isEnabled(.movies) {
             try await syncMovies(for: playlist, playlistId: playlistId, progress: progress)
             ranAPhase = true
+            syncedAreas.insert(.movies)
         }
 
         if AppAreaSettings.isEnabled(.series) {
             if ranAPhase { try await spaceContentPhaseRequests() }
             try await syncSeries(for: playlist, playlistId: playlistId, progress: progress)
             ranAPhase = true
+            syncedAreas.insert(.series)
         }
 
         if AppAreaSettings.isEnabled(.liveTV) {
             if ranAPhase { try await spaceContentPhaseRequests() }
             try await syncLiveStreams(for: playlist, playlistId: playlistId, progress: progress)
+            syncedAreas.insert(.liveTV)
         }
+
+        return syncedAreas
     }
 }
