@@ -162,4 +162,28 @@ struct TraktPlaybackScrobblerTests {
 
         #expect(events.last == Event(target: target, action: .stop, progress: 1))
     }
+
+    @Test func `resume fallback yields to the engine including a backward seek`() {
+        let clock = PlaybackClock()
+
+        #expect(clock.elapsed(fallback: 600) == 600)
+
+        // Engines commonly publish a preparatory zero before seeking to the
+        // saved resume point. It must not turn a 50% resume into a 0% scrobble.
+        clock.current = 0
+        #expect(clock.elapsed(fallback: 600) == 600)
+
+        clock.current = 605
+        #expect(clock.elapsed(fallback: 600) == 605)
+
+        // Once playback is established, a real seek behind the saved resume
+        // point must win. The old max(current, startTime) logic got this wrong.
+        clock.current = 120
+        #expect(clock.elapsed(fallback: 600) == 120)
+        clock.current = 0
+        #expect(clock.elapsed(fallback: 600) == 0)
+
+        clock.reset()
+        #expect(clock.elapsed(fallback: 300) == 300)
+    }
 }

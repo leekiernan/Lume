@@ -14,8 +14,19 @@ import Observation
 /// `duration` in its own body, so it is not invalidated by playback ticks.
 @Observable
 final class PlaybackClock {
-    var current: TimeInterval = 0
+    var current: TimeInterval = 0 {
+        didSet {
+            // A zero callback is common while a resumed stream is still
+            // preparing. Once an engine has reported a real position, zero is
+            // meaningful again (for example after seeking back to the start).
+            if current.isFinite, current > 0 {
+                hasEstablishedPosition = true
+            }
+        }
+    }
+
     var duration: TimeInterval = 0
+    private(set) var hasEstablishedPosition = false
     /// Low-frequency transport state shared with the host for lifecycle work
     /// such as Trakt scrobbling. Unlike the time fields, this changes only at
     /// play/pause boundaries.
@@ -26,6 +37,14 @@ final class PlaybackClock {
         current = 0
         duration = 0
         isPlaying = false
+        hasEstablishedPosition = false
+    }
+
+    /// Uses saved resume progress only while the engine is still emitting its
+    /// preparatory zero. After its first real time sample, always trust the
+    /// playhead—including a later seek backwards below the resume position.
+    func elapsed(fallback: TimeInterval) -> TimeInterval {
+        hasEstablishedPosition ? current : fallback
     }
 }
 
