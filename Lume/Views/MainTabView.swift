@@ -51,8 +51,8 @@ struct MainTabView: View {
     /// blocking progress cover. Auto-sync is presented (not silent) so the user
     /// sees progress and waits for it to finish — most importantly right after
     /// adding a playlist, when the app would otherwise look empty and broken.
-    @State private var syncQueue: [Playlist] = []
-    @State private var activeSyncPlaylist: Playlist?
+    @State private var syncQueue: [PlaylistSyncRequest] = []
+    @State private var activeSyncRequest: PlaylistSyncRequest?
 
     /// Playlists we've already auto-synced (or attempted) this session, so the
     /// launch / switch / foreground triggers don't re-present the cover for one
@@ -64,6 +64,16 @@ struct MainTabView: View {
 
     private var syncFrequency: SyncFrequency {
         SyncFrequency.resolve(syncFrequencyRaw)
+    }
+
+    /// Re-evaluate auto-sync when the profile or its enabled areas change, even
+    /// though neither operation changes the shared playlist rows themselves.
+    private var autoSyncTrigger: AutoSyncTrigger {
+        AutoSyncTrigger(
+            playlistCount: playlists.count,
+            activeProfileToken: activeProfileToken,
+            disabledAreasRaw: disabledAreasRaw
+        )
     }
 
     /// UI tests seed a fake playlist; auto-sync would present a blocking cover
@@ -80,7 +90,7 @@ struct MainTabView: View {
     /// on every platform that shows the prompt it is a sheet on the library
     /// toolbar rather than a tab, and so invisible to this root.
     private var hasBlockingPresentation: Bool {
-        activeSyncPlaylist != nil
+        activeSyncRequest != nil
             || showsDownloads
             || playlistSwitch?.isSwitching == true
             || profileManager?.isSwitching == true
@@ -157,9 +167,10 @@ struct MainTabView: View {
                 FullScreenPlayerView(media: media)
             }
         #endif
-            .task(id: playlists.count) {
-                // On launch (and whenever a playlist is added) sync any playlist that
-                // is due per the configured frequency.
+            .task(id: autoSyncTrigger) {
+                // On launch, playlist insertion, profile switch, or area toggle,
+                // sync anything due and repair catalog phases the active profile
+                // enables but the most recent successful sync skipped.
                 enqueueDueSyncs(playlists)
             }
             .onChange(of: selectedPlaylistID) {
@@ -177,7 +188,7 @@ struct MainTabView: View {
                     enqueueDueSyncs(playlists)
                 }
             }
-            .syncCover(item: $activeSyncPlaylist, onDismiss: promoteNextIfIdle)
+            .syncCover(item: $activeSyncRequest, onDismiss: promoteNextIfIdle)
             .downloadsSheet(isPresented: $showsDownloads)
             .switchProgressOverlay(playlist: playlistSwitch, profile: profileManager)
             // The one fire point for the rating sheet. Here rather than at the
@@ -273,7 +284,7 @@ struct MainTabView: View {
         /// it would move focus and hand it back somewhere else.
         private var blockingOverlayOwnsScreen: Bool {
             router.isMultiViewPresented
-                || activeSyncPlaylist != nil
+                || activeSyncRequest != nil
                 || profileManager?.isSwitching == true
         }
 
@@ -421,30 +432,66 @@ struct MainTabView: View {
     private func enqueueDueSyncs(_ candidates: [Playlist]) {
         guard !isUITesting else { return }
 
-        for playlist in candidates where shouldAutoSync(playlist) {
+        for playlist in candidates where !isQueued(playlist) {
+            guard let request = syncRequest(for: playlist) else { continue }
             autoSyncAttempted.insert(playlist.id)
-            syncQueue.append(playlist)
+            syncQueue.append(request)
         }
         promoteNextIfIdle()
     }
 
-    private func shouldAutoSync(_ playlist: Playlist) -> Bool {
-        AutoSync.shouldSync(
+    private func isQueued(_ playlist: Playlist) -> Bool {
+        activeSyncRequest?.id == playlist.id || syncQueue.contains { $0.id == playlist.id }
+    }
+
+    private func syncRequest(for playlist: Playlist) -> PlaylistSyncRequest? {
+        PlaylistSyncCoverage.bootstrapFromCatalogIfNeeded(
+            playlistID: playlist.id,
+            context: modelContext
+        )
+        let missingAreas = PlaylistSyncCoverage.missingEnabledAreas(
+            playlistID: playlist.id,
+            disabledAreasRaw: disabledAreasRaw
+        )
+        let isRegularlyDue = AutoSync.shouldSync(
             syncEnabled: playlist.syncEnabled,
             status: playlist.syncStatus,
             lastSyncDate: playlist.lastSyncDate,
             frequency: syncFrequency,
             alreadyStarted: autoSyncAttempted.contains(playlist.id)
         )
+        let needsCoverage = !missingAreas.isEmpty && playlist.syncEnabled && playlist.syncStatus != .syncing
+        guard isRegularlyDue || needsCoverage else { return nil }
+
+        // A due playlist gets its ordinary refresh. Only the otherwise-current
+        // Xtream playlist uses the narrow repair path; m3u and Stalker do not
+        // expose independent per-area bulk imports.
+        let repairingAreas = !isRegularlyDue && playlist.sourceType == .xtream ? missingAreas : nil
+        return PlaylistSyncRequest(playlist: playlist, repairingAreas: repairingAreas)
     }
 
     /// Presents the next queued playlist's sync cover when none is showing. The
     /// `SyncProgressView` auto-starts the sync and dismisses itself on success;
     /// the cover's `onDismiss` calls back here to advance the queue.
     private func promoteNextIfIdle() {
-        guard activeSyncPlaylist == nil, !syncQueue.isEmpty else { return }
-        activeSyncPlaylist = syncQueue.removeFirst()
+        guard activeSyncRequest == nil, !syncQueue.isEmpty else { return }
+        activeSyncRequest = syncQueue.removeFirst()
     }
+}
+
+private struct PlaylistSyncRequest: Identifiable {
+    let playlist: Playlist
+    let repairingAreas: Set<AppArea>?
+
+    var id: UUID {
+        playlist.id
+    }
+}
+
+private struct AutoSyncTrigger: Hashable {
+    let playlistCount: Int
+    let activeProfileToken: String
+    let disabledAreasRaw: String
 }
 
 // MARK: - Downloads sheet presentation
@@ -485,15 +532,23 @@ private extension View {
     /// cover on iOS/tvOS (no swipe-to-dismiss), a sheet on macOS where
     /// `fullScreenCover` is unavailable.
     @ViewBuilder
-    func syncCover(item: Binding<Playlist?>, onDismiss: @escaping () -> Void) -> some View {
+    func syncCover(item: Binding<PlaylistSyncRequest?>, onDismiss: @escaping () -> Void) -> some View {
         #if os(macOS)
-            sheet(item: item, onDismiss: onDismiss) { playlist in
-                SyncProgressView(playlist: playlist, autoStart: true)
-                    .frame(minWidth: 420, minHeight: 480)
+            sheet(item: item, onDismiss: onDismiss) { request in
+                SyncProgressView(
+                    playlist: request.playlist,
+                    autoStart: true,
+                    repairingAreas: request.repairingAreas
+                )
+                .frame(minWidth: 420, minHeight: 480)
             }
         #else
-            fullScreenCover(item: item, onDismiss: onDismiss) { playlist in
-                SyncProgressView(playlist: playlist, autoStart: true)
+            fullScreenCover(item: item, onDismiss: onDismiss) { request in
+                SyncProgressView(
+                    playlist: request.playlist,
+                    autoStart: true,
+                    repairingAreas: request.repairingAreas
+                )
             }
         #endif
     }

@@ -111,4 +111,16 @@ struct SyncProgressTests {
         #expect(ordered[5] == .series)
         #expect(ordered[6] == .liveStreams)
     }
+
+    @Test func `targeted live repair omits movie and series work`() {
+        #expect(SyncStep.steps(for: .xtream, areas: [.liveTV]) == [
+            .authenticating,
+            .liveCategories,
+            .liveStreams
+        ])
+    }
+
+    @Test func `regular Xtream sync retains every phase`() {
+        #expect(SyncStep.steps(for: .xtream) == SyncStep.xtreamSteps)
+    }
 }
