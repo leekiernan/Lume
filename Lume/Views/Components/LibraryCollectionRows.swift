@@ -230,15 +230,20 @@ struct MovieCollectionView: View {
     }
 
     private func loadNextPage() {
-        collection.loadNextPage(in: modelContext, pageSize: pageSize) { offset, limit in
-            MovieCollectionQuery.pageDescriptor(
-                for: kind,
-                playlistPrefix: playlistPrefix,
-                excludedCategoryIDs: restriction.excludedCategoryIDs,
-                offset: offset,
-                limit: limit
-            )
-        }
+        collection.loadNextPage(
+            in: modelContext,
+            pageSize: pageSize,
+            deduplicateBy: { $0.tmdbId.map(AnyHashable.init) },
+            descriptor: { offset, limit in
+                MovieCollectionQuery.pageDescriptor(
+                    for: kind,
+                    playlistPrefix: playlistPrefix,
+                    excludedCategoryIDs: restriction.excludedCategoryIDs,
+                    offset: offset,
+                    limit: limit
+                )
+            }
+        )
     }
 }
 
@@ -427,15 +432,20 @@ struct SeriesCollectionView: View {
     }
 
     private func loadNextPage() {
-        collection.loadNextPage(in: modelContext, pageSize: pageSize) { offset, limit in
-            SeriesCollectionQuery.pageDescriptor(
-                for: kind,
-                playlistPrefix: playlistPrefix,
-                excludedCategoryIDs: restriction.excludedCategoryIDs,
-                offset: offset,
-                limit: limit
-            )
-        }
+        collection.loadNextPage(
+            in: modelContext,
+            pageSize: pageSize,
+            deduplicateBy: { $0.tmdbId.map(AnyHashable.init) },
+            descriptor: { offset, limit in
+                SeriesCollectionQuery.pageDescriptor(
+                    for: kind,
+                    playlistPrefix: playlistPrefix,
+                    excludedCategoryIDs: restriction.excludedCategoryIDs,
+                    offset: offset,
+                    limit: limit
+                )
+            }
+        )
     }
 }
 
