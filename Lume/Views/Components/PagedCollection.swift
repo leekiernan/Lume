@@ -18,6 +18,9 @@ final class PagedCollection<Item: PersistentModel> {
     private(set) var isLoading = false
 
     private var requestKey: String?
+    /// Source cursor is distinct from `items.count` when a fork-specific
+    /// presentation collapses duplicate catalog rows.
+    private var sourceOffset = 0
 
     /// Starts a new result set only when its query inputs changed. Returning to
     /// a grid from a detail screen keeps its loaded pages and scroll position.
@@ -25,6 +28,7 @@ final class PagedCollection<Item: PersistentModel> {
         guard requestKey != key else { return }
         requestKey = key
         items = []
+        sourceOffset = 0
         canLoadMore = true
         isLoading = false
     }
@@ -35,6 +39,7 @@ final class PagedCollection<Item: PersistentModel> {
     func loadNextPage(
         in context: ModelContext,
         pageSize: Int,
+        deduplicateBy: ((Item) -> AnyHashable?)? = nil,
         descriptor: (_ offset: Int, _ limit: Int) -> FetchDescriptor<Item>
     ) {
         guard canLoadMore, !isLoading else { return }
@@ -42,10 +47,25 @@ final class PagedCollection<Item: PersistentModel> {
         defer { isLoading = false }
 
         do {
-            let page = try context.fetch(descriptor(items.count, pageSize))
-            let existing = Set(items.map(\.persistentModelID))
-            items.append(contentsOf: page.filter { !existing.contains($0.persistentModelID) })
-            canLoadMore = page.count == pageSize
+            var existingIDs = Set(items.map(\.persistentModelID))
+            var existingKeys = Set(items.compactMap { deduplicateBy?($0) })
+            var accepted: [Item] = []
+
+            // A whole source page can consist of alternate streams for titles
+            // already shown. Keep walking until the UI gains a new trailing
+            // card (which can trigger its next onAppear) or the source ends.
+            repeat {
+                let page = try context.fetch(descriptor(sourceOffset, pageSize))
+                sourceOffset += page.count
+                canLoadMore = page.count == pageSize
+                accepted.append(contentsOf: page.filter { item in
+                    guard existingIDs.insert(item.persistentModelID).inserted else { return false }
+                    guard let key = deduplicateBy?(item) else { return true }
+                    return existingKeys.insert(key).inserted
+                })
+            } while accepted.isEmpty && canLoadMore
+
+            items.append(contentsOf: accepted)
         } catch {
             // Preserve the already loaded window. A later appearance can retry
             // instead of turning a transient store failure into a false end.

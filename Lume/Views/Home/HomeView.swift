@@ -203,6 +203,13 @@ struct HomeView: View {
                     .navigationTransition(.zoom(sourceID: series.id, in: animationNamespace))
                 #endif
             }
+            .navigationDestination(for: SectionCollectionSelection.self) { selection in
+                SectionCollectionView(
+                    selection: selection,
+                    feed: feed,
+                    animationNamespace: animationNamespace
+                )
+            }
             #if os(tvOS)
             .navigationDestination(item: $selectedHero) { hero in
                 if let movie = hero.movie {
@@ -229,7 +236,7 @@ struct HomeView: View {
                 seedDefaultHeroIfNeeded()
                 feed.heroRef = heroRef
                 feed.update(context: feedContext)
-                await feed.loadCustomSections(cacheKey: customSectionsKey, sections: visibleCustomSections)
+                await feed.loadCustomSections(cacheKey: customSectionsCacheKey, sections: visibleCustomSections)
             }
             .task(id: seriesResumeKey) {
                 await loadSeriesResume()
@@ -273,7 +280,7 @@ struct HomeView: View {
                let section = customSections.first(where: { $0.id == id }),
                HomeLayoutSettings.isEnabled(ref, disabledRaw: disabledSectionsRaw)
             {
-                rail(Text(verbatim: section.title), feed.items(for: ref))
+                rail(Text(verbatim: section.title), feed.items(for: ref), section: ref, title: section.title)
             }
         }
     }
@@ -296,11 +303,20 @@ struct HomeView: View {
                     animationNamespace: animationNamespace
                 )
             case .trendingMovies:
-                rail(Text("Trending Movies"), feed.items(for: .builtin(section)))
+                rail(
+                    Text("Trending Movies"), feed.items(for: .builtin(section)),
+                    section: .builtin(section), title: String(localized: "Trending Movies")
+                )
             case .trendingSeries:
-                rail(Text("Trending Series"), feed.items(for: .builtin(section)))
+                rail(
+                    Text("Trending Series"), feed.items(for: .builtin(section)),
+                    section: .builtin(section), title: String(localized: "Trending Series")
+                )
             case .traktWatchlist:
-                rail(Text("From Your Trakt Watchlist"), feed.items(for: .builtin(section)))
+                rail(
+                    Text("From Your Trakt Watchlist"), feed.items(for: .builtin(section)),
+                    section: .builtin(section), title: String(localized: "From Your Trakt Watchlist")
+                )
             case .recentlyAdded:
                 // Movies/Series only — `HomeSection.cases(for: .home)` never
                 // yields it, so Home has no row to draw.
@@ -318,27 +334,6 @@ struct HomeView: View {
             : HomeLayoutSettings.isEnabled(.builtin(section), disabledRaw: disabledSectionsRaw)
     }
 
-    /// A standard Home rail that only renders when it has items. The Recently
-    /// Watched rail passes `onRemove` to add its remove-from-history action.
-    @ViewBuilder
-    private func rail(
-        _ title: Text,
-        _ items: [HomeMediaItem],
-        onRemove: ((HomeMediaItem) -> Void)? = nil
-    ) -> some View {
-        if !items.isEmpty {
-            HomeRow(
-                title: title,
-                items: items,
-                seriesResume: seriesResume,
-                onPlayLive: playChannel,
-                onRemove: onRemove,
-                onStartMultiView: startMultiView,
-                animationNamespace: animationNamespace
-            )
-        }
-    }
-
     /// Identity of the trending/hero load, and the key its session memo is
     /// stored under. Includes the visibility token so hiding a category in
     /// Content Management reloads the rows instead of replaying a cached list
@@ -349,7 +344,7 @@ struct HomeView: View {
     }
 
     var watchlistKey: String {
-        "watchlist-\(trakt.isConnected)-\(selectedPlaylistID)-\(restriction.visibilityToken)"
+        "watchlist-\(trakt.username ?? "disconnected")-\(trendingKey)"
     }
 
     /// Identity of the custom-section load. Shares the trending key's playlist /
@@ -360,7 +355,11 @@ struct HomeView: View {
     /// catalog nor the section list, so without it the load never re-runs and
     /// the feed is never told which section to build the hero from.
     var customSectionsKey: String {
-        "custom-\(trendingKey)-\(heroSectionRaw)-\(CustomHomeSections.contentSignature(visibleCustomSections))"
+        "\(customSectionsCacheKey)-hero-\(heroSectionRaw)"
+    }
+
+    private var customSectionsCacheKey: String {
+        "custom-\(trendingKey)-\(CustomHomeSections.contentSignature(visibleCustomSections))"
     }
 
     /// Creates Home's starting hero the first time it is needed, as an ordinary
@@ -549,6 +548,41 @@ struct HomeView: View {
         #else
             playingMedia = media
         #endif
+    }
+}
+
+private extension HomeView {
+    /// A standard Home rail that only renders when it has items. The Recently
+    /// Watched rail passes `onRemove` to add its remove-from-history action.
+    @ViewBuilder
+    func rail(
+        _ title: Text,
+        _ items: [HomeMediaItem],
+        section: HomeSectionRef? = nil,
+        title collectionTitle: String? = nil,
+        onRemove: ((HomeMediaItem) -> Void)? = nil
+    ) -> some View {
+        if !items.isEmpty {
+            HomeRow(
+                title: title,
+                items: items,
+                seriesResume: seriesResume,
+                onPlayLive: playChannel,
+                showAll: collectionSelection(for: section, title: collectionTitle),
+                onRemove: onRemove,
+                onStartMultiView: startMultiView,
+                animationNamespace: animationNamespace
+            )
+        }
+    }
+
+    func collectionSelection(
+        for section: HomeSectionRef?,
+        title: String?
+    ) -> SectionCollectionSelection? {
+        guard let section, let title,
+              feed.collection(for: section)?.hasMoreCandidates == true else { return nil }
+        return SectionCollectionSelection(section: section, title: title)
     }
 }
 
