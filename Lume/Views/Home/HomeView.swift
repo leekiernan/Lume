@@ -150,7 +150,7 @@ struct HomeView: View {
                         // `TVHomeScreen.swift`.
                         TVHomeScreen(
                             heroItems: feed.heroItems,
-                            reservesHero: heroRef != nil,
+                            reservesHero: feed.heroState.reservesSpace,
                             warmStartBackdropURL: heroWarmStartBackdropURL,
                             onSelectHero: { selectedHero = $0 },
                             rows: { homeRows }
@@ -161,7 +161,7 @@ struct HomeView: View {
                             LazyVStack(alignment: .leading, spacing: PosterCardMetrics.sectionSpacing) {
                                 if !feed.heroItems.isEmpty {
                                     HomeHeroCarousel(items: feed.heroItems)
-                                } else if heroRef != nil {
+                                } else if feed.heroState.reservesSpace {
                                     HomeHeroWarmStart(backdropURL: heroWarmStartBackdropURL)
                                 }
                                 homeRows
@@ -169,7 +169,7 @@ struct HomeView: View {
                             // The hero fills the top inset itself when it's
                             // showing; without one, Home takes the same inset as
                             // the Movies and Series pages.
-                            .padding(.top, heroRef == nil ? PosterCardMetrics.sectionVerticalPadding : 0)
+                            .padding(.top, feed.heroState.reservesSpace ? 0 : PosterCardMetrics.sectionVerticalPadding)
                             .padding(.bottom, PosterCardMetrics.sectionVerticalPadding)
                         }
                         .browseActivity()
@@ -177,7 +177,7 @@ struct HomeView: View {
                         // Only let content run under the nav bar when the hero
                         // backdrop is there to fill it; otherwise the first row
                         // would sit hidden behind the bar.
-                        .ignoresSafeArea(edges: heroRef == nil ? [] : .top)
+                        .ignoresSafeArea(edges: feed.heroState.reservesSpace ? .top : [])
                     #endif
                 }
             }
@@ -384,7 +384,7 @@ struct HomeView: View {
         }
     }
 
-    private var customSections: [CustomHomeSection] {
+    var customSections: [CustomHomeSection] {
         CustomHomeSections.decode(customSectionsRaw)
     }
 
