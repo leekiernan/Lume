@@ -21,6 +21,9 @@ struct HomeRow: View {
     /// (`SeriesResumeLoader`) rather than per card — see `HomeMediaItem`.
     let seriesResume: [String: Double]
     let onPlayLive: (LiveStream) -> Void
+    /// Destination for remote rows whose retained source contains more than the
+    /// 20-card preview. Local rows supply their own collection navigation.
+    var showAll: SectionCollectionSelection?
     /// When set, each card gains a "Remove from Recently Watched" context menu.
     /// Only the Recently Watched row passes this; the others leave it nil.
     var onRemove: ((HomeMediaItem) -> Void)?
@@ -36,11 +39,22 @@ struct HomeRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            title
-                .font(PosterCardMetrics.railTitleFont)
-                .fontWeight(.bold)
-                .foregroundStyle(.secondary)
-                .padding(.horizontal)
+            HStack {
+                title
+                    .font(PosterCardMetrics.railTitleFont)
+                    .fontWeight(.bold)
+                    .foregroundStyle(.secondary)
+
+                Spacer()
+
+                if let showAll {
+                    NavigationLink(value: showAll) {
+                        Text("Show All")
+                            .font(.subheadline)
+                    }
+                }
+            }
+            .padding(.horizontal)
 
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: PosterCardMetrics.railSpacing) {
