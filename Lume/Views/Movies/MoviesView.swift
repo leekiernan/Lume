@@ -34,6 +34,7 @@ struct MoviesView: View {
 
     @AppStorage(HomeLayoutSettings.heroSectionKey(.movies)) private var heroSectionRaw = ""
     @AppStorage(HomeLayoutSettings.disabledSectionsKey(.movies)) private var disabledSectionsRaw = ""
+    @AppStorage(CustomHomeSections.storageKey(.movies)) private var customSectionsRaw = ""
     @State private var heroWarmStart = HeroWarmStartState(surface: .movies)
 
     @AppStorage(SortStorageKey.movieCategories) private var categorySortRaw: String = CategorySortOption.playlist.rawValue
@@ -128,7 +129,7 @@ struct MoviesView: View {
         #if os(tvOS)
             TVHomeScreen(
                 heroItems: feed.heroItems,
-                reservesHero: heroRef != nil,
+                reservesHero: feed.heroState.reservesSpace,
                 warmStartBackdropURL: heroWarmStartBackdropURL,
                 onSelectHero: open(hero:)
             ) {
@@ -139,16 +140,16 @@ struct MoviesView: View {
                 LazyVStack(alignment: .leading, spacing: PosterCardMetrics.sectionSpacing) {
                     if !feed.heroItems.isEmpty {
                         HomeHeroCarousel(items: feed.heroItems)
-                    } else if heroRef != nil {
+                    } else if feed.heroState.reservesSpace {
                         HomeHeroWarmStart(backdropURL: heroWarmStartBackdropURL)
                     }
                     rowsContent
                 }
                 // The hero fills the top inset itself when it's showing.
-                .padding(.top, heroRef == nil ? PosterCardMetrics.sectionVerticalPadding : 0)
+                .padding(.top, feed.heroState.reservesSpace ? 0 : PosterCardMetrics.sectionVerticalPadding)
                 .padding(.bottom, PosterCardMetrics.sectionVerticalPadding)
             }
-            .ignoresSafeArea(edges: heroRef == nil ? [] : .top)
+            .ignoresSafeArea(edges: feed.heroState.reservesSpace ? .top : [])
         #endif
     }
 
@@ -235,7 +236,12 @@ struct MoviesView: View {
     }
 
     private var heroWarmStartScope: String {
-        activePlaylist?.id.uuidString ?? "none"
+        HeroWarmStartCache.catalogScope(
+            playlistID: activePlaylist?.id,
+            visibilityToken: restriction.visibilityToken,
+            hero: heroRef,
+            customSections: CustomHomeSections.decode(customSectionsRaw)
+        )
     }
 
     private var heroWarmStartBackdropURL: URL? {

@@ -27,6 +27,26 @@ enum HeroWarmStartCache {
         "\(surface.storagePrefix).heroWarmStart.v1"
     }
 
+    /// Everything that can make a remembered hero ineligible without changing
+    /// the hero token itself. The profile is already part of the storage key;
+    /// this covers playlist changes, visibility/restriction changes, and an
+    /// edited URL on the same custom section id.
+    static func catalogScope(
+        playlistID: UUID?,
+        visibilityToken: String,
+        hero: HomeSectionRef?,
+        customSections: [CustomHomeSection]
+    ) -> String {
+        let source: String = if case let .custom(id) = hero,
+                                let section = customSections.first(where: { $0.id == id })
+        {
+            section.sourceURL
+        } else {
+            "builtin"
+        }
+        return "\(playlistID?.uuidString ?? "none")|\(visibilityToken)|\(source)"
+    }
+
     static func encode(hero: HomeSectionRef, catalogScope: String, backdropURL: URL) -> String? {
         let record = HeroWarmStart(
             heroToken: hero.token,
@@ -39,7 +59,7 @@ enum HeroWarmStartCache {
 
     /// Returns the remembered URL only when it belongs to the hero and catalog
     /// currently on screen. Switching profile is handled by the scoped key;
-    /// these checks cover changing the promoted section or active playlist.
+    /// `catalogScope` covers the playlist, restrictions and custom source URL.
     static func backdropURL(
         from raw: String,
         hero: HomeSectionRef?,

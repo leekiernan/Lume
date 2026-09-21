@@ -12,13 +12,36 @@ import SwiftData
 enum HomeLoadState {
     case idle
     case loading
+    /// A previously resolved collection is visible while its source is being
+    /// revalidated or its hero artwork is being refreshed.
+    case cached
     case loaded
     case failed
 
     var isSettled: Bool {
         switch self {
-        case .idle, .loading: false
+        case .idle, .loading, .cached: false
         case .loaded, .failed: true
+        }
+    }
+}
+
+/// What the promoted section can render right now. This is deliberately
+/// separate from a row's network state: a list can load successfully but still
+/// resolve to no local titles, or none of its titles may have usable wide art.
+enum HeroLoadState: Equatable {
+    case disabled
+    case loading
+    case content
+    case empty
+    case failed
+
+    /// Loading keeps the first-frame geometry stable. Empty and failed are
+    /// terminal and release the reserved space instead of leaving a blank hero.
+    var reservesSpace: Bool {
+        switch self {
+        case .loading, .content: true
+        case .disabled, .empty, .failed: false
         }
     }
 }

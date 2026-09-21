@@ -26,31 +26,6 @@ final class SectionFeed {
         case fresh
     }
 
-    private enum HeroArtworkKind {
-        case movie
-        case series
-    }
-
-    private struct HeroArtworkRequest {
-        let id: String
-        let heroID: String
-        let tmdbId: Int
-        let kind: HeroArtworkKind
-        let needsBackdrop: Bool
-    }
-
-    private struct HeroPresentation {
-        let backdropPath: String?
-        let logoPath: String?
-        let overview: String?
-
-        init(_ details: TMDBTitleDetails) {
-            backdropPath = details.backdropPath
-            logoPath = details.logoPath
-            overview = details.overview
-        }
-    }
-
     /// What a load needs from the view: the store to match against, the
     /// viewer's hidden categories, and the active playlist's id prefix (nil
     /// means "no playlist scoping", which is what previews get).
@@ -72,28 +47,34 @@ final class SectionFeed {
     /// hero opens on its own content or on nothing, never on someone else's.
     var heroRef: HomeSectionRef?
     /// Bumped when hero artwork lands — see `refreshHeroArtwork`.
-    private(set) var heroArtworkRevision = 0
+    var heroArtworkRevision = 0
     /// Fresh TMDB paths used immediately while the view context still holds the
     /// pre-enrichment version of a model. The same details are persisted by the
     /// enrichment actor for subsequent launches.
-    private var heroPresentationOverrides: [String: HeroPresentation] = [:]
+    var heroPresentationOverrides: [String: HeroPresentation] = [:]
     /// Prevents the independent trending, watchlist and custom-section loaders
     /// from requesting the same hero enrichment while another loader is still
     /// waiting for it.
-    private var heroEnrichmentIDs: Set<String> = []
+    var heroEnrichmentIDs: Set<String> = []
     /// Every remote-backed row shares one representation: its lightweight
     /// ordered source plus a bounded catalog preview. The source tail remains
     /// available for an incrementally-loaded full grid without keeping all of
     /// its SwiftData models alive on the browse screen.
     private(set) var collections: [HomeSectionRef: SectionCollectionSnapshot] = [:]
     private(set) var trendingState: HomeLoadState = .idle
-    private let loadGate = SectionFeedLoadGate()
-    private var context: Context?
+    private(set) var watchlistState: HomeLoadState = .idle
+    private(set) var customState: HomeLoadState = .idle
+    /// Sources that reached a terminal transport/provider failure without a
+    /// usable cached collection. Kept per section so one failed custom list
+    /// cannot make a successfully empty sibling look broken.
+    private var failedSections: Set<HomeSectionRef> = []
+    let loadGate = SectionFeedLoadGate()
+    var context: Context?
 
     /// How many matched titles a remote-backed row shows.
     static let itemLimit = 20
     /// How many hero candidates the Home carousel pages through.
-    private static let heroLimit = 8
+    static let heroLimit = 8
 
     init(surface: SectionSurface) {
         self.surface = surface
@@ -162,7 +143,7 @@ final class SectionFeed {
     }
 
     /// Everything the promoted row resolved to, artwork or not.
-    private var heroCandidates: [HeroItem] {
+    var heroCandidates: [HeroItem] {
         guard let heroRef else { return [] }
         return items(for: heroRef).compactMap { item in
             let presentation = heroPresentationOverrides[item.id]
@@ -178,7 +159,41 @@ final class SectionFeed {
     /// True once every remote row has settled, so a surface can tell "still
     /// loading" from "genuinely empty" before showing an empty state.
     var isSettled: Bool {
-        trendingState.isSettled
+        trendingState.isSettled && watchlistState.isSettled && customState.isSettled
+    }
+
+    /// The hero's explicit UI state. Views reserve its large first-frame slot
+    /// only while this says it may still produce content; a terminal empty or
+    /// failed source lets the rows move up instead of leaving a blank expanse.
+    var heroState: HeroLoadState {
+        guard let heroRef else { return .disabled }
+        if !heroItems.isEmpty { return .content }
+
+        switch loadState(for: heroRef) {
+        case .idle, .loading, .cached:
+            return .loading
+        case .failed:
+            return .failed
+        case .loaded:
+            if failedSections.contains(heroRef) { return .failed }
+            // A resolved list with no local matches is genuinely empty. When
+            // it has matches but still no wide artwork after enrichment, the
+            // hero itself failed even though its ordinary row remains usable.
+            return items(for: heroRef).isEmpty ? .empty : .failed
+        }
+    }
+
+    private func loadState(for section: HomeSectionRef) -> HomeLoadState {
+        switch section {
+        case let .builtin(section):
+            switch section {
+            case .trendingMovies, .trendingSeries: trendingState
+            case .traktWatchlist: watchlistState
+            case .recentlyWatched, .favorites, .recentlyAdded, .forYou: .loaded
+            }
+        case .custom:
+            customState
+        }
     }
 
     // MARK: - Trending
@@ -186,24 +201,31 @@ final class SectionFeed {
     func loadTrending(cacheKey: String) async {
         let request = loadGate.begin(.trending)
         let cached = restoreTrending(cacheKey: cacheKey)
+        trendingState = cached == .missing ? .loading : .cached
         if cached == .fresh {
             await refreshHeroArtwork()
+            guard loadGate.isCurrent(request, for: .trending) else { return }
+            failedSections.remove(.builtin(.trendingMovies))
+            failedSections.remove(.builtin(.trendingSeries))
+            trendingState = .loaded
             return
         }
-        guard let context else { return }
+        guard let context else {
+            finishTrendingFailure(cached: cached)
+            return
+        }
         let client = TMDBClient.shared
         guard client.isConfigured else {
-            if cached == .missing { trendingState = .loaded }
+            finishTrendingFailure(cached: cached)
             return
         }
-        if cached == .missing { trendingState = .loading }
         let interval = Perf.begin(.homeTrendingLoad)
         defer { Perf.end(interval) }
         do {
             try await refreshTrending(client: client, context: context, cacheKey: cacheKey, request: request)
         } catch {
             guard loadGate.isCurrent(request, for: .trending) else { return }
-            if cached == .missing { trendingState = .failed }
+            finishTrendingFailure(cached: cached)
         }
     }
 
@@ -227,12 +249,15 @@ final class SectionFeed {
         guard loadGate.isCurrent(request, for: .trending) else { return }
         collections[.builtin(.trendingMovies)] = movieCollection
         collections[.builtin(.trendingSeries)] = seriesCollection
-        trendingState = .loaded
         SectionFeedCache.shared.storeTrending(surface, key: cacheKey, entry: .init(
             movies: movieCollection,
             series: seriesCollection
         ))
         await refreshHeroArtwork()
+        guard loadGate.isCurrent(request, for: .trending) else { return }
+        failedSections.remove(.builtin(.trendingMovies))
+        failedSections.remove(.builtin(.trendingSeries))
+        trendingState = .loaded
     }
 
     private func trendingTitles(using client: TMDBClient) async throws -> ([TrendingTitle], [TrendingTitle]) {
@@ -247,16 +272,17 @@ final class SectionFeed {
         guard let cached = SectionFeedCache.shared.trendingEntry(surface, for: cacheKey) else { return .missing }
         collections[.builtin(.trendingMovies)] = cached.value.movies
         collections[.builtin(.trendingSeries)] = cached.value.series
-        trendingState = .loaded
         return cached.isFresh ? .fresh : .stale
     }
 
-    /// Missing hero artwork is enriched in the background. The 14-day guard
-    /// avoids repeatedly asking TMDB for artwork it does not have.
-    private static func heroNeedsArtwork(backdropPath: String?, logoPath: String?, enrichedAt: Date?) -> Bool {
-        guard (backdropPath ?? "").isEmpty || (logoPath ?? "").isEmpty else { return false }
-        guard let enrichedAt else { return true }
-        return Date().timeIntervalSince(enrichedAt) >= 14 * 24 * 3600
+    private func finishTrendingFailure(cached: CacheRestore) {
+        let refs: [HomeSectionRef] = [.builtin(.trendingMovies), .builtin(.trendingSeries)]
+        for ref in refs where items(for: ref).isEmpty {
+            failedSections.insert(ref)
+        }
+        trendingState = cached != .missing && refs.contains(where: { !items(for: $0).isEmpty })
+            ? .loaded
+            : .failed
     }
 }
 
@@ -269,13 +295,22 @@ extension SectionFeed {
     func loadWatchlist(cacheKey: String) async {
         let request = loadGate.begin(.watchlist)
         let cached = restoreWatchlist(cacheKey: cacheKey)
+        watchlistState = cached == .missing ? .loading : .cached
         if cached == .fresh {
             await refreshHeroArtwork()
+            guard loadGate.isCurrent(request, for: .watchlist) else { return }
+            failedSections.remove(.builtin(.traktWatchlist))
+            watchlistState = .loaded
             return
         }
-        guard let context else { return }
+        guard let context else {
+            finishWatchlistFailure(cached: cached)
+            return
+        }
         guard TraktService.shared.isConnected else {
             collections[.builtin(.traktWatchlist)] = .empty
+            failedSections.remove(.builtin(.traktWatchlist))
+            watchlistState = .loaded
             return
         }
         do {
@@ -286,12 +321,17 @@ extension SectionFeed {
             collections[.builtin(.traktWatchlist)] = collection
             SectionFeedCache.shared.storeWatchlist(surface, key: cacheKey, collection: collection)
             await refreshHeroArtwork()
+            guard loadGate.isCurrent(request, for: .watchlist) else { return }
+            failedSections.remove(.builtin(.traktWatchlist))
+            watchlistState = .loaded
         } catch {
             // Preserve a stale row when revalidation fails. A transport error is
             // not evidence that the remote watchlist became empty.
             if cached == .missing, loadGate.isCurrent(request, for: .watchlist) {
                 collections[.builtin(.traktWatchlist)] = .empty
             }
+            guard loadGate.isCurrent(request, for: .watchlist) else { return }
+            finishWatchlistFailure(cached: cached)
         }
     }
 
@@ -299,6 +339,16 @@ extension SectionFeed {
         guard let cached = SectionFeedCache.shared.watchlistEntry(surface, for: cacheKey) else { return .missing }
         collections[.builtin(.traktWatchlist)] = cached.value
         return cached.isFresh ? .fresh : .stale
+    }
+
+    private func finishWatchlistFailure(cached: CacheRestore) {
+        let ref = HomeSectionRef.builtin(.traktWatchlist)
+        if cached != .missing, !items(for: ref).isEmpty {
+            watchlistState = .loaded
+        } else {
+            failedSections.insert(ref)
+            watchlistState = .failed
+        }
     }
 
     private func watchlistEntries(_ items: [TraktWatchlistItem]) -> [HomeListEntry] {
@@ -325,18 +375,32 @@ extension SectionFeed {
         let request = loadGate.begin(.custom)
         guard !sections.isEmpty else {
             replaceCustomCollections(with: [:])
+            failedSections = failedSections.filter { ref in
+                if case .custom = ref { return false }
+                return true
+            }
+            customState = .loaded
             return
         }
         let cached = restoreCustom(cacheKey: cacheKey)
+        customState = cached.state == .missing ? .loading : .cached
         if cached.state == .fresh {
             // A recreated surface has a new transient presentation map even
             // though the session memo can restore its collection models. Run
             // enrichment before returning so a hero selected in Settings does
             // not remain empty until those models are rebuilt on app launch.
             await refreshHeroArtwork()
+            guard loadGate.isCurrent(request, for: .custom) else { return }
+            for section in sections {
+                failedSections.remove(.custom(section.id))
+            }
+            customState = .loaded
             return
         }
-        guard let context else { return }
+        guard let context else {
+            finishCustomFailure(sections: sections, cached: cached.collections)
+            return
+        }
 
         let interval = Perf.begin(.homeCustomSections)
         defer { Perf.end(interval) }
@@ -358,6 +422,8 @@ extension SectionFeed {
         // at launch, provider down) would leave it empty for the whole session,
         // since the cache key doesn't change until the catalog or the sections do.
         guard loadGate.isCurrent(request, for: .custom) else { return }
+        updateCustomFailures(sections: sections, lists: lists, fallback: cached.collections)
+        customState = .loaded
         guard sections.allSatisfy({ (lists[$0.id] ?? nil) != nil }) else { return }
         SectionFeedCache.shared.storeCustom(surface, key: cacheKey, collections: resolved)
     }
@@ -411,138 +477,31 @@ extension SectionFeed {
         return (cached.isFresh ? .fresh : .stale, cached.value)
     }
 
-    /// Fetches artwork only for the carousel's bounded visible candidates.
-    private func refreshHeroArtwork() async {
-        guard let context, heroRef != nil else { return }
-        let revision = loadGate.revision
-        let candidates = Array(heroCandidates.prefix(Self.heroLimit))
-        guard !candidates.isEmpty else { return }
-
-        // On a clean catalog most candidates have only portrait provider art.
-        // Build value-only requests before leaving the main actor; managed
-        // models must never cross into the task-group children.
-        var requests = candidates.compactMap(heroArtworkRequest)
-        requests.removeAll { request in
-            !heroEnrichmentIDs.insert(request.id).inserted
+    private func finishCustomFailure(
+        sections: [CustomHomeSection],
+        cached: [UUID: SectionCollectionSnapshot]
+    ) {
+        for section in sections where cached[section.id]?.preview.isEmpty != false {
+            failedSections.insert(.custom(section.id))
         }
-        guard !requests.isEmpty else { return }
-        let enrichmentIDs = requests.map(\.id)
-        defer { heroEnrichmentIDs.subtract(enrichmentIDs) }
-
-        // Make an entirely empty hero useful after one request, then finish the
-        // remaining bounded set concurrently. Previously all eight ran serially
-        // and the sole revision bump came at the end: Movies stayed blank while
-        // Home/Series appeared truncated during a cold launch.
-        if let firstMissingBackdrop = requests.firstIndex(where: \.needsBackdrop) {
-            requests.swapAt(0, firstMissingBackdrop)
-        }
-        let manager = ContentSyncManager(modelContainer: context.modelContext.container)
-        let firstRequest = requests.removeFirst()
-        let firstDetails = await enrichHeroArtwork(firstRequest, using: manager)
-        publishHeroArtworkChange(heroID: firstRequest.heroID, details: firstDetails, contextRevision: revision)
-        guard !Task.isCancelled, revision == loadGate.revision else { return }
-
-        await enrichRemainingHeroArtwork(requests, using: manager, contextRevision: revision)
+        customState = cached.values.contains(where: { !$0.preview.isEmpty }) ? .loaded : .failed
     }
 
-    private func enrichRemainingHeroArtwork(
-        _ requests: [HeroArtworkRequest],
-        using manager: ContentSyncManager,
-        contextRevision: UInt
-    ) async {
-        let concurrency = 2
-        for start in stride(from: 0, to: requests.count, by: concurrency) {
-            guard !Task.isCancelled, contextRevision == loadGate.revision else { return }
-            let end = min(start + concurrency, requests.count)
-            let batch = requests[start ..< end]
-            await withTaskGroup(of: (String, TMDBTitleDetails?).self) { group in
-                for request in batch {
-                    let id = request.id
-                    let heroID = request.heroID
-                    let tmdbId = request.tmdbId
-                    switch request.kind {
-                    case .movie:
-                        group.addTask {
-                            guard !Task.isCancelled else { return (heroID, nil) }
-                            let details = await manager.enrichMovie(id: id, tmdbId: tmdbId)
-                            return (heroID, details)
-                        }
-                    case .series:
-                        group.addTask {
-                            guard !Task.isCancelled else { return (heroID, nil) }
-                            let details = await manager.enrichSeries(id: id, tmdbId: tmdbId)
-                            return (heroID, details)
-                        }
-                    }
-                }
-                for await (heroID, details) in group {
-                    publishHeroArtworkChange(
-                        heroID: heroID,
-                        details: details,
-                        contextRevision: contextRevision
-                    )
-                }
+    private func updateCustomFailures(
+        sections: [CustomHomeSection],
+        lists: [UUID: [HomeListEntry]?],
+        fallback: [UUID: SectionCollectionSnapshot]
+    ) {
+        for section in sections {
+            let ref = HomeSectionRef.custom(section.id)
+            let failedWithoutCache = (lists[section.id] ?? nil) == nil
+                && fallback[section.id]?.preview.isEmpty != false
+            if failedWithoutCache {
+                failedSections.insert(ref)
+            } else {
+                failedSections.remove(ref)
             }
         }
-    }
-
-    private func heroArtworkRequest(_ hero: HeroItem) -> HeroArtworkRequest? {
-        // An override means this session already fetched the model's currently
-        // stale fields; do not let a later feed loader issue the same request.
-        guard heroPresentationOverrides[hero.id] == nil else { return nil }
-        switch hero {
-        case let .movie(movie, _, _, _):
-            guard Self.heroNeedsArtwork(
-                backdropPath: movie.backdropPath,
-                logoPath: movie.logoPath,
-                enrichedAt: movie.tmdbEnrichedAt
-            ), let tmdbId = movie.tmdbId else { return nil }
-            return HeroArtworkRequest(
-                id: movie.id,
-                heroID: hero.id,
-                tmdbId: tmdbId,
-                kind: .movie,
-                needsBackdrop: (movie.backdropPath ?? "").isEmpty
-            )
-        case let .series(series, _, _, _):
-            guard Self.heroNeedsArtwork(
-                backdropPath: series.backdropPath,
-                logoPath: series.logoPath,
-                enrichedAt: series.tmdbEnrichedAt
-            ), let tmdbId = series.tmdbId else { return nil }
-            return HeroArtworkRequest(
-                id: series.id,
-                heroID: hero.id,
-                tmdbId: tmdbId,
-                kind: .series,
-                needsBackdrop: (series.backdropPath ?? "").isEmpty
-            )
-        }
-    }
-
-    private func enrichHeroArtwork(
-        _ request: HeroArtworkRequest,
-        using manager: ContentSyncManager
-    ) async -> TMDBTitleDetails? {
-        switch request.kind {
-        case .movie:
-            await manager.enrichMovie(id: request.id, tmdbId: request.tmdbId)
-        case .series:
-            await manager.enrichSeries(id: request.id, tmdbId: request.tmdbId)
-        }
-    }
-
-    /// Render the fetched backdrop from a value snapshot immediately. The view
-    /// context may continue serving its stale pre-enrichment model until the
-    /// screen or app is recreated, despite the background save succeeding.
-    private func publishHeroArtworkChange(
-        heroID: String,
-        details: TMDBTitleDetails?,
-        contextRevision: UInt
-    ) {
-        guard contextRevision == loadGate.revision else { return }
-        if let details { heroPresentationOverrides[heroID] = HeroPresentation(details) }
-        heroArtworkRevision &+= 1
     }
 }
 
@@ -565,8 +524,11 @@ extension SectionFeed {
         collections.removeAll()
         heroPresentationOverrides.removeAll()
         heroEnrichmentIDs.removeAll()
+        failedSections.removeAll()
         heroArtworkRevision &+= 1
         trendingState = .idle
+        watchlistState = .idle
+        customState = .idle
     }
 
     private func contextIdentity(_ context: Context) -> String {

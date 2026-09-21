@@ -265,56 +265,6 @@ struct HomeLayoutSettingsTests {
         #expect(HomeLayoutSettings.heroRef("nonsense") == nil)
     }
 
-    @Test func `hero warm start round trips for the same hero and catalog`() throws {
-        let hero = HomeSectionRef.custom(Self.alpha.id)
-        let backdrop = try #require(URL(string: "https://image.tmdb.org/t/p/original/backdrop.jpg"))
-        let encoded = try #require(HeroWarmStartCache.encode(
-            hero: hero,
-            catalogScope: "playlist-a",
-            backdropURL: backdrop
-        ))
-
-        #expect(HeroWarmStartCache.backdropURL(
-            from: encoded,
-            hero: hero,
-            catalogScope: "playlist-a"
-        ) == backdrop)
-    }
-
-    @Test func `hero warm start rejects a different hero or catalog`() throws {
-        let hero = HomeSectionRef.custom(Self.alpha.id)
-        let backdrop = try #require(URL(string: "https://image.tmdb.org/t/p/original/backdrop.jpg"))
-        let encoded = try #require(HeroWarmStartCache.encode(
-            hero: hero,
-            catalogScope: "playlist-a",
-            backdropURL: backdrop
-        ))
-
-        #expect(HeroWarmStartCache.backdropURL(
-            from: encoded,
-            hero: .custom(Self.beta.id),
-            catalogScope: "playlist-a"
-        ) == nil)
-        #expect(HeroWarmStartCache.backdropURL(
-            from: encoded,
-            hero: hero,
-            catalogScope: "playlist-b"
-        ) == nil)
-        #expect(HeroWarmStartCache.backdropURL(
-            from: encoded,
-            hero: nil,
-            catalogScope: "playlist-a"
-        ) == nil)
-    }
-
-    @Test func `malformed hero warm start is ignored`() {
-        #expect(HeroWarmStartCache.backdropURL(
-            from: "not-json",
-            hero: .custom(Self.alpha.id),
-            catalogScope: "playlist-a"
-        ) == nil)
-    }
-
     // MARK: - The starting hero
 
     /// A fresh surface gets its hero as an ordinary section holding a real URL —

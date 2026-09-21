@@ -22,7 +22,12 @@ extension HomeView {
     }
 
     private var heroWarmStartScope: String {
-        activePlaylist?.id.uuidString ?? "none"
+        HeroWarmStartCache.catalogScope(
+            playlistID: activePlaylist?.id,
+            visibilityToken: restriction.visibilityToken,
+            hero: heroRef,
+            customSections: customSections
+        )
     }
 
     var heroWarmStartBackdropURL: URL? {
