@@ -93,6 +93,13 @@ struct SeriesView: View {
             .navigationDestination(for: LibraryCollection.self) { collection in
                 SeriesCollectionView(kind: collection.kind, playlistPrefix: playlistPrefix, animationNamespace: animationNamespace)
             }
+            .navigationDestination(for: SectionCollectionSelection.self) { selection in
+                SectionCollectionView(
+                    selection: selection,
+                    feed: feed,
+                    animationNamespace: animationNamespace
+                )
+            }
             .navigationDestination(for: GenreSelection.self) { selection in
                 SeriesGenreView(genre: selection.genre, playlistPrefix: playlistPrefix, animationNamespace: animationNamespace)
             }

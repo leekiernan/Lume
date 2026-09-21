@@ -87,7 +87,7 @@ struct LibrarySectionsView<CollectionRow: View>: View {
             seedDefaultHeroIfNeeded()
             feed.heroRef = heroRef
             feed.update(context: feedContext)
-            await feed.loadCustomSections(cacheKey: customSectionsKey, sections: visibleCustomSections)
+            await feed.loadCustomSections(cacheKey: customSectionsCacheKey, sections: visibleCustomSections)
         }
     }
 
@@ -108,7 +108,7 @@ struct LibrarySectionsView<CollectionRow: View>: View {
                let section = customSections.first(where: { $0.id == id }),
                HomeLayoutSettings.isEnabled(ref, disabledRaw: disabledSectionsRaw)
             {
-                rail(Text(verbatim: section.title), feed.items(for: ref))
+                rail(Text(verbatim: section.title), feed.items(for: ref), section: ref, collectionTitle: section.title)
             }
         }
     }
@@ -123,11 +123,20 @@ struct LibrarySectionsView<CollectionRow: View>: View {
         case .recentlyAdded:
             collectionRow(.recentlyAdded)
         case .trendingMovies:
-            rail(Text("Trending Movies"), feed.items(for: .builtin(section)))
+            rail(
+                Text("Trending Movies"), feed.items(for: .builtin(section)),
+                section: .builtin(section), collectionTitle: String(localized: "Trending Movies")
+            )
         case .trendingSeries:
-            rail(Text("Trending Series"), feed.items(for: .builtin(section)))
+            rail(
+                Text("Trending Series"), feed.items(for: .builtin(section)),
+                section: .builtin(section), collectionTitle: String(localized: "Trending Series")
+            )
         case .traktWatchlist:
-            rail(Text("From Your Trakt Watchlist"), feed.items(for: .builtin(section)))
+            rail(
+                Text("From Your Trakt Watchlist"), feed.items(for: .builtin(section)),
+                section: .builtin(section), collectionTitle: String(localized: "From Your Trakt Watchlist")
+            )
         case .forYou:
             // Home only — `HomeSection.cases(for:)` never yields it here.
             EmptyView()
@@ -137,13 +146,21 @@ struct LibrarySectionsView<CollectionRow: View>: View {
     /// A standard rail that only renders when it has items. These pages carry
     /// no live channels, so the row's live-playback hook is unused.
     @ViewBuilder
-    private func rail(_ title: Text, _ items: [HomeMediaItem]) -> some View {
+    private func rail(
+        _ title: Text,
+        _ items: [HomeMediaItem],
+        section: HomeSectionRef,
+        collectionTitle: String
+    ) -> some View {
         if !items.isEmpty {
             HomeRow(
                 title: title,
                 items: items,
                 seriesResume: seriesResume,
                 onPlayLive: { _ in },
+                showAll: feed.collection(for: section)?.hasMoreCandidates == true
+                    ? SectionCollectionSelection(section: section, title: collectionTitle)
+                    : nil,
                 onLeadingLeft: onRevealBrowse,
                 animationNamespace: animationNamespace
             )
@@ -153,14 +170,18 @@ struct LibrarySectionsView<CollectionRow: View>: View {
     // MARK: - Load keys
 
     private var watchlistKey: String {
-        "watchlist-\(surface.rawValue)-\(trakt.isConnected)-\(catalogKey)"
+        "watchlist-\(surface.rawValue)-\(trakt.username ?? "disconnected")-\(catalogKey)"
     }
 
     /// Includes the promoted section: choosing a hero changes neither the
     /// catalog nor the section list, so without it the load never re-runs and
     /// the feed is never told which section to build the hero from.
     private var customSectionsKey: String {
-        "custom-\(catalogKey)-\(heroSectionRaw)-\(CustomHomeSections.contentSignature(visibleCustomSections))"
+        "\(customSectionsCacheKey)-hero-\(heroSectionRaw)"
+    }
+
+    private var customSectionsCacheKey: String {
+        "custom-\(catalogKey)-\(CustomHomeSections.contentSignature(visibleCustomSections))"
     }
 
     /// The promoted row, if this surface has one and it is still switched on.
