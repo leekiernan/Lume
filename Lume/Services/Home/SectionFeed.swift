@@ -14,6 +14,7 @@
 //  nothing on the Series page rather than showing the wrong medium.
 //
 
+import OSLog
 import SwiftData
 import SwiftUI
 
@@ -368,9 +369,9 @@ extension SectionFeed {
 
     // MARK: - Custom sections
 
-    /// Fetches every visible custom list concurrently, then resolves only its
-    /// 20-card preview against the local catalog. The full lightweight source
-    /// remains in the snapshot for later pages.
+    /// Fetches every visible custom list concurrently and publishes each
+    /// 20-card preview as soon as that source resolves. The full lightweight
+    /// source remains in the snapshot for later pages.
     func loadCustomSections(cacheKey: String, sections: [CustomHomeSection]) async {
         let request = loadGate.begin(.custom)
         guard !sections.isEmpty else {
@@ -405,66 +406,93 @@ extension SectionFeed {
         let interval = Perf.begin(.homeCustomSections)
         defer { Perf.end(interval) }
 
-        let lists = await fetchCustomLists(sections)
-        guard loadGate.isCurrent(request, for: .custom) else { return }
-
-        guard let resolved = await resolveCustomLists(
+        guard let result = await resolveCustomListsProgressively(
             sections,
-            lists: lists,
             fallback: cached.collections,
             context: context,
             request: request
         ) else { return }
-        replaceCustomCollections(with: resolved)
         await refreshHeroArtwork()
 
         // Only memo a complete pass. Caching a row that failed to load (offline
         // at launch, provider down) would leave it empty for the whole session,
         // since the cache key doesn't change until the catalog or the sections do.
         guard loadGate.isCurrent(request, for: .custom) else { return }
-        updateCustomFailures(sections: sections, lists: lists, fallback: cached.collections)
+        updateCustomFailures(sections: sections, lists: result.lists, fallback: cached.collections)
         customState = .loaded
-        guard sections.allSatisfy({ (lists[$0.id] ?? nil) != nil }) else { return }
-        SectionFeedCache.shared.storeCustom(surface, key: cacheKey, collections: resolved)
+        guard sections.allSatisfy({ (result.lists[$0.id] ?? nil) != nil }) else { return }
+        SectionFeedCache.shared.storeCustom(surface, key: cacheKey, collections: result.collections)
     }
 
-    private func fetchCustomLists(
-        _ sections: [CustomHomeSection]
-    ) async -> [UUID: [HomeListEntry]?] {
-        await withTaskGroup(of: (UUID, [HomeListEntry]?).self) { group in
-            for section in sections {
-                group.addTask {
-                    // A failed fetch is nil, not an empty list — the two are
-                    // handled differently by `resolveCustomLists`.
-                    await (section.id, try? HomeListCatalog.entries(for: section.sourceURL))
-                }
-            }
-            var results: [UUID: [HomeListEntry]?] = [:]
-            for await (id, entries) in group {
-                results[id] = entries
-            }
-            return results
-        }
-    }
-
-    private func resolveCustomLists(
+    private func resolveCustomListsProgressively(
         _ sections: [CustomHomeSection],
-        lists: [UUID: [HomeListEntry]?],
         fallback: [UUID: SectionCollectionSnapshot],
         context: Context,
         request: SectionFeedLoadGate.Request
-    ) async -> [UUID: SectionCollectionSnapshot]? {
-        let visibleIDs = Set(sections.map(\.id))
+    ) async -> (lists: [UUID: [HomeListEntry]?], collections: [UUID: SectionCollectionSnapshot])? {
+        let sectionsByID = Dictionary(uniqueKeysWithValues: sections.map { ($0.id, $0) })
+        let visibleIDs = Set(sectionsByID.keys)
         var resolved = fallback.filter { visibleIDs.contains($0.key) }
-        for section in sections {
-            guard let entries = lists[section.id] ?? nil else {
-                if resolved[section.id] == nil { resolved[section.id] = .empty }
-                continue
+        replaceCustomCollections(with: resolved)
+
+        return await withTaskGroup(of: (UUID, [HomeListEntry]?, String?).self) { group in
+            for section in sections {
+                group.addTask {
+                    do {
+                        return try await (section.id, HomeListCatalog.entries(for: section.sourceURL), nil)
+                    } catch {
+                        // A failed fetch is nil, not an empty list — a stale
+                        // snapshot remains usable when the provider is offline.
+                        return (section.id, nil, error.localizedDescription)
+                    }
+                }
             }
-            resolved[section.id] = await makeCollection(entries: entries, context: context)
-            guard loadGate.isCurrent(request, for: .custom) else { return nil }
+            var lists: [UUID: [HomeListEntry]?] = [:]
+            for await (id, entries, failure) in group {
+                guard loadGate.isCurrent(request, for: .custom) else {
+                    group.cancelAll()
+                    return nil
+                }
+                lists[id] = entries
+
+                guard let entries else {
+                    if resolved[id] == nil {
+                        resolved[id] = .empty
+                        collections[.custom(id)] = .empty
+                    }
+                    logCustomSectionFailure(failure, section: sectionsByID[id])
+                    continue
+                }
+
+                let collection = await makeCollection(entries: entries, context: context)
+                guard loadGate.isCurrent(request, for: .custom) else {
+                    group.cancelAll()
+                    return nil
+                }
+                resolved[id] = collection
+                collections[.custom(id)] = collection
+                failedSections.remove(.custom(id))
+
+                // A custom hero should not wait for an unrelated slow list.
+                // Finish its bounded artwork pass as soon as its own source is
+                // available; other rails have already been fetching in parallel.
+                if heroRef == .custom(id) {
+                    await refreshHeroArtwork()
+                    guard loadGate.isCurrent(request, for: .custom) else {
+                        group.cancelAll()
+                        return nil
+                    }
+                }
+            }
+            return (lists, resolved)
         }
-        return loadGate.isCurrent(request, for: .custom) ? resolved : nil
+    }
+
+    private func logCustomSectionFailure(_ failure: String?, section: CustomHomeSection?) {
+        guard let failure, let section else { return }
+        Logger.network.warning(
+            "Custom section \(section.title, privacy: .private) failed: \(failure, privacy: .public)"
+        )
     }
 
     private func restoreCustom(
