@@ -220,6 +220,7 @@ final class TrackerMutationOutbox {
 }
 
 typealias TraktMutation = TrackerMutation
+typealias TrackerHistoryMutation = TrackerMutation
 typealias TraktHistoryMutation = TrackerMutation
 typealias TraktMutationStatus = TrackerMutationStatus
 typealias TraktMutationOutbox = TrackerMutationOutbox
