@@ -9,7 +9,9 @@
 
 import Foundation
 
-nonisolated struct TraktMutation: Codable, Equatable, Identifiable {
+/// Provider-neutral durable mutation. Trakt uses both history and watchlist;
+/// Simkl currently uses history, so collection kind stays part of the payload.
+nonisolated struct TrackerMutation: Codable, Equatable, Identifiable {
     nonisolated enum Kind: String, Codable, Equatable {
         case history
         case watchlist
@@ -77,13 +79,17 @@ nonisolated struct TraktMutation: Codable, Equatable, Identifiable {
     private enum CodingKeys: String, CodingKey {
         case id, kind, target, isPresent, watched, enqueuedAt, attemptCount, lastAttemptAt
     }
+
+    var watched: Bool {
+        isPresent
+    }
 }
 
-nonisolated struct TraktMutationStatus: Equatable {
+nonisolated struct TrackerMutationStatus: Equatable {
     let pendingCount: Int
     let failedCount: Int
 
-    static let empty = TraktMutationStatus(pendingCount: 0, failedCount: 0)
+    static let empty = TrackerMutationStatus(pendingCount: 0, failedCount: 0)
 }
 
 /// Small JSON outbox in UserDefaults. Mutations are ordered oldest-first and
@@ -92,9 +98,9 @@ nonisolated struct TraktMutationStatus: Equatable {
 /// target again removes the older value and appends the latest intent to the
 /// tail. History and watchlist intent for one title remain independent.
 @MainActor
-final class TraktMutationOutbox {
+final class TrackerMutationOutbox {
     private struct State: Codable {
-        var accounts: [String: [TraktMutation]] = [:]
+        var accounts: [String: [TrackerMutation]] = [:]
     }
 
     private let defaults: UserDefaults
@@ -118,16 +124,16 @@ final class TraktMutationOutbox {
 
     @discardableResult
     func enqueue(
-        kind: TraktMutation.Kind,
-        target: TraktMutation.Target,
+        kind: TrackerMutation.Kind,
+        target: TrackerMutation.Target,
         isPresent: Bool,
         account: String,
         now: Date = Date()
-    ) -> TraktMutation {
+    ) -> TrackerMutation {
         let account = Self.normalize(account)
         var mutations = state.accounts[account] ?? []
         mutations.removeAll { $0.kind == kind && $0.target == target }
-        let mutation = TraktMutation(
+        let mutation = TrackerMutation(
             kind: kind,
             target: target,
             isPresent: isPresent,
@@ -139,11 +145,23 @@ final class TraktMutationOutbox {
         return mutation
     }
 
-    func firstMutation(account: String) -> TraktMutation? {
+    /// History-only convenience used by trackers that do not expose Trakt's
+    /// separate watchlist collection.
+    @discardableResult
+    func enqueue(
+        target: TrackerMutation.Target,
+        watched: Bool,
+        account: String,
+        now: Date = Date()
+    ) -> TrackerMutation {
+        enqueue(kind: .history, target: target, isPresent: watched, account: account, now: now)
+    }
+
+    func firstMutation(account: String) -> TrackerMutation? {
         state.accounts[Self.normalize(account)]?.first
     }
 
-    func mutations(account: String) -> [TraktMutation] {
+    func mutations(account: String) -> [TrackerMutation] {
         state.accounts[Self.normalize(account)] ?? []
     }
 
@@ -168,9 +186,9 @@ final class TraktMutationOutbox {
         }
     }
 
-    func status(account: String) -> TraktMutationStatus {
+    func status(account: String) -> TrackerMutationStatus {
         let mutations = state.accounts[Self.normalize(account)] ?? []
-        return TraktMutationStatus(
+        return TrackerMutationStatus(
             pendingCount: mutations.count,
             failedCount: mutations.count(where: { $0.attemptCount > 0 })
         )
@@ -178,7 +196,7 @@ final class TraktMutationOutbox {
 
     private func mutateAccount(
         _ account: String,
-        mutation: (inout [TraktMutation]) -> Void
+        mutation: (inout [TrackerMutation]) -> Void
     ) {
         let account = Self.normalize(account)
         var mutations = state.accounts[account] ?? []
@@ -201,6 +219,10 @@ final class TraktMutationOutbox {
     }
 }
 
+typealias TraktMutation = TrackerMutation
+typealias TraktHistoryMutation = TrackerMutation
+typealias TraktMutationStatus = TrackerMutationStatus
+typealias TraktMutationOutbox = TrackerMutationOutbox
 nonisolated struct TraktAccountIdentity: Codable, Equatable {
     let username: String
     /// Stable Trakt numeric user id where available; normalized username is a
