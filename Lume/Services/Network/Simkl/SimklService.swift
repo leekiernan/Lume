@@ -280,7 +280,14 @@ final class SimklService {
                 break
             }
             do {
-                let items = historyItems(for: mutation.target)
+                guard let items = historyItems(for: mutation.target) else {
+                    // The shared queue can represent Trakt's show-watchlist
+                    // target, but Simkl history has no equivalent request.
+                    // It cannot originate from Simkl's enqueue sites, so drop
+                    // it defensively rather than blocking the account forever.
+                    mutationOutbox.acknowledge(id: mutation.id, account: account)
+                    continue
+                }
                 if mutation.watched {
                     try await client.addToHistory(items, accessToken: accessToken)
                 } else {
@@ -295,9 +302,10 @@ final class SimklService {
         }
     }
 
-    private func historyItems(for target: TrackerHistoryMutation.Target) -> SimklSyncItems {
+    private func historyItems(for target: TrackerHistoryMutation.Target) -> SimklSyncItems? {
         switch target {
         case let .movie(tmdbID): SimklSyncItems.movie(tmdbID: tmdbID, title: nil)
+        case .show: nil
         case let .episode(showTMDBID, season, episode):
             SimklSyncItems.episode(showTMDBID: showTMDBID, showTitle: nil, season: season, episode: episode)
         }
