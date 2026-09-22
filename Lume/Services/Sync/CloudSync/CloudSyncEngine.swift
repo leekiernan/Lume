@@ -29,6 +29,11 @@ nonisolated struct CloudSyncReconcileResult: Equatable {
     var traktPulled = 0
     /// Credential merge deferred because the local keychain was unavailable.
     var traktPending = 0
+    /// Simkl uses the same encrypted, rotating OAuth-token transport contract
+    /// as Trakt; the counters remain separate for diagnostics.
+    var simklPushed = 0
+    var simklPulled = 0
+    var simklPending = 0
     /// Cloud states whose local catalog item hasn't synced yet — left pending
     /// (shadow untouched) so a later pass applies them once the catalog lands.
     var contentPending = 0
@@ -144,6 +149,7 @@ actor CloudSyncEngine {
             // secrets stay in the keychain locally and CloudKit-encrypted fields
             // are used only to transport the latest rotating token pair.
             try reconcileTraktCredentials(into: &result)
+            try reconcileSimklCredentials(into: &result)
             // Manual EPG sources sync as their own lightweight mirror; each
             // playlist's derived (linked) source is regenerated locally so it
             // appears on every device that has the playlist.
@@ -159,7 +165,7 @@ actor CloudSyncEngine {
             // 3-way merge is idempotent).
             try saveStores()
             shadow.persist()
-            Logger.sync.info("Reconcile pl +\(result.playlistsPushed) new \(result.playlistsCreatedLocally) ct +\(result.contentPushed)/\(result.contentPulled) pend \(result.contentPending) epg +\(result.epgSourcesPushed)/\(result.epgSourcesPulled) par +\(result.parentalPushed)/\(result.parentalPulled) pend \(result.parentalPending) trakt +\(result.traktPushed)/\(result.traktPulled) pend \(result.traktPending) sports \(result.sportsFollowsKept)-\(result.sportsFollowsDeduped)") // swiftlint:disable:this line_length
+            Logger.sync.info("Reconcile pl +\(result.playlistsPushed) new \(result.playlistsCreatedLocally) ct +\(result.contentPushed)/\(result.contentPulled) pend \(result.contentPending) epg +\(result.epgSourcesPushed)/\(result.epgSourcesPulled) par +\(result.parentalPushed)/\(result.parentalPulled) pend \(result.parentalPending) trakt +\(result.traktPushed)/\(result.traktPulled) pend \(result.traktPending) simkl +\(result.simklPushed)/\(result.simklPulled) pend \(result.simklPending) sports \(result.sportsFollowsKept)-\(result.sportsFollowsDeduped)") // swiftlint:disable:this line_length
         } catch {
             Logger.sync.error("Reconcile failed: \(error.localizedDescription)")
         }

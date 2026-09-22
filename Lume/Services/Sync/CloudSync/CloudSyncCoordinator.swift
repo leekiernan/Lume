@@ -69,6 +69,7 @@ final class CloudSyncCoordinator {
         observeRemoteChanges()
         observeContentSyncCompletion()
         observeTraktCredentialChanges()
+        observeSimklCredentialChanges()
     }
 
     // No `deinit`: this coordinator is created once in `LumeApp` and lives for
@@ -185,6 +186,9 @@ final class CloudSyncCoordinator {
             // and must not hold the reconcile coalescing gate closed.
             if result.traktPulled > 0 {
                 Task { await TraktService.shared.restore() }
+            }
+            if result.simklPulled > 0 {
+                Task { await SimklService.shared.restore() }
             }
 
             isReconciling = false
@@ -460,6 +464,22 @@ final class CloudSyncCoordinator {
     private func observeTraktCredentialChanges() {
         let observer = NotificationCenter.default.addObserver(
             forName: .lumeTraktCredentialsDidChange,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.reconcile(reason: .queued)
+            }
+        }
+        observers.append(observer)
+    }
+
+    /// Simkl's OAuth pair follows the same encrypted CloudKit transport as
+    /// Trakt. Local connect, refresh and disconnect export promptly; a cloud
+    /// pull deliberately does not repost this notification.
+    private func observeSimklCredentialChanges() {
+        let observer = NotificationCenter.default.addObserver(
+            forName: .lumeSimklCredentialsDidChange,
             object: nil,
             queue: .main
         ) { [weak self] _ in

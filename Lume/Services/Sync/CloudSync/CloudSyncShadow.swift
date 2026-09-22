@@ -20,6 +20,7 @@ final nonisolated class CloudSyncShadow {
     private let parentalPINKey = "cloudsync.shadow.parentalpin.v1"
     private let categoryRestrictionsKey = "cloudsync.shadow.categoryrestrictions.v1"
     private let traktCredentialsKey = "cloudsync.shadow.traktCredentials.v1"
+    private let simklCredentialsKey = "cloudsync.shadow.simklCredentials.v1"
 
     private var playlists: [String: PlaylistConfigValues]
     private var content: [String: ContentStateValues]
@@ -30,6 +31,8 @@ final nonisolated class CloudSyncShadow {
     private var categoryRestrictions: [String: CategoryRestrictionValues]
     /// Fingerprint-only baseline; OAuth secrets are never persisted here.
     private var traktCredentials: TraktCredentialValues?
+    /// Fingerprint-only baseline; OAuth secrets are never persisted here.
+    private var simklCredentials: SimklCredentialValues?
 
     /// Set whenever a setter actually changes the baseline; cleared on `persist()`.
     /// A steady-state reconcile (every verdict `.noChange`) mutates nothing, so
@@ -44,6 +47,7 @@ final nonisolated class CloudSyncShadow {
         parentalPIN = Self.decode(defaults.data(forKey: parentalPINKey))
         categoryRestrictions = Self.decode(defaults.data(forKey: categoryRestrictionsKey)) ?? [:]
         traktCredentials = Self.decode(defaults.data(forKey: traktCredentialsKey))
+        simklCredentials = Self.decode(defaults.data(forKey: simklCredentialsKey))
     }
 
     // MARK: Playlists (keyed by UUID string)
@@ -134,6 +138,18 @@ final nonisolated class CloudSyncShadow {
         isDirty = true
     }
 
+    // MARK: Simkl authorization
+
+    func simklCredentialShadow() -> SimklCredentialValues? {
+        simklCredentials
+    }
+
+    func setSimklCredentialShadow(_ value: SimklCredentialValues?) {
+        guard simklCredentials != value else { return }
+        simklCredentials = value
+        isDirty = true
+    }
+
     /// Drop the entire content baseline. Called on a profile switch: the catalog
     /// has been re-projected to a different profile, so the previous baseline no
     /// longer describes it. The next reconcile rebuilds it (a one-time union
@@ -200,6 +216,11 @@ final nonisolated class CloudSyncShadow {
             defaults.set(Self.encode(traktCredentials), forKey: traktCredentialsKey)
         } else {
             defaults.removeObject(forKey: traktCredentialsKey)
+        }
+        if let simklCredentials {
+            defaults.set(Self.encode(simklCredentials), forKey: simklCredentialsKey)
+        } else {
+            defaults.removeObject(forKey: simklCredentialsKey)
         }
         isDirty = false
     }
