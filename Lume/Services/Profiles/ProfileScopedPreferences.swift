@@ -122,7 +122,14 @@ nonisolated enum ProfileScopedPreferences {
     ) {
         let supported = Set(scopedBaseKeys)
         for (base, value) in snapshot.strings where supported.contains(base) && !booleanBaseKeys.contains(base) {
-            defaults.set(value, forKey: key(base, profileID: profileID))
+            if base == AppAreaSettings.baseDisabledAreasKey {
+                // The cloud snapshot deliberately excludes the device-local
+                // generation. Applying its area value must still invalidate
+                // local work captured before this import.
+                AppAreaSettings.persist(disabledRaw: value, profileID: profileID, defaults: defaults)
+            } else {
+                defaults.set(value, forKey: key(base, profileID: profileID))
+            }
         }
         for (base, value) in snapshot.booleans where supported.contains(base) && booleanBaseKeys.contains(base) {
             defaults.set(value, forKey: key(base, profileID: profileID))
@@ -194,7 +201,13 @@ nonisolated enum ProfileScopedPreferences {
                 guard scoped != base, defaults.object(forKey: scoped) == nil,
                       let legacy = defaults.object(forKey: base)
                 else { continue }
-                defaults.set(legacy, forKey: scoped)
+                if base == AppAreaSettings.baseDisabledAreasKey, let disabledRaw = legacy as? String,
+                   let profile = ActiveProfileStore.current
+                {
+                    AppAreaSettings.persist(disabledRaw: disabledRaw, profileID: profile, defaults: defaults)
+                } else {
+                    defaults.set(legacy, forKey: scoped)
+                }
             }
             defaults.set(true, forKey: migrationFlagKey)
         }
