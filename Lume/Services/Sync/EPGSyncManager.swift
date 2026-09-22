@@ -86,6 +86,7 @@ actor EPGSyncManager {
 
     private nonisolated enum EPGPublicationError: Error {
         case suspiciousEmpty
+        case invalidDocument
         case sourceChanged
     }
 
@@ -197,7 +198,7 @@ actor EPGSyncManager {
 
         var programmesByKey: [String: ParsedProgramme] = [:]
         var cancelled = false
-        let parsedProgrammeCount = XMLTVParser.parse(fileURL: fileURL, batchSize: 2000) { batch in
+        let parseOutcome = XMLTVParser.parse(fileURL: fileURL, batchSize: 2000) { batch in
             if Task.isCancelled { cancelled = true; return }
             for programme in batch where knownChannelIDs.contains(programme.channelId) {
                 let key = "\(programme.channelId)\u{1F}\(Int(programme.start.timeIntervalSince1970))"
@@ -212,13 +213,14 @@ actor EPGSyncManager {
         }
         try Task.checkCancellation()
         if cancelled { throw CancellationError() }
+        guard parseOutcome.succeeded else { throw EPGPublicationError.invalidDocument }
         return StagedSource(
             programmes: programmesByKey.values.sorted {
                 let left = "\($0.channelId)\u{1F}\($0.start.timeIntervalSince1970)\u{1F}\($0.end.timeIntervalSince1970)\u{1F}\($0.title)\u{1F}\($0.description)"
                 let right = "\($1.channelId)\u{1F}\($1.start.timeIntervalSince1970)\u{1F}\($1.end.timeIntervalSince1970)\u{1F}\($1.title)\u{1F}\($1.description)"
                 return left < right
             },
-            parsedProgrammeCount: parsedProgrammeCount
+            parsedProgrammeCount: parseOutcome.programmeCount
         )
     }
 
