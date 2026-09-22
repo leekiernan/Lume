@@ -94,6 +94,14 @@ nonisolated enum CatalogIndexBackfill {
             name: "Z_EPGListing_SwiftDataIndexOnBinarychannelIdend",
             table: "ZEPGLISTING",
             columns: ["ZCHANNELID", "ZEND"]
+        ),
+        // Source-scoped publication deletes only the previous snapshot for one
+        // EPG source. Without this index a large guide would scan every row
+        // before each atomic replacement.
+        Index(
+            name: "Z_EPGListing_SwiftDataIndexOnBinarysourceID",
+            table: "ZEPGLISTING",
+            columns: ["ZSOURCEID"]
         )
     ]
 

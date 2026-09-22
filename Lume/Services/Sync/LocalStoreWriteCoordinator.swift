@@ -79,15 +79,28 @@ nonisolated enum LocalStoreWriteError: Error, Equatable {
 nonisolated struct Fence: Hashable {
     var profile: UUID?
     var areaGeneration: AreaGenerationToken
+    /// The stable area-set value closes the cross-process observation hole:
+    /// another process can observe the generation write before the legacy raw
+    /// preference write. A generation alone would let that mixed pair pass;
+    /// matching the set as well makes the eventual raw write supersede it.
+    var areaFingerprint: String
+
+    init(profile: UUID?, areaGeneration: AreaGenerationToken, areaFingerprint: String = "") {
+        self.profile = profile
+        self.areaGeneration = areaGeneration
+        self.areaFingerprint = areaFingerprint
+    }
 
     /// The fence as the running app sees it right now. Both halves are read
     /// through `AppAreaSettings.areaState`, which is the only thing that can
     /// move the area set and its generation apart.
     static var live: Fence {
         let profile = ActiveProfileStore.current
+        let areaState = AppAreaSettings.areaState(profileID: profile)
         return Fence(
             profile: profile,
-            areaGeneration: AppAreaSettings.areaState(profileID: profile).generation
+            areaGeneration: areaState.generation,
+            areaFingerprint: areaState.disabledRaw
         )
     }
 }
@@ -179,10 +192,16 @@ actor LocalStoreWriteCoordinator {
     /// The followers waiting on one leader's result, keyed by coalescing key.
     /// Present for the whole life of the leader's request, so an arrival can
     /// tell "already running" from "not requested" with one lookup.
-    private var coalescers: [String: [CheckedContinuation<any Sendable, Error>]] = [:]
+    private struct Follower {
+        let id: UInt64
+        let continuation: CheckedContinuation<any Sendable, Error>
+    }
+
+    private var coalescers: [String: [Follower]] = [:]
     private var activeShared = 0
     private var activeExclusive = false
     private var nextID: UInt64 = 0
+    private var nextFollowerID: UInt64 = 0
     private let currentFence: @Sendable () -> Fence
 
     /// Reads the live fence synchronously so that revalidation can happen
@@ -252,18 +271,42 @@ actor LocalStoreWriteCoordinator {
     }
 
     private func join<T: Sendable>(_ key: String, as _: T.Type) async throws -> T {
-        let boxed: any Sendable = try await withCheckedThrowingContinuation { continuation in
-            guard coalescers[key] != nil else {
-                // The leader settled between the lookup and here. Nothing to
-                // join, and no work was skipped, so re-request rather than
-                // inventing a result.
-                continuation.resume(throwing: LocalStoreWriteError.superseded)
-                return
+        nextFollowerID += 1
+        let followerID = nextFollowerID
+        let cancellation = CancellationFlag()
+        let boxed: any Sendable = try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                guard coalescers[key] != nil else {
+                    // The leader settled between the lookup and here. Nothing to
+                    // join, and no work was skipped, so re-request rather than
+                    // inventing a result.
+                    continuation.resume(throwing: LocalStoreWriteError.superseded)
+                    return
+                }
+                guard !cancellation.isCancelled else {
+                    continuation.resume(throwing: CancellationError())
+                    return
+                }
+                coalescers[key]?.append(Follower(id: followerID, continuation: continuation))
             }
-            coalescers[key]?.append(continuation)
+        } onCancel: {
+            cancellation.cancel()
+            Task { await self.cancelFollower(key: key, id: followerID) }
         }
         guard let typed = boxed as? T else { throw LocalStoreWriteError.coalescedResultTypeMismatch }
         return typed
+    }
+
+    /// A follower must not stay retained behind a long-running leader after
+    /// its caller has gone away. Removal and resumption happen in the same
+    /// actor turn, making the continuation single-owner.
+    private func cancelFollower(key: String, id: UInt64) {
+        guard var followers = coalescers[key],
+              let index = followers.firstIndex(where: { $0.id == id })
+        else { return }
+        let follower = followers.remove(at: index)
+        coalescers[key] = followers
+        follower.continuation.resume(throwing: CancellationError())
     }
 
     private func waitForAdmission(_ id: UInt64, cancellation: CancellationFlag) async throws {
@@ -293,7 +336,7 @@ actor LocalStoreWriteCoordinator {
     private func finishCoalescing(_ key: String, with outcome: Result<any Sendable, Error>) {
         guard let waiters = coalescers.removeValue(forKey: key) else { return }
         for waiter in waiters {
-            waiter.resume(with: outcome)
+            waiter.continuation.resume(with: outcome)
         }
     }
 
