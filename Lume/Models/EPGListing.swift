@@ -19,7 +19,8 @@ final class EPGListing {
         [\.start],
         [\.end],
         [\.channelId, \.start],
-        [\.channelId, \.end]
+        [\.channelId, \.end],
+        [\.sourceID]
     )
 
     @Attribute(.unique) var id: String
@@ -31,6 +32,9 @@ final class EPGListing {
     var listingDescription: String
     var start: Date
     var end: Date
+    /// The source that committed this row. Refreshing one source only replaces
+    /// its own snapshot, never every guide row ahead of a successful fetch.
+    var sourceID: UUID?
 
     init(
         id: String,
@@ -38,7 +42,8 @@ final class EPGListing {
         title: String,
         listingDescription: String,
         start: Date,
-        end: Date
+        end: Date,
+        sourceID: UUID? = nil
     ) {
         self.id = id
         self.channelId = channelId
@@ -46,5 +51,6 @@ final class EPGListing {
         self.listingDescription = listingDescription
         self.start = start
         self.end = end
+        self.sourceID = sourceID
     }
 }
