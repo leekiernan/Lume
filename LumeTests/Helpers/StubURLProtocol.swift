@@ -30,6 +30,8 @@ final nonisolated class StubURLProtocol: URLProtocol {
         let host: String
         let queryName: String
         let queryValue: String
+        /// When set, the route matches on the URL path instead of a query item.
+        var pathSuffix: String?
     }
 
     /// Routes for requests that carry no query at all (the MDBList list feed is
@@ -54,6 +56,13 @@ final nonisolated class StubURLProtocol: URLProtocol {
     static func register(host: String, path: String, response: Response) {
         let key = PathKey(host: host, path: path)
         lock.withLock { pathRoutes[key] = response }
+    }
+
+    /// Registers `response` for requests to `host` whose path ends in
+    /// `pathSuffix`, for endpoints that carry no query item to discriminate on.
+    static func register(host: String, pathSuffix: String, response: Response) {
+        let key = RouteKey(host: host, queryName: "", queryValue: "", pathSuffix: pathSuffix)
+        lock.withLock { routes[key] = response }
     }
 
     static func makeSession() -> URLSession {
@@ -86,7 +95,9 @@ final nonisolated class StubURLProtocol: URLProtocol {
 
         let match = Self.lock.withLock {
             Self.routes.first { key, _ in
-                key.host == host && items.contains { $0.name == key.queryName && $0.value == key.queryValue }
+                guard key.host == host else { return false }
+                if let suffix = key.pathSuffix { return components.path.hasSuffix(suffix) }
+                return items.contains { $0.name == key.queryName && $0.value == key.queryValue }
             }?.value ?? Self.pathRoutes[PathKey(host: host, path: components.path)]
         }
 

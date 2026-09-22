@@ -1,0 +1,136 @@
+{
+  "binding" : {
+    "activeProfileID" : "5EED1234-ABCD-4001-8000-000000000001",
+    "disabledAreasRaw" : "",
+    "enabledAreas" : [
+      "home",
+      "movies",
+      "series",
+      "liveTV"
+    ],
+    "epgSourceCount" : 3,
+    "epgSourcesEnabled" : 2,
+    "settingsGeneration" : "fnv1a64:eebdbb5cd7f0ad98"
+  },
+  "cloudKitEventSequence" : [
+
+  ],
+  "environment" : {
+    "buildConfiguration" : "Benchmark",
+    "deviceClass" : "Mac16,12",
+    "limitations" : [
+      "Not the oldest supported device class: iOS 18 \/ tvOS 18 are the deployment floors, so an A12 iPhone and an A8 Apple TV HD are in scope and neither was measured.",
+      "The playlist and guide are file:\/\/ URLs, so no network transfer, TLS, or gzip decompression is inside the clock, and no download scratch appears in the container figure.",
+      "cloudKitDatabase is .none for every benchmark store, so the CloudKit event sequence is empty by construction — see docs\/qa\/reliability-baseline.md for the code-derived event contract."
+    ],
+    "oldestSupportedDeviceClass" : false,
+    "osVersion" : "Version 27.2 (Build 26B5086k)",
+    "physicalMemoryBytes" : 17179869184,
+    "platform" : "macOS",
+    "processorCount" : 10,
+    "recordedAt" : "2026-09-21T22:54:55Z"
+  },
+  "failures" : [
+    {
+      "channelsAfter" : 0,
+      "listingsAfter" : 0,
+      "listingsBefore" : 65000,
+      "note" : "Baseline: `syncAllSources` clears every listing before any source fetches, so a failed refresh leaves no last-known-good guide. The reliability package must make this preserve the previous snapshot and report the source as failed.",
+      "refreshReportedSuccess" : false,
+      "scenario" : "soleEnabledSourceUnreachable",
+      "sourceStatusesAfter" : [
+        "Perf provider: idle",
+        "Fixture guide: error"
+      ]
+    },
+    {
+      "channelsAfter" : 500,
+      "listingsAfter" : 65000,
+      "listingsBefore" : 0,
+      "note" : "Baseline: `syncAllSources` returns true when any source succeeded, so a refresh with a failed source reports success and `EPGSyncService` advances the schedule. There is no `degraded` aggregate state today.",
+      "refreshReportedSuccess" : true,
+      "scenario" : "oneOfTwoSourcesUnreachable",
+      "sourceStatusesAfter" : [
+        "Fixture broken guide: error",
+        "Perf provider: idle",
+        "Fixture guide: idle"
+      ]
+    }
+  ],
+  "label" : "lume-reliability-baseline",
+  "phases" : [
+    {
+      "containerAfter" : {
+        "fileCount" : 3,
+        "journalBytes" : 0,
+        "otherBytes" : 0,
+        "sharedMemoryBytes" : 32768,
+        "storeBytes" : 80150528,
+        "walBytes" : 49152
+      },
+      "containerBefore" : {
+        "fileCount" : 3,
+        "journalBytes" : 0,
+        "otherBytes" : 0,
+        "sharedMemoryBytes" : 32768,
+        "storeBytes" : 339968,
+        "walBytes" : 61440
+      },
+      "containerPeak" : {
+        "fileCount" : 3,
+        "journalBytes" : 0,
+        "otherBytes" : 0,
+        "sharedMemoryBytes" : 32768,
+        "storeBytes" : 80150528,
+        "walBytes" : 4530176
+      },
+      "footprintBeforeBytes" : 71713944,
+      "footprintGrowthBytes" : 41730096,
+      "name" : "catalogImport",
+      "peakFootprintBytes" : 113444040,
+      "wallClockSeconds" : 24.927587917
+    },
+    {
+      "containerAfter" : {
+        "fileCount" : 3,
+        "journalBytes" : 0,
+        "otherBytes" : 0,
+        "sharedMemoryBytes" : 32768,
+        "storeBytes" : 91598848,
+        "walBytes" : 3371008
+      },
+      "containerBefore" : {
+        "fileCount" : 3,
+        "journalBytes" : 0,
+        "otherBytes" : 0,
+        "sharedMemoryBytes" : 32768,
+        "storeBytes" : 80150528,
+        "walBytes" : 1384448
+      },
+      "containerPeak" : {
+        "fileCount" : 3,
+        "journalBytes" : 0,
+        "otherBytes" : 0,
+        "sharedMemoryBytes" : 32768,
+        "storeBytes" : 88752128,
+        "walBytes" : 8269824
+      },
+      "footprintBeforeBytes" : 68175048,
+      "footprintGrowthBytes" : 44007448,
+      "name" : "epgRefresh",
+      "peakFootprintBytes" : 112182496,
+      "wallClockSeconds" : 3.192334084
+    }
+  ],
+  "scale" : {
+    "catalogEntriesOffered" : 150000,
+    "catalogEpisodes" : 129000,
+    "catalogLiveStreams" : 4500,
+    "catalogMovies" : 16500,
+    "catalogSeries" : 3220,
+    "epgChannelsPublished" : 500,
+    "epgListingsOffered" : 65000,
+    "epgListingsPublished" : 65000
+  },
+  "schemaVersion" : 1
+}

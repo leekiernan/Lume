@@ -18,7 +18,8 @@ struct HomeView: View {
     @Environment(\.modelContext) var modelContext
     @Environment(\.contentRestriction) var restriction
     #if os(macOS)
-        @Environment(\.openWindow) private var openWindow
+        /// Not `private`: read by the HomeView+Playback extension (separate file).
+        @Environment(\.openWindow) var openWindow
     #endif
 
     @Query var playlists: [Playlist]
@@ -76,16 +77,23 @@ struct HomeView: View {
     // the device is busy syncing — and retries automatically once it isn't.
     @State var indexing = ContentIndexingService.shared
     @State var epgSync = EPGSyncService.shared
-    @State private var playingMedia: PlayableMedia?
+    /// Observed for the Home empty-state check, which mirrors the Sports rail.
+    @State var sportsFollows = SportsFollowService.shared
+    @State var sportsStore = SportsStore.shared
+    /// Not `private`: read by the HomeView+Playback extension (separate file).
+    @State var playingMedia: PlayableMedia?
     @State private var showingSync = false
     @State private var showingSettings = false
     /// Shown when a channel's "Start Multi-View" is picked without Lume Pro.
-    @State private var showingPaywall = false
+    /// Not `private`: read by the HomeView+Playback extension (separate file).
+    @State var showingPaywall = false
     #if os(tvOS)
-        @Environment(DeepLinkRouter.self) private var router
+        /// Not `private`: read by the HomeView+Playback extension (separate file).
+        @Environment(DeepLinkRouter.self) var router
     #else
         /// Non-nil while Multi-View is up; carries the channel it opened with.
-        @State private var multiViewLaunch: MultiViewLaunch?
+        /// Not `private`: read by the HomeView+Playback extension (separate file).
+        @State var multiViewLaunch: MultiViewLaunch?
     #endif
 
     #if os(tvOS)
@@ -244,6 +252,9 @@ struct HomeView: View {
             .onChange(of: feed.heroItems.first?.imageURL, initial: true) { _, backdropURL in
                 rememberHeroWarmStart(backdropURL)
             }
+            .task(id: sportsWarmKey) {
+                warmSports()
+            }
             #if os(iOS) || os(tvOS)
             .fullScreenCover(item: $playingMedia) { media in
                 FullScreenPlayerView(media: media)
@@ -262,7 +273,10 @@ struct HomeView: View {
     /// immersive home. Rows render in the user's chosen order (Settings › Layout ›
     /// Home); each only appears when it has content.
     private var homeRows: some View {
-        ForEach(HomeLayoutSettings.resolve(orderRaw: sectionOrderRaw, custom: customSections, surface: .home)) { ref in
+        ForEach(HomeLayoutSettings.resolve(
+            orderRaw: sectionOrderRaw, custom: customSections, surface: .home,
+            liveTVEnabled: AppAreaSettings.isEnabled(.liveTV, disabledRaw: disabledAreasRaw)
+        )) { ref in
             homeRow(for: ref)
         }
     }
@@ -317,6 +331,8 @@ struct HomeView: View {
                     Text("From Your Trakt Watchlist"), feed.items(for: .builtin(section)),
                     section: .builtin(section), title: String(localized: "From Your Trakt Watchlist")
                 )
+            case .sports:
+                SportsHomeRail(isSyncBusy: isSyncBusy)
             case .recentlyAdded:
                 // Movies/Series only — `HomeSection.cases(for: .home)` never
                 // yields it, so Home has no row to draw.
@@ -326,12 +342,20 @@ struct HomeView: View {
     }
 
     /// Whether `section` should render. "For You" follows the recommendations
-    /// opt-in (which also gates its recompute); the rest follow the user's
-    /// per-section switches.
-    private func isSectionEnabled(_ section: HomeSection) -> Bool {
-        section == .forYou
-            ? (recommendationsEnabled && premium.isPremium)
-            : HomeLayoutSettings.isEnabled(.builtin(section), disabledRaw: disabledSectionsRaw)
+    /// opt-in (which also gates its recompute); Sports additionally requires
+    /// Live TV, since it matches fixtures to channels in the EPG and has
+    /// nothing to show — or sync — once that's off for the profile; the rest
+    /// follow the user's per-section switches.
+    func isSectionEnabled(_ section: HomeSection) -> Bool {
+        switch section {
+        case .forYou:
+            recommendationsEnabled && premium.isPremium
+        case .sports:
+            AppAreaSettings.isEnabled(.liveTV, disabledRaw: disabledAreasRaw)
+                && HomeLayoutSettings.isEnabled(.builtin(section), disabledRaw: disabledSectionsRaw)
+        default:
+            HomeLayoutSettings.isEnabled(.builtin(section), disabledRaw: disabledSectionsRaw)
+        }
     }
 
     /// Identity of the trending/hero load, and the key its session memo is
@@ -485,6 +509,7 @@ struct HomeView: View {
             && feed.items(for: .builtin(.trendingSeries)).isEmpty
             && feed.items(for: .builtin(.traktWatchlist)).isEmpty
             && visibleCustomSections.allSatisfy { feed.items(for: .custom($0.id)).isEmpty }
+            && !sportsRailHasContent
             && feed.isSettled
     }
 
@@ -512,42 +537,6 @@ struct HomeView: View {
         seriesResume = await Task.detached(priority: .userInitiated) {
             SeriesResumeLoader.load(container: container)
         }.value
-    }
-
-    // MARK: - Playback
-
-    /// Opens Multi-View seeded with a channel from one of the rails, or the
-    /// paywall when the viewer isn't on Lume Pro. Mirrors `LiveTVView`'s pair of
-    /// the same name — the rails are a second entry point to the same feature.
-    private func startMultiView(with stream: LiveStream) {
-        guard let playlist = activePlaylist,
-              let media = PlayableMedia.from(stream: stream, playlist: playlist) else { return }
-        guard premium.isPremium else {
-            showingPaywall = true
-            return
-        }
-        #if os(macOS)
-            // The window is a singleton, so it cannot be built around a launch:
-            // hand the channel over and let the grid adopt it on appear.
-            MultiViewLaunchQueue.shared.pending = [media]
-            openWindow(id: "multiview")
-        #elseif os(tvOS)
-            // Presented by `MainTabView`, above the tab bar — see the router.
-            router.multiViewLaunch = MultiViewLaunch(seed: [media])
-        #else
-            multiViewLaunch = MultiViewLaunch(seed: [media])
-        #endif
-    }
-
-    private func playChannel(_ stream: LiveStream) {
-        guard let playlist = activePlaylist,
-              let media = PlayableMedia.from(stream: stream, playlist: playlist) else { return }
-        if ExternalPlayback.open(media) { return }
-        #if os(macOS)
-            MacPlayerWindowRouter.shared.play(media, using: openWindow)
-        #else
-            playingMedia = media
-        #endif
     }
 }
 
