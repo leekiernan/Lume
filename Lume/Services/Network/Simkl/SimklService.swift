@@ -52,6 +52,10 @@ final class SimklService {
     private(set) var mutationSyncError: String?
 
     private var tokens: SimklTokens?
+    /// Matches Trakt's rotating-token protection: a refresh rejected because a
+    /// sibling device refreshed first should wait for CloudKit, not erase the
+    /// shared account from every device.
+    private var refreshFailedForToken: String?
     private var pollingTask: Task<Void, Never>?
     private var refreshTask: Task<String?, Never>?
     private var mutationDrainTask: Task<Void, Never>?
@@ -81,11 +85,22 @@ final class SimklService {
     /// Restores a previously connected session at launch: loads the stored
     /// tokens, refreshes them if stale, and fetches the username. Best-effort.
     func restore() async {
-        guard isConfigured, let stored = SimklTokenStore.load() else { return }
+        guard isConfigured else { return }
+        guard let stored = SimklTokenStore.load() else {
+            tokens = nil
+            username = nil
+            refreshFailedForToken = nil
+            refreshMutationStatus()
+            return
+        }
         tokens = stored
+        username = nil
+        if refreshFailedForToken != stored.refreshToken {
+            refreshFailedForToken = nil
+        }
         guard let accessToken = await validAccessToken() else {
-            // Refresh failed (revoked/expired) — drop the dead session quietly.
-            await disconnect()
+            // A sibling device may be rotating this shared token pair. Keep it
+            // until CloudKit has had a chance to deliver the replacement.
             return
         }
         username = try? await client.currentUser(accessToken: accessToken).name
@@ -205,7 +220,9 @@ final class SimklService {
         if let accessToken = tokens?.accessToken {
             try? await client.revokeToken(accessToken)
         }
-        SimklTokenStore.clear()
+        if SimklTokenStore.clear() {
+            NotificationCenter.default.post(name: .lumeSimklCredentialsDidChange, object: nil)
+        }
         // Parked watched state belongs to the account that was just signed out.
         SimklPendingWatchedStore.clearAll()
         tokens = nil
@@ -377,6 +394,8 @@ final class SimklService {
             return current.accessToken
         }
 
+        guard refreshFailedForToken != current.refreshToken else { return nil }
+
         if let refreshTask {
             return await refreshTask.value
         }
@@ -386,11 +405,18 @@ final class SimklService {
             do {
                 let response = try await client.refreshToken(current.refreshToken)
                 applyTokens(response.tokens)
-                return response.tokens.accessToken
+                return tokens?.accessToken
+            } catch let error as SimklError {
+                switch error {
+                case .server(400), .notAuthenticated:
+                    if tokens?.refreshToken == current.refreshToken {
+                        refreshFailedForToken = current.refreshToken
+                    }
+                default:
+                    break
+                }
+                return nil
             } catch {
-                // Refresh token is dead — drop the session so the UI prompts a
-                // reconnect rather than retrying forever.
-                await disconnect()
                 return nil
             }
         }
@@ -401,7 +427,19 @@ final class SimklService {
     }
 
     private func applyTokens(_ newTokens: SimklTokens) {
+        if let current = tokens, current.issuedAt > newTokens.issuedAt {
+            return
+        }
         tokens = newTokens
-        SimklTokenStore.save(newTokens)
+        refreshFailedForToken = nil
+        if SimklTokenStore.save(newTokens) {
+            NotificationCenter.default.post(name: .lumeSimklCredentialsDidChange, object: nil)
+        }
     }
+}
+
+extension Notification.Name {
+    /// Posted only for local Simkl authorization changes. CloudKit pulls do not
+    /// repost it, preventing an import/export feedback loop.
+    static let lumeSimklCredentialsDidChange = Notification.Name("LumeSimklCredentialsDidChange")
 }
