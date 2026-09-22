@@ -71,6 +71,38 @@ struct ProfileScopedPreferencesTests {
         }
     }
 
+    @Test func `sports requires both its switch and the Live TV area`() {
+        withActiveProfile(Self.profileA) {
+            let defaults = UserDefaults.standard
+            let areasKey = AppAreaSettings.disabledAreasKey
+            let sportsKey = SportsSyncService.enabledKey
+            let previousAreas = defaults.object(forKey: areasKey)
+            let previousSports = defaults.object(forKey: sportsKey)
+            defer {
+                if let previousAreas {
+                    defaults.set(previousAreas, forKey: areasKey)
+                } else {
+                    defaults.removeObject(forKey: areasKey)
+                }
+                if let previousSports {
+                    defaults.set(previousSports, forKey: sportsKey)
+                } else {
+                    defaults.removeObject(forKey: sportsKey)
+                }
+            }
+
+            defaults.set(true, forKey: sportsKey)
+            defaults.set("liveTV", forKey: areasKey)
+            #expect(!SportsSyncService.isEnabled)
+
+            defaults.set("", forKey: areasKey)
+            #expect(SportsSyncService.isEnabled)
+
+            defaults.set(false, forKey: sportsKey)
+            #expect(!SportsSyncService.isEnabled)
+        }
+    }
+
     // MARK: - Cloud snapshot
 
     @Test func `snapshot round trips string and boolean preferences`() throws {

@@ -2,9 +2,10 @@
 //  SettingsView+Sports.swift
 //  Lume
 //
-//  Sports belongs to Live TV because fixtures resolve to EPG channels. The
-//  dedicated pane is reached from Settings > Library > Live TV and manages the
-//  profile-scoped Sports switch, follows, tab and refresh schedule.
+//  Sports is a sibling in Settings > Library, while remaining operationally
+//  dependent on the profile's Live TV area because fixtures resolve to EPG
+//  channels. This pane manages the profile-scoped Sports switch, follows, tab
+//  and refresh schedule.
 //
 
 import SwiftUI

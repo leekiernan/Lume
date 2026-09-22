@@ -129,6 +129,9 @@ struct SettingsView: View {
         /// don't interpret that transient focus as user navigation before the
         /// enable row has reclaimed focus.
         @State var restoringLibraryAreaToggleFocus = false
+        /// Sports is a Library sibling, not an `AppArea`: it has no catalog of
+        /// its own and remains unavailable while the parent Live TV area is off.
+        @State var showingSportsSettings = false
         /// Whether the Playlists pane has drilled into the guide's sources.
         @State var showingEPGSources = false
         @AppStorage(AppAreaSettings.disabledAreasKey) var disabledAreasRaw = ""

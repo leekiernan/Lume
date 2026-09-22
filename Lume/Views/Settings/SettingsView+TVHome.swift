@@ -2,8 +2,9 @@
 //  SettingsView+TVHome.swift
 //  Lume
 //
-//  The tvOS Library pane: picks an area (Home, Movies, Series, Live TV), lets
-//  it be switched off entirely, and shows whatever that area has to configure —
+//  The tvOS Library pane: picks an area (Home, Movies, Series, Live TV) or the
+//  Sports settings sibling. Areas can be switched off entirely and show whatever
+//  configuration they own —
 //  its rows via `TVSectionLayoutDetail`, its categories via Content Management.
 //  Mirrors the iOS/macOS `LibrarySettingsView`, which uses a list and drill-ins
 //  instead; the tvOS sidebar is already long, so the areas share one category
@@ -18,29 +19,29 @@ import SwiftUI
         func tvLibraryDetail(proxy: ScrollViewProxy) -> some View {
             VStack(alignment: .leading, spacing: 28) {
                 tvAreaPicker
-                tvAreaEnableRow
-                tvAreaEnableNote
-
-                if AppAreaSettings.isEnabled(layoutArea, disabledRaw: disabledAreasRaw) {
-                    if let surface = layoutArea.sectionSurface {
-                        TVSectionLayoutDetail(surface: surface)
-                            // Rebuild on switch: the pane's @AppStorage keys are
-                            // fixed at init, so it has to be a new view per area.
-                            .id(surface)
-                    }
-
-                    if let type = layoutArea.categoryType {
-                        tvAreaCategoriesRow(type: type, proxy: proxy)
-                    }
-
-                    if layoutArea == .liveTV {
-                        TVSportsSettingsPane()
-                    }
+                if showingSportsSettings {
+                    TVSportsSettingsPane()
                 } else {
-                    Text("This area is switched off. It has no tab, and its content is skipped when playlists sync.")
-                        .font(.system(size: 20))
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, TVSettingsMetrics.rowHPadding)
+                    tvAreaEnableRow
+                    tvAreaEnableNote
+
+                    if AppAreaSettings.isEnabled(layoutArea, disabledRaw: disabledAreasRaw) {
+                        if let surface = layoutArea.sectionSurface {
+                            TVSectionLayoutDetail(surface: surface)
+                                // Rebuild on switch: the pane's @AppStorage keys are
+                                // fixed at init, so it has to be a new view per area.
+                                .id(surface)
+                        }
+
+                        if let type = layoutArea.categoryType {
+                            tvAreaCategoriesRow(type: type, proxy: proxy)
+                        }
+                    } else {
+                        Text("This area is switched off. It has no tab, and its content is skipped when playlists sync.")
+                            .font(.system(size: 20))
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, TVSettingsMetrics.rowHPadding)
+                    }
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -57,12 +58,23 @@ import SwiftUI
                     ForEach(AppArea.allCases) { area in
                         Button {
                             layoutArea = area
+                            showingSportsSettings = false
+                            showingAreaCategories = false
                         } label: {
                             Text(area.title)
                         }
                         .buttonStyle(TVSettingsActionButtonStyle(prominent: layoutArea == area))
                         .accessibilityAddTraits(layoutArea == area ? [.isSelected] : [])
                     }
+
+                    Button {
+                        showingSportsSettings = true
+                        showingAreaCategories = false
+                    } label: {
+                        Text("Sports")
+                    }
+                    .buttonStyle(TVSettingsActionButtonStyle(prominent: showingSportsSettings))
+                    .accessibilityAddTraits(showingSportsSettings ? [.isSelected] : [])
                 }
                 .focusSection()
             }
