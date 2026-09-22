@@ -127,7 +127,11 @@ struct MainTabView: View {
             // are rebuilt on a switch to re-read under the new profile. The
             // router lives outside this id, so navigation paths survive.
             .id(activeProfileToken)
-            .onChange(of: disabledAreasRaw) { _, _ in repairSelectionIfNeeded() }
+            .onChange(of: disabledAreasRaw) { _, _ in
+                repairSelectionIfNeeded()
+                SportsSyncService.shared.availabilityDidChange()
+                SportsFollowService.shared.reload()
+            }
         #if os(tvOS)
             .disabled(blockingOverlayOwnsScreen || router.isQuickSwitchPresented)
             // Attached OUTSIDE `.disabled` so the same button closes the modal it
@@ -263,7 +267,7 @@ struct MainTabView: View {
                     }
                 }
 
-                if sportsTabEnabled {
+                if SportsSyncService.isEnabled, sportsTabEnabled {
                     Tab(value: AppTab.sports) {
                         activeOnly(.sports, selection: selection.wrappedValue) { TVSportsHubScreen() }
                     } label: {
@@ -345,7 +349,7 @@ struct MainTabView: View {
                     }
                 }
 
-                if sportsTabEnabled {
+                if SportsSyncService.isEnabled, sportsTabEnabled {
                     Tab("Sports", systemImage: "sportscourt", value: AppTab.sports) {
                         SportsHubView()
                     }
