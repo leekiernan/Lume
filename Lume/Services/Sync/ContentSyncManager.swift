@@ -133,26 +133,36 @@ actor ContentSyncManager {
         updatePlaylistInfo(playlistId, with: authResponse)
         await progress?.complete(.authenticating)
 
-        try await syncAllCategories(for: playlist, playlistId: playlistId, progress: progress, full: full)
+        try await syncEnabledCategories(for: playlist, playlistId: playlistId, progress: progress, full: full)
 
         try await syncEnabledContent(for: playlist, playlistId: playlistId, progress: progress)
     }
 
-    func syncAllCategories(for playlist: Playlist, playlistId: UUID, progress: SyncProgress? = nil, full _: Bool = false) async throws {
-        Logger.database.info("Starting VOD category sync")
-        await progress?.start(.movieCategories)
-        try await syncVODCategories(for: playlist, playlistId: playlistId, progress: progress)
-        await progress?.complete(.movieCategories)
+    /// Categories are content too: fetching all three before the area gate made
+    /// a profile with Live TV off still ask its provider for the full live
+    /// catalogue. Keep each metadata phase beside its corresponding content
+    /// phase so every source observes the same profile contract.
+    func syncEnabledCategories(for playlist: Playlist, playlistId: UUID, progress: SyncProgress? = nil, full _: Bool = false) async throws {
+        if AppAreaSettings.isEnabled(.movies) {
+            Logger.database.info("Starting VOD category sync")
+            await progress?.start(.movieCategories)
+            try await syncVODCategories(for: playlist, playlistId: playlistId, progress: progress)
+            await progress?.complete(.movieCategories)
+        }
 
-        Logger.database.info("Starting Series category sync")
-        await progress?.start(.seriesCategories)
-        try await syncSeriesCategories(for: playlist, playlistId: playlistId, progress: progress)
-        await progress?.complete(.seriesCategories)
+        if AppAreaSettings.isEnabled(.series) {
+            Logger.database.info("Starting Series category sync")
+            await progress?.start(.seriesCategories)
+            try await syncSeriesCategories(for: playlist, playlistId: playlistId, progress: progress)
+            await progress?.complete(.seriesCategories)
+        }
 
-        Logger.database.info("Starting Live TV category sync")
-        await progress?.start(.liveCategories)
-        try await syncLiveCategories(for: playlist, playlistId: playlistId, progress: progress)
-        await progress?.complete(.liveCategories)
+        if AppAreaSettings.isEnabled(.liveTV) {
+            Logger.database.info("Starting Live TV category sync")
+            await progress?.start(.liveCategories)
+            try await syncLiveCategories(for: playlist, playlistId: playlistId, progress: progress)
+            await progress?.complete(.liveCategories)
+        }
     }
 
     // MARK: - Category Sync

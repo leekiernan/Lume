@@ -35,6 +35,15 @@ extension ContentSyncManager {
     }
 
     func performPlexSync(playlist: Playlist, playlistId: UUID, progress: SyncProgress?) async throws {
+        let importMovies = AppAreaSettings.isEnabled(.movies)
+        let importSeries = AppAreaSettings.isEnabled(.series)
+        // Plex Live TV needs its own channel/guide importer. Until that exists,
+        // a Live-TV-only profile must not cause the VOD/series importer to do
+        // unrelated work or report those phases as available.
+        guard importMovies || importSeries else {
+            Logger.database.info("Plex sync skipped: no supported profile areas enabled")
+            return
+        }
         guard let base = URL(string: playlist.serverURL), base.scheme != nil, base.host != nil else {
             throw PlexError.invalidURL
         }
@@ -54,35 +63,54 @@ extension ContentSyncManager {
         await progress?.complete(.authenticating)
 
         let sections = session.sections
-        let movieSections = sections.filter { $0.type == "movie" }
-        let showSections = sections.filter { $0.type == "show" }
+        let movieSections = importMovies ? sections.filter { $0.type == "movie" } : []
+        let showSections = importSeries ? sections.filter { $0.type == "show" } : []
         if movieSections.isEmpty, showSections.isEmpty {
             Logger.database.info("Plex sync: no movie or TV-show sections; catalog untouched")
         }
 
-        try syncPlexCategories(sections: movieSections, type: .vod, playlistId: playlistId)
-        try syncPlexCategories(sections: showSections, type: .series, playlistId: playlistId)
-
-        await progress?.start(.movies)
-        var seenMovies = Set<String>()
-        for section in movieSections {
-            let scope = scope(server: server, token: token, playlistId: playlistId, section: section, type: .vod)
-            try await syncPlexMovies(scope: scope, seenIds: &seenMovies, progress: progress)
+        if importMovies {
+            try await syncPlexMoviePhase(
+                sections: movieSections, server: server, token: token, playlistId: playlistId, progress: progress
+            )
         }
-        prunePlexMovies(playlistId: playlistId, seenIds: seenMovies, fetched: !movieSections.isEmpty)
-        await progress?.complete(.movies)
 
+        if importSeries {
+            try await syncPlexSeriesPhase(
+                sections: showSections, server: server, token: token, playlistId: playlistId, progress: progress
+            )
+        }
+
+        markPlaylistUpdated(playlistId)
+    }
+
+    private func syncPlexMoviePhase(
+        sections: [PlexSection], server: URL, token: String?, playlistId: UUID, progress: SyncProgress?
+    ) async throws {
+        try syncPlexCategories(sections: sections, type: .vod, playlistId: playlistId)
+        await progress?.start(.movies)
+        var seen = Set<String>()
+        for section in sections {
+            let sectionScope = scope(server: server, token: token, playlistId: playlistId, section: section, type: .vod)
+            try await syncPlexMovies(scope: sectionScope, seenIds: &seen, progress: progress)
+        }
+        prunePlexMovies(playlistId: playlistId, seenIds: seen, fetched: !sections.isEmpty)
+        await progress?.complete(.movies)
+    }
+
+    private func syncPlexSeriesPhase(
+        sections: [PlexSection], server: URL, token: String?, playlistId: UUID, progress: SyncProgress?
+    ) async throws {
+        try syncPlexCategories(sections: sections, type: .series, playlistId: playlistId)
         await progress?.start(.series)
         var seenSeries = Set<String>()
         var seenEpisodes = Set<String>()
-        for section in showSections {
-            let scope = scope(server: server, token: token, playlistId: playlistId, section: section, type: .series)
-            try await syncPlexShows(scope: scope, seenSeries: &seenSeries, seenEpisodes: &seenEpisodes, progress: progress)
+        for section in sections {
+            let sectionScope = scope(server: server, token: token, playlistId: playlistId, section: section, type: .series)
+            try await syncPlexShows(scope: sectionScope, seenSeries: &seenSeries, seenEpisodes: &seenEpisodes, progress: progress)
         }
-        prunePlexSeries(playlistId: playlistId, seenSeries: seenSeries, seenEpisodes: seenEpisodes, fetched: !showSections.isEmpty)
+        prunePlexSeries(playlistId: playlistId, seenSeries: seenSeries, seenEpisodes: seenEpisodes, fetched: !sections.isEmpty)
         await progress?.complete(.series)
-
-        markPlaylistUpdated(playlistId)
     }
 
     private func scope(server: URL, token: String?, playlistId: UUID, section: PlexSection, type: CategoryType) -> PlexSectionScope {

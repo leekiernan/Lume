@@ -55,6 +55,16 @@ extension ContentSyncManager {
     }
 
     func performMediaServerSync(playlist: Playlist, playlistId: UUID, flavor: MediaServerFlavor, progress: SyncProgress?) async throws {
+        let importMovies = AppAreaSettings.isEnabled(.movies)
+        let importSeries = AppAreaSettings.isEnabled(.series)
+        // Jellyfin and Emby can expose Live TV, but this importer currently has
+        // no first-class channel/guide phase. Do not authenticate or create
+        // misleading coverage for a Live-TV-only profile; adding that phase
+        // later is an explicit capability addition, not a special-case bypass.
+        guard importMovies || importSeries else {
+            Logger.database.info("\(flavor.displayName, privacy: .public) sync skipped: no supported profile areas enabled")
+            return
+        }
         guard let base = URL(string: playlist.serverURL), base.scheme != nil, base.host != nil else {
             throw JellyfinError.invalidURL
         }
@@ -81,35 +91,54 @@ extension ContentSyncManager {
         // neither (music, photos, books) still names its type and is skipped.
         // A non-media folder that happens to report no type costs one empty
         // query per kind, because the item query filters by type anyway.
-        let movieViews = views.filter { $0.collectionType == "movies" || $0.collectionType == nil }
-        let showViews = views.filter { $0.collectionType == "tvshows" || $0.collectionType == nil }
+        let movieViews = importMovies ? views.filter { $0.collectionType == "movies" || $0.collectionType == nil } : []
+        let showViews = importSeries ? views.filter { $0.collectionType == "tvshows" || $0.collectionType == nil } : []
         if movieViews.isEmpty, showViews.isEmpty {
             Logger.database.info("\(flavor.displayName, privacy: .public) sync: no movie or TV-show libraries; catalog untouched")
         }
 
-        try await syncJellyfinCategories(views: movieViews, type: .vod, playlistId: playlistId)
-        try await syncJellyfinCategories(views: showViews, type: .series, playlistId: playlistId)
-
-        await progress?.start(.movies)
-        var seenMovies = Set<String>()
-        for view in movieViews {
-            let viewScope = scope(connection, playlistId: playlistId, view: view, type: .vod)
-            try await syncJellyfinMovies(scope: viewScope, seenIds: &seenMovies, progress: progress)
+        if importMovies {
+            try await syncJellyfinMoviePhase(
+                views: movieViews, connection: connection, playlistId: playlistId, progress: progress
+            )
         }
-        pruneJellyfinMovies(playlistId: playlistId, flavor: flavor, seenIds: seenMovies, fetched: !movieViews.isEmpty)
-        await progress?.complete(.movies)
 
+        if importSeries {
+            try await syncJellyfinSeriesPhase(
+                views: showViews, connection: connection, playlistId: playlistId, progress: progress
+            )
+        }
+
+        markPlaylistUpdated(playlistId)
+    }
+
+    private func syncJellyfinMoviePhase(
+        views: [JellyfinLibrary], connection: JellyfinConnection, playlistId: UUID, progress: SyncProgress?
+    ) async throws {
+        try await syncJellyfinCategories(views: views, type: .vod, playlistId: playlistId)
+        await progress?.start(.movies)
+        var seen = Set<String>()
+        for view in views {
+            let viewScope = scope(connection, playlistId: playlistId, view: view, type: .vod)
+            try await syncJellyfinMovies(scope: viewScope, seenIds: &seen, progress: progress)
+        }
+        pruneJellyfinMovies(playlistId: playlistId, flavor: connection.flavor, seenIds: seen, fetched: !views.isEmpty)
+        await progress?.complete(.movies)
+    }
+
+    private func syncJellyfinSeriesPhase(
+        views: [JellyfinLibrary], connection: JellyfinConnection, playlistId: UUID, progress: SyncProgress?
+    ) async throws {
+        try await syncJellyfinCategories(views: views, type: .series, playlistId: playlistId)
         await progress?.start(.series)
         var seenSeries = Set<String>()
         var seenEpisodes = Set<String>()
-        for view in showViews {
+        for view in views {
             let viewScope = scope(connection, playlistId: playlistId, view: view, type: .series)
             try await syncJellyfinShows(scope: viewScope, seenSeries: &seenSeries, seenEpisodes: &seenEpisodes, progress: progress)
         }
-        pruneJellyfinSeries(playlistId: playlistId, flavor: flavor, seenSeries: seenSeries, seenEpisodes: seenEpisodes, fetched: !showViews.isEmpty)
+        pruneJellyfinSeries(playlistId: playlistId, flavor: connection.flavor, seenSeries: seenSeries, seenEpisodes: seenEpisodes, fetched: !views.isEmpty)
         await progress?.complete(.series)
-
-        markPlaylistUpdated(playlistId)
     }
 
     private func scope(_ connection: JellyfinConnection, playlistId: UUID, view: JellyfinLibrary, type: CategoryType) -> JellyfinViewScope {
