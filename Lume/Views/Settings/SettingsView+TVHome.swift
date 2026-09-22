@@ -72,9 +72,7 @@ import SwiftUI
                 // the area detail can otherwise make tvOS briefly focus the
                 // sidebar, whose focus-follow behaviour would navigate away.
                 restoringLibraryAreaToggleFocus = true
-                disabledAreasRaw = AppAreaSettings.settingEnabled(
-                    !enabled, for: layoutArea, disabledRaw: disabledAreasRaw
-                )
+                disabledAreasRaw = AppAreaSettings.setEnabled(!enabled, for: layoutArea).disabledRaw
             } label: {
                 HStack(spacing: 16) {
                     Image(systemName: enabled ? "checkmark.circle.fill" : "circle")

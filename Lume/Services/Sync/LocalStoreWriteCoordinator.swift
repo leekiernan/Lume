@@ -148,8 +148,29 @@ actor LocalStoreWriteCoordinator {
     private struct Entry {
         let id: UInt64
         let request: Request
+        let cancellation: CancellationFlag
         var bypassCount = 0
         var admission: CheckedContinuation<Void, Error>?
+    }
+
+    /// Cancellation handlers run outside this actor. Keeping the bit behind a
+    /// lock lets admission observe cancellation even when its cleanup task has
+    /// not reached the actor yet.
+    private final nonisolated class CancellationFlag: @unchecked Sendable {
+        private let lock = NSLock()
+        private var cancelled = false
+
+        func cancel() {
+            lock.lock()
+            cancelled = true
+            lock.unlock()
+        }
+
+        var isCancelled: Bool {
+            lock.lock()
+            defer { lock.unlock() }
+            return cancelled
+        }
     }
 
     /// Append-ordered, so array order is arrival order and `id` increases with
@@ -197,17 +218,24 @@ actor LocalStoreWriteCoordinator {
         }
 
         nextID += 1
-        let entry = Entry(id: nextID, request: request)
+        let entry = Entry(id: nextID, request: request, cancellation: CancellationFlag())
         coalescers[request.coalescingKey] = []
         queue.append(entry)
 
         do {
-            try await waitForAdmission(entry.id)
+            try await waitForAdmission(entry.id, cancellation: entry.cancellation)
         } catch {
             // `settle` has already notified the followers on the supersede and
             // cancel paths; this covers the ones that resume without it, and is
             // a no-op when the key is already gone.
             finishCoalescing(request.coalescingKey, with: .failure(error))
+            throw error
+        }
+
+        if Task.isCancelled {
+            let error = CancellationError()
+            finishCoalescing(request.coalescingKey, with: .failure(error))
+            release(request.mode)
             throw error
         }
 
@@ -238,7 +266,7 @@ actor LocalStoreWriteCoordinator {
         return typed
     }
 
-    private func waitForAdmission(_ id: UInt64) async throws {
+    private func waitForAdmission(_ id: UInt64, cancellation: CancellationFlag) async throws {
         try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
                 guard let index = queue.firstIndex(where: { $0.id == id }) else {
@@ -249,6 +277,7 @@ actor LocalStoreWriteCoordinator {
                 pump()
             }
         } onCancel: {
+            cancellation.cancel()
             Task { await self.abandonQueued(id, error: CancellationError()) }
         }
     }
@@ -334,6 +363,14 @@ actor LocalStoreWriteCoordinator {
             return false
         }
         let entry = queue[chosen]
+
+        // The cancellation handler sets this flag synchronously, but its actor
+        // cleanup arrives asynchronously. Do not grant a lease in that gap.
+        guard !entry.cancellation.isCancelled else {
+            queue.remove(at: chosen)
+            settle(entry, error: CancellationError())
+            return true
+        }
 
         // Charge a bypass to everything that arrived earlier, is still queued,
         // and could have been granted in this same pass. An entry blocked by a
