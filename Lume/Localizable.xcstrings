@@ -3459,6 +3459,7 @@
       }
     },
     "Add EPG sources and set how often the guide refreshes, separately from playlist content." : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
