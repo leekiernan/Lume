@@ -26,10 +26,16 @@ import SwiftData
 actor EPGSyncManager {
     let modelContainer: ModelContainer
     private let client: M3UClient
+    private let writeCoordinator: LocalStoreWriteCoordinator
 
-    init(modelContainer: ModelContainer, client: M3UClient = M3UClient()) {
+    init(
+        modelContainer: ModelContainer,
+        client: M3UClient = M3UClient(),
+        writeCoordinator: LocalStoreWriteCoordinator = .shared
+    ) {
         self.modelContainer = modelContainer
         self.client = client
+        self.writeCoordinator = writeCoordinator
     }
 
     /// Refreshes the guide from every enabled source. Returns `true` when at
@@ -49,12 +55,11 @@ actor EPGSyncManager {
             return false
         }
 
-        clearListings()
-
         var anySucceeded = false
         var unclaimedChannelIDs = knownChannelIDs
+        let fence = Fence.live
         for source in sources {
-            let result = await sync(sourceID: source.id, url: source.url, knownChannelIDs: unclaimedChannelIDs)
+            let result = await sync(source: source, knownChannelIDs: unclaimedChannelIDs, fence: fence)
             unclaimedChannelIDs.subtract(result.claimedChannelIDs)
             anySucceeded = anySucceeded || result.didSync
         }
@@ -70,45 +75,75 @@ actor EPGSyncManager {
         let claimedChannelIDs: Set<String>
     }
 
-    private func sync(sourceID: UUID, url: String, knownChannelIDs: Set<String>) async -> SourceResult {
+    private nonisolated struct StagedSource {
+        let programmes: [ParsedProgramme]
+        let parsedProgrammeCount: Int
+
+        var channelIDs: Set<String> {
+            Set(programmes.map(\.channelId))
+        }
+    }
+
+    private nonisolated enum EPGPublicationError: Error {
+        case suspiciousEmpty
+        case sourceChanged
+    }
+
+    private func sync(source: SourceInfo, knownChannelIDs: Set<String>, fence: Fence) async -> SourceResult {
         let interval = Perf.begin(.epgSourceSync)
         defer { Perf.end(interval) }
 
-        markStatus(sourceID, .syncing)
-        guard !url.isEmpty else {
-            markStatus(sourceID, .error)
+        markStatus(source.id, .syncing)
+        guard !source.url.isEmpty else {
+            markStatus(source.id, .error)
             return SourceResult(didSync: false, claimedChannelIDs: [])
         }
         guard !knownChannelIDs.isEmpty else {
             // Every channel this source could guide is already covered by an
             // earlier one; downloading it would only produce overlaps.
-            Logger.database.info("EPG source \(sourceID, privacy: .public) skipped, all channels already guided")
-            markSynced(sourceID)
+            Logger.database.info("EPG source \(source.id, privacy: .public) skipped, all channels already guided")
+            markSynced(source.id)
             return SourceResult(didSync: true, claimedChannelIDs: [])
         }
-        do {
-            let isRemote = !(URL(string: url)?.isFileURL ?? false)
-            let fileURL = try await client.downloadEPG(from: url)
-            defer { if isRemote { try? FileManager.default.removeItem(at: fileURL) } }
-
-            let inserted = insertListings(from: fileURL, knownChannelIDs: knownChannelIDs)
-            Logger.database.info("EPG source \(sourceID) inserted \(inserted.count) listings for \(inserted.channelIDs.count) channels")
-            markSynced(sourceID)
-            return SourceResult(didSync: true, claimedChannelIDs: inserted.channelIDs)
-        } catch {
-            // Credential-free detail (never a URL) so it can be public in
-            // user-exported diagnostic logs.
-            let nsError = error as NSError
-            let detail = (error as? M3UError)?.logDescription ?? "\(nsError.domain) \(nsError.code)"
-            Logger.database.warning("EPG source \(sourceID, privacy: .public) sync failed: \(detail, privacy: .public)")
-            markStatus(sourceID, .error)
-            return SourceResult(didSync: false, claimedChannelIDs: [])
+        for attempt in 0 ... 1 {
+            do {
+                try Task.checkCancellation()
+                let staged = try await stage(source.url, knownChannelIDs: knownChannelIDs)
+                // A non-empty XMLTV document that yielded no programmes for the
+                // requested channels is a mapping failure, not evidence that a
+                // previously committed source snapshot should be erased.
+                guard staged.parsedProgrammeCount == 0 || !staged.programmes.isEmpty else {
+                    throw EPGPublicationError.suspiciousEmpty
+                }
+                try await publish(staged, for: source, fence: fence)
+                markSynced(source.id)
+                return SourceResult(didSync: true, claimedChannelIDs: staged.channelIDs)
+            } catch is CancellationError {
+                markStatus(source.id, .idle)
+                return SourceResult(
+                    didSync: false,
+                    claimedChannelIDs: retainedChannelIDs(for: source.id, limitedTo: knownChannelIDs)
+                )
+            } catch {
+                guard attempt == 0 else {
+                    let nsError = error as NSError
+                    let detail = (error as? M3UError)?.logDescription ?? "\(nsError.domain) \(nsError.code)"
+                    Logger.database.warning("EPG source \(source.id, privacy: .public) sync failed: \(detail, privacy: .public)")
+                    markStatus(source.id, .error)
+                    return SourceResult(
+                        didSync: false,
+                        claimedChannelIDs: retainedChannelIDs(for: source.id, limitedTo: knownChannelIDs)
+                    )
+                }
+                Logger.database.info("EPG source \(source.id, privacy: .public) retrying once after a failed attempt")
+            }
         }
+        return SourceResult(didSync: false, claimedChannelIDs: [])
     }
 
     // MARK: - Source / channel lookups
 
-    private struct SourceInfo {
+    private nonisolated struct SourceInfo {
         let id: UUID
         let url: String
     }
@@ -136,77 +171,126 @@ actor EPGSyncManager {
         return ids.isEmpty ? nil : ids
     }
 
-    // MARK: - Listing store
-
-    private func clearListings() {
+    /// A failed source retains its last committed snapshot, which must continue
+    /// to reserve those channels during this run. Otherwise a later source can
+    /// publish the same channel and make the guide non-deterministically overlap.
+    private func retainedChannelIDs(for sourceID: UUID, limitedTo knownChannelIDs: Set<String>) -> Set<String> {
         let context = ModelContext(modelContainer)
         context.autosaveEnabled = false
-        do {
-            try context.delete(model: EPGListing.self)
-            try context.save()
-        } catch {
-            Logger.database.error("Failed to clear existing EPG listings: \(error.localizedDescription)")
-        }
+        let descriptor = FetchDescriptor<EPGListing>(predicate: #Predicate { $0.sourceID == sourceID })
+        let rows = (try? context.fetch(descriptor)) ?? []
+        return Set(rows.map(\.channelId)).intersection(knownChannelIDs)
     }
 
-    /// How many listings to accumulate before saving. Every save on the shared
-    /// catalog container merges into the main context and re-runs *every* active
-    /// `@Query` (not just `EPGListing` ones) — so a guide that saved once per
-    /// 2000-programme parse batch produced dozens of browse-view recompute
-    /// storms right after a sync. Coalescing into far larger saves cuts that
-    /// churn proportionally; the in-flight listings are tiny, so memory stays
-    /// bounded.
-    private static let saveThreshold = 10000
+    // MARK: - Staging and atomic publication
 
-    /// What an XMLTV file contributed: how many listings were inserted, and the
-    /// channels they landed on.
-    private struct InsertResult {
-        var count = 0
-        var channelIDs: Set<String> = []
-    }
-
-    /// Stream-parses an XMLTV file and inserts every programme on a known
-    /// channel.
-    ///
-    /// Parsing streams in 2000-programme batches to keep `ParsedProgramme`
-    /// memory flat, but inserts accumulate on a single context and save only
-    /// every `saveThreshold` listings to minimise main-context merges.
-    private func insertListings(from fileURL: URL, knownChannelIDs: Set<String>) -> InsertResult {
+    /// Fetching and parsing do not mutate SwiftData. An abandoned stage is
+    /// therefore cleaned up by normal process teardown and cannot be observed
+    /// by guide readers.
+    private func stage(_ url: String, knownChannelIDs: Set<String>) async throws -> StagedSource {
         let interval = Perf.begin(.epgIngest)
         defer { Perf.end(interval) }
 
-        var result = InsertResult()
-        var pendingInserts = 0
-        let context = ModelContext(modelContainer)
-        context.autosaveEnabled = false
+        let isRemote = !(URL(string: url)?.isFileURL ?? false)
+        let fileURL = try await client.downloadEPG(from: url)
+        defer { if isRemote { try? FileManager.default.removeItem(at: fileURL) } }
 
-        _ = XMLTVParser.parse(fileURL: fileURL, batchSize: 2000) { batch in
-            autoreleasepool {
-                for programme in batch where knownChannelIDs.contains(programme.channelId) {
-                    let listingId = "\(programme.channelId)-\(Int(programme.start.timeIntervalSince1970))"
-                    context.insert(EPGListing(
-                        id: listingId,
-                        channelId: programme.channelId,
-                        title: programme.title,
-                        listingDescription: programme.description,
-                        start: programme.start,
-                        end: programme.end
-                    ))
-                    result.count += 1
-                    result.channelIDs.insert(programme.channelId)
-                    pendingInserts += 1
+        var programmesByKey: [String: ParsedProgramme] = [:]
+        var cancelled = false
+        let parsedProgrammeCount = XMLTVParser.parse(fileURL: fileURL, batchSize: 2000) { batch in
+            if Task.isCancelled { cancelled = true; return }
+            for programme in batch where knownChannelIDs.contains(programme.channelId) {
+                let key = "\(programme.channelId)\u{1F}\(Int(programme.start.timeIntervalSince1970))"
+                guard let current = programmesByKey[key] else {
+                    programmesByKey[key] = programme
+                    continue
                 }
-                if pendingInserts >= Self.saveThreshold {
-                    try? context.save()
-                    pendingInserts = 0
-                }
+                let candidate = "\(programme.end.timeIntervalSince1970)\u{1F}\(programme.title)\u{1F}\(programme.description)"
+                let existing = "\(current.end.timeIntervalSince1970)\u{1F}\(current.title)\u{1F}\(current.description)"
+                if candidate < existing { programmesByKey[key] = programme }
             }
         }
+        try Task.checkCancellation()
+        if cancelled { throw CancellationError() }
+        return StagedSource(
+            programmes: programmesByKey.values.sorted {
+                let left = "\($0.channelId)\u{1F}\($0.start.timeIntervalSince1970)\u{1F}\($0.end.timeIntervalSince1970)\u{1F}\($0.title)\u{1F}\($0.description)"
+                let right = "\($1.channelId)\u{1F}\($1.start.timeIntervalSince1970)\u{1F}\($1.end.timeIntervalSince1970)\u{1F}\($1.title)\u{1F}\($1.description)"
+                return left < right
+            },
+            parsedProgrammeCount: parsedProgrammeCount
+        )
+    }
 
-        if pendingInserts > 0 {
-            try? context.save()
+    /// One source gets exactly one durable publication. If validation, a final
+    /// cancellation check, or `save()` fails, the context rolls back and that
+    /// source's prior committed snapshot remains visible.
+    private func publish(_ staged: StagedSource, for sourceInfo: SourceInfo, fence: Fence) async throws {
+        let request = LocalStoreWriteCoordinator.Request(
+            scope: .epgPublish(sourceInfo.id),
+            mode: .exclusive,
+            priority: .background,
+            coalescingKey: "epg-publish-\(sourceInfo.id.uuidString)-\(sourceInfo.url)",
+            fence: fence
+        )
+        try await writeCoordinator.withLease(request) { [modelContainer] in
+            try Task.checkCancellation()
+            guard Fence.live == fence else { throw LocalStoreWriteError.superseded }
+            let context = ModelContext(modelContainer)
+            context.autosaveEnabled = false
+            guard let source = try context.fetch(
+                FetchDescriptor<EPGSource>(predicate: #Predicate { $0.id == sourceInfo.id })
+            ).first, source.isEnabled, source.url == sourceInfo.url else {
+                throw EPGPublicationError.sourceChanged
+            }
+            try Self.replaceSnapshot(staged, for: sourceInfo, source: source, in: context)
+            try Task.checkCancellation()
+            guard Fence.live == fence else { throw LocalStoreWriteError.superseded }
+            do {
+                try context.save()
+            } catch {
+                context.rollback()
+                throw error
+            }
         }
-        return result
+    }
+
+    private nonisolated static func replaceSnapshot(
+        _ staged: StagedSource,
+        for sourceInfo: SourceInfo,
+        source: EPGSource,
+        in context: ModelContext
+    ) throws {
+        let oldRows = try context.fetch(
+            FetchDescriptor<EPGListing>(predicate: #Predicate { $0.sourceID == sourceInfo.id })
+        )
+        for row in oldRows {
+            context.delete(row)
+        }
+        // Pre-LUM-13 rows had no source ownership. Retire only the legacy rows
+        // for channels this source is now committing; deleting every unowned row
+        // here would recreate the destructive multi-source wipe.
+        let legacyRows = try context.fetch(
+            FetchDescriptor<EPGListing>(predicate: #Predicate { $0.sourceID == nil })
+        )
+        let stagedChannels = Set(staged.programmes.map(\.channelId))
+        for row in legacyRows where stagedChannels.contains(row.channelId) {
+            context.delete(row)
+        }
+        for programme in staged.programmes {
+            try Task.checkCancellation()
+            let start = Int(programme.start.timeIntervalSince1970)
+            context.insert(EPGListing(
+                id: "\(sourceInfo.id.uuidString)-\(programme.channelId)-\(start)",
+                channelId: programme.channelId,
+                title: programme.title,
+                listingDescription: programme.description,
+                start: programme.start,
+                end: programme.end,
+                sourceID: sourceInfo.id
+            ))
+        }
+        source.committedGeneration &+= 1
     }
 
     // MARK: - Status bookkeeping

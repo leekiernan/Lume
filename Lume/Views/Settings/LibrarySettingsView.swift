@@ -67,7 +67,10 @@
             Binding(
                 get: { AppAreaSettings.isEnabled(area, disabledRaw: disabledAreasRaw) },
                 set: { isOn in
-                    disabledAreasRaw = AppAreaSettings.setEnabled(isOn, for: area).disabledRaw
+                    // `setEnabled` is the sole persistent writer. Assigning to
+                    // AppStorage afterwards can race another paired write and
+                    // overwrite its area set without advancing its generation.
+                    AppAreaSettings.setEnabled(isOn, for: area)
                 }
             )
         }
