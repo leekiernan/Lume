@@ -9,7 +9,10 @@
 
 import Foundation
 
-nonisolated struct TraktHistoryMutation: Codable, Equatable, Identifiable {
+/// Provider-neutral durable watched-history intent. Both Trakt and Simkl use
+/// TMDB identifiers, so keeping this payload independent of either API gives
+/// future trackers the same ordering/coalescing/retry contract.
+nonisolated struct TrackerHistoryMutation: Codable, Equatable, Identifiable {
     nonisolated enum Target: Codable, Equatable, Hashable {
         case movie(tmdbID: Int)
         case episode(showTMDBID: Int, season: Int, episode: Int)
@@ -39,11 +42,11 @@ nonisolated struct TraktHistoryMutation: Codable, Equatable, Identifiable {
     }
 }
 
-nonisolated struct TraktMutationStatus: Equatable {
+nonisolated struct TrackerMutationStatus: Equatable {
     let pendingCount: Int
     let failedCount: Int
 
-    static let empty = TraktMutationStatus(pendingCount: 0, failedCount: 0)
+    static let empty = TrackerMutationStatus(pendingCount: 0, failedCount: 0)
 }
 
 /// Small JSON outbox in UserDefaults. Mutations are ordered oldest-first and
@@ -51,9 +54,9 @@ nonisolated struct TraktMutationStatus: Equatable {
 /// never replay the previous account's intent. Enqueuing the same target again
 /// removes the older value and appends the latest intent to the tail.
 @MainActor
-final class TraktMutationOutbox {
+final class TrackerMutationOutbox {
     private struct State: Codable {
-        var accounts: [String: [TraktHistoryMutation]] = [:]
+        var accounts: [String: [TrackerHistoryMutation]] = [:]
     }
 
     private let defaults: UserDefaults
@@ -77,26 +80,26 @@ final class TraktMutationOutbox {
 
     @discardableResult
     func enqueue(
-        target: TraktHistoryMutation.Target,
+        target: TrackerHistoryMutation.Target,
         watched: Bool,
         account: String,
         now: Date = Date()
-    ) -> TraktHistoryMutation {
+    ) -> TrackerHistoryMutation {
         let account = Self.normalize(account)
         var mutations = state.accounts[account] ?? []
         mutations.removeAll { $0.target == target }
-        let mutation = TraktHistoryMutation(target: target, watched: watched, enqueuedAt: now)
+        let mutation = TrackerHistoryMutation(target: target, watched: watched, enqueuedAt: now)
         mutations.append(mutation)
         state.accounts[account] = mutations
         persist()
         return mutation
     }
 
-    func firstMutation(account: String) -> TraktHistoryMutation? {
+    func firstMutation(account: String) -> TrackerHistoryMutation? {
         state.accounts[Self.normalize(account)]?.first
     }
 
-    func mutations(account: String) -> [TraktHistoryMutation] {
+    func mutations(account: String) -> [TrackerHistoryMutation] {
         state.accounts[Self.normalize(account)] ?? []
     }
 
@@ -121,9 +124,9 @@ final class TraktMutationOutbox {
         }
     }
 
-    func status(account: String) -> TraktMutationStatus {
+    func status(account: String) -> TrackerMutationStatus {
         let mutations = state.accounts[Self.normalize(account)] ?? []
-        return TraktMutationStatus(
+        return TrackerMutationStatus(
             pendingCount: mutations.count,
             failedCount: mutations.count(where: { $0.attemptCount > 0 })
         )
@@ -131,7 +134,7 @@ final class TraktMutationOutbox {
 
     private func mutateAccount(
         _ account: String,
-        mutation: (inout [TraktHistoryMutation]) -> Void
+        mutation: (inout [TrackerHistoryMutation]) -> Void
     ) {
         let account = Self.normalize(account)
         var mutations = state.accounts[account] ?? []
@@ -153,6 +156,12 @@ final class TraktMutationOutbox {
         account.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
     }
 }
+
+/// Compatibility names keep the Trakt-specific service/API readable while its
+/// durable storage implementation is shared by every tracker.
+typealias TraktHistoryMutation = TrackerHistoryMutation
+typealias TraktMutationStatus = TrackerMutationStatus
+typealias TraktMutationOutbox = TrackerMutationOutbox
 
 nonisolated struct TraktAccountIdentity: Codable, Equatable {
     let username: String
