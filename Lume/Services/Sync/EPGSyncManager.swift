@@ -56,12 +56,30 @@ actor EPGSyncManager {
         }
 
         var anySucceeded = false
+        var everySourceSynced = true
         var unclaimedChannelIDs = knownChannelIDs
         let fence = Fence.live
         for source in sources {
             let result = await sync(source: source, knownChannelIDs: unclaimedChannelIDs, fence: fence)
             unclaimedChannelIDs.subtract(result.claimedChannelIDs)
             anySucceeded = anySucceeded || result.didSync
+            everySourceSynced = everySourceSynced && result.didSync
+        }
+        // Listings created before source-scoped publication have no ownership
+        // metadata. Keep that aggregate snapshot whenever any source failed,
+        // then retire it only after every enabled source has published (or was
+        // safely superseded by an earlier successful source) in this pass.
+        // That gives a valid empty guide the same replacement semantics as a
+        // non-empty guide without throwing away another source's last snapshot
+        // during a partial refresh failure.
+        if everySourceSynced {
+            do {
+                try await retireLegacySnapshot(fence: fence)
+            } catch is CancellationError {
+                return false
+            } catch {
+                Logger.database.warning("EPG legacy snapshot retirement failed: \(error.localizedDescription, privacy: .public)")
+            }
         }
         return anySucceeded
     }
@@ -228,6 +246,7 @@ actor EPGSyncManager {
     /// cancellation check, or `save()` fails, the context rolls back and that
     /// source's prior committed snapshot remains visible.
     private func publish(_ staged: StagedSource, for sourceInfo: SourceInfo, fence: Fence) async throws {
+        let sourceID = sourceInfo.id
         let request = LocalStoreWriteCoordinator.Request(
             scope: .epgPublish(sourceInfo.id),
             mode: .exclusive,
@@ -241,7 +260,7 @@ actor EPGSyncManager {
             let context = ModelContext(modelContainer)
             context.autosaveEnabled = false
             guard let source = try context.fetch(
-                FetchDescriptor<EPGSource>(predicate: #Predicate { $0.id == sourceInfo.id })
+                FetchDescriptor<EPGSource>(predicate: #Predicate { $0.id == sourceID })
             ).first, source.isEnabled, source.url == sourceInfo.url else {
                 throw EPGPublicationError.sourceChanged
             }
@@ -263,15 +282,16 @@ actor EPGSyncManager {
         source: EPGSource,
         in context: ModelContext
     ) throws {
+        let sourceID: UUID? = sourceInfo.id
         let oldRows = try context.fetch(
-            FetchDescriptor<EPGListing>(predicate: #Predicate { $0.sourceID == sourceInfo.id })
+            FetchDescriptor<EPGListing>(predicate: #Predicate { $0.sourceID == sourceID })
         )
         for row in oldRows {
             context.delete(row)
         }
         // Pre-LUM-13 rows had no source ownership. Retire only the legacy rows
-        // for channels this source is now committing; deleting every unowned row
-        // here would recreate the destructive multi-source wipe.
+        // for channels this source is now committing; the remaining aggregate
+        // snapshot is retired only after every enabled source succeeds below.
         let legacyRows = try context.fetch(
             FetchDescriptor<EPGListing>(predicate: #Predicate { $0.sourceID == nil })
         )
@@ -293,6 +313,41 @@ actor EPGSyncManager {
             ))
         }
         source.committedGeneration &+= 1
+    }
+
+    /// A pre-LUM-13 guide was one aggregate snapshot, so its unowned rows
+    /// cannot be assigned to a single source without guessing. The only safe
+    /// migration point is after this pass has source-scoped replacements for
+    /// every enabled source. This also clears a valid empty guide's former
+    /// legacy rows while a failed source leaves the aggregate fallback intact.
+    private func retireLegacySnapshot(fence: Fence) async throws {
+        let request = LocalStoreWriteCoordinator.Request(
+            scope: .maintenance,
+            mode: .exclusive,
+            priority: .background,
+            coalescingKey: "epg-retire-legacy-snapshot",
+            fence: fence
+        )
+        try await writeCoordinator.withLease(request) { [modelContainer] in
+            try Task.checkCancellation()
+            guard Fence.live == fence else { throw LocalStoreWriteError.superseded }
+            let context = ModelContext(modelContainer)
+            context.autosaveEnabled = false
+            let legacyRows = try context.fetch(
+                FetchDescriptor<EPGListing>(predicate: #Predicate { $0.sourceID == nil })
+            )
+            for row in legacyRows {
+                context.delete(row)
+            }
+            try Task.checkCancellation()
+            guard Fence.live == fence else { throw LocalStoreWriteError.superseded }
+            do {
+                try context.save()
+            } catch {
+                context.rollback()
+                throw error
+            }
+        }
     }
 
     // MARK: - Status bookkeeping
