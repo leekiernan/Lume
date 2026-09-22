@@ -30,19 +30,23 @@ struct HomeView: View {
     // Recently watched (capped — watch history is naturally bounded).
     @Query var watchedMovies: [Movie]
     @Query var watchedSeries: [Series]
-    @Query private var watchedStreams: [LiveStream]
+    /// Not `private`: read by the HomeView+DerivedContent extension (separate file).
+    @Query var watchedStreams: [LiveStream]
 
     // Favorites.
     @Query var favoriteMovies: [Movie]
     @Query var favoriteSeries: [Series]
-    @Query private var favoriteStreams: [LiveStream]
+    /// Not `private`: read by the HomeView+DerivedContent extension (separate file).
+    @Query var favoriteStreams: [LiveStream]
 
     /// The remote-backed rows (trending, Trakt watchlist, custom lists), shared
-    /// with the Movies and Series pages — see `SectionFeed`.
-    @State private var feed = SectionFeed(surface: .home)
+    /// with the Movies and Series pages — see `SectionFeed`. Not `private`:
+    /// read by the HomeView+DerivedContent extension (separate file).
+    @State var feed = SectionFeed(surface: .home)
     /// Resume fractions for partially-watched series, keyed by series id and
-    /// resolved off the main thread — see `SeriesResumeLoader`.
-    @State private var seriesResume: [String: Double] = [:]
+    /// resolved off the main thread — see `SeriesResumeLoader`. Not `private`:
+    /// written by the HomeView+DerivedContent extension (separate file).
+    @State var seriesResume: [String: Double] = [:]
     @AppStorage(RecommendationSettings.enabledKey) var recommendationsEnabled = RecommendationSettings.enabledDefault
     /// The user's chosen Home row order (Settings › Layout › Home). Falls back to
     /// the surface's default order until they reorder.
@@ -61,7 +65,11 @@ struct HomeView: View {
     @State var heroWarmStart = HeroWarmStartState(surface: .home)
     /// Areas switched off for this profile (Settings › Library). Live TV is the
     /// one that reaches Home: its channels sit inside the mixed rows below.
-    @AppStorage(AppAreaSettings.disabledAreasKey) private var disabledAreasRaw = ""
+    /// Movies/Series gate the trending rows, the Trakt watchlist, custom
+    /// list-backed rows and the hero — all sourced from a catalog the profile
+    /// can't browse. Not `private`: read by the HomeView+HeroWarmStart
+    /// extension (separate file).
+    @AppStorage(AppAreaSettings.disabledAreasKey) var disabledAreasRaw = ""
     /// Bumped by the DEBUG "Recalculate" action in Settings (always 0 otherwise);
     /// part of the task id so the row recomputes on demand.
     @AppStorage(RecommendationSettings.manualRecalculationKey) var recommendationsRecalcToken = 0
@@ -290,7 +298,10 @@ struct HomeView: View {
             // A custom row's header is the user's own text, so it goes through
             // verbatim; the items are resolved in `HomeView+CustomSections`.
             // A promoted row is the hero, so it never also draws as a row.
-            if ref != heroRef,
+            // Custom rows are always movie/series lists (see
+            // `SectionSurface.defaultHeroSourceURL`), so they need the same VOD
+            // gate as the built-in trending rows.
+            if vodAvailable, ref != heroRef,
                let section = customSections.first(where: { $0.id == id }),
                HomeLayoutSettings.isEnabled(ref, disabledRaw: disabledSectionsRaw)
             {
@@ -344,8 +355,10 @@ struct HomeView: View {
     /// Whether `section` should render. "For You" follows the recommendations
     /// opt-in (which also gates its recompute); Sports additionally requires
     /// Live TV, since it matches fixtures to channels in the EPG and has
-    /// nothing to show — or sync — once that's off for the profile; the rest
-    /// follow the user's per-section switches.
+    /// nothing to show — or sync — once that's off for the profile; the
+    /// movie/series-sourced rows require the matching area, since a profile
+    /// without Movies or Series enabled has nothing in its catalog for them to
+    /// show; the rest follow the user's per-section switches.
     func isSectionEnabled(_ section: HomeSection) -> Bool {
         switch section {
         case .forYou:
@@ -353,9 +366,27 @@ struct HomeView: View {
         case .sports:
             AppAreaSettings.isEnabled(.liveTV, disabledRaw: disabledAreasRaw)
                 && HomeLayoutSettings.isEnabled(.builtin(section), disabledRaw: disabledSectionsRaw)
+        case .trendingMovies:
+            AppAreaSettings.isEnabled(.movies, disabledRaw: disabledAreasRaw)
+                && HomeLayoutSettings.isEnabled(.builtin(section), disabledRaw: disabledSectionsRaw)
+        case .trendingSeries:
+            AppAreaSettings.isEnabled(.series, disabledRaw: disabledAreasRaw)
+                && HomeLayoutSettings.isEnabled(.builtin(section), disabledRaw: disabledSectionsRaw)
+        case .traktWatchlist:
+            vodAvailable && HomeLayoutSettings.isEnabled(.builtin(section), disabledRaw: disabledSectionsRaw)
         default:
             HomeLayoutSettings.isEnabled(.builtin(section), disabledRaw: disabledSectionsRaw)
         }
+    }
+
+    /// Whether Home may show anything sourced from the movie/series catalog —
+    /// the Trakt watchlist, custom list-backed rows, and the hero, none of
+    /// which are scoped to a single medium the way the trending rows are.
+    /// False only when the profile has switched off both VOD areas. Not
+    /// `private`: read by the HomeView+HeroWarmStart extension (separate file).
+    var vodAvailable: Bool {
+        AppAreaSettings.isEnabled(.movies, disabledRaw: disabledAreasRaw)
+            || AppAreaSettings.isEnabled(.series, disabledRaw: disabledAreasRaw)
     }
 
     /// Identity of the trending/hero load, and the key its session memo is
@@ -413,8 +444,9 @@ struct HomeView: View {
     }
 
     /// The custom sections that should actually be fetched: the user's list
-    /// minus the ones they've hidden. A hidden row costs no network.
-    private var visibleCustomSections: [CustomHomeSection] {
+    /// minus the ones they've hidden. A hidden row costs no network. Not
+    /// `private`: read by the HomeView+DerivedContent extension (separate file).
+    var visibleCustomSections: [CustomHomeSection] {
         customSections.filter {
             // The promoted section is still fetched — it feeds the hero even
             // though it draws no row.
@@ -453,90 +485,6 @@ struct HomeView: View {
     func belongsToActivePlaylist(_ id: String) -> Bool {
         guard let prefix = playlistPrefix else { return true }
         return id.hasPrefix(prefix)
-    }
-
-    // MARK: - Derived content
-
-    /// The channels Home may show: none when this profile has Live TV switched
-    /// off. That area leaves the navigation and stops syncing, so its channels
-    /// shouldn't keep turning up inside Home's mixed rows either — and unlike
-    /// movies and series, they have no row of their own to switch off, because
-    /// they only ever appear alongside other media.
-    private func visibleChannels(_ streams: [LiveStream]) -> [LiveStream] {
-        guard AppAreaSettings.isEnabled(.liveTV, disabledRaw: disabledAreasRaw) else { return [] }
-        return streams.filter { belongsToActivePlaylist($0.id) }.excludingRestricted(restriction)
-    }
-
-    private var recentlyWatched: [HomeMediaItem] {
-        let items = watchedMovies.filter { belongsToActivePlaylist($0.id) }.excludingRestricted(restriction).map(HomeMediaItem.movie)
-            + watchedSeries.filter { belongsToActivePlaylist($0.id) }.excludingRestricted(restriction).map(HomeMediaItem.series)
-            + visibleChannels(watchedStreams).map(HomeMediaItem.live)
-        return items
-            .sorted { ($0.lastWatchedDate ?? .distantPast) > ($1.lastWatchedDate ?? .distantPast) }
-            // After sorting, so the copy kept is the one watched most recently.
-            .deduplicatedByTitle()
-            .prefix(10)
-            .map(\.self)
-    }
-
-    private var favorites: [HomeMediaItem] {
-        let movies = favoriteMovies.filter { belongsToActivePlaylist($0.id) }.excludingRestricted(restriction)
-        let series = favoriteSeries.filter { belongsToActivePlaylist($0.id) }.excludingRestricted(restriction)
-        let streams = visibleChannels(favoriteStreams)
-
-        // Interleave the three types by the cross-type `favoriteOrder` set in
-        // Content Management → Favorites, so a movie placed above a channel shows
-        // above it here too. Items never reordered (nil) fall back to a stable
-        // type/name grouping (channels, movies, then series) — the same fallback
-        // the favorites manager uses.
-        let entries: [(order: Int?, rank: Int, name: String, item: HomeMediaItem)] =
-            streams.map { ($0.favoriteOrder, 0, $0.name, HomeMediaItem.live($0)) }
-                + movies.map { ($0.favoriteOrder, 1, $0.name, HomeMediaItem.movie($0)) }
-                + series.map { ($0.favoriteOrder, 2, $0.name, HomeMediaItem.series($0)) }
-
-        return entries
-            .sorted { ($0.order ?? Int.max, $0.rank, $0.name) < ($1.order ?? Int.max, $1.rank, $1.name) }
-            .map(\.item)
-            .deduplicatedByTitle()
-    }
-
-    /// Truly empty home — only show the empty state once trending has settled
-    /// so async-loaded content doesn't make the empty view flash on launch.
-    private var isEmpty: Bool {
-        recentlyWatched.isEmpty
-            && favorites.isEmpty
-            && feed.items(for: .builtin(.trendingMovies)).isEmpty
-            && feed.items(for: .builtin(.trendingSeries)).isEmpty
-            && feed.items(for: .builtin(.traktWatchlist)).isEmpty
-            && visibleCustomSections.allSatisfy { feed.items(for: .custom($0.id)).isEmpty }
-            && !sportsRailHasContent
-            && feed.isSettled
-    }
-
-    // MARK: - Recently watched
-
-    /// Clears an item's watch timestamp so it drops out of the Recently Watched
-    /// row. The @Query-backed rows update automatically once the change is saved.
-    private func removeFromRecentlyWatched(_ item: HomeMediaItem) {
-        switch item {
-        case let .movie(movie): movie.lastWatchedDate = nil
-        case let .series(series): series.lastWatchedDate = nil
-        case let .live(stream): stream.lastWatchedDate = nil
-        }
-        try? modelContext.save()
-    }
-
-    // MARK: - Series resume
-
-    /// Resolves the resume bar for every partially-watched series in one indexed
-    /// fetch, off the main thread. The rails then read a plain dictionary rather
-    /// than each card faulting its series' whole `episodes` relationship from
-    /// `body` — the same hoist the Live TV list does for now/next EPG.
-    private func loadSeriesResume() async {
-        let container = modelContext.container
-        seriesResume = await Task.detached(priority: .userInitiated) {
-            SeriesResumeLoader.load(container: container)
-        }.value
     }
 }
 
