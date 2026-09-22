@@ -195,6 +195,58 @@ nonisolated struct LocalStoreWriteCoordinatorTests {
         #expect(await executions.entries.isEmpty)
     }
 
+    @Test
+    func `a cancelled coalesced follower is removed and resumed before its leader finishes`() async throws {
+        let coordinator = LocalStoreWriteCoordinator(currentFence: { Self.fence })
+        let started = Gate()
+        let release = Gate()
+        let request = request("coalesced-cancellation")
+        let leader = Task.detached {
+            try await coordinator.withLease(request) {
+                await started.open()
+                await release.wait()
+                return 1
+            }
+        }
+        await started.wait()
+
+        let follower = Task.detached {
+            try await coordinator.withLease(request) { 2 }
+        }
+        #expect(await settle(until: { await coordinator.coalescedWaiterCount(forKey: "coalesced-cancellation") == 1 }))
+        follower.cancel()
+        #expect(await settle(until: { await coordinator.coalescedWaiterCount(forKey: "coalesced-cancellation") == 0 }))
+        await #expect(throws: CancellationError.self) { try await follower.value }
+
+        await release.open()
+        #expect(try await leader.value == 1)
+    }
+
+    @Test
+    func `same generation with a changed area fingerprint is superseded`() async throws {
+        let captured = Fence(profile: nil, areaGeneration: .initial.bumped(), areaFingerprint: "")
+        let box = FenceBox(captured)
+        let coordinator = LocalStoreWriteCoordinator(currentFence: { box.current })
+        let held = await holdLease(on: coordinator, fence: captured)
+        let executions = Recorder()
+        let queuedRequest = request("fingerprint", fence: captured)
+        let queued = Task.detached {
+            try await coordinator.withLease(queuedRequest) {
+                await executions.record("ran")
+            }
+        }
+        #expect(await settle(until: { await coordinator.queueDepth == 1 }))
+
+        // Models the second process observing generation N before the old raw
+        // area set is replaced: the generation is unchanged, but the pair is not.
+        box.current = Fence(profile: nil, areaGeneration: captured.areaGeneration, areaFingerprint: "liveTV")
+        await held.release.open()
+        try await held.finished.value
+
+        await #expect(throws: LocalStoreWriteError.superseded) { try await queued.value }
+        #expect(await executions.entries.isEmpty)
+    }
+
     // MARK: - T-W8 (gate G5)
 
     /// The bound the plan claims — "cannot be bypassed by more than one later

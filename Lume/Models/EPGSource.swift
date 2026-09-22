@@ -24,6 +24,9 @@ final class EPGSource {
     var isEnabled: Bool = true
     var lastSyncDate: Date?
     var syncStatusRaw: String = SyncStatus.idle.rawValue
+    /// Written with the source snapshot in one save. A crash can therefore
+    /// expose only a committed generation, never a partial stage.
+    var committedGeneration: UInt64 = 0
 
     var addedAt: Date = Date()
 
