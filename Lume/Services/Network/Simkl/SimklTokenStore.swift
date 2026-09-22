@@ -20,7 +20,7 @@ import Security
 
 /// The OAuth token set returned by Simkl's `/oauth2/token`, plus the metadata
 /// needed to know when the access token needs refreshing.
-struct SimklTokens: Codable, Equatable {
+nonisolated struct SimklTokens: Codable, Equatable {
     var accessToken: String
     var refreshToken: String
     /// Unix timestamp (seconds) when the access token was issued — captured
@@ -45,7 +45,7 @@ struct SimklTokens: Codable, Equatable {
 
 /// Reads and writes the Simkl token set in the keychain. Stateless and
 /// thread-safe — the keychain itself serializes access.
-enum SimklTokenStore {
+nonisolated enum SimklTokenStore {
     private static let service = "bilipp.Lume.simkl"
     private static let account = "oauth-tokens"
 
@@ -61,20 +61,36 @@ enum SimklTokenStore {
         ]
     }
 
-    /// Loads the stored token set, or nil if the user has never connected (or
-    /// disconnected). Returns nil on any decode/keychain miss rather than
-    /// throwing — callers treat "no usable token" uniformly.
-    static func load() -> SimklTokens? {
+    /// A sync reconcile must distinguish a missing token from a keychain read
+    /// that failed while the device was locked. Treating the latter as a user
+    /// disconnect would delete the shared authorization from every device.
+    enum StoredTokens: Equatable {
+        case tokens(SimklTokens)
+        case notSet
+        case unavailable
+    }
+
+    static func storedTokens() -> StoredTokens {
         var query = baseQuery
         query[kSecReturnData as String] = true
         query[kSecMatchLimit as String] = kSecMatchLimitOne
 
         var result: AnyObject?
         let status = SecItemCopyMatching(query as CFDictionary, &result)
-        guard status == errSecSuccess, let data = result as? Data else {
-            return nil
-        }
-        return try? JSONDecoder().decode(SimklTokens.self, from: data)
+        if status == errSecItemNotFound { return .notSet }
+        guard status == errSecSuccess,
+              let data = result as? Data,
+              let tokens = try? JSONDecoder().decode(SimklTokens.self, from: data)
+        else { return .unavailable }
+        return .tokens(tokens)
+    }
+
+    /// Loads the stored token set, or nil if it is absent or temporarily
+    /// unreadable. UI/network callers do not need that distinction; the
+    /// CloudKit reconciler uses `storedTokens()` when it matters.
+    static func load() -> SimklTokens? {
+        guard case let .tokens(tokens) = storedTokens() else { return nil }
+        return tokens
     }
 
     /// Saves the token set, replacing any existing one. Uses update-then-add so
