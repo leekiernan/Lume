@@ -325,6 +325,15 @@ final class SimklService {
         }
     }
 
+    // MARK: - Playback scrobbling
+
+    /// Simkl deliberately has no playback implementation yet. Keeping the
+    /// same API as Trakt lets a tracker dispatcher call both services without
+    /// claiming that old start/pause events are durable user intent.
+    func scrobble(_ target: TraktScrobbleTarget, action: TraktScrobbleAction, progress: Double) {
+        _ = (target, action, progress)
+    }
+
     // MARK: - Watched import
 
     /// Imports the user's Simkl watched history into the local catalog, marking
