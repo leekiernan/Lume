@@ -73,6 +73,47 @@ struct SimklTokensTests {
     }
 }
 
+// MARK: - Cloud merge values
+
+struct SimklCredentialValuesTests {
+    private func makeTokens(accessToken: String, refreshToken: String, issuedAt: TimeInterval) -> SimklTokens {
+        SimklTokens(
+            accessToken: accessToken,
+            refreshToken: refreshToken,
+            issuedAt: issuedAt,
+            expiresIn: 604_800,
+            scope: "media:read media:write",
+            tokenType: "Bearer"
+        )
+    }
+
+    @Test func `shadow encoding contains a fingerprint but no OAuth secrets`() throws {
+        let value = SimklCredentialValues(tokens: makeTokens(
+            accessToken: "secret-access",
+            refreshToken: "secret-refresh",
+            issuedAt: 100
+        ))
+        let data = try JSONEncoder().encode(value)
+        let encoded = try #require(String(data: data, encoding: .utf8))
+        #expect(encoded.contains("fingerprint"))
+        #expect(!encoded.contains("secret-access"))
+        #expect(!encoded.contains("secret-refresh"))
+        #expect(try JSONDecoder().decode(SimklCredentialValues.self, from: data) == value)
+    }
+
+    @Test func `a concurrent refresh keeps the newest issued token`() {
+        let older = SimklCredentialValues(tokens: makeTokens(accessToken: "older", refreshToken: "older-refresh", issuedAt: 100))
+        let newer = SimklCredentialValues(tokens: makeTokens(accessToken: "newer", refreshToken: "newer-refresh", issuedAt: 200))
+        #expect(SimklCredentialValues.reconcile(local: newer, cloud: older, shadow: nil) == .writeBoth(newer))
+    }
+
+    @Test func `a concurrent disconnect wins over a token refresh`() {
+        let original = SimklCredentialValues(tokens: makeTokens(accessToken: "original", refreshToken: "original-refresh", issuedAt: 100))
+        let refreshed = SimklCredentialValues(tokens: makeTokens(accessToken: "refreshed", refreshToken: "refreshed-refresh", issuedAt: 200))
+        #expect(SimklCredentialValues.reconcile(local: nil, cloud: refreshed, shadow: original) == .pushToCloud(nil))
+    }
+}
+
 // MARK: - SimklTokenStore (keychain)
 
 /// Serialized because every test touches the single shared keychain item
@@ -97,6 +138,7 @@ struct SimklTokenStoreTests {
 
     @Test func `load returns nil when nothing stored`() {
         #expect(SimklTokenStore.load() == nil)
+        #expect(SimklTokenStore.storedTokens() == .notSet)
     }
 
     @Test func `save then load returns the same tokens`() {
