@@ -2,36 +2,17 @@
 //  SettingsView+Sports.swift
 //  Lume
 //
-//  The Sports settings entry in the main list and its dedicated pane. Follows the
-//  same shape as the TV Guide / Auto-Sync sections: a NavigationLink from the
-//  grouped list into `SportsSettingsView`, which manages followed teams, the tab
-//  toggle, the refresh schedule and a manual refresh. tvOS reaches the equivalent
-//  controls through `TVSportsSettingsPane` (SettingsView+TVComponents), so both
-//  the section and the pane below are iOS / macOS / visionOS only.
+//  Sports belongs to Live TV because fixtures resolve to EPG channels. The
+//  dedicated pane is reached from Settings > Library > Live TV and manages the
+//  profile-scoped Sports switch, follows, tab and refresh schedule.
 //
 
 import SwiftUI
 
 #if !os(tvOS)
 
-    extension SettingsView {
-        /// iOS / macOS grouped-list section linking to the dedicated Sports pane.
-        var sportsSection: some View {
-            Section {
-                NavigationLink {
-                    SportsSettingsView()
-                } label: {
-                    Label("Sports", systemImage: "sportscourt")
-                }
-            } header: {
-                Text("Sports")
-            } footer: {
-                Text("Follow leagues and teams to build your Sports Hub.")
-            }
-        }
-    }
-
     struct SportsSettingsView: View {
+        @AppStorage(SportsSyncService.enabledKey) private var enabled = SportsSyncService.enabledDefault
         @AppStorage(SportsSyncService.tabEnabledKey) private var tabEnabled = SportsSyncService.tabEnabledDefault
         @AppStorage(SportsSyncService.syncFrequencyKey)
         private var freqRaw = SportsSyncService.defaultFrequency.rawValue
@@ -47,9 +28,16 @@ import SwiftUI
 
         var body: some View {
             Form {
-                teamsSection
-                tabSection
-                refreshSection
+                Section {
+                    Toggle("Enable Sports", isOn: $enabled)
+                } footer: {
+                    Text("Sports uses your Live TV channels to open games. Turning it off stops Sports refreshes for this profile.")
+                }
+                if enabled {
+                    teamsSection
+                    tabSection
+                    refreshSection
+                }
             }
             #if os(macOS)
             .formStyle(.grouped)
@@ -60,6 +48,10 @@ import SwiftUI
             #endif
                 .sheet(isPresented: $showingManageTeams) {
                     ManageTeamsSheet()
+                }
+                .onChange(of: enabled) { _, _ in
+                    SportsSyncService.shared.availabilityDidChange()
+                    SportsFollowService.shared.reload()
                 }
         }
 

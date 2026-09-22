@@ -31,16 +31,13 @@ import OSLog
 
 // MARK: - Follow source
 
-/// The set of leagues and teams the active profile follows. `SportsFollowService`
-/// (the per-profile iCloud mirror) is the production source, injected from
-/// `LumeApp` via `configure(followSource:)`; tests supply stubs.
+/// The active profile's followed leagues and teams; tests supply stubs.
 nonisolated protocol SportsFollowSource: Sendable {
     var followedLeagueIds: [String] { get }
     var followedTeamIds: [String] { get }
 }
 
-/// Follows nothing. The default until `configure(followSource:)` runs, so the
-/// shared instance is inert rather than refreshing leagues nobody follows.
+/// Empty default keeps the shared service inert until it is configured.
 nonisolated struct EmptySportsFollowSource: SportsFollowSource {
     var followedLeagueIds: [String] {
         []
@@ -66,16 +63,10 @@ final class SportsSyncService {
     private var task: Task<Void, Never>?
     private var missingTask: Task<Void, Never>?
     private var catchUpTask: Task<Void, Never>?
-    /// Leagues `refreshMissing()` already filled this launch — only the ones the
-    /// provider actually answered for, so an off-season league with genuinely no
-    /// fixtures is not re-fetched on every appearance while a league that failed
-    /// stays eligible for the next try.
+    /// Leagues `refreshMissing()` already filled this launch.
     private var attemptedMissing: Set<String> = []
 
-    /// Whether the app is foregrounded, updated from the scene-phase hook. Live
-    /// polling pauses while the app is not active; coming back to the foreground
-    /// catches the snapshots up, so hours in the background never leave a game
-    /// "live" on the rail.
+    /// Live polling pauses in background and catches up on return.
     var isForeground = true {
         didSet {
             if isForeground, !oldValue { catchUpIfStale() }
@@ -87,9 +78,25 @@ final class SportsSyncService {
 
     /// `@AppStorage` key for the sports refresh interval — independent of the
     /// content-sync and EPG frequencies.
-    static let syncFrequencyKey = "sports.syncFrequency"
+    static let baseSyncFrequencyKey = "sports.syncFrequency"
+    static var syncFrequencyKey: String {
+        ProfileScopedPreferences.key(baseSyncFrequencyKey)
+    }
+
     /// `@AppStorage` key for the Sports tab toggle.
-    static let tabEnabledKey = "sports.tabEnabled"
+    static let baseTabEnabledKey = "sports.tabEnabled"
+    static var tabEnabledKey: String {
+        ProfileScopedPreferences.key(baseTabEnabledKey)
+    }
+
+    /// Sports is an optional Live TV feature. Its own switch gives a profile a
+    /// way to hide the hub while retaining the rest of Live TV.
+    static let baseEnabledKey = "sports.enabled.v1"
+    static var enabledKey: String {
+        ProfileScopedPreferences.key(baseEnabledKey)
+    }
+
+    static let enabledDefault = true
     /// Default for the Sports tab toggle: on everywhere except iPhone, where iOS
     /// fits four regular tabs plus the Search pill — a fifth would push both
     /// Sports and Search into "More". There the Home rail's "See All" opens the
@@ -102,16 +109,16 @@ final class SportsSyncService {
         #endif
     }
 
-    /// Sports data changes often; default to a daily refresh.
+    /// Sports data changes often; refresh daily by default.
     static let defaultFrequency: SyncFrequency = .daily
-    private static let lastRefreshKey = "lume.sportsLastRefresh"
+    private static let baseLastRefreshKey = "lume.sportsLastRefresh"
+    private static var lastRefreshKey: String {
+        ProfileScopedPreferences.key(baseLastRefreshKey)
+    }
 
-    /// Teams (crests, colours) change rarely; reuse the cached roster for a week.
+    /// Reuse the cached roster for a week.
     private static let teamCacheLifetime: TimeInterval = 7 * 24 * 60 * 60
-    /// How often live scores re-poll while a sports surface is visible.
     static let livePollInterval: TimeInterval = 60
-    /// How old the newest snapshot may be before a surface appearing (or the app
-    /// foregrounding) re-fetches today and yesterday by day.
     static let catchUpStaleness: TimeInterval = 15 * 60
     /// How far back a fixture still called "scheduled" or "live" past its kickoff
     /// keeps the poll going. Beyond this the scheduled month refresh owns it; the
@@ -138,7 +145,36 @@ final class SportsSyncService {
     ) {
         self.provider = provider
         if let followSource { self.followSource = followSource }
+        availabilityDidChange()
+    }
+
+    /// Re-evaluates the active profile's Live TV/Sports switches. This lives at
+    /// the service boundary so background callers cannot keep ESPN work alive
+    /// after the user switches either feature off.
+    func availabilityDidChange() {
+        guard Self.isEnabled else {
+            task?.cancel()
+            missingTask?.cancel()
+            catchUpTask?.cancel()
+            liveTask?.cancel()
+            task = nil
+            missingTask = nil
+            catchUpTask = nil
+            liveTask = nil
+            liveClients = 0
+            isSyncing = false
+            attemptedMissing.removeAll()
+            return
+        }
         store.loadCached(leagueIds: leaguesToRefresh())
+    }
+
+    /// A Sports surface is meaningful only when both the parent Live TV area
+    /// and this profile's optional Sports feature are on.
+    static var isEnabled: Bool {
+        AppAreaSettings.isEnabled(.liveTV)
+            && (UserDefaults.standard.object(forKey: enabledKey) == nil
+                || UserDefaults.standard.bool(forKey: enabledKey))
     }
 
     // MARK: - Triggers
@@ -146,12 +182,14 @@ final class SportsSyncService {
     /// Manual pull (a "Refresh" affordance): refreshes now regardless of the
     /// schedule.
     func syncNow() {
+        guard Self.isEnabled else { return }
         kick()
     }
 
     /// Launch / foreground trigger: refreshes only if the sports data is stale per
     /// the sports frequency setting.
     func syncIfDue() {
+        guard Self.isEnabled else { return }
         guard isDue else { return }
         kick()
     }
@@ -159,6 +197,7 @@ final class SportsSyncService {
     /// Fetches followed leagues that have no fixtures yet — a league followed a
     /// moment ago must not wait for the next scheduled refresh to show up.
     func refreshMissing() {
+        guard Self.isEnabled else { return }
         guard provider != nil, missingTask == nil else { return }
         guard !missingLeagueIds().isEmpty else { return }
         isSyncing = true
@@ -174,6 +213,7 @@ final class SportsSyncService {
     /// tests can sequence on it; `refreshMissing()` wraps it in the
     /// fire-and-forget Task.
     func fillMissing() async {
+        guard Self.isEnabled else { return }
         let missing = missingLeagueIds()
         guard !missing.isEmpty else { return }
         let refreshed = await performRefresh(leagueIds: missing, months: Self.monthsToFetch(for: Date()))
@@ -205,6 +245,7 @@ final class SportsSyncService {
     /// only says how often the whole month is re-pulled — and a daily pull done
     /// at 09:00 leaves every kickoff after it stale until tomorrow.
     func catchUpIfStale() {
+        guard Self.isEnabled else { return }
         // A scheduled refresh in flight is about to bring the whole month; a day
         // fetch on top of it would only duplicate the requests.
         guard provider != nil, catchUpTask == nil, task == nil else { return }
@@ -222,6 +263,7 @@ final class SportsSyncService {
     /// One catch-up pass over the followed leagues. Awaitable so tests can
     /// sequence on it; `catchUpIfStale()` wraps it with the staleness check.
     func catchUp() async {
+        guard Self.isEnabled else { return }
         let ids = leaguesToRefresh()
         guard !ids.isEmpty else { return }
         let now = Date()
@@ -252,6 +294,7 @@ final class SportsSyncService {
     }
 
     private func kick() {
+        guard Self.isEnabled else { return }
         guard provider != nil, task == nil else { return }
         guard !leaguesToRefresh().isEmpty else { return }
         isSyncing = true
@@ -265,6 +308,7 @@ final class SportsSyncService {
     /// One full refresh over the followed leagues. Awaitable so callers (and tests)
     /// can sequence work after it; `kick()` wraps it in the fire-and-forget Task.
     func refreshAll() async {
+        guard Self.isEnabled else { return }
         let leagueIds = leaguesToRefresh()
         guard !leagueIds.isEmpty else { return }
         await performRefresh(leagueIds: leagueIds, months: Self.monthsToFetch(for: Date()))
@@ -275,6 +319,7 @@ final class SportsSyncService {
     /// Called by a sports surface (tab / rail / detail) as it appears. Reference
     /// counted, so overlapping surfaces keep one shared 60s loop alive.
     func beginLivePolling() {
+        guard Self.isEnabled else { return }
         liveClients += 1
         startLiveLoopIfNeeded()
     }
@@ -292,7 +337,7 @@ final class SportsSyncService {
         guard liveTask == nil, liveClients > 0 else { return }
         liveTask = Task(priority: .utility) { [weak self] in
             while !Task.isCancelled {
-                guard let self, liveClients > 0 else { break }
+                guard let self, Self.isEnabled, liveClients > 0 else { break }
                 if isForeground, !ContentIndexingService.shared.isPlaybackActive {
                     let ids = leaguesToRefresh()
                     let days = Self.pollDays(fixtures: store.fixtures(inLeagues: ids), now: Date())
@@ -356,6 +401,7 @@ final class SportsSyncService {
     /// opposed to which were merely attempted.
     @discardableResult
     private func performRefresh(leagueIds: [String], months: [DateComponents]) async -> Set<String> {
+        guard Self.isEnabled else { return [] }
         let leagues = leagueIds.compactMap { SportsCatalog.league(id: $0) }
         let refreshed = await withTaskGroup(of: (String, Bool).self) { group in
             var iterator = leagues.makeIterator()
@@ -372,6 +418,7 @@ final class SportsSyncService {
             }
             return succeeded
         }
+        guard Self.isEnabled else { return [] }
         if refreshed.isEmpty {
             store.markRefreshFailed()
         } else {
@@ -384,7 +431,7 @@ final class SportsSyncService {
     /// standings, then publishes a merged snapshot. Returns whether anything fresh
     /// arrived; on a total failure it leaves the existing snapshot untouched.
     private func refreshLeague(_ league: SportsLeague, months: [DateComponents]) async -> Bool {
-        guard let provider else { return false }
+        guard Self.isEnabled, let provider else { return false }
         let existing = store.snapshot(for: league.id)
         let teamsCacheFresh = Self.teamsCacheIsFresh(existing)
 
@@ -423,7 +470,7 @@ final class SportsSyncService {
 
         let standings = standingsResult.isEmpty ? (existing?.standings ?? []) : standingsResult
 
-        guard gotFixtures || gotTeams || !standingsResult.isEmpty else { return false }
+        guard Self.isEnabled, gotFixtures || gotTeams || !standingsResult.isEmpty else { return false }
 
         let snapshot = SportsLeagueSnapshot(
             fetchedAt: Date(),
@@ -477,7 +524,7 @@ final class SportsSyncService {
     /// Shared by the live poll and the catch-up; a league whose every day came
     /// back empty is left untouched (that is what a failed request looks like).
     private func refreshDays(leagueIds: [String], days: [Date]) async {
-        guard let provider, !days.isEmpty else { return }
+        guard Self.isEnabled, let provider, !days.isEmpty else { return }
         let leagues = leagueIds.compactMap { SportsCatalog.league(id: $0) }
         let fetchedByLeague = await withTaskGroup(of: (String, [SportsFixture]).self) { group in
             for league in leagues {
@@ -495,6 +542,7 @@ final class SportsSyncService {
         }
 
         var updated = false
+        guard Self.isEnabled else { return }
         for (leagueId, fetched) in fetchedByLeague {
             guard !fetched.isEmpty else { continue }
             var snapshot = store.snapshot(for: leagueId) ?? SportsLeagueSnapshot()
@@ -515,6 +563,7 @@ final class SportsSyncService {
     /// The union of followed leagues and the leagues of followed teams, in follow
     /// order with duplicates removed.
     func leaguesToRefresh() -> [String] {
+        guard Self.isEnabled else { return [] }
         var ids: [String] = []
         var seen: Set<String> = []
         for leagueId in followSource.followedLeagueIds where seen.insert(leagueId).inserted {

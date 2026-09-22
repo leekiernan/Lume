@@ -140,12 +140,14 @@ struct MainTabView: View {
     var body: some View {
         @Bindable var router = router
         return tabView(selection: $router.selectedTab)
-            // Layout preferences are keyed by the active profile, and
-            // @AppStorage binds its key when the view is created — so the tabs
-            // are rebuilt on a switch to re-read under the new profile. The
-            // router lives outside this id, so navigation paths survive.
+            // Profile-scoped preferences bind when tab contents are rebuilt; the
+            // router remains outside this identity, so navigation paths survive.
             .id(activeProfileToken)
-            .onChange(of: disabledAreasRaw) { _, _ in repairSelectionIfNeeded() }
+            .onChange(of: disabledAreasRaw) { _, _ in
+                repairSelectionIfNeeded()
+                SportsSyncService.shared.availabilityDidChange()
+                SportsFollowService.shared.reload()
+            }
         #if os(tvOS)
             .disabled(blockingOverlayOwnsScreen || router.isQuickSwitchPresented)
             // Attached OUTSIDE `.disabled` so the same button closes the modal it
@@ -284,7 +286,7 @@ struct MainTabView: View {
                     }
                 }
 
-                if sportsTabEnabled {
+                if SportsSyncService.isEnabled, sportsTabEnabled {
                     Tab(value: AppTab.sports) {
                         activeOnly(.sports, selection: selection.wrappedValue) { TVSportsHubScreen() }
                     } label: {
@@ -366,7 +368,7 @@ struct MainTabView: View {
                     }
                 }
 
-                if sportsTabEnabled {
+                if SportsSyncService.isEnabled, sportsTabEnabled {
                     Tab("Sports", systemImage: "sportscourt", value: AppTab.sports) {
                         SportsHubView()
                     }
