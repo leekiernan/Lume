@@ -2,11 +2,8 @@
 //  EPGSyncManager.swift
 //  Lume
 //
-//  The dedicated EPG pipeline, split out of the playlist sync. It rebuilds the
-//  whole `EPGListing` store from every enabled `EPGSource`: collect the channel
-//  ids any live stream references, bulk-delete the old listings once, then
-//  stream-parse each source's XMLTV file and insert only programmes whose
-//  channel a stream actually uses.
+//  The dedicated EPG pipeline, split out of the playlist sync. It stages each
+//  enabled source before publishing that source's guide in a single save.
 //
 //  A channel is guided by exactly one source. Sources are walked oldest-first
 //  and each claims the channels it carries; later sources are then confined to
@@ -15,8 +12,8 @@
 //  matches to the second — and the guide drew their schedules on top of each
 //  other.
 //
-//  Memory stays flat regardless of guide size: files live on disk, and only one
-//  batch of `ParsedProgramme` structs is held at a time.
+//  The downloaded file stays on disk; staging holds one source's deduplicated
+//  programmes in memory until it can be published.
 //
 
 import Foundation
@@ -38,8 +35,9 @@ actor EPGSyncManager {
         self.writeCoordinator = writeCoordinator
     }
 
-    /// Refreshes the guide from every enabled source. Returns `true` when at
-    /// least one source synced successfully.
+    /// Refreshes the guide from every enabled source. Returns `true` only when
+    /// every source succeeded, so the global refresh date never hides a failed
+    /// source from the next due check.
     @discardableResult
     func syncAllSources() async -> Bool {
         let sources = enabledSources()
@@ -55,14 +53,12 @@ actor EPGSyncManager {
             return false
         }
 
-        var anySucceeded = false
         var everySourceSynced = true
         var unclaimedChannelIDs = knownChannelIDs
         let fence = Fence.live
         for source in sources {
             let result = await sync(source: source, knownChannelIDs: unclaimedChannelIDs, fence: fence)
             unclaimedChannelIDs.subtract(result.claimedChannelIDs)
-            anySucceeded = anySucceeded || result.didSync
             everySourceSynced = everySourceSynced && result.didSync
         }
         // Listings created before source-scoped publication have no ownership
@@ -79,9 +75,10 @@ actor EPGSyncManager {
                 return false
             } catch {
                 Logger.database.warning("EPG legacy snapshot retirement failed: \(error.localizedDescription, privacy: .public)")
+                return false
             }
         }
-        return anySucceeded
+        return everySourceSynced
     }
 
     // MARK: - Per-source sync
@@ -119,10 +116,17 @@ actor EPGSyncManager {
         }
         guard !knownChannelIDs.isEmpty else {
             // Every channel this source could guide is already covered by an
-            // earlier one; downloading it would only produce overlaps.
-            Logger.database.info("EPG source \(source.id, privacy: .public) skipped, all channels already guided")
-            markSynced(source.id)
-            return SourceResult(didSync: true, claimedChannelIDs: [])
+            // earlier one. Retire any snapshot this source previously owned,
+            // or its old programmes would still overlap the earlier source.
+            do {
+                try await publish(StagedSource(programmes: [], parsedProgrammeCount: 0), for: source, fence: fence)
+                Logger.database.info("EPG source \(source.id, privacy: .public) retired, all channels already guided")
+                markSynced(source.id)
+                return SourceResult(didSync: true, claimedChannelIDs: [])
+            } catch {
+                markStatus(source.id, .error)
+                return SourceResult(didSync: false, claimedChannelIDs: [])
+            }
         }
         for attempt in 0 ... 1 {
             do {
@@ -231,7 +235,9 @@ actor EPGSyncManager {
         }
         try Task.checkCancellation()
         if cancelled { throw CancellationError() }
-        guard parseOutcome.succeeded else { throw EPGPublicationError.invalidDocument }
+        guard parseOutcome.succeeded,
+              parseOutcome.encounteredProgrammeCount == 0 || parseOutcome.programmeCount > 0
+        else { throw EPGPublicationError.invalidDocument }
         return StagedSource(
             programmes: programmesByKey.values.sorted {
                 let left = "\($0.channelId)\u{1F}\($0.start.timeIntervalSince1970)\u{1F}\($0.end.timeIntervalSince1970)\u{1F}\($0.title)\u{1F}\($0.description)"
@@ -286,9 +292,11 @@ actor EPGSyncManager {
         let oldRows = try context.fetch(
             FetchDescriptor<EPGListing>(predicate: #Predicate { $0.sourceID == sourceID })
         )
-        for row in oldRows {
-            context.delete(row)
-        }
+        // A refresh commonly contains the same programme IDs. Deleting and
+        // reinserting those @Attribute(.unique) IDs in one save can make
+        // SwiftData upsert/remap temporary identifiers. Update retained rows
+        // instead; only truly removed/added IDs are deleted/inserted.
+        var oldByID = Dictionary(uniqueKeysWithValues: oldRows.map { ($0.id, $0) })
         // Pre-LUM-13 rows had no source ownership. Retire only the legacy rows
         // for channels this source is now committing; the remaining aggregate
         // snapshot is retired only after every enabled source succeeds below.
@@ -302,15 +310,29 @@ actor EPGSyncManager {
         for programme in staged.programmes {
             try Task.checkCancellation()
             let start = Int(programme.start.timeIntervalSince1970)
-            context.insert(EPGListing(
-                id: "\(sourceInfo.id.uuidString)-\(programme.channelId)-\(start)",
-                channelId: programme.channelId,
-                title: programme.title,
-                listingDescription: programme.description,
-                start: programme.start,
-                end: programme.end,
-                sourceID: sourceInfo.id
-            ))
+            let id = "\(sourceInfo.id.uuidString)-\(programme.channelId)-\(start)"
+            if let existing = oldByID.removeValue(forKey: id) {
+                if existing.channelId != programme.channelId { existing.channelId = programme.channelId }
+                if existing.title != programme.title { existing.title = programme.title }
+                if existing.listingDescription != programme.description {
+                    existing.listingDescription = programme.description
+                }
+                if existing.start != programme.start { existing.start = programme.start }
+                if existing.end != programme.end { existing.end = programme.end }
+            } else {
+                context.insert(EPGListing(
+                    id: id,
+                    channelId: programme.channelId,
+                    title: programme.title,
+                    listingDescription: programme.description,
+                    start: programme.start,
+                    end: programme.end,
+                    sourceID: sourceInfo.id
+                ))
+            }
+        }
+        for stale in oldByID.values {
+            context.delete(stale)
         }
         source.committedGeneration &+= 1
     }

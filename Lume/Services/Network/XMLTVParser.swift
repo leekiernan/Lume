@@ -20,6 +20,7 @@ struct ParsedProgramme {
 final nonisolated class XMLTVParser: NSObject, XMLParserDelegate {
     struct ParseOutcome {
         let programmeCount: Int
+        let encounteredProgrammeCount: Int
         let succeeded: Bool
     }
 
@@ -27,6 +28,8 @@ final nonisolated class XMLTVParser: NSObject, XMLParserDelegate {
     private let batchSize: Int
     private let onBatch: ([ParsedProgramme]) -> Void
     private(set) var totalCount: Int = 0
+    private(set) var encounteredProgrammeCount: Int = 0
+    private var rootElement: String?
 
     private var currentStart: String?
     private var currentStop: String?
@@ -45,21 +48,27 @@ final nonisolated class XMLTVParser: NSObject, XMLParserDelegate {
     /// guide: callers must not publish an empty replacement for a parse error.
     static func parse(fileURL: URL, batchSize: Int = 2000, onBatch: @escaping ([ParsedProgramme]) -> Void) -> ParseOutcome {
         guard let xmlParser = XMLParser(contentsOf: fileURL) else {
-            return ParseOutcome(programmeCount: 0, succeeded: false)
+            return ParseOutcome(programmeCount: 0, encounteredProgrammeCount: 0, succeeded: false)
         }
         let delegate = XMLTVParser(batchSize: batchSize, onBatch: onBatch)
         xmlParser.delegate = delegate
-        let succeeded = xmlParser.parse()
+        let succeeded = xmlParser.parse() && delegate.rootElement == "tv"
         // Flush remaining
         if succeeded, !delegate.batch.isEmpty {
             onBatch(delegate.batch)
         }
-        return ParseOutcome(programmeCount: delegate.totalCount, succeeded: succeeded)
+        return ParseOutcome(
+            programmeCount: delegate.totalCount,
+            encounteredProgrammeCount: delegate.encounteredProgrammeCount,
+            succeeded: succeeded
+        )
     }
 
     func parser(_: XMLParser, didStartElement elementName: String, namespaceURI _: String?, qualifiedName _: String?, attributes attributeDict: [String: String] = [:]) {
+        if rootElement == nil { rootElement = elementName }
         currentText = ""
         if elementName == "programme" {
+            encounteredProgrammeCount += 1
             currentStart = attributeDict["start"]
             currentStop = attributeDict["stop"]
             currentChannel = attributeDict["channel"]
