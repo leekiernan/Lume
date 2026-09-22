@@ -173,8 +173,9 @@
                         }
                         rows
                     }
-                    .padding(.top, hasHero ? 0 : 60)
-                    .padding(.bottom, 60)
+                    // The hero fills the top inset itself when it's showing.
+                    .padding(.top, hasHero ? 0 : PosterCardMetrics.sectionVerticalPadding)
+                    .padding(.bottom, PosterCardMetrics.sectionVerticalPadding)
                 }
                 .scrollIndicators(.hidden)
                 .scrollClipDisabled()

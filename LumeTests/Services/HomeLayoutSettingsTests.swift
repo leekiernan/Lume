@@ -16,7 +16,7 @@ struct HomeLayoutSettingsTests {
     )
 
     private var builtins: [HomeSectionRef] {
-        HomeSection.allCases.map(HomeSectionRef.builtin)
+        HomeSection.cases(for: .home).map(HomeSectionRef.builtin)
     }
 
     // MARK: - encode / decode
@@ -82,11 +82,11 @@ struct HomeLayoutSettingsTests {
 
     @Test func `normalized keeps given order and appends missing`() {
         let result = HomeLayoutSettings.normalized(
-            [.builtin(.forYou), .builtin(.recentlyWatched)], custom: []
+            [.builtin(.forYou), .builtin(.recentlyWatched)], custom: [], surface: .home
         )
         #expect(result.first == .builtin(.forYou))
         #expect(result[1] == .builtin(.recentlyWatched))
-        for section in HomeSection.allCases {
+        for section in HomeSection.cases(for: .home) {
             #expect(result.contains(.builtin(section)))
         }
     }
@@ -94,44 +94,44 @@ struct HomeLayoutSettingsTests {
     @Test func `normalized deduplicates`() {
         let result = HomeLayoutSettings.normalized(
             [.builtin(.favorites), .builtin(.favorites), .builtin(.forYou), .builtin(.favorites)],
-            custom: []
+            custom: [], surface: .home
         )
         let favoritesCount = result.count(where: { $0 == .builtin(.favorites) })
         #expect(favoritesCount == 1)
     }
 
     @Test func `normalized empty input falls back to all sections`() {
-        let result = HomeLayoutSettings.normalized([], custom: [])
+        let result = HomeLayoutSettings.normalized([], custom: [], surface: .home)
         #expect(result == builtins)
     }
 
     @Test func `normalized handles partial list`() {
         let result = HomeLayoutSettings.normalized(
-            [.builtin(.traktWatchlist), .builtin(.trendingMovies)], custom: []
+            [.builtin(.traktWatchlist), .builtin(.trendingMovies)], custom: [], surface: .home
         )
         #expect(result.first == .builtin(.traktWatchlist))
         #expect(result[1] == .builtin(.trendingMovies))
-        #expect(result.count == HomeSection.allCases.count)
+        #expect(result.count == HomeSection.cases(for: .home).count)
     }
 
     @Test func `normalized appends a newly added custom section at the end`() {
-        let result = HomeLayoutSettings.normalized(builtins, custom: [Self.alpha, Self.beta])
+        let result = HomeLayoutSettings.normalized(builtins, custom: [Self.alpha, Self.beta], surface: .home)
         #expect(result.suffix(2) == [.custom(Self.alpha.id), .custom(Self.beta.id)])
     }
 
     @Test func `normalized keeps a custom section where the user placed it`() {
         let order: [HomeSectionRef] = [.custom(Self.alpha.id), .builtin(.favorites)]
-        let result = HomeLayoutSettings.normalized(order, custom: [Self.alpha])
+        let result = HomeLayoutSettings.normalized(order, custom: [Self.alpha], surface: .home)
         #expect(result.first == .custom(Self.alpha.id))
         #expect(result[1] == .builtin(.favorites))
-        #expect(result.count == HomeSection.allCases.count + 1)
+        #expect(result.count == HomeSection.cases(for: .home).count + 1)
     }
 
     /// A section deleted on another device leaves its token behind in the synced
     /// order; it must not survive as a phantom row.
     @Test func `normalized drops a custom ref with no matching section`() {
         let order: [HomeSectionRef] = [.custom(Self.alpha.id), .builtin(.favorites)]
-        let result = HomeLayoutSettings.normalized(order, custom: [])
+        let result = HomeLayoutSettings.normalized(order, custom: [], surface: .home)
         #expect(!result.contains(.custom(Self.alpha.id)))
         #expect(result.first == .builtin(.favorites))
     }
@@ -139,18 +139,18 @@ struct HomeLayoutSettingsTests {
     // MARK: - resolve
 
     @Test func `resolve with stored order uses it`() {
-        let result = HomeLayoutSettings.resolve(orderRaw: "favorites,forYou", custom: [])
+        let result = HomeLayoutSettings.resolve(orderRaw: "favorites,forYou", custom: [], surface: .home)
         #expect(result.first == .builtin(.favorites))
         #expect(result[1] == .builtin(.forYou))
     }
 
     @Test func `resolve with empty string falls back to all sections`() {
-        let result = HomeLayoutSettings.resolve(orderRaw: "", custom: [])
+        let result = HomeLayoutSettings.resolve(orderRaw: "", custom: [], surface: .home)
         #expect(result == builtins)
     }
 
     @Test func `resolve appends custom sections when nothing is stored`() {
-        let result = HomeLayoutSettings.resolve(orderRaw: "", custom: [Self.alpha])
+        let result = HomeLayoutSettings.resolve(orderRaw: "", custom: [Self.alpha], surface: .home)
         #expect(result == builtins + [.custom(Self.alpha.id)])
     }
 
@@ -230,6 +230,72 @@ struct HomeLayoutSettingsTests {
         for section in HomeSection.allCases {
             #expect(!section.systemImage.isEmpty)
         }
+    }
+
+    // MARK: - Surfaces
+
+    /// Each page offers the rows that make sense there: Home mixes both media
+    /// and owns the recommendations row, while Movies and Series each take only
+    /// their own trending row.
+    @Test func `each surface offers its own built-in rows`() {
+        #expect(HomeSection.cases(for: .home).contains(.forYou))
+        #expect(HomeSection.cases(for: .home).contains(.trendingMovies))
+        #expect(HomeSection.cases(for: .home).contains(.trendingSeries))
+
+        #expect(!HomeSection.cases(for: .movies).contains(.forYou))
+        #expect(HomeSection.cases(for: .movies).contains(.trendingMovies))
+        #expect(!HomeSection.cases(for: .movies).contains(.trendingSeries))
+
+        #expect(!HomeSection.cases(for: .series).contains(.forYou))
+        #expect(HomeSection.cases(for: .series).contains(.trendingSeries))
+        #expect(!HomeSection.cases(for: .series).contains(.trendingMovies))
+    }
+
+    @Test func `recently added is a library row, not a Home one`() {
+        #expect(!HomeSection.cases(for: .home).contains(.recentlyAdded))
+        #expect(HomeSection.cases(for: .movies).contains(.recentlyAdded))
+        #expect(HomeSection.cases(for: .series).contains(.recentlyAdded))
+    }
+
+    @Test func `resolve returns the surface default order`() {
+        for surface in SectionSurface.allCases {
+            let result = HomeLayoutSettings.resolve(orderRaw: "", custom: [], surface: surface)
+            #expect(result == HomeSection.cases(for: surface).map(HomeSectionRef.builtin))
+        }
+    }
+
+    /// A stored order carrying a row from another page (synced across devices,
+    /// or left over from an older build) must not conjure that row here.
+    @Test func `normalized drops built-ins that do not belong to the surface`() {
+        let order: [HomeSectionRef] = [.builtin(.forYou), .builtin(.trendingSeries), .builtin(.favorites)]
+        let result = HomeLayoutSettings.normalized(order, custom: [], surface: .movies)
+        #expect(!result.contains(.builtin(.forYou)))
+        #expect(!result.contains(.builtin(.trendingSeries)))
+        #expect(result.first == .builtin(.favorites))
+        #expect(result.count == HomeSection.cases(for: .movies).count)
+    }
+
+    @Test func `each surface stores its layout under its own keys`() {
+        let orderKeys = SectionSurface.allCases.map(HomeLayoutSettings.sectionOrderKey)
+        let hiddenKeys = SectionSurface.allCases.map(HomeLayoutSettings.disabledSectionsKey)
+        let customKeys = SectionSurface.allCases.map(CustomHomeSections.storageKey)
+        let all = orderKeys + hiddenKeys + customKeys
+        #expect(Set(all).count == all.count)
+    }
+
+    /// Home shipped before the other surfaces existed, so its keys must not move
+    /// — a rename would silently reset everyone's Home layout.
+    @Test func `home keeps the keys it shipped with`() {
+        #expect(HomeLayoutSettings.sectionOrderKey(.home) == "home.sectionOrder.v1")
+        #expect(HomeLayoutSettings.disabledSectionsKey(.home) == "home.disabledSections.v1")
+        #expect(CustomHomeSections.storageKey(.home) == "home.customSections.v1")
+    }
+
+    /// What makes a movie list on the Series page resolve to nothing.
+    @Test func `surfaces narrow to one medium`() {
+        #expect(SectionSurface.home.mediaType == nil)
+        #expect(SectionSurface.movies.mediaType == .movie)
+        #expect(SectionSurface.series.mediaType == .series)
     }
 
     /// The custom prefix must never be mistakable for a built-in raw value.

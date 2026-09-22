@@ -26,7 +26,7 @@
         /// Hero strip that stays visible at the top after the first scroll down.
         static let heroStrip: CGFloat = 280
         /// Vertical gap between the showcase and the rows / between rows.
-        static let rowSpacing: CGFloat = 28
+        static let rowSpacing: CGFloat = PosterCardMetrics.sectionSpacing
     }
 
     // MARK: - Fold zones

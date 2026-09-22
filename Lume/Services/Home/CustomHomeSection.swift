@@ -2,15 +2,16 @@
 //  CustomHomeSection.swift
 //  Lume
 //
-//  User-defined Home rows built from a public list URL (MDBList today, see
-//  `HomeListCatalog`). Like the built-in row order these are a small scalar
-//  preference, so they live in UserDefaults via @AppStorage rather than in
-//  either model container — they describe the *layout*, not the catalog.
+//  User-defined rows built from a public list URL (MDBList today, see
+//  `HomeListCatalog`), on any section surface — Home, Movies or Series. Like
+//  the built-in row order these are a small scalar preference, so they live in
+//  UserDefaults via @AppStorage rather than in either model container — they
+//  describe the *layout*, not the catalog.
 //
 
 import Foundation
 
-/// One user-added Home row: a display title and the list URL it is built from.
+/// One user-added row: a display title and the list URL it is built from.
 /// The provider is derived from the URL at fetch time (`HomeListCatalog`), so a
 /// section keeps working if a provider later changes how it is addressed.
 nonisolated struct CustomHomeSection: Codable, Identifiable, Hashable {
@@ -33,10 +34,14 @@ nonisolated struct CustomHomeSection: Codable, Identifiable, Hashable {
     }
 }
 
-/// Storage for the user's custom Home rows: a JSON array under a single
-/// UserDefaults key, mirroring how `HomeLayoutSettings` keeps the row order.
+/// Storage for a surface's custom rows: a JSON array under one UserDefaults
+/// key per surface, mirroring how `HomeLayoutSettings` keeps the row order.
+/// Home, Movies and Series each keep their own list — a section added on one
+/// page never appears on another.
 enum CustomHomeSections {
-    static let storageKey = "home.customSections.v1"
+    static func storageKey(_ surface: SectionSurface) -> String {
+        "\(surface.storagePrefix).customSections.v1"
+    }
 
     /// Upper bound on custom rows. Each one is a network fetch on every Home
     /// load, and the stored order string grows by a UUID per section.

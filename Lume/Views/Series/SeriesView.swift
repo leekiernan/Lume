@@ -2,8 +2,10 @@
 //  SeriesView.swift
 //  Lume
 //
-//  Main view for browsing TV series. Each category shows a preview row;
-//  "Show All" navigates to the full category view.
+//  The TV Shows page. Like Home, it is built out of configurable rows (Settings
+//  › Layout › Series — see `LibrarySectionsView`), scoped so every row only ever
+//  shows series. The provider's own categories moved into the browse sidebar,
+//  which is hidden until asked for.
 //
 
 import SwiftData
@@ -23,7 +25,12 @@ struct SeriesView: View {
     @AppStorage(PlaylistSelectionStore.key) private var selectedPlaylistID: String = ""
     @State private var showingSync = false
     @State private var showingSettings = false
+    @State private var showingBrowse = false
     @State private var genres: [String] = []
+    /// Resume fractions for partially-watched series, resolved off the main
+    /// thread so the rails don't fault each series' episodes — see
+    /// `SeriesResumeLoader`.
+    @State private var seriesResume: [String: Double] = [:]
 
     @AppStorage(SortStorageKey.seriesCategories) private var categorySortRaw: String = CategorySortOption.playlist.rawValue
     @AppStorage(SortStorageKey.seriesContent) private var contentSortRaw: String = ContentSortOption.playlist.rawValue
@@ -32,22 +39,7 @@ struct SeriesView: View {
         CategorySortOption(rawValue: categorySortRaw) ?? .playlist
     }
 
-    private var contentSort: ContentSortOption {
-        ContentSortOption(rawValue: contentSortRaw) ?? .playlist
-    }
-
-    private let previewLimit = 20
-
-    /// How many categories render as full inline preview rows. Each preview row
-    /// carries its own live `@Query`, so capping them keeps the browse screen
-    /// fast; the remaining categories surface as lightweight name tiles below.
-    private let previewCategoryLimit = 4
-
     var body: some View {
-        // Resolve once per render — `sortedCategories` filters + sorts every
-        // playlist's categories, so reading it three times (the emptiness check
-        // plus the preview/remaining splits) tripled that work.
-        let sorted = sortedCategories
         NavigationStack(path: navigationPath) {
             Group {
                 if playlists.isEmpty {
@@ -56,42 +48,14 @@ struct SeriesView: View {
                         systemImage: "tv",
                         description: Text("Add a playlist in Settings to start browsing series")
                     )
-                } else if sorted.isEmpty {
-                    VStack(spacing: 20) {
-                        ContentUnavailableView(
-                            "No Series",
-                            systemImage: "tv.fill",
-                            description: Text("Sync your playlist to load TV series")
-                        )
-                    }
+                } else if sortedCategories.isEmpty {
+                    ContentUnavailableView(
+                        "No Series",
+                        systemImage: "tv.fill",
+                        description: Text("Sync your playlist to load TV series")
+                    )
                 } else {
-                    let remaining = Array(sorted.dropFirst(previewCategoryLimit))
-                    ScrollView {
-                        LazyVStack(alignment: .leading, spacing: 24, pinnedViews: []) {
-                            SeriesCollectionRow(kind: .recentlyWatched, playlistPrefix: playlistPrefix, animationNamespace: animationNamespace)
-                            SeriesCollectionRow(kind: .favorites, playlistPrefix: playlistPrefix, animationNamespace: animationNamespace)
-                            SeriesCollectionRow(kind: .recentlyAdded, playlistPrefix: playlistPrefix, animationNamespace: animationNamespace)
-
-                            ForEach(sorted.prefix(previewCategoryLimit)) { category in
-                                SeriesCategoryPreview(category: category, limit: previewLimit, sort: contentSort, animationNamespace: animationNamespace)
-                                    .id("\(category.id)-\(contentSort.rawValue)")
-                            }
-
-                            if !genres.isEmpty {
-                                GenreGridSection(genres: genres, type: .series)
-                            }
-
-                            if !remaining.isEmpty {
-                                CategoryGridSection(title: "All Categories", categories: remaining)
-                                    .padding(.top, 12)
-                            }
-                        }
-                        .padding(.vertical)
-                    }
-                    .browseActivity()
-                    .task(id: playlistPrefix) {
-                        genres = await GenreDerivation.seriesGenres(in: modelContext.container, playlistPrefix: playlistPrefix, restriction: restriction)
-                    }
+                    sections
                 }
             }
             .platformNavigationTitle("Series")
@@ -105,6 +69,17 @@ struct SeriesView: View {
                 showingSettings: $showingSettings,
                 activePlaylist: activePlaylist
             ))
+            .browseSidebarToolbar(isPresented: $showingBrowse, isEnabled: !sortedCategories.isEmpty)
+            .overlay(alignment: .leading) {
+                LibraryBrowseSidebar(
+                    isPresented: $showingBrowse,
+                    categories: sortedCategories,
+                    genres: genres,
+                    type: .series,
+                    onSelectCategory: { open($0) },
+                    onSelectGenre: { open(genre: $0) }
+                )
+            }
             .navigationDestination(for: Category.self) { category in
                 SeriesCategoryView(category: category, animationNamespace: animationNamespace)
             }
@@ -123,12 +98,67 @@ struct SeriesView: View {
         }
     }
 
+    private var sections: some View {
+        ScrollView {
+            LibrarySectionsView(
+                surface: .series,
+                catalogKey: catalogKey,
+                feedContext: SectionFeed.Context(
+                    modelContext: modelContext,
+                    restriction: restriction,
+                    playlistPrefix: playlistPrefix.isEmpty ? nil : playlistPrefix
+                ),
+                seriesResume: seriesResume,
+                animationNamespace: animationNamespace,
+                onRevealBrowse: { showingBrowse = true },
+                collectionRow: { kind in
+                    SeriesCollectionRow(
+                        kind: kind,
+                        playlistPrefix: playlistPrefix,
+                        animationNamespace: animationNamespace,
+                        onLeadingLeft: { showingBrowse = true }
+                    )
+                }
+            )
+            .padding(.vertical, PosterCardMetrics.sectionVerticalPadding)
+
+            BrowseCategoriesButton(isPresented: $showingBrowse)
+                .padding(.bottom, PosterCardMetrics.sectionVerticalPadding)
+        }
+        .browseActivity()
+        .task(id: playlistPrefix) {
+            genres = await GenreDerivation.seriesGenres(in: modelContext.container, playlistPrefix: playlistPrefix, restriction: restriction)
+        }
+        .task(id: playlistPrefix) {
+            let container = modelContext.container
+            seriesResume = await Task.detached(priority: .userInitiated) {
+                SeriesResumeLoader.load(container: container)
+            }.value
+        }
+    }
+
+    // MARK: - Navigation
+
     /// Drives the stack from the shared `DeepLinkRouter` so an `onOpenURL` push
     /// lands here; falls back to a local path in previews where no router exists.
     private var navigationPath: Binding<NavigationPath> {
         guard let router else { return $fallbackPath }
         return Binding(get: { router.seriesPath }, set: { router.seriesPath = $0 })
     }
+
+    /// Picking from the sidebar navigates rather than filtering the page behind
+    /// it, so the panel closes as the push lands.
+    private func open(_ category: Category) {
+        showingBrowse = false
+        navigationPath.wrappedValue.append(category)
+    }
+
+    private func open(genre: String) {
+        showingBrowse = false
+        navigationPath.wrappedValue.append(GenreSelection(genre: genre, type: .series))
+    }
+
+    // MARK: - Playlist scoping
 
     /// The playlist whose content is currently shown, resolved from the global
     /// selection. Falls back to the first playlist until the user picks one.
@@ -140,6 +170,13 @@ struct SeriesView: View {
     /// scope the cross-category collection rows in-memory.
     private var playlistPrefix: String {
         activePlaylist.map { "\($0.id.uuidString)-" } ?? ""
+    }
+
+    /// Identity of the catalog the remote rows are matched against — the same
+    /// inputs Home's trending key uses.
+    private var catalogKey: String {
+        let synced = activePlaylist?.lastSyncDate?.timeIntervalSince1970 ?? 0
+        return "series-\(playlists.count)-\(selectedPlaylistID)-\(synced)-\(restriction.visibilityToken)"
     }
 
     /// Categories scoped to the active playlist. The `@Query` fetches every

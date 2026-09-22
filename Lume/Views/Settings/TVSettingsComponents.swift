@@ -147,9 +147,13 @@
     // MARK: - Reorderable row
 
     /// One row of a reorderable tvOS settings list: caller-supplied leading
-    /// content, then up / down controls and an optional remove button. The row
-    /// is a full-width focus band — a narrow target wouldn't catch "down" from
-    /// the row above.
+    /// content, then one trailing cluster of icon controls — optional edit and
+    /// remove buttons, then the up / down controls. The row is a full-width
+    /// focus band — a narrow target wouldn't catch "down" from the row above.
+    ///
+    /// Every control lives in that one right-hand cluster so the up / down pair
+    /// stays vertically aligned down the list no matter which rows also offer
+    /// edit or remove.
     ///
     /// `onMove` receives the offset (-1 / +1); `name` is only used for the
     /// controls' VoiceOver labels.
@@ -158,6 +162,7 @@
         private let index: Int
         private let count: Int
         private let onMove: (Int) -> Void
+        private let onEdit: (() -> Void)?
         private let onRemove: (() -> Void)?
         private let leading: Leading
 
@@ -166,6 +171,7 @@
             index: Int,
             count: Int,
             onMove: @escaping (Int) -> Void,
+            onEdit: (() -> Void)? = nil,
             onRemove: (() -> Void)? = nil,
             @ViewBuilder leading: () -> Leading
         ) {
@@ -173,6 +179,7 @@
             self.index = index
             self.count = count
             self.onMove = onMove
+            self.onEdit = onEdit
             self.onRemove = onRemove
             self.leading = leading()
         }
@@ -182,6 +189,22 @@
                 leading
 
                 Spacer(minLength: 0)
+
+                if let onEdit {
+                    Button(action: onEdit) {
+                        Image(systemName: "pencil")
+                    }
+                    .buttonStyle(TVContentIconButtonStyle())
+                    .accessibilityLabel("Edit \(name)")
+                }
+
+                if let onRemove {
+                    Button(action: onRemove) {
+                        Image(systemName: "minus")
+                    }
+                    .buttonStyle(TVContentIconButtonStyle())
+                    .accessibilityLabel("Remove \(name)")
+                }
 
                 Button {
                     onMove(-1)
@@ -200,14 +223,6 @@
                 .buttonStyle(TVContentIconButtonStyle())
                 .disabled(index == count - 1)
                 .accessibilityLabel("Move \(name) down")
-
-                if let onRemove {
-                    Button(action: onRemove) {
-                        Image(systemName: "minus")
-                    }
-                    .buttonStyle(TVContentIconButtonStyle())
-                    .accessibilityLabel("Remove \(name)")
-                }
             }
             .padding(.horizontal, TVSettingsMetrics.rowHPadding)
             .padding(.vertical, TVSettingsMetrics.rowVPadding)

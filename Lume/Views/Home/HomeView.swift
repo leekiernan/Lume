@@ -13,64 +13,64 @@ import SwiftUI
 
 struct HomeView: View {
     @Namespace private var animationNamespace
-    // Several members below are `internal` (not `private`) so the trending /
-    // watchlist loading in `HomeView+Trending.swift` can drive them.
+    // Several members below are `internal` (not `private`) so the "For You"
+    // row's loading in `HomeView+ForYou.swift` can drive them.
     @Environment(\.modelContext) var modelContext
     @Environment(\.contentRestriction) var restriction
     #if os(macOS)
         @Environment(\.openWindow) private var openWindow
     #endif
 
-    @Query private var playlists: [Playlist]
-    @AppStorage(PlaylistSelectionStore.key) private var selectedPlaylistID: String = ""
+    @Query var playlists: [Playlist]
+    @AppStorage(PlaylistSelectionStore.key) var selectedPlaylistID: String = ""
     @AppStorage(SortStorageKey.movieCategories) private var categorySortRaw: String = CategorySortOption.playlist.rawValue
     @AppStorage(SortStorageKey.movieContent) private var contentSortRaw: String = ContentSortOption.playlist.rawValue
 
     // Recently watched (capped — watch history is naturally bounded).
-    @Query private var watchedMovies: [Movie]
-    @Query private var watchedSeries: [Series]
+    @Query var watchedMovies: [Movie]
+    @Query var watchedSeries: [Series]
     @Query private var watchedStreams: [LiveStream]
 
     // Favorites.
-    @Query private var favoriteMovies: [Movie]
-    @Query private var favoriteSeries: [Series]
+    @Query var favoriteMovies: [Movie]
+    @Query var favoriteSeries: [Series]
     @Query private var favoriteStreams: [LiveStream]
 
-    @State var trendingMovies: [HomeMediaItem] = []
-    @State var trendingSeries: [HomeMediaItem] = []
-    @State var watchlist: [HomeMediaItem] = []
+    /// The remote-backed rows (trending, Trakt watchlist, custom lists), shared
+    /// with the Movies and Series pages — see `SectionFeed`.
+    @State private var feed = SectionFeed(surface: .home)
     /// Resume fractions for partially-watched series, keyed by series id and
     /// resolved off the main thread — see `SeriesResumeLoader`.
     @State private var seriesResume: [String: Double] = [:]
-    @AppStorage(RecommendationSettings.enabledKey) private var recommendationsEnabled = RecommendationSettings.enabledDefault
+    @AppStorage(RecommendationSettings.enabledKey) var recommendationsEnabled = RecommendationSettings.enabledDefault
     /// The user's chosen Home row order (Settings › Layout › Home). Falls back to
-    /// the declaration order of `HomeSection` until they reorder.
-    @AppStorage(HomeLayoutSettings.sectionOrderKey) private var sectionOrderRaw = ""
+    /// the surface's default order until they reorder.
+    @AppStorage(HomeLayoutSettings.sectionOrderKey(.home)) private var sectionOrderRaw = ""
     /// Sections the user switched off (Settings › Layout › Home). "For You" is
     /// gated by `recommendationsEnabled` instead — see `HomeLayoutSettings`.
-    /// Internal: `HomeView+CustomSections.swift` reads it to skip hidden rows.
-    @AppStorage(HomeLayoutSettings.disabledSectionsKey) var disabledSectionsRaw = ""
-    /// The user's custom list-backed rows (Settings › Layout › Home › Add
-    /// Section), and the titles each one resolved to, keyed by section id.
-    @AppStorage(CustomHomeSections.storageKey) var customSectionsRaw = ""
-    @State var customSectionItems: [UUID: [HomeMediaItem]] = [:]
+    @AppStorage(HomeLayoutSettings.disabledSectionsKey(.home)) private var disabledSectionsRaw = ""
+    /// The user's custom list-backed rows (Settings › Layout › Home › Add Section).
+    @AppStorage(CustomHomeSections.storageKey(.home)) private var customSectionsRaw = ""
+    /// Areas switched off for this profile (Settings › Library). Movies/Series
+    /// gate the trending rows, the Trakt watchlist, custom list-backed rows and
+    /// the hero below — all sourced from a catalog the profile can't browse.
+    @AppStorage(AppAreaSettings.disabledAreasKey) private var disabledAreasRaw = ""
     /// Bumped by the DEBUG "Recalculate" action in Settings (always 0 otherwise);
     /// part of the task id so the row recomputes on demand.
-    @AppStorage(RecommendationSettings.manualRecalculationKey) private var recommendationsRecalcToken = 0
-    @State private var recommendations: [HomeMediaItem] = []
+    @AppStorage(RecommendationSettings.manualRecalculationKey) var recommendationsRecalcToken = 0
+    @State var recommendations: [HomeMediaItem] = []
     /// False until the first recommendations pass completes, so the row can show
     /// a progress placeholder rather than an empty state on launch.
-    @State private var recommendationsLoaded = false
-    @State var heroItems: [HeroItem] = []
-    @State var trendingState: HomeLoadState = .idle
-    @State var trakt = TraktService.shared
+    @State var recommendationsLoaded = false
+    @State private var trakt = TraktService.shared
     /// "For You" is a Lume Pro feature; observed so the row appears/disappears
     /// when entitlement changes.
     @State var premium = PremiumManager.shared
     // Observed so the For You row defers its (potentially heavy) recompute while
     // the device is busy syncing — and retries automatically once it isn't.
-    @State private var indexing = ContentIndexingService.shared
-    @State private var epgSync = EPGSyncService.shared
+    // Not `private`: read by the HomeView+ForYou extension (separate file).
+    @State var indexing = ContentIndexingService.shared
+    @State var epgSync = EPGSyncService.shared
     /// Observed for the Home empty-state check, which mirrors the Sports rail.
     @State var sportsFollows = SportsFollowService.shared
     @State var sportsStore = SportsStore.shared
@@ -164,27 +164,31 @@ struct HomeView: View {
                         // teasing first row, fold-snapping scroll. Lives in
                         // `TVHomeScreen.swift`.
                         TVHomeScreen(
-                            heroItems: heroItems,
+                            heroItems: visibleHeroItems,
                             onSelectHero: { selectedHero = $0 },
                             rows: { homeRows }
                         )
                         .tvQuickSwitchHint(interacted: selectedHero != nil)
                     #else
                         ScrollView {
-                            LazyVStack(alignment: .leading, spacing: 28) {
-                                if !heroItems.isEmpty {
-                                    HomeHeroCarousel(items: heroItems)
+                            LazyVStack(alignment: .leading, spacing: PosterCardMetrics.sectionSpacing) {
+                                if !visibleHeroItems.isEmpty {
+                                    HomeHeroCarousel(items: visibleHeroItems)
                                 }
                                 homeRows
                             }
-                            .padding(.bottom)
+                            // The hero fills the top inset itself when it's
+                            // showing; without one, Home takes the same inset as
+                            // the Movies and Series pages.
+                            .padding(.top, visibleHeroItems.isEmpty ? PosterCardMetrics.sectionVerticalPadding : 0)
+                            .padding(.bottom, PosterCardMetrics.sectionVerticalPadding)
                         }
                         .browseActivity()
                         .scrollIndicators(.hidden)
                         // Only let content run under the nav bar when the hero
                         // backdrop is there to fill it; otherwise the first row
                         // would sit hidden behind the bar.
-                        .ignoresSafeArea(edges: heroItems.isEmpty ? [] : .top)
+                        .ignoresSafeArea(edges: visibleHeroItems.isEmpty ? [] : .top)
                     #endif
                 }
             }
@@ -220,16 +224,19 @@ struct HomeView: View {
             }
             #endif
             .task(id: trendingKey) {
-                await loadTrending(cacheKey: trendingKey)
+                feed.update(context: feedContext)
+                await feed.loadTrending(cacheKey: trendingKey)
             }
             .task(id: watchlistKey) {
-                await loadWatchlist(cacheKey: watchlistKey)
+                feed.update(context: feedContext)
+                await feed.loadWatchlist(cacheKey: watchlistKey)
             }
             .task(id: recommendationsKey) {
                 await loadRecommendations()
             }
             .task(id: customSectionsKey) {
-                await loadCustomSections(cacheKey: customSectionsKey)
+                feed.update(context: feedContext)
+                await feed.loadCustomSections(cacheKey: customSectionsKey, sections: visibleCustomSections)
             }
             .task(id: seriesResumeKey) {
                 await loadSeriesResume()
@@ -255,7 +262,7 @@ struct HomeView: View {
     /// immersive home. Rows render in the user's chosen order (Settings › Layout ›
     /// Home); each only appears when it has content.
     private var homeRows: some View {
-        ForEach(HomeLayoutSettings.resolve(orderRaw: sectionOrderRaw, custom: customSections)) { ref in
+        ForEach(HomeLayoutSettings.resolve(orderRaw: sectionOrderRaw, custom: customSections, surface: .home)) { ref in
             homeRow(for: ref)
         }
     }
@@ -268,10 +275,14 @@ struct HomeView: View {
         case let .custom(id):
             // A custom row's header is the user's own text, so it goes through
             // verbatim; the items are resolved in `HomeView+CustomSections`.
-            if let section = customSections.first(where: { $0.id == id }),
+            // Custom rows are always movie/series lists (see
+            // `SectionSurface.defaultHeroSourceURL`), so they need the same VOD
+            // gate as the built-in trending rows.
+            if vodAvailable,
+               let section = customSections.first(where: { $0.id == id }),
                HomeLayoutSettings.isEnabled(ref, disabledRaw: disabledSectionsRaw)
             {
-                rail(Text(verbatim: section.title), customSectionItems[id] ?? [])
+                rail(Text(verbatim: section.title), feed.customItems[id] ?? [])
             }
         }
     }
@@ -294,24 +305,57 @@ struct HomeView: View {
                     animationNamespace: animationNamespace
                 )
             case .trendingMovies:
-                rail(Text("Trending Movies"), trendingMovies)
+                rail(Text("Trending Movies"), feed.trendingMovies)
             case .trendingSeries:
-                rail(Text("Trending Series"), trendingSeries)
+                rail(Text("Trending Series"), feed.trendingSeries)
             case .traktWatchlist:
-                rail("From Your Trakt Watchlist", watchlist)
+                rail(Text("From Your Trakt Watchlist"), feed.watchlist)
             case .sports:
                 SportsHomeRail(isSyncBusy: isSyncBusy)
+            case .recentlyAdded:
+                // Movies/Series only — `HomeSection.cases(for: .home)` never
+                // yields it, so Home has no row to draw.
+                EmptyView()
             }
         }
     }
 
     /// Whether `section` should render. "For You" follows the recommendations
-    /// opt-in (which also gates its recompute); the rest follow the user's
-    /// per-section switches.
+    /// opt-in (which also gates its recompute); the movie/series-sourced rows
+    /// additionally require the matching area, since a profile without Movies
+    /// or Series enabled has nothing in its catalog for them to show; the rest
+    /// follow the user's per-section switches.
     func isSectionEnabled(_ section: HomeSection) -> Bool {
-        section == .forYou
-            ? (recommendationsEnabled && premium.isPremium)
-            : HomeLayoutSettings.isEnabled(.builtin(section), disabledRaw: disabledSectionsRaw)
+        switch section {
+        case .forYou:
+            recommendationsEnabled && premium.isPremium
+        case .trendingMovies:
+            AppAreaSettings.isEnabled(.movies, disabledRaw: disabledAreasRaw)
+                && HomeLayoutSettings.isEnabled(.builtin(section), disabledRaw: disabledSectionsRaw)
+        case .trendingSeries:
+            AppAreaSettings.isEnabled(.series, disabledRaw: disabledAreasRaw)
+                && HomeLayoutSettings.isEnabled(.builtin(section), disabledRaw: disabledSectionsRaw)
+        case .traktWatchlist:
+            vodAvailable && HomeLayoutSettings.isEnabled(.builtin(section), disabledRaw: disabledSectionsRaw)
+        default:
+            HomeLayoutSettings.isEnabled(.builtin(section), disabledRaw: disabledSectionsRaw)
+        }
+    }
+
+    /// Whether Home may show anything sourced from the movie/series catalog —
+    /// the Trakt watchlist, custom list-backed rows, and the hero below, none
+    /// of which are scoped to a single medium the way the trending rows are.
+    /// False only when the profile has switched off both VOD areas.
+    private var vodAvailable: Bool {
+        AppAreaSettings.isEnabled(.movies, disabledRaw: disabledAreasRaw)
+            || AppAreaSettings.isEnabled(.series, disabledRaw: disabledAreasRaw)
+    }
+
+    /// The hero, suppressed when the profile can't browse the movies/series
+    /// catalog it's drawn from — showing one that can't be opened is worse than
+    /// showing none. See `vodAvailable`.
+    private var visibleHeroItems: [HeroItem] {
+        vodAvailable ? feed.heroItems : []
     }
 
     /// A standard Home rail that only renders when it has items. The Recently
@@ -348,6 +392,36 @@ struct HomeView: View {
         "watchlist-\(trakt.isConnected)-\(selectedPlaylistID)-\(restriction.visibilityToken)"
     }
 
+    /// Identity of the custom-section load. Shares the trending key's playlist /
+    /// sync / visibility inputs — the match is against the same catalog — plus a
+    /// signature of the sections themselves, so adding a row or editing its URL
+    /// reloads while renaming one doesn't.
+    var customSectionsKey: String {
+        "custom-\(trendingKey)-\(CustomHomeSections.contentSignature(visibleCustomSections))"
+    }
+
+    /// The user's custom rows for this surface, decoded from their stored JSON.
+    private var customSections: [CustomHomeSection] {
+        CustomHomeSections.decode(customSectionsRaw)
+    }
+
+    /// The custom sections that should actually be fetched: the user's list
+    /// minus the ones they've hidden. A hidden row costs no network.
+    private var visibleCustomSections: [CustomHomeSection] {
+        customSections.filter {
+            HomeLayoutSettings.isEnabled(.custom($0.id), disabledRaw: disabledSectionsRaw)
+        }
+    }
+
+    /// What the feed needs to match remote titles against the local catalog.
+    private var feedContext: SectionFeed.Context {
+        SectionFeed.Context(
+            modelContext: modelContext,
+            restriction: restriction,
+            playlistPrefix: playlistPrefix
+        )
+    }
+
     /// Identity of the series resume lookup. Resuming or finishing an episode
     /// stamps its series' `lastWatchedDate` (`WatchProgressWriter`), which is
     /// exactly what the Recently Watched query orders by — so the newest stamp
@@ -368,7 +442,7 @@ struct HomeView: View {
     /// The id prefix every Movie/Series/LiveStream belonging to the active
     /// playlist shares (ids are stored as `"\(playlistID)-…"`). The `@Query`
     /// results span all playlists, so this scopes them in-memory.
-    private var playlistPrefix: String? {
+    var playlistPrefix: String? {
         activePlaylist.map { "\($0.id.uuidString)-" }
     }
 
@@ -414,12 +488,12 @@ struct HomeView: View {
     private var isEmpty: Bool {
         recentlyWatched.isEmpty
             && favorites.isEmpty
-            && trendingMovies.isEmpty
-            && trendingSeries.isEmpty
-            && watchlist.isEmpty
+            && feed.trendingMovies.isEmpty
+            && feed.trendingSeries.isEmpty
+            && feed.watchlist.isEmpty
             && !sportsRailHasContent
-            && customSectionItems.values.allSatisfy(\.isEmpty)
-            && trendingState.isSettled
+            && feed.customItems.values.allSatisfy(\.isEmpty)
+            && feed.isSettled
     }
 
     // MARK: - Recently watched
@@ -482,106 +556,6 @@ struct HomeView: View {
         #else
             playingMedia = media
         #endif
-    }
-}
-
-// MARK: - For You
-
-private extension HomeView {
-    /// Refresh the row when the active playlist, the favorites/history queries or
-    /// the hidden categories change. This only re-resolves the list (cheap, and
-    /// re-validates each entry against live state) — the engine still throttles the actual re-ranking to
-    /// its recalculation interval.
-    var recommendationsKey: String {
-        let counts = "\(watchedMovies.count)-\(watchedSeries.count)-\(favoriteMovies.count)-\(favoriteSeries.count)"
-        let visibility = restriction.visibilityToken
-        return "rec-\(recommendationsEnabled)-\(premium.isPremium)-\(isSyncBusy)-\(recommendationsRecalcToken)-\(counts)-\(selectedPlaylistID)-\(visibility)"
-    }
-
-    /// True while a playlist sync, iCloud sync or EPG import is running. The For
-    /// You recompute reads and ranks the whole catalog, so on older devices it's
-    /// deferred until those finish — and during a CloudKit import, touching the
-    /// catalog mid-handshake is best avoided entirely. Folded into
-    /// `recommendationsKey` so the load retries the moment syncing settles.
-    var isSyncBusy: Bool {
-        playlists.contains { $0.syncStatus == .syncing }
-            || indexing.isCloudSyncActive
-            || epgSync.isSyncing
-    }
-
-    /// Resolves the engine's (throttled, possibly cached) list to local models,
-    /// dropping any that are no longer recommendable — watched, favorited or
-    /// voted on since the list was computed. That live re-validation is what lets
-    /// a vote remove a card without forcing a full re-rank.
-    func loadRecommendations() async {
-        guard recommendationsEnabled, premium.isPremium else {
-            recommendations = []
-            return
-        }
-        // Don't calculate while syncing — leave whatever is already shown (or the
-        // loading placeholder) in place; the task re-fires once `isSyncBusy` clears.
-        guard !isSyncBusy else { return }
-
-        let interval = Perf.begin(.homeRecommendations)
-        defer { Perf.end(interval) }
-
-        let engine = RecommendationEngine(modelContainer: modelContext.container)
-        let scored = await engine.recommendations(excluding: restriction.excludedCategoryIDs)
-        var items: [HomeMediaItem] = []
-        for recommendation in scored {
-            switch recommendation.kind {
-            case .movie:
-                if let movie = fetchMovie(id: recommendation.id), isRecommendable(movie) { items.append(.movie(movie)) }
-            case .series:
-                if let series = fetchSeries(id: recommendation.id), isRecommendable(series) { items.append(.series(series)) }
-            }
-            if items.count >= 10 { break }
-        }
-        recommendations = items
-        recommendationsLoaded = true
-    }
-
-    func isRecommendable(_ movie: Movie) -> Bool {
-        !movie.isWatched && !movie.isFavorite && movie.lastWatchedDate == nil && movie.recommendationVote == nil
-    }
-
-    func isRecommendable(_ series: Series) -> Bool {
-        !series.isFavorite && series.lastWatchedDate == nil && series.recommendationVote == nil
-    }
-
-    func fetchMovie(id: String) -> Movie? {
-        var descriptor = FetchDescriptor<Movie>(predicate: #Predicate { $0.id == id })
-        descriptor.fetchLimit = 1
-        guard let movie = try? modelContext.fetch(descriptor).first,
-              belongsToActivePlaylist(movie.id), !restriction.hides(categoryID: movie.categoryId)
-        else { return nil }
-        return movie
-    }
-
-    func fetchSeries(id: String) -> Series? {
-        var descriptor = FetchDescriptor<Series>(predicate: #Predicate { $0.id == id })
-        descriptor.fetchLimit = 1
-        guard let series = try? modelContext.fetch(descriptor).first,
-              belongsToActivePlaylist(series.id), !restriction.hides(categoryID: series.categoryId)
-        else { return nil }
-        return series
-    }
-
-    /// Records an up/down vote for a recommendation. Either vote drops the title
-    /// from the row immediately (it's been acted on) and steers the next recompute
-    /// — an upvote pulls the taste profile toward it, a downvote away. The vote is
-    /// persisted now; the engine folds it in on its next (throttled) recompute.
-    func vote(_ item: HomeMediaItem, _ vote: RecommendationVote) {
-        switch item {
-        case let .movie(movie): movie.recommendationVote = vote
-        case let .series(series): series.recommendationVote = vote
-        case .live: return
-        }
-        // Persisted on the catalog model like favorites/watch state; the iCloud
-        // reconciler mirrors it to UserContentState so the vote syncs.
-        try? modelContext.save()
-
-        recommendations.removeAll { $0.id == item.id }
     }
 }
 

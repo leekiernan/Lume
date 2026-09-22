@@ -88,6 +88,8 @@ private struct CollectionPreviewRow<Item: Identifiable & Hashable & WatchlistFav
     /// context menu (a long-press on the focused card on tvOS). Nil for rows
     /// where removal doesn't apply, e.g. Favorites.
     var removeAction: ((Item) -> Void)?
+    /// tvOS: pressing left on the row's first card — see `onLeadingEdgeLeft`.
+    var onLeadingLeft: (() -> Void)?
     @Environment(\.modelContext) private var modelContext
     @ViewBuilder let card: (Item) -> Card
 
@@ -95,7 +97,7 @@ private struct CollectionPreviewRow<Item: Identifiable & Hashable & WatchlistFav
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Text(title)
-                    .font(.headline)
+                    .font(PosterCardMetrics.railTitleFont)
                     .fontWeight(.bold)
                     .foregroundStyle(.secondary)
 
@@ -112,12 +114,13 @@ private struct CollectionPreviewRow<Item: Identifiable & Hashable & WatchlistFav
 
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: PosterCardMetrics.railSpacing) {
-                    ForEach(items) { item in
+                    ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
                         NavigationLink(value: item) {
                             card(item)
                                 .matchedTransitionSourceIfAvailable(id: item.id, in: animationNamespace)
                         }
                         .posterCardButtonStyle()
+                        .onLeadingEdgeLeft(index == 0 ? onLeadingLeft : nil)
                         .mediaFavoriteMenu(
                             isFavorite: { item.isFavorite },
                             onToggleFavorite: { MediaFavorites.toggle(item, in: modelContext) },
@@ -144,13 +147,21 @@ private struct CollectionPreviewRow<Item: Identifiable & Hashable & WatchlistFav
 struct MovieCollectionRow: View {
     let kind: LibraryCollection.Kind
     var animationNamespace: Namespace.ID?
+    /// tvOS: pressing left on the row's first card — see `onLeadingEdgeLeft`.
+    var onLeadingLeft: (() -> Void)?
     @Environment(\.modelContext) private var modelContext
     @Environment(\.contentRestriction) private var restriction
     @Query private var movies: [Movie]
 
-    init(kind: LibraryCollection.Kind, playlistPrefix: String, animationNamespace: Namespace.ID? = nil) {
+    init(
+        kind: LibraryCollection.Kind,
+        playlistPrefix: String,
+        animationNamespace: Namespace.ID? = nil,
+        onLeadingLeft: (() -> Void)? = nil
+    ) {
         self.kind = kind
         self.animationNamespace = animationNamespace
+        self.onLeadingLeft = onLeadingLeft
         _movies = Query(MovieCollectionQuery.rowDescriptor(for: kind, playlistPrefix: playlistPrefix))
     }
 
@@ -172,6 +183,7 @@ struct MovieCollectionRow: View {
                     movie.lastWatchedDate = nil
                     try? modelContext.save()
                 } : nil,
+                onLeadingLeft: onLeadingLeft,
                 card: { MovieCardView(movie: $0) }
             )
         }
@@ -271,13 +283,21 @@ enum MovieCollectionQuery {
 struct SeriesCollectionRow: View {
     let kind: LibraryCollection.Kind
     var animationNamespace: Namespace.ID?
+    /// tvOS: pressing left on the row's first card — see `onLeadingEdgeLeft`.
+    var onLeadingLeft: (() -> Void)?
     @Environment(\.modelContext) private var modelContext
     @Environment(\.contentRestriction) private var restriction
     @Query private var series: [Series]
 
-    init(kind: LibraryCollection.Kind, playlistPrefix: String, animationNamespace: Namespace.ID? = nil) {
+    init(
+        kind: LibraryCollection.Kind,
+        playlistPrefix: String,
+        animationNamespace: Namespace.ID? = nil,
+        onLeadingLeft: (() -> Void)? = nil
+    ) {
         self.kind = kind
         self.animationNamespace = animationNamespace
+        self.onLeadingLeft = onLeadingLeft
         _series = Query(SeriesCollectionQuery.rowDescriptor(for: kind, playlistPrefix: playlistPrefix))
     }
 
@@ -299,6 +319,7 @@ struct SeriesCollectionRow: View {
                     series.lastWatchedDate = nil
                     try? modelContext.save()
                 } : nil,
+                onLeadingLeft: onLeadingLeft,
                 card: { SeriesCardView(series: $0) }
             )
         }

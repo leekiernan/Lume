@@ -2,29 +2,46 @@
 
     import SwiftUI
 
-    /// Home screen layout settings (iOS / macOS): switch each Home row on or off
-    /// and drag to reorder them. Each row still only appears on Home when it has
-    /// something to show. Custom rows built from a list URL are added, edited and
-    /// removed here too, and sit in the same order as the built-in ones. See
-    /// `HomeLayoutSettings` and `CustomHomeSection`.
-    struct HomeLayoutSettingsView: View {
+    /// Layout settings for one section surface — Home, Movies or Series (iOS /
+    /// macOS): switch each row on or off and drag to reorder them. Each row still
+    /// only appears when it has something to show. Custom rows built from a list
+    /// URL are added, edited and removed here too, and sit in the same order as
+    /// the built-in ones. Every surface keeps its own order, hidden set and
+    /// custom rows — see `SectionSurface`, `HomeLayoutSettings` and
+    /// `CustomHomeSection`.
+    struct SectionLayoutSettingsView: View {
+        let surface: SectionSurface
+        /// The area's catalog categories, when it has any. Non-nil adds the
+        /// drill-in to category management; Home passes nil.
+        var categoryType: CategoryType?
+
         /// "For You" is the opt-in recommendations row; its toggle writes the same
         /// flag that gates the recommendation recompute on Home.
         @AppStorage(RecommendationSettings.enabledKey) private var recommendationsEnabled = RecommendationSettings.enabledDefault
-        @AppStorage(HomeLayoutSettings.sectionOrderKey) private var sectionOrderRaw = ""
-        @AppStorage(HomeLayoutSettings.disabledSectionsKey) private var disabledSectionsRaw = ""
-        @AppStorage(CustomHomeSections.storageKey) private var customSectionsRaw = ""
+        @AppStorage private var sectionOrderRaw: String
+        @AppStorage private var disabledSectionsRaw: String
+        @AppStorage private var customSectionsRaw: String
         @State private var premium = PremiumManager.shared
         @State private var showPaywall = false
-@State private var paywallHighlight: PremiumFeature = .recommendations
+        @State private var paywallHighlight: PremiumFeature = .recommendations
         @State private var editorMode: CustomHomeSectionEditor.Mode?
+
+        /// The three stores are keyed by surface, so they're built in `init`
+        /// rather than declared with a literal key.
+        init(surface: SectionSurface, categoryType: CategoryType? = nil) {
+            self.surface = surface
+            self.categoryType = categoryType
+            _sectionOrderRaw = AppStorage(wrappedValue: "", HomeLayoutSettings.sectionOrderKey(surface))
+            _disabledSectionsRaw = AppStorage(wrappedValue: "", HomeLayoutSettings.disabledSectionsKey(surface))
+            _customSectionsRaw = AppStorage(wrappedValue: "", CustomHomeSections.storageKey(surface))
+        }
 
         private var customSections: [CustomHomeSection] {
             CustomHomeSections.decode(customSectionsRaw)
         }
 
         private var sections: [HomeSectionRef] {
-            HomeLayoutSettings.resolve(orderRaw: sectionOrderRaw, custom: customSections)
+            HomeLayoutSettings.resolve(orderRaw: sectionOrderRaw, custom: customSections, surface: surface)
         }
 
         /// Home rows gated behind Lume Pro — badged with a crown and paywalled
@@ -41,7 +58,7 @@
                 } header: {
                     Text("Sections")
                 } footer: {
-                    Text("Turn sections on or off and reorder them. Each appears on Home only when it has something to show. \"For You\" is built on-device from your library and what you watch.")
+                    footerText
                 }
 
                 Section {
@@ -56,18 +73,44 @@
                 } footer: {
                     Text("Build your own row from a public list, like a site's most-popular chart. Lume matches the list against your playlist and shows the titles you have.")
                 }
+
+                if let categoryType {
+                    Section {
+                        NavigationLink {
+                            ContentManagementView(fixedType: categoryType)
+                        } label: {
+                            Label("Categories", systemImage: "square.grid.2x2")
+                        }
+                    } footer: {
+                        Text("Hide and reorder the categories your provider supplies, and choose what appears in the browse sidebar.")
+                    }
+                }
             }
-            .platformNavigationTitle("Home")
+            .platformNavigationTitle(surface.title)
             #if os(iOS)
                 // Keep the list permanently in edit mode so the rows are always
                 // draggable — no Edit button to enter reorder mode first (matches
                 // the Player Engines list). Toggles stay interactive in edit mode.
                 .environment(\.editMode, .constant(.active))
             #endif
-.paywall(isPresented: $showPaywall, highlight: paywallHighlight)
+                .paywall(isPresented: $showPaywall, highlight: paywallHighlight)
                 .sheet(item: $editorMode) { mode in
-                    CustomHomeSectionEditor(mode: mode, onSave: save, onDelete: delete)
+                    CustomHomeSectionEditor(mode: mode, surface: surface, onSave: save, onDelete: delete)
                 }
+        }
+
+        /// The Movies and Series pages only ever show one medium, so say so —
+        /// that's what makes a movie list added there resolve to nothing.
+        @ViewBuilder
+        private var footerText: some View {
+            switch surface {
+            case .home:
+                Text("Turn sections on or off and reorder them. Each appears on Home only when it has something to show. \"For You\" is built on-device from your library and what you watch.")
+            case .movies:
+                Text("Turn sections on or off and reorder them. Each appears only when it has something to show, and only ever shows movies.")
+            case .series:
+                Text("Turn sections on or off and reorder them. Each appears only when it has something to show, and only ever shows series.")
+            }
         }
 
         // MARK: - Rows
@@ -149,7 +192,7 @@
         /// it on gets the paywall instead. Every other section is tracked by
         /// `HomeLayoutSettings`' disabled set (absent ⇒ enabled).
         private func enabledBinding(for section: HomeSection) -> Binding<Bool> {
-if section == .forYou {
+            if section == .forYou {
                 return Binding(
                     get: { recommendationsEnabled },
                     set: { isOn in
@@ -175,9 +218,9 @@ if section == .forYou {
                         showPaywall = true
                         return
                     }
-                    var disabled = HomeLayoutSettings.decodeDisabled(disabledSectionsRaw)
-                    if isOn { disabled.remove(section) } else { disabled.insert(section) }
-                    disabledSectionsRaw = HomeLayoutSettings.encodeDisabled(disabled)
+                    disabledSectionsRaw = HomeLayoutSettings.settingEnabled(
+                        isOn, for: .builtin(section), disabledRaw: disabledSectionsRaw
+                    )
                 }
             )
         }
@@ -201,7 +244,7 @@ if section == .forYou {
             var list = sections
             list.move(fromOffsets: offsets, toOffset: destination)
             sectionOrderRaw = HomeLayoutSettings.encode(
-                HomeLayoutSettings.normalized(list, custom: customSections)
+                HomeLayoutSettings.normalized(list, custom: customSections, surface: surface)
             )
         }
 
@@ -217,7 +260,9 @@ if section == .forYou {
             let remaining = CustomHomeSections.remove(id: id, from: customSections)
             customSectionsRaw = CustomHomeSections.encode(remaining)
             sectionOrderRaw = HomeLayoutSettings.encode(
-                HomeLayoutSettings.normalized(sections.filter { $0 != .custom(id) }, custom: remaining)
+                HomeLayoutSettings.normalized(
+                    sections.filter { $0 != .custom(id) }, custom: remaining, surface: surface
+                )
             )
             disabledSectionsRaw = HomeLayoutSettings.settingEnabled(
                 true, for: .custom(id), disabledRaw: disabledSectionsRaw
@@ -227,7 +272,7 @@ if section == .forYou {
 
     #Preview {
         NavigationStack {
-            HomeLayoutSettingsView()
+            SectionLayoutSettingsView(surface: .home)
         }
     }
 

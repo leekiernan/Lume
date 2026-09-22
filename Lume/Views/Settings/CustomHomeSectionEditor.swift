@@ -32,6 +32,10 @@
         }
 
         let mode: Mode
+        /// Which page the section is being added to. Only affects the guidance
+        /// shown — a list of the "wrong" medium is allowed and simply resolves
+        /// to nothing, which the warning below says out loud.
+        let surface: SectionSurface
         let onSave: (CustomHomeSection) -> Void
         let onDelete: (UUID) -> Void
 
@@ -47,10 +51,19 @@
             case idle
             case checking
             case failed(String)
+            /// Saved, but nothing on the list is of this page's medium.
+            case mismatch(String)
 
             var message: String? {
-                if case let .failed(message) = self { return message }
-                return nil
+                switch self {
+                case let .failed(message), let .mismatch(message): message
+                case .idle, .checking: nil
+                }
+            }
+
+            var isWarning: Bool {
+                if case .mismatch = self { return true }
+                return false
             }
         }
 
@@ -77,8 +90,8 @@
                             Label {
                                 Text(verbatim: message)
                             } icon: {
-                                Image(systemName: "exclamationmark.triangle.fill")
-                                    .foregroundStyle(.orange)
+                                Image(systemName: state.isWarning ? "info.circle.fill" : "exclamationmark.triangle.fill")
+                                    .foregroundStyle(state.isWarning ? Color.secondary : Color.orange)
                             }
                             .font(.footnote)
                         }
@@ -134,7 +147,14 @@
 
         private var footer: some View {
             VStack(alignment: .leading, spacing: 6) {
-                Text("Paste the address of a public list. Lume matches the titles on it against your playlist and shows the ones you have.")
+                switch surface {
+                case .home:
+                    Text("Paste the address of a public list. Lume matches the titles on it against your playlist and shows the ones you have.")
+                case .movies:
+                    Text("Paste the address of a public list. Lume matches the titles on it against your playlist and shows the movies you have.")
+                case .series:
+                    Text("Paste the address of a public list. Lume matches the titles on it against your playlist and shows the series you have.")
+                }
                 Text("Supported: \(supportedProviders).")
             }
         }
@@ -160,6 +180,15 @@
             return Text("Section title")
         }
 
+        /// Shown when a saved list holds nothing of this page's medium.
+        private var mismatchWarning: String {
+            switch surface {
+            case .home: ""
+            case .movies: String(localized: "Saved. That list has no movies on it, so this row will stay empty on the Movies page.")
+            case .series: String(localized: "Saved. That list has no series on it, so this row will stay empty on the Series page.")
+            }
+        }
+
         private func prefill() {
             guard let existing = mode.existing, title.isEmpty, urlText.isEmpty else { return }
             title = existing.title
@@ -180,8 +209,9 @@
             }
             state = .checking
             Task {
+                let entries: [HomeListEntry]
                 do {
-                    _ = try await HomeListCatalog.entries(for: url)
+                    entries = try await HomeListCatalog.entries(for: url)
                 } catch {
                     let message = (error as? HomeListError)?.errorDescription ?? error.localizedDescription
                     state = .failed(message)
@@ -192,7 +222,16 @@
                     title: resolvedTitle,
                     sourceURL: url
                 ))
-                dismiss()
+                // A list of the other medium is allowed — it just won't have
+                // anything to show here. Say so rather than silently saving a
+                // row that can only ever be empty, but still save it.
+                guard let wanted = surface.mediaType,
+                      !entries.contains(where: { $0.mediaType == wanted })
+                else {
+                    dismiss()
+                    return
+                }
+                state = .mismatch(mismatchWarning)
             }
         }
     }
