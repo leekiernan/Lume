@@ -47,7 +47,10 @@ struct ProfileScopedPreferencesTests {
         withActiveProfile(Self.profileA) {
             var expected: Set<String> = [
                 AppAreaSettings.disabledAreasKey,
-                RecommendationSettings.enabledKey
+                RecommendationSettings.enabledKey,
+                SportsSyncService.enabledKey,
+                SportsSyncService.tabEnabledKey,
+                SportsSyncService.syncFrequencyKey
             ]
             for surface in SectionSurface.allCases {
                 expected.insert(HomeLayoutSettings.sectionOrderKey(surface))
@@ -84,6 +87,14 @@ struct ProfileScopedPreferencesTests {
             RecommendationSettings.baseEnabledKey,
             profileID: Self.profileA
         ))
+        source.set(false, forKey: ProfileScopedPreferences.key(
+            SportsSyncService.baseEnabledKey,
+            profileID: Self.profileA
+        ))
+        source.set(SyncFrequency.weekly.rawValue, forKey: ProfileScopedPreferences.key(
+            SportsSyncService.baseSyncFrequencyKey,
+            profileID: Self.profileA
+        ))
 
         let captured = ProfileScopedPreferences.snapshot(profileID: Self.profileA, defaults: source)
         let json = try #require(ProfileScopedPreferences.encode(captured))
@@ -95,6 +106,14 @@ struct ProfileScopedPreferencesTests {
             RecommendationSettings.baseEnabledKey,
             profileID: Self.profileB
         )))
+        #expect(!destination.bool(forKey: ProfileScopedPreferences.key(
+            SportsSyncService.baseEnabledKey,
+            profileID: Self.profileB
+        )))
+        #expect(destination.string(forKey: ProfileScopedPreferences.key(
+            SportsSyncService.baseSyncFrequencyKey,
+            profileID: Self.profileB
+        )) == SyncFrequency.weekly.rawValue)
     }
 
     @Test func `pristine profile does not claim an empty cloud snapshot`() throws {
@@ -300,5 +319,33 @@ struct ProfileScopedPreferencesTests {
             profileID: Self.profileA
         )))
         #expect(defaults.bool(forKey: ProfileScopedPreferences.recommendationMigrationFlagKey))
+    }
+
+    @Test func `global sports choices are adopted after an earlier layout migration`() throws {
+        let suiteName = "ProfileScopedPreferencesTests.sportsMigration"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defaults.removePersistentDomain(forName: suiteName)
+        defaults.set(true, forKey: ProfileScopedPreferences.migrationFlagKey)
+        defaults.set(false, forKey: SportsSyncService.baseEnabledKey)
+        defaults.set(false, forKey: SportsSyncService.baseTabEnabledKey)
+        defaults.set(SyncFrequency.weekly.rawValue, forKey: SportsSyncService.baseSyncFrequencyKey)
+
+        withActiveProfile(Self.profileA) {
+            ProfileScopedPreferences.migrateLegacyValuesIfNeeded(defaults: defaults)
+        }
+
+        #expect(!defaults.bool(forKey: ProfileScopedPreferences.key(
+            SportsSyncService.baseEnabledKey,
+            profileID: Self.profileA
+        )))
+        #expect(!defaults.bool(forKey: ProfileScopedPreferences.key(
+            SportsSyncService.baseTabEnabledKey,
+            profileID: Self.profileA
+        )))
+        #expect(defaults.string(forKey: ProfileScopedPreferences.key(
+            SportsSyncService.baseSyncFrequencyKey,
+            profileID: Self.profileA
+        )) == SyncFrequency.weekly.rawValue)
+        #expect(defaults.bool(forKey: ProfileScopedPreferences.sportsMigrationFlagKey))
     }
 }

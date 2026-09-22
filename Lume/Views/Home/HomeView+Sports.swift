@@ -22,14 +22,14 @@ extension HomeView {
     /// followed set arriving (iCloud reconcile, profile switch) or the row being
     /// switched on.
     var sportsWarmKey: String {
-        guard isSectionEnabled(.sports), premium.isPremium else { return "off" }
+        guard SportsSyncService.isEnabled, isSectionEnabled(.sports), premium.isPremium else { return "off" }
         return sportsFollows.follows.map(\.key).joined(separator: ",")
     }
 
     /// Loads the cached snapshots and asks for anything missing or stale — the
     /// same three triggers the Sports tab runs on appear.
     func warmSports() {
-        guard isSectionEnabled(.sports), premium.isPremium else { return }
+        guard SportsSyncService.isEnabled, isSectionEnabled(.sports), premium.isPremium else { return }
         sportsStore.loadCached(
             leagueIds: SportsRailPlanner.displayLeagueIds(for: sportsFollows.follows)
         )
@@ -43,7 +43,7 @@ extension HomeView {
     /// is followed-team fixtures (or the onboarding card) never sees the empty state.
     var sportsRailHasContent: Bool {
         let lockedRowShown = true
-        guard isSectionEnabled(.sports) else { return false }
+        guard SportsSyncService.isEnabled, isSectionEnabled(.sports) else { return false }
         return SportsRailPlanner.hasContent(
             isPremium: premium.isPremium,
             follows: sportsFollows.follows,

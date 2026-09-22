@@ -108,7 +108,7 @@ final class SportsFollowService {
     /// Follow a league or team, appended to the end of the profile's order. A
     /// no-op when it is already followed.
     func follow(_ key: String, kind: SportsFollowKind) {
-        guard let context, !isFollowing(key) else { return }
+        guard SportsSyncService.isEnabled, let context, !isFollowing(key) else { return }
         let nextOrder = (follows.map(\.sortOrder).max() ?? -1) + 1
         context.insert(SyncedSportsFollow(
             key: key,
@@ -132,7 +132,7 @@ final class SportsFollowService {
 
     /// Unfollow, removing every mirror row for this key under the active profile.
     func unfollow(_ key: String) {
-        guard let context else { return }
+        guard SportsSyncService.isEnabled, let context else { return }
         for row in fetchRows() where row.key == key {
             context.delete(row)
         }
@@ -143,7 +143,7 @@ final class SportsFollowService {
     /// Reorder the follow list (from an `onMove`), rewriting every row's
     /// `sortOrder` to its new position.
     func move(fromOffsets source: IndexSet, toOffset destination: Int) {
-        guard let context else { return }
+        guard SportsSyncService.isEnabled, let context else { return }
         var reordered = follows
         reordered.move(fromOffsets: source, toOffset: destination)
         let rowsByKey = Dictionary(fetchRows().map { ($0.key, $0) }, uniquingKeysWith: { first, _ in first })
@@ -162,7 +162,7 @@ final class SportsFollowService {
     /// `IndexSet`/offset move the iOS list uses), so it hands back the finished
     /// array here.
     func setOrder(_ ordered: [SportsFollow]) {
-        guard let context else { return }
+        guard SportsSyncService.isEnabled, let context else { return }
         let rowsByKey = Dictionary(fetchRows().map { ($0.key, $0) }, uniquingKeysWith: { first, _ in first })
         let now = Date()
         for (index, follow) in ordered.enumerated() {
@@ -181,6 +181,12 @@ final class SportsFollowService {
     /// switch, and after each reconcile.
     func reload() {
         guard container != nil else { return }
+        SportsSyncService.shared.availabilityDidChange()
+        guard SportsSyncService.isEnabled else {
+            follows = []
+            publishSnapshot([])
+            return
+        }
         bootstrapPreFollowsIfNeeded()
         let loaded = fetchRows().map {
             SportsFollow(
@@ -224,7 +230,7 @@ final class SportsFollowService {
     /// profile. The stamp is set on the first attempt whether or not rows are
     /// written, so a user who later removes every pre-follow is not re-seeded.
     private func bootstrapPreFollowsIfNeeded() {
-        guard let context else { return }
+        guard SportsSyncService.isEnabled, let context else { return }
         let profileID = currentProfileID
         let stampKey = Self.preFollowStampKey(for: profileID)
         guard !defaults.bool(forKey: stampKey) else { return }

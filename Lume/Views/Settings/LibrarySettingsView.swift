@@ -87,11 +87,39 @@
             // set here — two on one destination is ambiguous in SwiftUI.
             if let surface = area.sectionSurface {
                 SectionLayoutSettingsView(surface: surface, categoryType: area.categoryType)
+            } else if area == .liveTV {
+                LiveTVLibrarySettingsView()
             } else if let type = area.categoryType {
                 // Live TV has no configurable rows — its categories *are* the
                 // screen, so skip the intermediate level entirely.
                 ContentManagementView(fixedType: type)
             }
+        }
+    }
+
+    /// Live TV owns Sports: fixtures resolve to the user's EPG channels, so a
+    /// standalone Sports settings destination implied it could operate without
+    /// the parent library area.
+    private struct LiveTVLibrarySettingsView: View {
+        var body: some View {
+            List {
+                Section {
+                    NavigationLink {
+                        SportsSettingsView()
+                    } label: {
+                        Label("Sports", systemImage: "sportscourt")
+                    }
+
+                    NavigationLink {
+                        ContentManagementView(fixedType: .live)
+                    } label: {
+                        Label("Categories and Channels", systemImage: "square.grid.2x2")
+                    }
+                } footer: {
+                    Text("Sports uses your Live TV channels to open games. Switching Live TV off also stops Sports refreshes.")
+                }
+            }
+            .platformNavigationTitle("Live TV")
         }
     }
 

@@ -165,7 +165,6 @@ struct SettingsView: View {
                     // No standalone TV Guide section here: its sources are a
                     // NavigationLink inside `playlistsSection` in this fork,
                     // not their own top-level section.
-                    sportsSection
                     CloudSyncSection()
                     if trakt.isConfigured || simkl.isConfigured {
                         integrationsSection
@@ -517,7 +516,6 @@ struct SettingsView: View {
                             }
                         case .profiles: TVProfilesSettingsView()
                         case .library: tvLibraryDetail(proxy: proxy)
-                        case .sports: TVSportsSettingsPane()
                         case .search: tvSearchDetail
                         case .storage: StorageManagementView()
                         case .integrations: tvIntegrationsDetail

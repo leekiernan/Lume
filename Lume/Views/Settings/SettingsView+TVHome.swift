@@ -32,6 +32,10 @@ import SwiftUI
                     if let type = layoutArea.categoryType {
                         tvAreaCategoriesRow(type: type, proxy: proxy)
                     }
+
+                    if layoutArea == .liveTV {
+                        TVSportsSettingsPane()
+                    }
                 } else {
                     Text("This area is switched off. It has no tab, and its content is skipped when playlists sync.")
                         .font(.system(size: 20))
