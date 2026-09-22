@@ -311,14 +311,9 @@ actor EPGSyncManager {
             try Task.checkCancellation()
             let start = Int(programme.start.timeIntervalSince1970)
             let id = "\(sourceInfo.id.uuidString)-\(programme.channelId)-\(start)"
+            let category = programme.categories.isEmpty ? nil : programme.categories.joined(separator: ", ")
             if let existing = oldByID.removeValue(forKey: id) {
-                if existing.channelId != programme.channelId { existing.channelId = programme.channelId }
-                if existing.title != programme.title { existing.title = programme.title }
-                if existing.listingDescription != programme.description {
-                    existing.listingDescription = programme.description
-                }
-                if existing.start != programme.start { existing.start = programme.start }
-                if existing.end != programme.end { existing.end = programme.end }
+                existing.update(from: programme, category: category)
             } else {
                 context.insert(EPGListing(
                     id: id,
@@ -327,7 +322,9 @@ actor EPGSyncManager {
                     listingDescription: programme.description,
                     start: programme.start,
                     end: programme.end,
-                    sourceID: sourceInfo.id
+                    sourceID: sourceInfo.id,
+                    subtitle: programme.subtitle,
+                    category: category
                 ))
             }
         }

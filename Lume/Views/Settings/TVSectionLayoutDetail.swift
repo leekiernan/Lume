@@ -50,9 +50,15 @@ import SwiftUI
         @AppStorage private var customSectionsRaw: String
         @AppStorage private var heroSectionRaw: String
         @AppStorage private var heroSeeded: Bool
+        /// Sports is a Live TV feature (fixtures matched to EPG channels), so it
+        /// only offers itself as a row when this profile has Live TV on.
+        @AppStorage(AppAreaSettings.disabledAreasKey) private var disabledAreasRaw = ""
 
         @State private var premium = PremiumManager.shared
         @State private var showPaywall = false
+        /// Which paywall to surface — "For You" and "Sports" are both Lume Pro
+        /// features but advertise different entitlements.
+        @State private var paywallHighlight: PremiumFeature = .recommendations
         @State private var editor: TVCustomSectionEditorMode?
         @State private var editorTitle = ""
         @State private var editorURL = ""
@@ -78,7 +84,7 @@ import SwiftUI
             // Seeded here as well as on the page itself, so the starting hero is
             // in the list the first time someone opens this pane.
             .onAppear(perform: seedDefaultHeroIfNeeded)
-            .paywall(isPresented: $showPaywall, highlight: .recommendations)
+            .paywall(isPresented: $showPaywall, highlight: paywallHighlight)
         }
 
         // MARK: - Derived state
@@ -90,7 +96,10 @@ import SwiftUI
         /// The user's resolved row order (falls back to the surface's default
         /// order until they reorder). See `HomeLayoutSettings`.
         private var sections: [HomeSectionRef] {
-            HomeLayoutSettings.resolve(orderRaw: sectionOrderRaw, custom: customSections, surface: surface)
+            HomeLayoutSettings.resolve(
+                orderRaw: sectionOrderRaw, custom: customSections, surface: surface,
+                liveTVEnabled: AppAreaSettings.isEnabled(.liveTV, disabledRaw: disabledAreasRaw)
+            )
         }
 
         /// Whether `ref` is switched on. "For You" maps to the recommendations
@@ -106,10 +115,18 @@ import SwiftUI
                 // "For You" is a Lume Pro feature — gate turning it on behind the
                 // paywall (disabling it is always allowed).
                 if !recommendationsEnabled, !premium.isPremium {
+                    paywallHighlight = .recommendations
                     showPaywall = true
                     return
                 }
                 recommendationsEnabled.toggle()
+                return
+            }
+            // "Sports" is gated the same way, but stays in the ordinary disabled
+            // set — it has no flag of its own.
+            if ref == .builtin(.sports), !isEnabled(ref), !premium.isPremium {
+                paywallHighlight = .sportsHub
+                showPaywall = true
                 return
             }
             disabledSectionsRaw = HomeLayoutSettings.settingEnabled(
@@ -232,9 +249,10 @@ import SwiftUI
                             .font(.system(size: TVSettingsMetrics.rowFontSize))
                             .foregroundStyle(enabled ? .primary : .secondary)
 
-                        // "For You" is a Lume Pro feature; badge it for free users
-                        // (Sideload/owned builds are always premium, so this never shows).
-                        if section == .forYou, !premium.isPremium {
+                        // "For You" and "Sports" are Lume Pro features; badge them
+                        // for free users (Sideload/owned builds are always
+                        // premium, so this never shows).
+                        if section == .forYou || section == .sports, !premium.isPremium {
                             Image(systemName: "crown.fill")
                                 .font(.system(size: 20))
                                 .foregroundStyle(.tint)
