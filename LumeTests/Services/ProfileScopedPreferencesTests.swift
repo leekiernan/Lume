@@ -220,6 +220,22 @@ struct ProfileScopedPreferencesTests {
         #expect(defaults.bool(forKey: ProfileScopedPreferences.migrationFlagKey))
     }
 
+    @Test func `area migration advances the local generation`() throws {
+        let suiteName = "ProfileScopedPreferencesTests.areaMigration"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defaults.removePersistentDomain(forName: suiteName)
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        defaults.set("liveTV", forKey: AppAreaSettings.baseDisabledAreasKey)
+
+        withActiveProfile(Self.profileA) {
+            ProfileScopedPreferences.migrateLegacyValuesIfNeeded(defaults: defaults)
+        }
+
+        let state = AppAreaSettings.areaState(profileID: Self.profileA, defaults: defaults)
+        #expect(state.disabledRaw == "liveTV")
+        #expect(state.generation == AreaGenerationToken.initial.bumped())
+    }
+
     /// The copy must never run twice: a second pass after the viewer had
     /// switched would stamp the old global layout onto whoever is active now.
     @Test func `migration runs only once`() throws {

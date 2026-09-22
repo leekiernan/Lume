@@ -170,6 +170,31 @@ nonisolated struct LocalStoreWriteCoordinatorTests {
         #expect(await coordinator.queueDepth == 0)
     }
 
+    @Test
+    func `a cancelled queued leader never starts its body`() async throws {
+        let coordinator = LocalStoreWriteCoordinator(currentFence: { Self.fence })
+        let executions = Recorder()
+        let held = await holdLease(on: coordinator)
+        let request = request("cancelled")
+
+        let queued = Task.detached {
+            try await coordinator.withLease(request) {
+                await executions.record("ran")
+            }
+        }
+        #expect(await settle(until: { await coordinator.queueDepth == 1 }))
+
+        // Cancel while the entry is still queued, then release immediately.
+        // Admission must see the cancellation bit even if cleanup has not yet
+        // won the race to the coordinator actor.
+        queued.cancel()
+        await held.release.open()
+        try await held.finished.value
+
+        await #expect(throws: CancellationError.self) { try await queued.value }
+        #expect(await executions.entries.isEmpty)
+    }
+
     // MARK: - T-W8 (gate G5)
 
     /// The bound the plan claims — "cannot be bypassed by more than one later

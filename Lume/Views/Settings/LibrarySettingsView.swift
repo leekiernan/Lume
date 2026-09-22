@@ -67,9 +67,7 @@
             Binding(
                 get: { AppAreaSettings.isEnabled(area, disabledRaw: disabledAreasRaw) },
                 set: { isOn in
-                    disabledAreasRaw = AppAreaSettings.settingEnabled(
-                        isOn, for: area, disabledRaw: disabledAreasRaw
-                    )
+                    disabledAreasRaw = AppAreaSettings.setEnabled(isOn, for: area).disabledRaw
                 }
             )
         }

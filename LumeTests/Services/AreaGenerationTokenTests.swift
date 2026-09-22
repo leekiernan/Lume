@@ -91,6 +91,21 @@ struct AreaGenerationTokenTests {
         }
     }
 
+    @Test func `a cloud preference import advances the device-local generation`() {
+        withDefaults { defaults in
+            let snapshot = ProfilePreferencesSnapshot(
+                strings: [AppAreaSettings.baseDisabledAreasKey: "liveTV"],
+                booleans: [:]
+            )
+
+            ProfileScopedPreferences.apply(snapshot, profileID: Self.profile, defaults: defaults)
+
+            let state = AppAreaSettings.areaState(profileID: Self.profile, defaults: defaults)
+            #expect(state.disabledRaw == "liveTV")
+            #expect(state.generation == AreaGenerationToken.initial.bumped())
+        }
+    }
+
     @Test func `the generation key is profile scoped under the documented name`() {
         #expect(AppAreaSettings.baseAreaGenerationKey == "nav.areaGeneration.v1")
         #expect(
