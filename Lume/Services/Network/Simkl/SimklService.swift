@@ -10,7 +10,9 @@
 //  A shared singleton because watched-state changes originate from many places
 //  (player completion, detail-screen toggles, model methods) that don't all
 //  have access to the SwiftUI environment. It's still `@Observable`, so views
-//  observe `SimklService.shared` directly.
+//  observe `SimklService.shared` directly. Watched mutations use the same
+//  durable account-scoped outbox contract as Trakt; playback scrobbles remain
+//  deliberately unsupported by Simkl for now.
 //
 
 import Foundation
@@ -42,15 +44,25 @@ final class SimklService {
     /// Cleared when a new import begins.
     private(set) var lastImport: SimklImportSummary?
 
+    /// Mirrors Trakt's durable-history status so a temporary network failure
+    /// cannot silently lose a local watched/unwatched choice.
+    private(set) var pendingMutationCount = 0
+    private(set) var failedMutationCount = 0
+    private(set) var isSyncingMutations = false
+    private(set) var mutationSyncError: String?
+
     private var tokens: SimklTokens?
     private var pollingTask: Task<Void, Never>?
     private var refreshTask: Task<String?, Never>?
+    private var mutationDrainTask: Task<Void, Never>?
+    private var mutationDrainID: UUID?
 
     /// The catalog context the connect flow captured, so the watched-history
     /// import can run the moment the device code is approved.
     private var importContext: ModelContext?
 
     private let client = SimklClient.shared
+    private let mutationOutbox = TrackerMutationOutbox(storageKey: "simkl.mutationOutbox.v1")
 
     private init() {}
 
@@ -77,6 +89,8 @@ final class SimklService {
             return
         }
         username = try? await client.currentUser(accessToken: accessToken).name
+        refreshMutationStatus()
+        retryPendingMutations()
     }
 
     // MARK: - Connect (device flow)
@@ -159,6 +173,8 @@ final class SimklService {
         pendingCode = nil
         isConnecting = false
         connectionError = nil
+        refreshMutationStatus()
+        retryPendingMutations()
 
         // The issue's contract: the account's watched history imports on
         // connect, not only on demand. Runs on the context the connect call
@@ -183,6 +199,9 @@ final class SimklService {
     func disconnect() async {
         pollingTask?.cancel()
         pollingTask = nil
+        mutationDrainTask?.cancel()
+        mutationDrainTask = nil
+        mutationDrainID = nil
         if let accessToken = tokens?.accessToken {
             try? await client.revokeToken(accessToken)
         }
@@ -195,46 +214,124 @@ final class SimklService {
         isConnecting = false
         lastImport = nil
         importContext = nil
+        pendingMutationCount = 0
+        failedMutationCount = 0
+        isSyncingMutations = false
+        mutationSyncError = nil
     }
 
-    // MARK: - Watched sync (fire-and-forget)
+    // MARK: - Durable watched sync
 
     /// Syncs a movie's watched state to Simkl. Captures the TMDB id and title
     /// up front so the model never crosses an actor boundary. No-ops when not
     /// connected or the movie has no TMDB id.
     func syncWatched(movie: Movie, watched: Bool) {
-        guard isConnected, let tmdbID = movie.tmdbId else { return }
-        let items = SimklSyncItems.movie(tmdbID: tmdbID, title: movie.name)
-        syncHistory(items, add: watched)
+        guard let account = mutationAccount, let tmdbID = movie.tmdbId else { return }
+        mutationOutbox.enqueue(target: .movie(tmdbID: tmdbID), watched: watched, account: account)
+        refreshMutationStatus()
+        retryPendingMutations()
     }
 
     /// Syncs an episode's watched state to Simkl using its show's TMDB id plus
     /// the season/episode numbers.
     func syncWatched(episode: Episode, watched: Bool) {
-        guard isConnected, let series = episode.series, let showTMDBID = series.tmdbId else { return }
-        let items = SimklSyncItems.episode(
-            showTMDBID: showTMDBID,
-            showTitle: series.name,
-            season: episode.seasonNum,
-            episode: episode.episodeNum
+        guard let account = mutationAccount, let showTMDBID = episode.series?.tmdbId else { return }
+        mutationOutbox.enqueue(
+            target: .episode(showTMDBID: showTMDBID, season: episode.seasonNum, episode: episode.episodeNum),
+            watched: watched,
+            account: account
         )
-        syncHistory(items, add: watched)
+        refreshMutationStatus()
+        retryPendingMutations()
     }
 
-    private func syncHistory(_ items: SimklSyncItems, add: Bool) {
-        Task { [weak self] in
-            guard let self, let accessToken = await validAccessToken() else { return }
+    func retryPendingMutations() {
+        guard mutationDrainTask == nil, let account = mutationAccount,
+              mutationOutbox.firstMutation(account: account) != nil
+        else {
+            refreshMutationStatus()
+            return
+        }
+        mutationSyncError = nil
+        isSyncingMutations = true
+        let drainID = UUID()
+        mutationDrainID = drainID
+        mutationDrainTask = Task { [weak self] in
+            await self?.drainPendingMutations(account: account, drainID: drainID)
+        }
+    }
+
+    private func drainPendingMutations(account: String, drainID: UUID) async {
+        defer {
+            if mutationDrainID == drainID {
+                mutationDrainTask = nil
+                mutationDrainID = nil
+                isSyncingMutations = false
+                refreshMutationStatus()
+            }
+        }
+        while !Task.isCancelled,
+              mutationAccount == account,
+              let mutation = mutationOutbox.firstMutation(account: account)
+        {
+            guard let accessToken = await validAccessToken() else {
+                mutationOutbox.recordFailure(id: mutation.id, account: account)
+                mutationSyncError = "Couldn't sync changes to Simkl. Please try again."
+                break
+            }
             do {
-                if add {
+                let items = historyItems(for: mutation.target)
+                if mutation.watched {
                     try await client.addToHistory(items, accessToken: accessToken)
                 } else {
                     try await client.removeFromHistory(items, accessToken: accessToken)
                 }
+                mutationOutbox.acknowledge(id: mutation.id, account: account)
             } catch {
-                // Scrobbling is best-effort; a failed sync shouldn't disrupt
-                // playback or the UI.
+                mutationOutbox.recordFailure(id: mutation.id, account: account)
+                mutationSyncError = "Couldn't sync changes to Simkl. Please try again."
+                if mutationOutbox.contains(id: mutation.id, account: account) { break }
             }
         }
+    }
+
+    private func historyItems(for target: TrackerHistoryMutation.Target) -> SimklSyncItems {
+        switch target {
+        case let .movie(tmdbID): SimklSyncItems.movie(tmdbID: tmdbID, title: nil)
+        case let .episode(showTMDBID, season, episode):
+            SimklSyncItems.episode(showTMDBID: showTMDBID, showTitle: nil, season: season, episode: episode)
+        }
+    }
+
+    private var mutationAccount: String? {
+        guard isConnected, let username else { return nil }
+        return username.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    }
+
+    private func refreshMutationStatus() {
+        guard let account = mutationAccount else {
+            pendingMutationCount = 0
+            failedMutationCount = 0
+            mutationSyncError = nil
+            return
+        }
+        let status = mutationOutbox.status(account: account)
+        pendingMutationCount = status.pendingCount
+        failedMutationCount = status.failedCount
+        if status.failedCount == 0 {
+            mutationSyncError = nil
+        } else if mutationSyncError == nil {
+            mutationSyncError = "Some Simkl changes are waiting to retry."
+        }
+    }
+
+    // MARK: - Playback scrobbling
+
+    /// Simkl deliberately has no playback implementation yet. Keeping the
+    /// same API as Trakt lets a tracker dispatcher call both services without
+    /// claiming that old start/pause events are durable user intent.
+    func scrobble(_ target: TraktScrobbleTarget, action: TraktScrobbleAction, progress: Double) {
+        _ = (target, action, progress)
     }
 
     // MARK: - Watched import
