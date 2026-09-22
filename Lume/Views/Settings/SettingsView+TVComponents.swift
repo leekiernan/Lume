@@ -168,8 +168,8 @@ import SwiftUI
 
     // MARK: - Sports pane
 
-    /// Embedded under the Live TV Library area, because Sports opens fixtures on
-    /// the channels supplied by that area.
+    /// Selected from the Sports sibling in Library. Sports still requires the
+    /// Live TV area at runtime because it opens fixtures on those channels.
     struct TVSportsSettingsPane: View {
         @AppStorage(SportsSyncService.enabledKey) private var enabled = SportsSyncService.enabledDefault
         @AppStorage(SportsSyncService.tabEnabledKey) private var tabEnabled = SportsSyncService.tabEnabledDefault
