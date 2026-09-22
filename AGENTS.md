@@ -185,5 +185,74 @@ SwiftFormat + SwiftLint run as errors. Notable: `String(decoding:)` is banned; `
 
 ---
 
+## Working environment, testing & handoff (agents)
+
+This section is authoritative. It exists because "the workspace is empty" and
+"the package flags are broken" have both been filed as blockers when the real
+cause was working in the wrong directory. Read it before declaring a blocker.
+
+### The one checkout
+
+There is exactly one Lume checkout, and it is the repo you are reading now:
+
+```
+/Users/lee/Sites/lume-app/Lume
+```
+
+- It is a full Git working tree (`git rev-parse --is-inside-work-tree` → `true`),
+  with all Swift sources, `Lume.xcodeproj`, `LumeTests`, and both remotes wired.
+- The Paperclip **project mount** (`…/projects/…/_default`) is intentionally
+  empty. It is *not* the code and never will be. If your shell lands there,
+  `cd /Users/lee/Sites/lume-app/Lume` before doing anything else.
+- Before writing "blocked: no repository / empty workspace", run
+  `git -C /Users/lee/Sites/lume-app/Lume status`. If it succeeds, you are not
+  blocked — you were in the wrong directory. Fix the directory, don't file a
+  blocker.
+
+### Remotes (they mean different things)
+
+| Remote | URL | Role |
+|--------|-----|------|
+| `origin` | `leekiernan/Lume` | Our fork — where team branches land |
+| `upstream` | `bilipp/Lume` | Community upstream — public contributions |
+
+### Who verifies what
+
+Verification is split so nobody blocks on hardware they don't have:
+
+| Check | Owner | Notes |
+|-------|-------|-------|
+| Local unit tests (`LumeTests`) | Engineer **or** QA before handoff | iPhone 17 Pro sim, iOS 26.4+; see **Testing** above |
+| Build verification | Engineer **or** QA before handoff | `xcodebuild build` with the shared SPM clone |
+| Linting / formatting | Engineer **or** QA before handoff | SwiftFormat + SwiftLint (pre-commit hook enforces) |
+| **Device testing** | **Board** | Physical-device runs are the board's job — **never block a handoff on device testing** |
+
+A simulator that won't launch, DerivedData bloat, or a package-resolution flag
+is a **developer-environment problem, not a task blocker**. Fix it (see
+**Build & run**), or hand off with unit tests + build + lint green and note the
+local-env snag — do not stop the task for it.
+
+### Definition of Done
+
+A task is **complete only when its branch is merged.** `in_review`, `blocked`,
+and "implemented but unmerged" are all *not done*. The sequence is:
+
+1. Engineer implements on a branch; runs unit tests + build + lint (or QA does).
+2. Branch handed to Staff Engineer for review.
+3. On approval, **merge the branch**, then mark the task complete — not before.
+
+### Branch lifecycle after merge
+
+- Branch cut from `origin/main` (our fork): **delete it once merged.** It has
+  served its purpose; keeping it clutters the fork.
+- Branch cut from `upstream/main` (community upstream): **keep it after merge**
+  — it backs the public PR and community history.
+
+If you're unsure which a branch came from, check its upstream tracking
+(`git branch -vv`): branches showing `[upstream/main: …]` are community branches
+and are kept; branches tracking (or based on) `origin/main` are deleted on merge.
+
+---
+
 ## GitHub
 Issues & roadmap: <https://github.com/bilipp/Lume/issues>
