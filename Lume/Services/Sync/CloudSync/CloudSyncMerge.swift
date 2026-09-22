@@ -322,6 +322,81 @@ nonisolated struct TraktCredentialValues: Codable, Equatable {
     }
 }
 
+// MARK: - Simkl credentials
+
+/// The Simkl counterpart to `TraktCredentialValues`. It intentionally has the
+/// same three-way merge contract: only a fingerprint and issuance time enter
+/// the local shadow, concurrent refreshes choose the newest token, and an
+/// explicit disconnect wins over a concurrent refresh.
+nonisolated struct SimklCredentialValues: Codable, Equatable {
+    var tokens: SimklTokens?
+    private var fingerprint: String
+    private var issuedAt: TimeInterval
+
+    init(tokens: SimklTokens) {
+        self.tokens = tokens
+        issuedAt = tokens.issuedAt
+        fingerprint = Self.fingerprint(for: tokens)
+    }
+
+    static func == (lhs: SimklCredentialValues, rhs: SimklCredentialValues) -> Bool {
+        lhs.fingerprint == rhs.fingerprint
+    }
+
+    static func mergeConflict(local: SimklCredentialValues, cloud: SimklCredentialValues) -> SimklCredentialValues {
+        local.issuedAt > cloud.issuedAt ? local : cloud
+    }
+
+    static func reconcile(
+        local: SimklCredentialValues?,
+        cloud: SimklCredentialValues?,
+        shadow: SimklCredentialValues?
+    ) -> MergeVerdict<SimklCredentialValues> {
+        let localChanged = local != shadow
+        let cloudChanged = cloud != shadow
+        if localChanged, cloudChanged, local == nil {
+            return .pushToCloud(nil)
+        }
+        if localChanged, cloudChanged, cloud == nil {
+            return .pullToLocal(nil)
+        }
+        return CloudSyncMerge.reconcile(
+            local: local,
+            cloud: cloud,
+            shadow: shadow,
+            mergeConflict: mergeConflict
+        )
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case fingerprint, issuedAt
+    }
+
+    nonisolated init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        fingerprint = try container.decode(String.self, forKey: .fingerprint)
+        issuedAt = try container.decode(TimeInterval.self, forKey: .issuedAt)
+        tokens = nil
+    }
+
+    private static func fingerprint(for tokens: SimklTokens) -> String {
+        let components = [
+            tokens.accessToken,
+            tokens.refreshToken,
+            String(tokens.issuedAt.bitPattern),
+            String(tokens.expiresIn.bitPattern),
+            tokens.scope ?? "",
+            tokens.tokenType ?? ""
+        ]
+        let canonical = components
+            .map { "\($0.utf8.count):\($0)" }
+            .joined(separator: "|")
+        return SHA256.hash(data: Data(canonical.utf8))
+            .map { String(format: "%02x", $0) }
+            .joined()
+    }
+}
+
 // MARK: - Per-content user state
 
 /// The syncable user state of a single catalog item. Fields irrelevant to a
