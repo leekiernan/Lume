@@ -28,6 +28,13 @@ struct MainTabView: View {
     /// Changes when the viewer switches profile — see `activeProfileToken`.
     @AppStorage(ActiveProfileStore.key) private var activeProfileToken: String = ""
     @AppStorage(PlaylistSelectionStore.key) private var selectedPlaylistID: String = ""
+    /// Whether the Sports tab appears in the tab bar (Settings toggle). When off,
+    /// the hub is still reachable from the Home rail header.
+    @AppStorage(SportsSyncService.tabEnabledKey) private var sportsTabEnabled = SportsSyncService.tabEnabledDefault
+    /// The Sports feature itself is profile-scoped and additionally requires the
+    /// profile's Live TV area. Reading it here makes a settings toggle rebuild
+    /// the tab bar immediately, rather than waiting for an unrelated change.
+    @AppStorage(SportsSyncService.enabledKey) private var sportsEnabled = SportsSyncService.enabledDefault
 
     /// Selected tab and the Movies/Series navigation stacks, shared so an
     /// `onOpenURL` deep link can switch tabs and push a detail screen.
@@ -116,9 +123,17 @@ struct MainTabView: View {
         AppAreaSettings.isEnabled(area, disabledRaw: disabledAreasRaw)
     }
 
+    private var showsSportsTab: Bool {
+        sportsEnabled && sportsTabEnabled && SportsSyncService.isEnabled
+    }
+
     /// Move off a tab the user has just switched off, so the selection can
     /// never point at a tab that is no longer in the bar.
     private func repairSelectionIfNeeded() {
+        if router.selectedTab == .sports, !showsSportsTab {
+            router.selectedTab = AppAreaSettings.enabledAreas(disabledRaw: disabledAreasRaw).first?.tab ?? .home
+            return
+        }
         guard let area = AppArea.allCases.first(where: { $0.tab == router.selectedTab }),
               !isOn(area),
               let fallback = AppAreaSettings.enabledAreas(disabledRaw: disabledAreasRaw).first
@@ -137,12 +152,19 @@ struct MainTabView: View {
     var body: some View {
         @Bindable var router = router
         return tabView(selection: $router.selectedTab)
-            // Layout preferences are keyed by the active profile, and
-            // @AppStorage binds its key when the view is created — so the tabs
-            // are rebuilt on a switch to re-read under the new profile. The
-            // router lives outside this id, so navigation paths survive.
+            // Profile-scoped preferences bind when tab contents are rebuilt; the
+            // router remains outside this identity, so navigation paths survive.
             .id(activeProfileToken)
-            .onChange(of: disabledAreasRaw) { _, _ in repairSelectionIfNeeded() }
+            .onChange(of: disabledAreasRaw) { _, _ in
+                repairSelectionIfNeeded()
+                SportsSyncService.shared.availabilityDidChange()
+                SportsFollowService.shared.reload()
+            }
+            .onChange(of: sportsEnabled) { _, _ in
+                repairSelectionIfNeeded()
+                SportsSyncService.shared.availabilityDidChange()
+            }
+            .onChange(of: sportsTabEnabled) { _, _ in repairSelectionIfNeeded() }
         #if os(tvOS)
             .disabled(blockingOverlayOwnsScreen || router.isQuickSwitchPresented)
             // Attached OUTSIDE `.disabled` so the same button closes the modal it
@@ -194,7 +216,9 @@ struct MainTabView: View {
                 // app this is the practical equivalent of "on launch".
                 if phase == .active {
                     enqueueDueSyncs(playlists)
+                    SportsSyncService.shared.syncIfDue()
                 }
+                SportsSyncService.shared.isForeground = phase == .active
             }
             .syncCover(item: $activeSyncRequest, onDismiss: promoteNextIfIdle)
             .downloadsSheet(isPresented: $showsDownloads)
@@ -279,6 +303,14 @@ struct MainTabView: View {
                     }
                 }
 
+                if showsSportsTab {
+                    Tab(value: AppTab.sports) {
+                        activeOnly(.sports, selection: selection.wrappedValue) { TVSportsHubScreen() }
+                    } label: {
+                        Text("Sports")
+                    }
+                }
+
                 Tab(value: AppTab.settings) {
                     activeOnly(.settings, selection: selection.wrappedValue) { SettingsView() }
                 } label: {
@@ -350,6 +382,12 @@ struct MainTabView: View {
                 if isOn(.liveTV) {
                     Tab("Live TV", systemImage: "antenna.radiowaves.left.and.right", value: AppTab.liveTV) {
                         LiveTVView()
+                    }
+                }
+
+                if showsSportsTab {
+                    Tab("Sports", systemImage: "sportscourt", value: AppTab.sports) {
+                        SportsHubView()
                     }
                 }
 

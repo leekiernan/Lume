@@ -190,7 +190,9 @@ final class SectionFeed {
             switch section {
             case .trendingMovies, .trendingSeries: trendingState
             case .traktWatchlist: watchlistState
-            case .recentlyWatched, .favorites, .recentlyAdded, .forYou: .loaded
+            // Sports has its own pipeline (`SportsFollowService`/`SportsStore`) —
+            // this feed never fetches it, so there is nothing here to wait on.
+            case .recentlyWatched, .favorites, .recentlyAdded, .forYou, .sports: .loaded
             }
         case .custom:
             customState

@@ -479,9 +479,7 @@ struct BrowseQueryShapeTests {
         let config = ModelConfiguration(schema: schema, url: url, cloudKitDatabase: .none)
         return try ModelContainer(for: schema, configurations: [config])
     }
-}
 
-private extension BrowseQueryShapeTests {
     /// Complete descriptors remain available for explicit reads and benchmarks,
     /// while the shipping grids request bounded windows.
     @Test func `show-all grids use consistent pages`() {

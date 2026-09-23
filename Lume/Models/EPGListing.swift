@@ -36,6 +36,15 @@ final class EPGListing {
     /// its own snapshot, never every guide row ahead of a successful fetch.
     var sourceID: UUID?
 
+    /// XMLTV `<sub-title>` — episode title for series, or the fixture line for a
+    /// sports broadcast. Optional/defaulted so adding it is a lightweight
+    /// migration; deliberately kept out of the guide loaders' `propertiesToFetch`
+    /// so the hot now/next and guide-window fetches don't pay for it.
+    var subtitle: String?
+    /// XMLTV `<category>` values joined with ", " — the signal the Sports Hub
+    /// uses to spot sports broadcasts.
+    var category: String?
+
     init(
         id: String,
         channelId: String,
@@ -43,7 +52,9 @@ final class EPGListing {
         listingDescription: String,
         start: Date,
         end: Date,
-        sourceID: UUID? = nil
+        sourceID: UUID? = nil,
+        subtitle: String? = nil,
+        category: String? = nil
     ) {
         self.id = id
         self.channelId = channelId
@@ -52,5 +63,21 @@ final class EPGListing {
         self.start = start
         self.end = end
         self.sourceID = sourceID
+        self.subtitle = subtitle
+        self.category = category
+    }
+
+    /// Updates every field a refresh can change, skipping the write when a
+    /// field is already current — `EPGSyncManager.replaceSnapshot` retains
+    /// rows across a refresh instead of deleting and reinserting them (see its
+    /// own comment), so an unmoved field should cost nothing.
+    func update(from programme: ParsedProgramme, category: String?) {
+        if channelId != programme.channelId { channelId = programme.channelId }
+        if title != programme.title { title = programme.title }
+        if listingDescription != programme.description { listingDescription = programme.description }
+        if start != programme.start { start = programme.start }
+        if end != programme.end { end = programme.end }
+        if subtitle != programme.subtitle { subtitle = programme.subtitle }
+        if self.category != category { self.category = category }
     }
 }
