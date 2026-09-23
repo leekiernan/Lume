@@ -3,14 +3,16 @@
 //  Lume
 //
 //  One screen for everything that shapes what the app shows, organised by the
-//  same areas as the top navigation: Home, Movies, Series, Live TV. It replaces
+//  same areas as the top navigation: Home, Movies, Series, Live TV, and Sports.
 //  the separate "Content Management" and "Layout" entries, which split the same
 //  decisions across two places — one by content type, the other by page.
 //
 //  Each area can be switched off entirely, which removes its tab *and* stops it
 //  syncing (see `AppAreaSettings`). Drilling into an area gives whatever it has
 //  to configure: rows for Home, rows and categories for Movies and Series,
-//  categories and channels for Live TV.
+//  categories and channels for Live TV. Sports is a sibling settings item but
+//  remains operationally dependent on Live TV because fixtures open its EPG
+//  channels.
 //
 
 #if !os(tvOS)
@@ -25,6 +27,12 @@
                 Section {
                     ForEach(AppArea.allCases) { area in
                         row(for: area)
+                    }
+
+                    NavigationLink {
+                        SportsSettingsView()
+                    } label: {
+                        Label("Sports", systemImage: "sportscourt")
                     }
                 } header: {
                     Text("Areas")

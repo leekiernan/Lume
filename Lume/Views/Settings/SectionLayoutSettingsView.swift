@@ -23,8 +23,14 @@
         @AppStorage private var customSectionsRaw: String
         @AppStorage private var heroSectionRaw: String
         @AppStorage private var heroSeeded: Bool
+        /// Sports is a Live TV feature (fixtures matched to EPG channels), so it
+        /// only offers itself as a row when this profile has Live TV on.
+        @AppStorage(AppAreaSettings.disabledAreasKey) private var disabledAreasRaw = ""
         @State private var premium = PremiumManager.shared
         @State private var showPaywall = false
+        /// Which paywall to surface — "For You" and "Sports" are both Lume Pro
+        /// features but advertise different entitlements.
+        @State private var paywallHighlight: PremiumFeature = .recommendations
         @State private var editorMode: CustomHomeSectionEditor.Mode?
 
         /// The three stores are keyed by surface, so they're built in `init`
@@ -44,7 +50,10 @@
         }
 
         private var sections: [HomeSectionRef] {
-            HomeLayoutSettings.resolve(orderRaw: sectionOrderRaw, custom: customSections, surface: surface)
+            HomeLayoutSettings.resolve(
+                orderRaw: sectionOrderRaw, custom: customSections, surface: surface,
+                liveTVEnabled: AppAreaSettings.isEnabled(.liveTV, disabledRaw: disabledAreasRaw)
+            )
         }
 
         var body: some View {
@@ -96,7 +105,7 @@
                 // the Player Engines list). Toggles stay interactive in edit mode.
                 .environment(\.editMode, .constant(.active))
             #endif
-                .paywall(isPresented: $showPaywall, highlight: .recommendations)
+                .paywall(isPresented: $showPaywall, highlight: paywallHighlight)
                 .sheet(item: $editorMode) { mode in
                     CustomHomeSectionEditor(mode: mode, surface: surface, onSave: save, onDelete: delete)
                 }
@@ -221,11 +230,13 @@
             }
         }
 
+        /// Rows badged with a crown for free users — Sideload/owned builds are
+        /// always premium, so the crown never shows there.
+        private static let premiumSections: Set<HomeSection> = [.forYou, .sports]
+
         @ViewBuilder
         private func rowLabel(for section: HomeSection) -> some View {
-            // "For You" is a Lume Pro feature: badge it with a crown for free users
-            // (Sideload/owned builds are always premium, so the crown never shows).
-            if section == .forYou, !premium.isPremium {
+            if Self.premiumSections.contains(section), !premium.isPremium {
                 Label {
                     HStack(spacing: 6) {
                         Text(section.title)
@@ -245,16 +256,34 @@
 
         /// On/off binding for a built-in section. "For You" maps to the
         /// recommendations flag and is gated behind Lume Pro — a free user turning
-        /// it on gets the paywall instead. Every other section is tracked by
-        /// `HomeLayoutSettings`' disabled set (absent ⇒ enabled).
+        /// it on gets the paywall instead. "Sports" is gated the same way, but
+        /// stays in the ordinary disabled set — it has no flag of its own.
+        /// Every other section is tracked by `HomeLayoutSettings`' disabled set
+        /// (absent ⇒ enabled).
         private func enabledBinding(for section: HomeSection) -> Binding<Bool> {
-            guard section == .forYou else { return enabledBinding(for: .builtin(section)) }
+            guard section == .forYou else {
+                guard section == .sports else { return enabledBinding(for: .builtin(section)) }
+                return Binding(
+                    get: { HomeLayoutSettings.isEnabled(.builtin(section), disabledRaw: disabledSectionsRaw) },
+                    set: { isOn in
+                        if isOn, !premium.isPremium {
+                            paywallHighlight = .sportsHub
+                            showPaywall = true
+                            return
+                        }
+                        disabledSectionsRaw = HomeLayoutSettings.settingEnabled(
+                            isOn, for: .builtin(section), disabledRaw: disabledSectionsRaw
+                        )
+                    }
+                )
+            }
             return Binding(
                 get: { recommendationsEnabled },
                 set: { isOn in
                     if isOn, !premium.isPremium {
                         // Don't enable; surface the paywall. The toggle snaps
                         // back to off because the getter still returns false.
+                        paywallHighlight = .recommendations
                         showPaywall = true
                         return
                     }

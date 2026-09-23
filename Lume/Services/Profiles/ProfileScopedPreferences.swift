@@ -42,7 +42,10 @@ nonisolated enum ProfileScopedPreferences {
     static var scopedBaseKeys: [String] {
         var keys = [
             AppAreaSettings.baseDisabledAreasKey,
-            RecommendationSettings.baseEnabledKey
+            RecommendationSettings.baseEnabledKey,
+            SportsSyncService.baseEnabledKey,
+            SportsSyncService.baseTabEnabledKey,
+            SportsSyncService.baseSyncFrequencyKey
         ]
         for surface in SectionSurface.allCases {
             keys.append(HomeLayoutSettings.baseSectionOrderKey(surface))
@@ -55,7 +58,11 @@ nonisolated enum ProfileScopedPreferences {
     }
 
     private static var booleanBaseKeys: Set<String> {
-        [RecommendationSettings.baseEnabledKey]
+        [
+            RecommendationSettings.baseEnabledKey,
+            SportsSyncService.baseEnabledKey,
+            SportsSyncService.baseTabEnabledKey
+        ]
     }
 
     /// Captures every syncable value, including defaults. Explicit empty/false
@@ -71,13 +78,26 @@ nonisolated enum ProfileScopedPreferences {
             let scoped = key(base, profileID: profileID)
             if booleanBaseKeys.contains(base) {
                 booleans[base] = defaults.object(forKey: scoped) == nil
-                    ? RecommendationSettings.enabledDefault
+                    ? defaultBooleanValue(for: base)
                     : defaults.bool(forKey: scoped)
             } else {
                 strings[base] = defaults.string(forKey: scoped) ?? ""
             }
         }
         return ProfilePreferencesSnapshot(strings: strings, booleans: booleans)
+    }
+
+    private static func defaultBooleanValue(for base: String) -> Bool {
+        switch base {
+        case RecommendationSettings.baseEnabledKey:
+            RecommendationSettings.enabledDefault
+        case SportsSyncService.baseEnabledKey:
+            SportsSyncService.enabledDefault
+        case SportsSyncService.baseTabEnabledKey:
+            SportsSyncService.tabEnabledDefault
+        default:
+            false
+        }
     }
 
     /// Whether this install has any pre-snapshot values worth seeding into
@@ -183,6 +203,9 @@ nonisolated enum ProfileScopedPreferences {
     /// one-time repair adopts that latest bare value before the views switch to
     /// the correctly scoped key.
     static let recommendationMigrationFlagKey = "profiles.recommendationsScoped.v2"
+    /// Sports arrived after the original layout migration. Existing global Sports
+    /// choices need one adoption pass even on installs that already completed it.
+    static let sportsMigrationFlagKey = "profiles.sportsScoped.v1"
 
     /// Adopts the layout someone had before this change as the active profile's.
     /// Without it, upgrading would silently reset every existing install to the
@@ -222,6 +245,21 @@ nonisolated enum ProfileScopedPreferences {
                 defaults.set(legacy, forKey: scoped)
             }
             defaults.set(true, forKey: recommendationMigrationFlagKey)
+        }
+
+        if !defaults.bool(forKey: sportsMigrationFlagKey) {
+            for base in [
+                SportsSyncService.baseEnabledKey,
+                SportsSyncService.baseTabEnabledKey,
+                SportsSyncService.baseSyncFrequencyKey
+            ] {
+                let scoped = key(base)
+                guard scoped != base, defaults.object(forKey: scoped) == nil,
+                      let legacy = defaults.object(forKey: base)
+                else { continue }
+                defaults.set(legacy, forKey: scoped)
+            }
+            defaults.set(true, forKey: sportsMigrationFlagKey)
         }
     }
 }

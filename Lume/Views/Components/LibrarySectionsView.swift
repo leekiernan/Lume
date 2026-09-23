@@ -137,8 +137,8 @@ struct LibrarySectionsView<CollectionRow: View>: View {
                 Text("From Your Trakt Watchlist"), feed.items(for: .builtin(section)),
                 section: .builtin(section), collectionTitle: String(localized: "From Your Trakt Watchlist")
             )
-        case .forYou:
-            // Home only — `HomeSection.cases(for:)` never yields it here.
+        case .forYou, .sports:
+            // Home only — `HomeSection.cases(for:)` never yields either here.
             EmptyView()
         }
     }

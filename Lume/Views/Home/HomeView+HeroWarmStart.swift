@@ -13,9 +13,14 @@ extension HomeView {
         playlists.active(for: selectedPlaylistID)
     }
 
-    /// The promoted row, if it is configured and still switched on.
+    /// The promoted row, if it is configured, still switched on, and — since
+    /// every promotable row is a movie/series list (see
+    /// `SectionSurface.defaultHeroSourceURL`; Sports isn't promotable) —
+    /// the profile can browse at least one of those catalogs. Showing a hero
+    /// that can't be opened is worse than showing none. See `vodAvailable`.
     var heroRef: HomeSectionRef? {
-        guard let ref = HomeLayoutSettings.heroRef(heroSectionRaw),
+        guard vodAvailable,
+              let ref = HomeLayoutSettings.heroRef(heroSectionRaw),
               HomeLayoutSettings.isEnabled(ref, disabledRaw: disabledSectionsRaw)
         else { return nil }
         return ref

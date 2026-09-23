@@ -2,33 +2,16 @@
 //  FullScreenPlayerView+Trakt.swift
 //  Lume
 //
-//  Permanent Trakt history updates triggered by playback completion.
+//  Transient Trakt scrobble (start/pause/stop) triggered by playback state.
+//  The one-time durable "watched" sync lives in `syncWatchedServices(ref:)`
+//  (FullScreenPlayerView.swift) — it now syncs Simkl alongside Trakt, so both
+//  trackers share the one completion path instead of Trakt alone reaching it.
 //
 
 import Foundation
 import SwiftData
 
 extension FullScreenPlayerView {
-    /// One-time durable watched sync when local playback crosses the completion
-    /// threshold. This is deliberately separate from transient scrobble stop:
-    /// a failed lifecycle event must not lose permanent watched history.
-    func syncTraktWatched(ref: PlayableMedia.ContentRef) {
-        switch ref {
-        case let .movie(id):
-            var descriptor = FetchDescriptor<Movie>(predicate: #Predicate { $0.id == id })
-            descriptor.fetchLimit = 1
-            guard let movie = try? modelContext.fetch(descriptor).first else { return }
-            TraktService.shared.syncWatched(movie: movie, watched: true)
-        case let .episode(id):
-            var descriptor = FetchDescriptor<Episode>(predicate: #Predicate { $0.id == id })
-            descriptor.fetchLimit = 1
-            guard let episode = try? modelContext.fetch(descriptor).first else { return }
-            TraktService.shared.syncWatched(episode: episode, watched: true)
-        case .live:
-            break
-        }
-    }
-
     /// The Trakt identity and catalog duration for a playable item. This is
     /// resolved only at transport boundaries, never on the playback tick path.
     private func traktPlaybackDetails(

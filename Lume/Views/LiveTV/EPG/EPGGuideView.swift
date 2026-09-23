@@ -224,7 +224,9 @@ struct EPGGuideView: View {
                         title: titles[slot % titles.count],
                         listingDescription: "A sample programme synopsis used for preview purposes only.",
                         start: cursor,
-                        end: end
+                        end: end,
+                        subtitle: "Episode \(slot)",
+                        category: "General"
                     ))
                     cursor = end
                     slot += 1

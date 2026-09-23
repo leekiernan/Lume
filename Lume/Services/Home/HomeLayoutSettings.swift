@@ -22,6 +22,7 @@ enum HomeSection: String, CaseIterable, Identifiable {
     case trendingMovies
     case trendingSeries
     case traktWatchlist
+    case sports
 
     var id: String {
         rawValue
@@ -53,6 +54,7 @@ enum HomeSection: String, CaseIterable, Identifiable {
         case .trendingMovies: "Trending Movies"
         case .trendingSeries: "Trending Series"
         case .traktWatchlist: "Trakt Watchlist"
+        case .sports: "Sports"
         }
     }
 
@@ -68,6 +70,7 @@ enum HomeSection: String, CaseIterable, Identifiable {
         case .trendingMovies: String(localized: "Trending Movies")
         case .trendingSeries: String(localized: "Trending Series")
         case .traktWatchlist: String(localized: "Trakt Watchlist")
+        case .sports: String(localized: "Sports")
         }
     }
 
@@ -77,7 +80,7 @@ enum HomeSection: String, CaseIterable, Identifiable {
     var isPromotable: Bool {
         switch self {
         case .trendingMovies, .trendingSeries, .traktWatchlist: true
-        case .recentlyWatched, .favorites, .recentlyAdded, .forYou: false
+        case .recentlyWatched, .favorites, .recentlyAdded, .forYou, .sports: false
         }
     }
 
@@ -90,6 +93,7 @@ enum HomeSection: String, CaseIterable, Identifiable {
         case .trendingMovies: "film"
         case .trendingSeries: "tv"
         case .traktWatchlist: "rectangle.stack.badge.play"
+        case .sports: "sportscourt"
         }
     }
 }
@@ -242,9 +246,10 @@ enum HomeLayoutSettings {
     static func resolve(
         orderRaw: String,
         custom: [CustomHomeSection],
-        surface: SectionSurface
+        surface: SectionSurface,
+        liveTVEnabled: Bool = true
     ) -> [HomeSectionRef] {
-        normalized(decode(orderRaw), custom: custom, surface: surface)
+        normalized(decode(orderRaw), custom: custom, surface: surface, liveTVEnabled: liveTVEnabled)
     }
 
     /// Parse the comma-separated raw value into rows, dropping any token that
@@ -264,13 +269,21 @@ enum HomeLayoutSettings {
     /// sections in the order they were added. Guarantees the order is always
     /// complete even after a new case is added to `HomeSection`, or a section
     /// is added on another device, once the user has stored their order.
+    /// `liveTVEnabled` drops Sports from the surfaced builtins (and from any
+    /// stored order that still names it) when the active profile has Live TV
+    /// switched off — Sports is fixture data matched against the EPG, so with
+    /// no Live TV there is nothing for it to show. Defaults to `true` so
+    /// callers with no opinion (Movies, Series — surfaces `cases(for:)` never
+    /// gives Sports to anyway) are unaffected.
     static func normalized(
         _ order: [HomeSectionRef],
         custom: [CustomHomeSection],
-        surface: SectionSurface
+        surface: SectionSurface,
+        liveTVEnabled: Bool = true
     ) -> [HomeSectionRef] {
         let customIDs = Set(custom.map(\.id))
-        let builtins = HomeSection.cases(for: surface)
+        var builtins = HomeSection.cases(for: surface)
+        if !liveTVEnabled { builtins.removeAll { $0 == .sports } }
         var seen = Set<HomeSectionRef>()
         var result: [HomeSectionRef] = []
         for ref in order where seen.insert(ref).inserted {

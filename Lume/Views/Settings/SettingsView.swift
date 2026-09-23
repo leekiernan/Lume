@@ -11,8 +11,10 @@ struct SettingsView: View {
     @Query var playlists: [Playlist]
     /// Not `private`: read by the SettingsView+Playlists extension (separate file).
     @State var showingAddPlaylist = false
-    @State private var trakt = TraktService.shared
-    @State private var openSubtitles = OpenSubtitlesService.shared
+    /// Not `private`: read by the SettingsView+Integrations extension (separate file).
+    @State var trakt = TraktService.shared
+    @State var simkl = SimklService.shared
+    @State var openSubtitles = OpenSubtitlesService.shared
     /// Premium entitlement + paywall presentation. Not `private`: read by the
     /// SettingsView+Playlists / +TVComponents extensions (separate files).
     @State var premium = PremiumManager.shared
@@ -127,6 +129,9 @@ struct SettingsView: View {
         /// don't interpret that transient focus as user navigation before the
         /// enable row has reclaimed focus.
         @State var restoringLibraryAreaToggleFocus = false
+        /// Sports is a Library sibling, not an `AppArea`: it has no catalog of
+        /// its own and remains unavailable while the parent Live TV area is off.
+        @State var showingSportsSettings = false
         /// Whether the Playlists pane has drilled into the guide's sources.
         @State var showingEPGSources = false
         @AppStorage(AppAreaSettings.disabledAreasKey) var disabledAreasRaw = ""
@@ -160,8 +165,11 @@ struct SettingsView: View {
                     appearanceSection
                     searchSection
                     autoSyncSection
+                    // No standalone TV Guide section here: its sources are a
+                    // NavigationLink inside `playlistsSection` in this fork,
+                    // not their own top-level section.
                     CloudSyncSection()
-                    if trakt.isConfigured {
+                    if trakt.isConfigured || simkl.isConfigured {
                         integrationsSection
                     }
                     playbackSection
@@ -226,7 +234,7 @@ struct SettingsView: View {
 
                                 VStack(alignment: .leading, spacing: 1) {
                                     Text(playlist.name)
-                                    Text(playlist.serverURL)
+                                    Text(playlist.displayURL)
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
                                         .lineLimit(1)
@@ -310,44 +318,6 @@ struct SettingsView: View {
                 Text("Search")
             } footer: {
                 Text("When off, search only finds content in the active playlist. Turn this on to search across all your playlists.")
-            }
-        }
-
-        private var integrationsSection: some View {
-            Section {
-                NavigationLink {
-                    TraktIntegrationView()
-                } label: {
-                    HStack {
-                        Label("Trakt", systemImage: "rectangle.stack.badge.play")
-                        Spacer()
-                        if trakt.isConnected {
-                            Text(trakt.username.map { "@\($0)" } ?? "Connected")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                }
-
-                if openSubtitles.isConfigured {
-                    NavigationLink {
-                        OpenSubtitlesIntegrationView()
-                    } label: {
-                        HStack {
-                            Label("OpenSubtitles", systemImage: "captions.bubble")
-                            Spacer()
-                            if let username = openSubtitles.username {
-                                Text(username)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                    }
-                }
-            } header: {
-                Text("Integrations")
-            } footer: {
-                Text("Sync watched movies and episodes, show your Trakt watchlist on Home, and download subtitles for anything that ships without them.")
             }
         }
 
@@ -519,7 +489,7 @@ struct SettingsView: View {
         /// credentials for at least one of them.
         private var availableCategories: [SettingsCategory] {
             SettingsCategory.allCases.filter {
-                $0 != .integrations || trakt.isConfigured || openSubtitles.isConfigured
+                $0 != .integrations || trakt.isConfigured || simkl.isConfigured || openSubtitles.isConfigured
             }
         }
 
@@ -570,17 +540,6 @@ struct SettingsView: View {
                 }
             }
             .focusSection()
-        }
-
-        private var tvIntegrationsDetail: some View {
-            VStack(alignment: .leading, spacing: 36) {
-                if trakt.isConfigured {
-                    TVTraktIntegrationView()
-                }
-                if openSubtitles.isConfigured {
-                    TVOpenSubtitlesIntegrationView()
-                }
-            }
         }
 
         private var tvSearchDetail: some View {

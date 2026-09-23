@@ -15,6 +15,8 @@ import SwiftUI
 
     /// The top-level settings categories shown in the tvOS sidebar.
     enum SettingsCategory: String, CaseIterable, Identifiable {
+        /// Content/Home/TV Guide/Sports are one "Library" category; TV Guide's
+        /// sources live under Playlists instead of their own category.
         case premium, playlists, profiles, library, search, integrations, player, storage, about
 
         var id: String {
@@ -161,6 +163,96 @@ import SwiftUI
                 RoundedRectangle(cornerRadius: TVSettingsMetrics.rowCornerRadius, style: .continuous)
                     .fill(Color.white.opacity(0.05))
             )
+        }
+    }
+
+    // MARK: - Sports pane
+
+    /// Selected from the Sports sibling in Library. Sports still requires the
+    /// Live TV area at runtime because it opens fixtures on those channels.
+    struct TVSportsSettingsPane: View {
+        @AppStorage(SportsSyncService.enabledKey) private var enabled = SportsSyncService.enabledDefault
+        @AppStorage(SportsSyncService.tabEnabledKey) private var tabEnabled = SportsSyncService.tabEnabledDefault
+        @AppStorage(SportsSyncService.syncFrequencyKey)
+        private var freqRaw = SportsSyncService.defaultFrequency.rawValue
+        @State private var sync = SportsSyncService.shared
+        @State private var showManageTeams = false
+
+        var body: some View {
+            VStack(alignment: .leading, spacing: 36) {
+                VStack(alignment: .leading, spacing: 8) {
+                    TVSettingsSectionLabel("Sports")
+
+                    TVOptionToggleRow(title: "Enable Sports", isOn: $enabled)
+
+                    if enabled {
+                        Button {
+                            showManageTeams = true
+                        } label: {
+                            HStack(spacing: 16) {
+                                Label("Manage Teams", systemImage: "person.2.badge.plus")
+                                Spacer(minLength: 0)
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 22, weight: .semibold))
+                            }
+                        }
+                        .buttonStyle(TVSettingsRowButtonStyle())
+
+                        TVOptionToggleRow(title: "Show Sports Tab", isOn: $tabEnabled)
+                    }
+                }
+
+                if enabled {
+                    VStack(alignment: .leading, spacing: 8) {
+                        TVSettingsSectionLabel("Sports Data")
+
+                        TVOptionCycleRow(
+                            title: "Refresh",
+                            valueLabel: String(localized: frequency.label)
+                        ) { freqRaw = PlayerOptionCycle.next(freqRaw, in: SyncFrequency.self) }
+
+                        Button {
+                            sync.syncNow()
+                        } label: {
+                            HStack(spacing: 16) {
+                                Text(sync.isSyncing ? "Refreshing…" : "Refresh Now")
+                                Spacer(minLength: 0)
+                                if sync.isSyncing {
+                                    ProgressView()
+                                }
+                            }
+                        }
+                        .buttonStyle(TVSettingsRowButtonStyle())
+                        .disabled(sync.isSyncing)
+
+                        TVSettingsValueRow("Last Refreshed", value: lastRefreshText)
+                    }
+                }
+
+                Text("Follow leagues and teams to build your Sports Hub. Fixtures, live scores and standings come from ESPN, and each game links to a channel in your playlists.")
+                    .font(.system(size: 20))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, TVSettingsMetrics.rowHPadding)
+            }
+            .fullScreenCover(isPresented: $showManageTeams) {
+                TVManageTeamsPane()
+            }
+            .onChange(of: enabled) { _, _ in
+                SportsSyncService.shared.availabilityDidChange()
+                SportsFollowService.shared.reload()
+            }
+        }
+
+        private var frequency: SyncFrequency {
+            SyncFrequency(rawValue: freqRaw) ?? SportsSyncService.defaultFrequency
+        }
+
+        /// A relative "last refreshed" line, or "Never" before the first refresh.
+        private var lastRefreshText: String {
+            if let last = sync.lastRefresh {
+                return last.formatted(.relative(presentation: .named))
+            }
+            return String(localized: "Never")
         }
     }
 

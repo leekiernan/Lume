@@ -37,21 +37,6 @@ extension SettingsView {
                 Text("Playlists refresh automatically in the background at this interval. Disable a specific playlist's sync in its details.")
             }
         }
-
-        /// iOS / macOS grouped-list section linking to the dedicated EPG settings.
-        var epgSection: some View {
-            Section {
-                NavigationLink {
-                    EPGSettingsView()
-                } label: {
-                    Label("TV Guide", systemImage: "list.clipboard")
-                }
-            } header: {
-                Text("TV Guide")
-            } footer: {
-                Text("Add EPG sources and set how often the guide refreshes, separately from playlist content.")
-            }
-        }
     #else
         /// tvOS detail-pane section, using the same checkmark-row style as the
         /// player engine picker.
