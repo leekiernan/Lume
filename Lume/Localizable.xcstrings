@@ -49876,6 +49876,58 @@
         }
       }
     },
+    "That list doesn't exist or isn't shared with your Trakt account. Check the link." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diese Liste existiert nicht oder ist nicht für dein Trakt-Konto freigegeben. Prüfe den Link."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esa lista no existe o no está compartida con tu cuenta de Trakt. Comprueba el enlace."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cette liste n'existe pas ou n'est pas partagée avec votre compte Trakt. Vérifiez le lien."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Questa lista non esiste o non è condivisa con il tuo account Trakt. Controlla il link."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "このリストは存在しないか、あなたのTraktアカウントと共有されていません。リンクを確認してください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이 목록은 존재하지 않거나 내 Trakt 계정과 공유되지 않았습니다. 링크를 확인하세요."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Essa lista não existe ou não está compartilhada com sua conta do Trakt. Verifique o link."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "该列表不存在，或未与你的 Trakt 账户共享。请检查链接。"
+          }
+        }
+      }
+    },
     "That list is empty." : {
       "localizations" : {
         "de" : {

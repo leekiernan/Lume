@@ -381,7 +381,8 @@ struct HomeView: View {
     /// Identity of the custom-section load. Shares the trending key's playlist /
     /// sync / visibility inputs — the match is against the same catalog — plus a
     /// signature of the sections themselves, so adding a row or editing its URL
-    /// reloads while renaming one doesn't.
+    /// reloads while renaming one doesn't — and, when a row reads from Trakt,
+    /// the connected account, since that decides which private lists open.
     /// Includes the promoted section: choosing a hero changes neither the
     /// catalog nor the section list, so without it the load never re-runs and
     /// the feed is never told which section to build the hero from.
@@ -391,6 +392,7 @@ struct HomeView: View {
 
     private var customSectionsCacheKey: String {
         "custom-\(trendingKey)-\(CustomHomeSections.contentSignature(visibleCustomSections))"
+            + CustomHomeSections.accountSignature(visibleCustomSections, traktUsername: trakt.username)
     }
 
     /// Creates Home's starting hero the first time it is needed, as an ordinary

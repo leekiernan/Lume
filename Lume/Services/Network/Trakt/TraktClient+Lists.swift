@@ -3,8 +3,9 @@
 //  Lume
 //
 //  Reading a Trakt list's items so a custom row can be built from it
-//  (`TraktListProvider`). A public list needs only the app's API key — no
-//  connected account — so this never sends the user's token.
+//  (`TraktListProvider`). A public list needs only the app's API key; the
+//  connected user's token is sent too when there is one, which is what lets
+//  their own private lists through.
 //
 //  Trakt lists mix media and can hold seasons, episodes and people too; each
 //  item names its own kind. Seasons and episodes stand in for their show, which
@@ -29,15 +30,17 @@ nonisolated extension TraktClient {
     /// The items at `apiPath` (e.g. `users/alice/lists/favs/items`), in the
     /// order the list's owner chose to sort it — Trakt applies that server-side,
     /// so a "newest first" list arrives newest first. Items with no TMDB id, and
-    /// people, are dropped.
+    /// people, are dropped. `accessToken` is optional: nil reads public lists
+    /// only.
     func listEntries(
         apiPath: String,
+        accessToken: String? = nil,
         pages: Int = TraktClient.listPageLimit
     ) async throws -> [TraktListEntry] {
         let items: [TraktListItem] = try await allPages(
             "/\(apiPath)",
             maxPages: max(pages, 1),
-            accessToken: nil
+            accessToken: accessToken
         )
         return items.compactMap(\.entry)
     }
