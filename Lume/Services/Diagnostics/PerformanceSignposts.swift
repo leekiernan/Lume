@@ -108,6 +108,7 @@ nonisolated extension PerfSignpost {
     // Home
     static let homeTrendingLoad = PerfSignpost("HomeTrendingLoad")
     static let homeRecommendations = PerfSignpost("HomeRecommendations")
+    static let homeCustomSections = PerfSignpost("HomeCustomSections")
 
     /// Sports
     /// The off-main batch fixture→channel resolve (`SportsChannelResolver`): two

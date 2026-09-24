@@ -13,12 +13,17 @@ import SwiftUI
 // MARK: - Row
 
 struct HomeRow: View {
-    let title: LocalizedStringKey
+    /// A `Text` rather than a `LocalizedStringKey` so custom rows can pass their
+    /// user-typed header verbatim while the built-in rows stay localized.
+    let title: Text
     let items: [HomeMediaItem]
     /// Resume fractions keyed by series id, resolved once for the whole screen
     /// (`SeriesResumeLoader`) rather than per card — see `HomeMediaItem`.
     let seriesResume: [String: Double]
     let onPlayLive: (LiveStream) -> Void
+    /// Destination for remote rows whose retained source contains more than the
+    /// 20-card preview. Local rows supply their own collection navigation.
+    var showAll: SectionCollectionSelection?
     /// When set, each card gains a "Remove from Recently Watched" context menu.
     /// Only the Recently Watched row passes this; the others leave it nil.
     var onRemove: ((HomeMediaItem) -> Void)?
@@ -31,11 +36,22 @@ struct HomeRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(title)
-                .font(.subheadline)
-                .fontWeight(.bold)
-                .foregroundStyle(.secondary)
-                .padding(.horizontal)
+            HStack {
+                title
+                    .font(PosterCardMetrics.railTitleFont)
+                    .fontWeight(.bold)
+                    .foregroundStyle(.secondary)
+
+                Spacer()
+
+                if let showAll {
+                    NavigationLink(value: showAll) {
+                        Text("Show All")
+                            .font(.subheadline)
+                    }
+                }
+            }
+            .padding(.horizontal)
 
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: PosterCardMetrics.railSpacing) {
@@ -160,7 +176,7 @@ struct ForYouRow: View {
         if items.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
                 Text("For You")
-                    .font(.subheadline)
+                    .font(PosterCardMetrics.railTitleFont)
                     .fontWeight(.bold)
                     .foregroundStyle(.secondary)
                     .padding(.horizontal)
@@ -169,7 +185,7 @@ struct ForYouRow: View {
             }
         } else {
             HomeRow(
-                title: "For You",
+                title: Text("For You"),
                 items: items,
                 seriesResume: seriesResume,
                 onPlayLive: onPlayLive,

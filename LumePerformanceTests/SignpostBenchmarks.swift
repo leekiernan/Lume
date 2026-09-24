@@ -147,7 +147,7 @@ final class SignpostBenchmarks: XCTestCase {
             .m3uPruneLive, .m3uPruneMovies, .m3uPruneEpisodes, .m3uPruneSeries, .m3uPruneCategories,
             .catalogPurgeHistory,
             .epgSourceSync, .epgIngest, .channelEPGLoad, .guideWindowLoad,
-            .homeTrendingLoad, .homeRecommendations,
+            .homeTrendingLoad, .homeRecommendations, .homeCustomSections,
             .sportsChannelResolve, .sportsFixtureRefresh,
             .playerStartup, .playerRebuffer, .playerEngineFallback, .playerStartupFailure
         ]

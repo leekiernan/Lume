@@ -111,13 +111,6 @@ struct SettingsView: View {
         enum PreferredLanguagePane {
             case list, add
         }
-
-        /// Home layout preferences, shown in the Home category. Not `private`: read
-        /// by the SettingsView+TVHome extension (separate file). The iOS/macOS build
-        /// has its own `HomeLayoutSettingsView`, so these live in the tvOS block.
-        @AppStorage(RecommendationSettings.enabledKey) var recommendationsEnabled = RecommendationSettings.enabledDefault
-        @AppStorage(HomeLayoutSettings.sectionOrderKey) var homeSectionOrderRaw = ""
-        @AppStorage(HomeLayoutSettings.disabledSectionsKey) var homeDisabledSectionsRaw = ""
     #endif
 
     /// The user's ordered engine fallback list (migrates the legacy single-engine
@@ -273,7 +266,7 @@ struct SettingsView: View {
         private var layoutSection: some View {
             Section {
                 NavigationLink {
-                    HomeLayoutSettingsView()
+                    SectionLayoutSettingsView(surface: .home)
                 } label: {
                     Label("Home", systemImage: "house")
                 }

@@ -45,7 +45,7 @@ struct HomeHeroCarousel: View {
     private static let headCloneID = "hero-clone-head"
     private static let tailCloneID = "hero-clone-tail"
 
-    private let heroHeight: CGFloat = 800
+    private let heroHeight = HomeHeroMetrics.height
 
     /// The rendered pages: the real items padded with a clone of the LAST item
     /// at the front and the FIRST at the back. Paging onto a clone is one slide;
@@ -306,6 +306,31 @@ struct HomeHeroCarousel: View {
     }
 }
 
+/// Holds the page geometry steady while its promoted section resolves, using
+/// only the last lead backdrop. The real carousel replaces it at the same
+/// height once titles and actions are ready.
+struct HomeHeroWarmStart: View {
+    let backdropURL: URL?
+
+    var body: some View {
+        ZStack(alignment: .bottomLeading) {
+            HeroBackdrop(url: backdropURL)
+            LinearGradient(
+                colors: [.clear, .black.opacity(0.15), .black.opacity(0.85)],
+                startPoint: .center,
+                endPoint: .bottom
+            )
+            .allowsHitTesting(false)
+        }
+        .frame(height: HomeHeroMetrics.height)
+        .clipped()
+    }
+}
+
+private enum HomeHeroMetrics {
+    static let height: CGFloat = 800
+}
+
 /// One rendered page in the carousel. Real items use their own `HeroItem.id`;
 /// boundary clones reuse a mirrored item but carry a sentinel id so the scroll
 /// position can distinguish a clone from the page it duplicates.
@@ -321,16 +346,19 @@ private struct HeroSlot: Identifiable {
         HeroItem.movie(
             Movie(id: "preview-hero-1", streamId: 1, name: "The Matrix"),
             backdropURL: URL(string: "https://image.tmdb.org/t/p/w1280/fNG7i7RqM1T0sP1vQmRIqRnW.jpg"),
+            logoURL: nil,
             overview: "A computer hacker learns about the true nature of reality."
         ),
         HeroItem.series(
             Series(id: "preview-series-1", seriesId: 1, name: "Breaking Bad", num: 1),
             backdropURL: nil,
+            logoURL: nil,
             overview: "A high school chemistry teacher diagnosed with inoperable cancer."
         ),
         HeroItem.movie(
             Movie(id: "preview-hero-2", streamId: 2, name: "Inception"),
             backdropURL: nil,
+            logoURL: nil,
             overview: "A thief who steals corporate secrets through dream-sharing technology."
         )
     ]
@@ -343,6 +371,7 @@ private struct HeroSlot: Identifiable {
         HeroItem.movie(
             Movie(id: "preview-hero-3", streamId: 3, name: "The Dark Knight"),
             backdropURL: nil,
+            logoURL: nil,
             overview: "When the menace known as the Joker wreaks havoc on Gotham."
         )
     ]

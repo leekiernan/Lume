@@ -141,6 +141,14 @@
     /// adjusts where each focus-driven scroll comes to rest.
     struct TVHomeScreen<Rows: View>: View {
         let heroItems: [HeroItem]
+        /// True while a configured hero's feed is still resolving. Keeping the
+        /// showcase in the hierarchy from frame one prevents the rows from
+        /// drawing at the top and then jumping down by nearly a screen height.
+        let reservesHero: Bool
+        /// The last lead backdrop for this hero/playlist. Its bytes are already
+        /// managed by ImagePipeline; this lets that one disk-cache decode start
+        /// before the promoted section has produced its HeroItem.
+        let warmStartBackdropURL: URL?
         /// Called when the hero surface is selected; the owner navigates.
         let onSelectHero: (HeroItem) -> Void
         @ViewBuilder var rows: Rows
@@ -157,14 +165,32 @@
             zone != .expanded
         }
 
+        init(
+            heroItems: [HeroItem],
+            reservesHero: Bool = false,
+            warmStartBackdropURL: URL? = nil,
+            onSelectHero: @escaping (HeroItem) -> Void,
+            @ViewBuilder rows: () -> Rows
+        ) {
+            self.heroItems = heroItems
+            self.reservesHero = reservesHero
+            self.warmStartBackdropURL = warmStartBackdropURL
+            self.onSelectHero = onSelectHero
+            self.rows = rows()
+        }
+
         private var hasHero: Bool {
-            !heroItems.isEmpty
+            reservesHero || !heroItems.isEmpty
         }
 
         var body: some View {
             ZStack {
                 if hasHero {
-                    TVHeroBackdrop(model: model, belowFold: belowFold)
+                    TVHeroBackdrop(
+                        model: model,
+                        belowFold: belowFold,
+                        warmStartBackdropURL: warmStartBackdropURL
+                    )
                 }
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: TVHomeMetrics.rowSpacing) {
@@ -173,8 +199,9 @@
                         }
                         rows
                     }
-                    .padding(.top, hasHero ? 0 : 60)
-                    .padding(.bottom, 60)
+                    // The hero fills the top inset itself when it's showing.
+                    .padding(.top, hasHero ? 0 : PosterCardMetrics.sectionVerticalPadding)
+                    .padding(.bottom, PosterCardMetrics.sectionVerticalPadding)
                 }
                 .scrollIndicators(.hidden)
                 .scrollClipDisabled()
@@ -222,13 +249,18 @@
     private struct TVHeroBackdrop: View {
         let model: TVHeroModel
         let belowFold: Bool
+        let warmStartBackdropURL: URL?
+
+        private var backdropURL: URL? {
+            model.currentHero?.imageURL ?? warmStartBackdropURL
+        }
 
         var body: some View {
             ZStack {
                 Color.black
 
-                if let hero = model.currentHero {
-                    CachedAsyncImage(url: hero.imageURL) { phase in
+                if let backdropURL {
+                    CachedAsyncImage(url: backdropURL) { phase in
                         // The placeholder must be a REAL view: lifecycle
                         // modifiers (CachedAsyncImage's internal `.task`) never
                         // fire on EmptyView, so an empty `.empty` branch means
@@ -244,7 +276,7 @@
                     // Keyed by slide so a page change swaps views, and the
                     // opacity transition (driven by the model's animated index
                     // change) reads as a crossfade.
-                    .id(hero.id)
+                    .id(backdropURL.absoluteString)
                     .transition(.opacity)
                 }
             }
@@ -511,11 +543,13 @@
             HeroItem.movie(
                 Movie(id: "preview-hero-1", streamId: 1, name: "The Matrix"),
                 backdropURL: URL(string: "https://image.tmdb.org/t/p/w1280/fNG7i7RqM1T0sP1vQmRIqRnW.jpg"),
+                logoURL: nil,
                 overview: "A computer hacker learns about the true nature of reality."
             ),
             HeroItem.movie(
                 Movie(id: "preview-hero-2", streamId: 2, name: "Inception"),
                 backdropURL: nil,
+                logoURL: nil,
                 overview: "A thief who steals corporate secrets through dream-sharing technology."
             )
         ]
