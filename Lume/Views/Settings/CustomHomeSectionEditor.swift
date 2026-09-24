@@ -160,7 +160,7 @@
         }
 
         private var supportedProviders: String {
-            HomeListCatalog.providers.map(\.displayName).formatted(.list(type: .and))
+            HomeListCatalog.providerNames
         }
 
         private var exampleURL: String {

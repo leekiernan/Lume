@@ -8,8 +8,8 @@
 //
 //  One provider per site. The user pastes the human-readable list page URL and
 //  the provider works out the machine-readable form — they should never have to
-//  know that MDBList serves JSON from a `/json` suffix. Adding a second site
-//  means adding a provider here and listing it in `HomeListCatalog.providers`.
+//  know that MDBList serves JSON from a `/json` suffix. Adding a site means
+//  adding a provider and listing it in `HomeListCatalog.providers`.
 //
 
 import Foundation
@@ -35,6 +35,9 @@ nonisolated enum HomeListError: LocalizedError, Equatable {
     case invalidURL
     /// The provider answered, but there is no list at that address.
     case listNotFound
+    /// The provider refused the list: it's private, or — where the provider
+    /// doesn't distinguish (Trakt) — it doesn't exist.
+    case privateList
     case serverError(Int)
     case emptyList
     case network(String)
@@ -42,11 +45,13 @@ nonisolated enum HomeListError: LocalizedError, Equatable {
     var errorDescription: String? {
         switch self {
         case .unsupportedSource:
-            String(localized: "Lume doesn't recognise that site. Paste a list URL from MDBList.")
+            String(localized: "Lume doesn't recognise that site. Paste a list URL from \(HomeListCatalog.providerNames).")
         case .invalidURL:
             String(localized: "That doesn't look like a valid link.")
         case .listNotFound:
             String(localized: "No list found at that address. Check the link and try again.")
+        case .privateList:
+            String(localized: "That list is private or doesn't exist. Check the link, or make the list public.")
         case let .serverError(code):
             String(localized: "The list provider returned an error (\(code)).")
         case .emptyList:
@@ -80,7 +85,12 @@ nonisolated protocol HomeListProvider: Sendable {
 /// The providers Lume knows about, and the entry point Home and the section
 /// editor both go through.
 nonisolated enum HomeListCatalog {
-    static let providers: [any HomeListProvider] = [MDBListProvider(), TMDBListProvider()]
+    static let providers: [any HomeListProvider] = [MDBListProvider(), TMDBListProvider(), TraktListProvider()]
+
+    /// "MDBList, TMDB and Trakt", for messages that name the supported sites.
+    static var providerNames: String {
+        providers.map(\.displayName).formatted(.list(type: .and))
+    }
 
     /// The provider for a raw URL string, or nil when nothing handles it.
     static func provider(for raw: String) -> (any HomeListProvider)? {
