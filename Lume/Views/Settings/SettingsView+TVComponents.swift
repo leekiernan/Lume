@@ -183,7 +183,17 @@ import SwiftUI
                 VStack(alignment: .leading, spacing: 8) {
                     TVSettingsSectionLabel("Sports")
 
-                    TVOptionToggleRow(title: "Enable Sports", isOn: $enabled)
+                    Button { enabled.toggle() } label: {
+                        HStack(spacing: 16) {
+                            Image(systemName: enabled ? "checkmark.circle.fill" : "circle")
+                            Text("Show Sports")
+                            Spacer(minLength: 0)
+                            Text(enabled ? "On" : "Off")
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .buttonStyle(TVSettingsRowButtonStyle())
+                    .accessibilityValue(enabled ? Text("On") : Text("Off"))
 
                     if enabled {
                         Button {
