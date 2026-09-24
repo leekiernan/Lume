@@ -18359,6 +18359,7 @@
       }
     },
     "Follow leagues and teams to build your Sports Hub." : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
