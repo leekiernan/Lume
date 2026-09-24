@@ -30,7 +30,7 @@ import SwiftUI
         var body: some View {
             Form {
                 Section {
-                    Toggle("Enable Sports", isOn: $enabled)
+                    Toggle("Show Sports", isOn: $enabled)
                 } footer: {
                     Text("Sports uses your Live TV channels to open games. Turning it off stops Sports refreshes for this profile.")
                 }
