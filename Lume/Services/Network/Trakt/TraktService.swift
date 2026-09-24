@@ -4,8 +4,8 @@
 //
 //  The app-wide coordinator for the Trakt integration. Owns the OAuth token
 //  lifecycle (device-flow connect, refresh, disconnect), exposes connection
-//  state for the Settings UI to observe, durable watched-history syncing,
-//  watchlist mutation, and transient playback scrobbling.
+//  state for the Settings UI to observe, and provides durable user mutations,
+//  watchlist fetching, and transient playback scrobbling.
 //
 //  A shared singleton because watched-state changes originate from many places
 //  (player completion, detail-screen toggles, model methods) that don't all
@@ -43,7 +43,7 @@ final class TraktService {
     /// Cleared when a new import begins.
     private(set) var lastImport: TraktImportSummary?
 
-    /// Durable watched-history intent waiting to reach the connected account.
+    /// Durable history/watchlist intent waiting to reach the connected account.
     /// Failed mutations remain here until a later retry succeeds.
     private(set) var pendingMutationCount = 0
     private(set) var failedMutationCount = 0
@@ -235,14 +235,19 @@ final class TraktService {
         mutationSyncError = nil
     }
 
-    // MARK: - Durable watched sync
+    // MARK: - Durable mutation sync
 
     /// Syncs a movie's watched state to Trakt. Captures the TMDB id up front so
     /// the model never crosses an actor boundary. No-ops when not connected or
     /// the movie has no TMDB id.
     func syncWatched(movie: Movie, watched: Bool) {
         guard let account = mutationAccount, let tmdbID = movie.tmdbId else { return }
-        mutationOutbox.enqueue(target: .movie(tmdbID: tmdbID), watched: watched, account: account)
+        mutationOutbox.enqueue(
+            kind: .history,
+            target: .movie(tmdbID: tmdbID),
+            isPresent: watched,
+            account: account
+        )
         refreshMutationStatus()
         retryPendingMutations()
     }
@@ -252,12 +257,13 @@ final class TraktService {
     func syncWatched(episode: Episode, watched: Bool) {
         guard let account = mutationAccount, let showTMDBID = episode.series?.tmdbId else { return }
         mutationOutbox.enqueue(
+            kind: .history,
             target: .episode(
                 showTMDBID: showTMDBID,
                 season: episode.seasonNum,
                 episode: episode.episodeNum
             ),
-            watched: watched,
+            isPresent: watched,
             account: account
         )
         refreshMutationStatus()
@@ -305,17 +311,18 @@ final class TraktService {
             }
 
             do {
-                let items = historyItems(for: mutation.target)
-                if mutation.watched {
-                    try await client.addToHistory(items, accessToken: accessToken)
-                } else {
-                    try await client.removeFromHistory(items, accessToken: accessToken)
+                guard try await client.apply(mutation, accessToken: accessToken) else {
+                    Logger.network.error(
+                        "Discarding malformed Trakt \(mutation.kind.rawValue, privacy: .public) mutation"
+                    )
+                    mutationOutbox.acknowledge(id: mutation.id, account: account)
+                    continue
                 }
                 mutationOutbox.acknowledge(id: mutation.id, account: account)
             } catch {
                 mutationOutbox.recordFailure(id: mutation.id, account: account)
                 let reason = error.localizedDescription
-                Logger.network.warning("Trakt history mutation failed: \(reason, privacy: .public)")
+                Logger.network.warning("Trakt mutation failed: \(reason, privacy: .public)")
                 mutationSyncError = "Couldn't sync changes to Trakt. Please try again."
                 // If this intent was replaced while its request was in flight,
                 // it is no longer the queue head. Continue with the new intent;
@@ -329,33 +336,32 @@ final class TraktService {
 
     // MARK: - Playback scrobbling
 
-    /// Transient playback events are serialized but intentionally not durable:
-    /// replaying an old start/pause after relaunch would create stale playback.
-    func scrobble(_ target: TraktScrobbleTarget, action: TraktScrobbleAction, progress: Double) {
+    /// Queues a start, pause or stop event for the connected account. These are
+    /// deliberately transient: replaying an old lifecycle event after relaunch
+    /// would create a stale Now Watching session on Trakt.
+    func scrobble(
+        _ target: TraktScrobbleTarget,
+        action: TraktScrobbleAction,
+        progress: Double
+    ) {
         guard isConnected else { return }
         let previous = scrobbleTask
         scrobbleTask = Task { [weak self] in
             await previous?.value
-            guard !Task.isCancelled, let self, let accessToken = await validAccessToken() else { return }
+            guard !Task.isCancelled, let self,
+                  let accessToken = await validAccessToken()
+            else { return }
+
             do {
-                try await client.scrobble(target, action: action, progress: progress, accessToken: accessToken)
+                try await client.scrobble(
+                    target, action: action, progress: progress, accessToken: accessToken
+                )
             } catch {
                 let detail = LogRedaction.describe(error)
-                Logger.network.warning("Trakt scrobble \(action.rawValue, privacy: .public) failed: \(detail, privacy: .public)")
+                Logger.network.warning(
+                    "Trakt scrobble \(action.rawValue, privacy: .public) failed: \(detail, privacy: .public)"
+                )
             }
-        }
-    }
-
-    private func historyItems(for target: TraktHistoryMutation.Target) -> TraktSyncItems {
-        switch target {
-        case let .movie(tmdbID):
-            TraktSyncItems.movie(tmdbID: tmdbID)
-        case let .episode(showTMDBID, season, episode):
-            TraktSyncItems.episode(
-                showTMDBID: showTMDBID,
-                season: season,
-                episode: episode
-            )
         }
     }
 
@@ -396,41 +402,48 @@ final class TraktService {
 
     // MARK: - Watchlist
 
-    /// Fetches the user's watchlist. Returns an empty array when not connected
-    /// or on error — the home row simply hides.
+    /// Best-effort compatibility wrapper for callers where an unavailable
+    /// watchlist and an empty one are intentionally equivalent.
     func fetchWatchlist() async -> [TraktWatchlistItem] {
-        guard let accessToken = await validAccessToken() else { return [] }
-        return await (try? client.watchlist(accessToken: accessToken)) ?? []
+        await (try? watchlistItems()) ?? []
+    }
+
+    /// Fetches the watchlist without collapsing a transport/auth failure into
+    /// an authoritative empty result. Feed caches use this to retain stale data
+    /// until a later successful revalidation.
+    func watchlistItems() async throws -> [TraktWatchlistItem] {
+        guard let accessToken = await validAccessToken() else {
+            throw TraktError.notAuthenticated
+        }
+        return try await client.watchlist(accessToken: accessToken)
     }
 
     /// Mirrors a local movie favorite to the connected user's Trakt watchlist.
     /// Captures the TMDB id before starting asynchronous work so the SwiftData
     /// model never crosses an actor boundary.
     func syncWatchlist(movie: Movie, watchlisted: Bool) {
-        guard isConnected, let tmdbID = movie.tmdbId else { return }
-        syncWatchlist(.movie(tmdbID: tmdbID), add: watchlisted)
+        guard let account = mutationAccount, let tmdbID = movie.tmdbId else { return }
+        mutationOutbox.enqueue(
+            kind: .watchlist,
+            target: .movie(tmdbID: tmdbID),
+            isPresent: watchlisted,
+            account: account
+        )
+        refreshMutationStatus()
+        retryPendingMutations()
     }
 
     /// Series counterpart
     func syncWatchlist(series: Series, watchlisted: Bool) {
-        guard isConnected, let tmdbID = series.tmdbId else { return }
-        syncWatchlist(.show(tmdbID: tmdbID), add: watchlisted)
-    }
-
-    private func syncWatchlist(_ items: TraktWatchlistSyncItems, add: Bool) {
-        Task { [weak self] in
-            guard let self, let accessToken = await validAccessToken() else { return }
-            do {
-                if add {
-                    try await client.addToWatchlist(items, accessToken: accessToken)
-                } else {
-                    try await client.removeFromWatchlist(items, accessToken: accessToken)
-                }
-            } catch {
-                // Favorite changes are local-first and Trakt sync is best-effort;
-                // a network failure must not roll back or interrupt the UI.
-            }
-        }
+        guard let account = mutationAccount, let tmdbID = series.tmdbId else { return }
+        mutationOutbox.enqueue(
+            kind: .watchlist,
+            target: .show(tmdbID: tmdbID),
+            isPresent: watchlisted,
+            account: account
+        )
+        refreshMutationStatus()
+        retryPendingMutations()
     }
 
     // MARK: - Watched import

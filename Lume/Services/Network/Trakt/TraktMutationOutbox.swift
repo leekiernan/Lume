@@ -9,36 +9,79 @@
 
 import Foundation
 
-/// Provider-neutral durable watched-history intent. Both Trakt and Simkl use
-/// TMDB identifiers, so keeping this payload independent of either API gives
-/// future trackers the same ordering/coalescing/retry contract.
-nonisolated struct TrackerHistoryMutation: Codable, Equatable, Identifiable {
+/// Provider-neutral durable mutation. Trakt uses both history and watchlist;
+/// Simkl currently uses history, so collection kind stays part of the payload.
+nonisolated struct TrackerMutation: Codable, Equatable, Identifiable {
+    nonisolated enum Kind: String, Codable, Equatable {
+        case history
+        case watchlist
+    }
+
     nonisolated enum Target: Codable, Equatable, Hashable {
         case movie(tmdbID: Int)
+        case show(tmdbID: Int)
         case episode(showTMDBID: Int, season: Int, episode: Int)
     }
 
     let id: UUID
+    let kind: Kind
     let target: Target
-    let watched: Bool
+    /// Whether the target should be present in the selected Trakt collection.
+    /// For history this means watched; for watchlist it means watchlisted.
+    let isPresent: Bool
     let enqueuedAt: Date
     var attemptCount: Int
     var lastAttemptAt: Date?
 
     init(
         id: UUID = UUID(),
+        kind: Kind,
         target: Target,
-        watched: Bool,
+        isPresent: Bool,
         enqueuedAt: Date = Date(),
         attemptCount: Int = 0,
         lastAttemptAt: Date? = nil
     ) {
         self.id = id
+        self.kind = kind
         self.target = target
-        self.watched = watched
+        self.isPresent = isPresent
         self.enqueuedAt = enqueuedAt
         self.attemptCount = attemptCount
         self.lastAttemptAt = lastAttemptAt
+    }
+
+    /// Decode the history-only v1 shape as well as the generalized shape. This
+    /// matters if an app update lands while a failed history mutation is parked.
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        kind = try container.decodeIfPresent(Kind.self, forKey: .kind) ?? .history
+        target = try container.decode(Target.self, forKey: .target)
+        isPresent = try container.decodeIfPresent(Bool.self, forKey: .isPresent)
+            ?? container.decode(Bool.self, forKey: .watched)
+        enqueuedAt = try container.decode(Date.self, forKey: .enqueuedAt)
+        attemptCount = try container.decode(Int.self, forKey: .attemptCount)
+        lastAttemptAt = try container.decodeIfPresent(Date.self, forKey: .lastAttemptAt)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(kind, forKey: .kind)
+        try container.encode(target, forKey: .target)
+        try container.encode(isPresent, forKey: .isPresent)
+        try container.encode(enqueuedAt, forKey: .enqueuedAt)
+        try container.encode(attemptCount, forKey: .attemptCount)
+        try container.encodeIfPresent(lastAttemptAt, forKey: .lastAttemptAt)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, kind, target, isPresent, watched, enqueuedAt, attemptCount, lastAttemptAt
+    }
+
+    var watched: Bool {
+        isPresent
     }
 }
 
@@ -50,13 +93,14 @@ nonisolated struct TrackerMutationStatus: Equatable {
 }
 
 /// Small JSON outbox in UserDefaults. Mutations are ordered oldest-first and
-/// partitioned by normalized Trakt username so signing into another account can
-/// never replay the previous account's intent. Enqueuing the same target again
-/// removes the older value and appends the latest intent to the tail.
+/// partitioned by stable Trakt account scope so signing into another account
+/// can never replay the previous account's intent. Enqueuing the same kind and
+/// target again removes the older value and appends the latest intent to the
+/// tail. History and watchlist intent for one title remain independent.
 @MainActor
 final class TrackerMutationOutbox {
     private struct State: Codable {
-        var accounts: [String: [TrackerHistoryMutation]] = [:]
+        var accounts: [String: [TrackerMutation]] = [:]
     }
 
     private let defaults: UserDefaults
@@ -80,26 +124,44 @@ final class TrackerMutationOutbox {
 
     @discardableResult
     func enqueue(
-        target: TrackerHistoryMutation.Target,
-        watched: Bool,
+        kind: TrackerMutation.Kind,
+        target: TrackerMutation.Target,
+        isPresent: Bool,
         account: String,
         now: Date = Date()
-    ) -> TrackerHistoryMutation {
+    ) -> TrackerMutation {
         let account = Self.normalize(account)
         var mutations = state.accounts[account] ?? []
-        mutations.removeAll { $0.target == target }
-        let mutation = TrackerHistoryMutation(target: target, watched: watched, enqueuedAt: now)
+        mutations.removeAll { $0.kind == kind && $0.target == target }
+        let mutation = TrackerMutation(
+            kind: kind,
+            target: target,
+            isPresent: isPresent,
+            enqueuedAt: now
+        )
         mutations.append(mutation)
         state.accounts[account] = mutations
         persist()
         return mutation
     }
 
-    func firstMutation(account: String) -> TrackerHistoryMutation? {
+    /// History-only convenience used by trackers that do not expose Trakt's
+    /// separate watchlist collection.
+    @discardableResult
+    func enqueue(
+        target: TrackerMutation.Target,
+        watched: Bool,
+        account: String,
+        now: Date = Date()
+    ) -> TrackerMutation {
+        enqueue(kind: .history, target: target, isPresent: watched, account: account, now: now)
+    }
+
+    func firstMutation(account: String) -> TrackerMutation? {
         state.accounts[Self.normalize(account)]?.first
     }
 
-    func mutations(account: String) -> [TrackerHistoryMutation] {
+    func mutations(account: String) -> [TrackerMutation] {
         state.accounts[Self.normalize(account)] ?? []
     }
 
@@ -134,7 +196,7 @@ final class TrackerMutationOutbox {
 
     private func mutateAccount(
         _ account: String,
-        mutation: (inout [TrackerHistoryMutation]) -> Void
+        mutation: (inout [TrackerMutation]) -> Void
     ) {
         let account = Self.normalize(account)
         var mutations = state.accounts[account] ?? []
@@ -157,12 +219,11 @@ final class TrackerMutationOutbox {
     }
 }
 
-/// Compatibility names keep the Trakt-specific service/API readable while its
-/// durable storage implementation is shared by every tracker.
-typealias TraktHistoryMutation = TrackerHistoryMutation
+typealias TraktMutation = TrackerMutation
+typealias TrackerHistoryMutation = TrackerMutation
+typealias TraktHistoryMutation = TrackerMutation
 typealias TraktMutationStatus = TrackerMutationStatus
 typealias TraktMutationOutbox = TrackerMutationOutbox
-
 nonisolated struct TraktAccountIdentity: Codable, Equatable {
     let username: String
     /// Stable Trakt numeric user id where available; normalized username is a

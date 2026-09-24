@@ -49,7 +49,7 @@ extension FullScreenPlayerView {
     /// engines whose first playing state arrives before their duration callback.
     func updateTraktScrobble(isPlaying: Bool) {
         guard let details = traktPlaybackDetails(for: activeMedia.contentRef) else { return }
-        let elapsed = max(clock.current, activeMedia.startTime)
+        let elapsed = clock.elapsed(fallback: activeMedia.startTime)
         let duration = clock.duration > 0 ? clock.duration : details.duration
         let progress = TraktPlaybackScrobbler.progress(elapsed: elapsed, duration: duration)
 
@@ -64,7 +64,7 @@ extension FullScreenPlayerView {
     /// reset by a close or in-player stream change.
     func stopTraktScrobble() {
         guard let details = traktPlaybackDetails(for: activeMedia.contentRef) else { return }
-        let elapsed = max(clock.current, activeMedia.startTime)
+        let elapsed = clock.elapsed(fallback: activeMedia.startTime)
         let duration = clock.duration > 0 ? clock.duration : details.duration
         let progress = TraktPlaybackScrobbler.progress(elapsed: elapsed, duration: duration)
         traktScrobbler.playbackStopped(target: details.target, progress: progress)
