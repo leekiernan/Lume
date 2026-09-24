@@ -25424,54 +25424,54 @@
         }
       }
     },
-    "Lume doesn't recognise that site. Paste a list URL from MDBList." : {
+    "Lume doesn't recognise that site. Paste a list URL from %@." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lume kennt diese Website nicht. Füge eine Listen-URL von MDBList ein."
+            "value" : "Lume kennt diese Website nicht. Füge eine Listen-URL von %@ ein."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lume no reconoce ese sitio. Pega la URL de una lista de MDBList."
+            "value" : "Lume no reconoce ese sitio. Pega la URL de una lista de %@."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lume ne reconnaît pas ce site. Collez l'URL d'une liste MDBList."
+            "value" : "Lume ne reconnaît pas ce site. Collez l'URL d'une liste de %@."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lume non riconosce questo sito. Incolla l'URL di un elenco di MDBList."
+            "value" : "Lume non riconosce questo sito. Incolla l'URL di una lista da %@."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lume はこのサイトに対応していません。MDBList のリストの URL を貼り付けてください。"
+            "value" : "Lumeはこのサイトを認識できません。%@のリストURLを貼り付けてください。"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lume가 인식할 수 없는 사이트입니다. MDBList의 목록 URL을 붙여넣으세요."
+            "value" : "Lume에서 인식할 수 없는 사이트입니다. %@의 목록 URL을 붙여 넣으세요."
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "O Lume não reconhece esse site. Cole a URL de uma lista do MDBList."
+            "value" : "O Lume não reconhece esse site. Cole o URL de uma lista do %@."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lume 无法识别该网站。请粘贴 MDBList 的列表网址。"
+            "value" : "Lume 无法识别该网站。请粘贴来自 %@ 的列表 URL。"
           }
         }
       }
@@ -49928,6 +49928,58 @@
         }
       }
     },
+    "That list is private or doesn't exist. Check the link, or make the list public." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diese Liste ist privat oder existiert nicht. Prüfe den Link oder mache die Liste öffentlich."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esa lista es privada o no existe. Comprueba el enlace o haz pública la lista."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cette liste est privée ou n'existe pas. Vérifiez le lien ou rendez la liste publique."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Questa lista è privata o non esiste. Controlla il link o rendi pubblica la lista."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "このリストは非公開か、存在しません。リンクを確認するか、リストを公開してください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이 목록은 비공개이거나 존재하지 않습니다. 링크를 확인하거나 목록을 공개로 설정하세요."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Essa lista é privada ou não existe. Verifique o link ou torne a lista pública."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "该列表为私密列表或不存在。请检查链接，或将列表设为公开。"
+          }
+        }
+      }
+    },
     "That URL doesn't answer as a Jellyfin or Emby server. Enter the server's base address, e.g. http://192.168.1.10:8096." : {
       "comment" : "Error message when the entered address does not answer as a Jellyfin or Emby server.",
       "localizations" : {
@@ -53116,6 +53168,58 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Trakt集成"
+          }
+        }
+      }
+    },
+    "Trakt List" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Trakt-Liste"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lista de Trakt"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Liste Trakt"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lista Trakt"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Traktリスト"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Trakt 목록"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lista do Trakt"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Trakt 列表"
           }
         }
       }

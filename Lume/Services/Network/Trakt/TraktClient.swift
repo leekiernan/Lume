@@ -40,7 +40,7 @@ nonisolated struct TraktClient {
     private let baseURL = "https://api.trakt.tv"
 
     /// Requested page size for paginated collections. Trakt's documented maximum.
-    private static let pageSize = 250
+    static let pageSize = 250
 
     /// Page size for `extended=progress`, which Trakt caps at 100 because it
     /// carries the season/episode progress. Asking for more doesn't just return
@@ -210,17 +210,23 @@ nonisolated struct TraktClient {
     /// items. Trakt paginates these server-side and caps the page size per
     /// endpoint, so the requested `limit` is a hint: the walk follows the
     /// `X-Pagination-Page-Count` of each response rather than assuming one.
-    private func allPages<T: Decodable>(
+    ///
+    /// `accessToken` is nil for public data, which needs only the app's API
+    /// key. `maxPages` stops the walk early for callers that only want a
+    /// bounded head of a long collection.
+    func allPages<T: Decodable>(
         _ path: String,
         query: [URLQueryItem] = [],
         pageSize: Int = TraktClient.pageSize,
-        accessToken: String
+        maxPages: Int? = nil,
+        accessToken: String?
     ) async throws -> [T] {
         var items: [T] = []
         var page = 1
         var pageCount = 1
+        let pageLimit = min(maxPages ?? Self.pageWalkLimit, Self.pageWalkLimit)
 
-        while page <= pageCount, page <= Self.pageWalkLimit {
+        while page <= pageCount, page <= pageLimit {
             let pageQuery = query + [
                 URLQueryItem(name: "page", value: String(page)),
                 URLQueryItem(name: "limit", value: String(pageSize))
