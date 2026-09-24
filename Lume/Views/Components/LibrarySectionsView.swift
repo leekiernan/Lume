@@ -180,8 +180,11 @@ struct LibrarySectionsView<CollectionRow: View>: View {
         "\(customSectionsCacheKey)-hero-\(heroSectionRaw)"
     }
 
+    /// Folds in the Trakt account when a row reads from Trakt — see
+    /// `CustomHomeSections.accountSignature`.
     private var customSectionsCacheKey: String {
         "custom-\(catalogKey)-\(CustomHomeSections.contentSignature(visibleCustomSections))"
+            + CustomHomeSections.accountSignature(visibleCustomSections, traktUsername: trakt.username)
     }
 
     /// The promoted row, if this surface has one and it is still switched on.

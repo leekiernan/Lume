@@ -158,4 +158,14 @@ enum CustomHomeSections {
     static func contentSignature(_ sections: [CustomHomeSection]) -> String {
         sections.map { "\($0.id.uuidString):\($0.sourceURL)" }.joined(separator: "|")
     }
+
+    /// The Trakt account the sections' list fetches run as, for folding into the
+    /// same load key. A private list's rows must not outlive a disconnect or
+    /// survive a switch to another account, so the load re-runs when it
+    /// changes. Empty when no section reads from Trakt, so connecting an
+    /// account doesn't refetch rows it can't affect.
+    static func accountSignature(_ sections: [CustomHomeSection], traktUsername: String?) -> String {
+        guard sections.contains(where: { $0.provider is TraktListProvider }) else { return "" }
+        return "trakt:\(traktUsername ?? "none")"
+    }
 }

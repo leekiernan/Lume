@@ -98,6 +98,27 @@ struct CustomHomeSectionTests {
         )
     }
 
+    // MARK: - Account signature
+
+    private static let traktList = CustomHomeSection(title: "Mine", sourceURL: "https://trakt.tv/users/me/lists/mine")
+
+    /// Connecting Trakt can't change what an MDBList row shows, so it mustn't
+    /// refetch one.
+    @Test func `account signature ignores the account when no row reads from Trakt`() {
+        #expect(CustomHomeSections.accountSignature([Self.popular], traktUsername: "alice") == "")
+        #expect(CustomHomeSections.accountSignature([Self.popular], traktUsername: nil) == "")
+    }
+
+    /// A private list's rows must not outlive a disconnect or carry over to
+    /// another account.
+    @Test func `account signature changes with the Trakt account`() {
+        let sections = [Self.popular, Self.traktList]
+        let alice = CustomHomeSections.accountSignature(sections, traktUsername: "alice")
+        let bob = CustomHomeSections.accountSignature(sections, traktUsername: "bob")
+        let disconnected = CustomHomeSections.accountSignature(sections, traktUsername: nil)
+        #expect(Set([alice, bob, disconnected]).count == 3)
+    }
+
     // MARK: - Provider resolution
 
     @Test func `an mdblist URL resolves to the mdblist provider`() {
