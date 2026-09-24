@@ -7,13 +7,17 @@ struct TraktListProviderTests {
         try #require(URL(string: string))
     }
 
-    /// A provider whose client has credentials and answers from the stub.
-    private func stubbedProvider() -> TraktListProvider {
-        TraktListProvider(client: TraktClient(
-            session: StubURLProtocol.makeSession(),
-            clientID: "test-client",
-            clientSecret: "test-secret"
-        ))
+    /// A provider whose client has credentials and answers from the stub,
+    /// signed in as `token` (nil: no connected Trakt account).
+    private func stubbedProvider(token: String? = nil) -> TraktListProvider {
+        TraktListProvider(
+            client: TraktClient(
+                session: StubURLProtocol.makeSession(),
+                clientID: "test-client",
+                clientSecret: "test-secret"
+            ),
+            accessToken: { token }
+        )
     }
 
     // MARK: - canHandle
@@ -142,6 +146,36 @@ struct TraktListProviderTests {
         }
     }
 
+    /// Signed in, the viewer's own private lists would have opened — so a
+    /// refusal means the list isn't theirs, and says so.
+    @Test func `reports a list not shared with the connected account`() async throws {
+        StubURLProtocol.register(
+            host: "api.trakt.tv", pathSuffix: "/users/decode/lists/not-shared/items",
+            response: .init(status: 403, body: "")
+        )
+        await #expect(throws: HomeListError.listNotShared) {
+            try await stubbedProvider(token: "user-token").entries(for: url("https://trakt.tv/users/decode/lists/not-shared"))
+        }
+    }
+
+    @Test func `reads a list while signed in`() async throws {
+        StubURLProtocol.register(
+            host: "api.trakt.tv", pathSuffix: "/users/decode/lists/mine/items",
+            response: .init(status: 200, body: #"[{"type": "movie", "movie": {"title": "Mine", "ids": {"tmdb": 7}}}]"#)
+        )
+        let entries = try await stubbedProvider(token: "user-token").entries(for: url("https://trakt.tv/users/decode/lists/mine"))
+        #expect(entries.map(\.tmdbId) == [7])
+    }
+
+    @Test func `words a refusal for whether the viewer is signed in`() {
+        for error in [TraktError.server(403), .notAuthenticated] {
+            #expect(TraktListProvider.listError(from: error, signedIn: false) == .privateList)
+            #expect(TraktListProvider.listError(from: error, signedIn: true) == .listNotShared)
+        }
+        #expect(TraktListProvider.listError(from: .server(404), signedIn: true) == .listNotFound)
+        #expect(TraktListProvider.listError(from: .server(500), signedIn: true) == .serverError(500))
+    }
+
     @Test func `reports an empty list`() async throws {
         StubURLProtocol.register(
             host: "api.trakt.tv", pathSuffix: "/users/decode/lists/empty/items",
@@ -175,9 +209,10 @@ struct TraktListProviderTests {
     /// Without the app's Trakt key the provider can't read anything, so it
     /// says the source is unavailable rather than failing with an auth error.
     @Test func `reports itself unavailable without credentials`() async throws {
-        let provider = TraktListProvider(client: TraktClient(
-            session: StubURLProtocol.makeSession(), clientID: nil, clientSecret: nil
-        ))
+        let provider = TraktListProvider(
+            client: TraktClient(session: StubURLProtocol.makeSession(), clientID: nil, clientSecret: nil),
+            accessToken: { nil }
+        )
         await #expect(throws: HomeListError.unsupportedSource) {
             try await provider.entries(for: url("https://trakt.tv/users/decode/lists/basic"))
         }

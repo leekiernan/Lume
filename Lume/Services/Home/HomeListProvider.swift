@@ -38,6 +38,9 @@ nonisolated enum HomeListError: LocalizedError, Equatable {
     /// The provider refused the list: it's private, or — where the provider
     /// doesn't distinguish (Trakt) — it doesn't exist.
     case privateList
+    /// Like `privateList`, but the request was made as the viewer's own
+    /// account — so it isn't theirs, and its owner hasn't shared it.
+    case listNotShared
     case serverError(Int)
     case emptyList
     case network(String)
@@ -52,6 +55,8 @@ nonisolated enum HomeListError: LocalizedError, Equatable {
             String(localized: "No list found at that address. Check the link and try again.")
         case .privateList:
             String(localized: "That list is private or doesn't exist. Check the link, or make the list public.")
+        case .listNotShared:
+            String(localized: "That list doesn't exist or isn't shared with your Trakt account. Check the link.")
         case let .serverError(code):
             String(localized: "The list provider returned an error (\(code)).")
         case .emptyList:

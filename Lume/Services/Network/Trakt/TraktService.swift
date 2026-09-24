@@ -446,6 +446,15 @@ final class TraktService {
         retryPendingMutations()
     }
 
+    // MARK: - Lists
+
+    /// A token for reading the connected user's private lists in a custom
+    /// section, refreshed if stale; nil when not connected. Public lists read
+    /// without one.
+    func listAccessToken() async -> String? {
+        await validAccessToken()
+    }
+
     // MARK: - Watched import
 
     /// Imports the user's Trakt watched history into the local catalog, marking

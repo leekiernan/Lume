@@ -10,6 +10,8 @@
 //  the provider works out the API call behind it. Public lists need only the
 //  app's Trakt API key, so this works whether or not the viewer has connected
 //  a Trakt account — and reports itself unavailable when the key is missing.
+//  When an account is connected its token rides along, so the viewer's own
+//  private lists work too.
 //
 
 import Foundation
@@ -21,9 +23,16 @@ nonisolated struct TraktListProvider: HomeListProvider {
     private static let hosts: Set<String> = ["trakt.tv", "www.trakt.tv", "app.trakt.tv", "api.trakt.tv"]
 
     private let client: TraktClient
+    /// The connected account's token, or nil when there isn't one. Injected so
+    /// tests don't reach the real `TraktService` and its Keychain.
+    private let accessToken: @Sendable () async -> String?
 
-    init(client: TraktClient = .shared) {
+    init(
+        client: TraktClient = .shared,
+        accessToken: @escaping @Sendable () async -> String? = { await TraktService.shared.listAccessToken() }
+    ) {
         self.client = client
+        self.accessToken = accessToken
     }
 
     var displayName: String {
@@ -43,11 +52,12 @@ nonisolated struct TraktListProvider: HomeListProvider {
         guard client.isConfigured else { throw HomeListError.unsupportedSource }
         guard let list = Self.list(for: url) else { throw HomeListError.invalidURL }
 
+        let token = await accessToken()
         let entries: [TraktListEntry]
         do {
-            entries = try await client.listEntries(apiPath: list.itemsPath)
+            entries = try await client.listEntries(apiPath: list.itemsPath, accessToken: token)
         } catch let error as TraktError {
-            throw Self.listError(from: error)
+            throw Self.listError(from: error, signedIn: token != nil)
         } catch {
             throw HomeListError.network(error.localizedDescription)
         }
@@ -107,11 +117,12 @@ nonisolated struct TraktListProvider: HomeListProvider {
 
     /// Trakt's errors, in the section editor's vocabulary. Trakt answers 403
     /// both for a private list and for one that doesn't exist, so the two share
-    /// a message that covers either.
-    private static func listError(from error: TraktError) -> HomeListError {
+    /// a message that covers either — worded for whether the request carried
+    /// the viewer's account, since signed in their own lists would have opened.
+    static func listError(from error: TraktError, signedIn: Bool) -> HomeListError {
         switch error {
         case .notConfigured: .unsupportedSource
-        case .notAuthenticated, .server(403): .privateList
+        case .notAuthenticated, .server(403): signedIn ? .listNotShared : .privateList
         case .server(404), .decoding, .invalidResponse: .listNotFound
         case let .server(code): .serverError(code)
         case .authorizationPending, .slowDown, .codeExpired, .codeDenied, .codeUsed: .listNotFound
