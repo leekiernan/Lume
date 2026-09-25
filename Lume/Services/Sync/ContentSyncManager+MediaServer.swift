@@ -50,7 +50,7 @@ extension ContentSyncManager {
         /// The id prefix every row of this library carries. The flavour infix
         /// is what scopes the prune sweeps (see `MediaServerFlavor.idInfix`).
         var idPrefix: String {
-            "\(playlistId.uuidString)-\(flavor.idInfix)-"
+            ContentSyncManager.mediaServerIdPrefix(playlistId, flavor: flavor)
         }
     }
 
@@ -198,9 +198,7 @@ extension ContentSyncManager {
             try context.save()
         }
 
-        if !views.isEmpty {
-            pruneStaleCategories(playlistId: playlistId, type: type, seenApiIds: Set(views.map(\.id)))
-        }
+        pruneCategories(playlistId: playlistId, type: type, seenApiIds: Set(views.map(\.id)), importedCount: views.count)
     }
 
     // MARK: - Movies
@@ -315,23 +313,17 @@ extension ContentSyncManager {
 
     /// Removes movies the server no longer lists. Gated on `fetched`: an empty
     /// library list is the transient-failure signature, and sweeping then
-    /// would drop the whole catalog.
+    /// would drop the whole catalog. Past that, the paged, coverage-gated
+    /// sweep in `ContentSyncManager+Prune.swift`, scoped to the flavour's own
+    /// id prefix so rows of any other source are never read.
     private func pruneJellyfinMovies(playlistId: UUID, flavor: MediaServerFlavor, seenIds: Set<String>, fetched: Bool) {
         guard fetched else { return }
-        let context = ModelContext(modelContainer)
-        context.autosaveEnabled = false
-        let prefix = playlistId.uuidString
-        let rows = (try? context.fetch(FetchDescriptor<Movie>(
-            predicate: #Predicate { $0.id.starts(with: prefix) }
-        ))) ?? []
-        // Only rows this pipeline owns carry the flavour infix; anything else
-        // under the prefix belongs to another source and is left alone.
-        let infix = "-\(flavor.idInfix)-"
-        for movie in rows where movie.id.contains(infix) && !seenIds.contains(movie.id) {
-            context.delete(movie)
-        }
-        if context.hasChanges {
-            try? context.save()
-        }
+        pruneMovies(playlistId: playlistId, idPrefix: Self.mediaServerIdPrefix(playlistId, flavor: flavor), seenIds: seenIds)
+    }
+
+    /// The prefix every row of `flavor` for this playlist carries — the same
+    /// string `JellyfinViewScope.idPrefix` builds.
+    nonisolated static func mediaServerIdPrefix(_ playlistId: UUID, flavor: MediaServerFlavor) -> String {
+        "\(playlistId.uuidString)-\(flavor.idInfix)-"
     }
 }

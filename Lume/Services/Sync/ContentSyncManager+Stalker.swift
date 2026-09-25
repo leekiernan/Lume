@@ -104,9 +104,9 @@ extension ContentSyncManager {
             try context.save()
         }
 
-        if !cats.isEmpty {
-            pruneStaleCategories(playlistId: playlistId, type: type, seenApiIds: Set(cats.map(\.id)))
-        }
+        // A failed list request arrives here as `[]` (see `performStalkerSync`),
+        // which the guarded entry never sweeps on.
+        pruneCategories(playlistId: playlistId, type: type, seenApiIds: Set(cats.map(\.id)), importedCount: cats.count)
     }
 
     // MARK: - Catalog walk (vod / series)
@@ -199,9 +199,11 @@ extension ContentSyncManager {
 
         // Prune only after the walk reached the catalog's end; a truncated
         // walk (mid-walk page failure) has a partial `seenIds`, and pruning
-        // against it would delete titles still on the portal.
-        if result.complete, !result.seenIds.isEmpty {
-            pruneStaleMovies(playlistId: playlistId, seenIds: result.seenIds)
+        // against it would delete titles still on the portal. A complete walk
+        // still goes through the coverage gate: the portal pages are lenient
+        // JSON, and a walk whose items mostly failed to decode "completes" too.
+        if result.complete {
+            pruneMovies(playlistId: playlistId, seenIds: result.seenIds, fetchedCount: result.seenIds.count)
         }
         // A completed full walk pulled every category's content, so none needs
         // an on-demand fetch when opened.
@@ -283,10 +285,10 @@ extension ContentSyncManager {
             )
         }
 
-        // Prune only after the walk reached the catalog's end — see
-        // `syncStalkerMovies`.
-        if result.complete, !result.seenIds.isEmpty {
-            pruneStaleSeries(playlistId: playlistId, seenIds: result.seenIds)
+        // Prune only after the walk reached the catalog's end, and through the
+        // coverage gate — see `syncStalkerMovies`.
+        if result.complete {
+            pruneSeries(playlistId: playlistId, seenIds: result.seenIds, fetchedCount: result.seenIds.count)
         }
         if result.complete {
             markAllStalkerCategoriesImported(type: .series, playlistId: playlistId)
@@ -423,9 +425,7 @@ extension ContentSyncManager {
             )
         }
 
-        if !seenIds.isEmpty {
-            pruneStaleLiveStreams(playlistId: playlistId, seenIds: seenIds)
-        }
+        pruneLiveStreams(playlistId: playlistId, seenIds: seenIds, fetchedCount: seenIds.count)
         Logger.database.info("Stalker: synced \(totalCount) live channels")
         await progress?.complete(.liveStreams)
     }
