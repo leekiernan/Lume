@@ -18,6 +18,7 @@
 //  goes back up. Only Select navigates; moving through the list never does.
 //
 
+import SwiftData
 import SwiftUI
 
 struct LibraryBrowseSidebar: View {
@@ -286,5 +287,28 @@ private struct LibraryBrowseRowButtonStyle: ButtonStyle {
                         .fill(Color.primary.opacity(configuration.isPressed ? 0.12 : 0))
                 )
         #endif
+    }
+}
+
+// MARK: - Query
+
+/// The categories the sidebar lists: one type, in the active playlist, minus
+/// the viewer's hidden and restricted ones — all selected in SQL, so a page
+/// never fetches every playlist's categories to filter them on each body pass.
+/// Internal so the tests can run it against a real store.
+enum LibraryCategoryQuery {
+    static func descriptor(
+        type: CategoryType,
+        playlistPrefix prefix: String,
+        excludedCategoryIDs excluded: Set<String>
+    ) -> FetchDescriptor<Category> {
+        let typeRaw = type.rawValue
+        let filtersCategories = !excluded.isEmpty
+        return FetchDescriptor<Category>(predicate: #Predicate {
+            $0.typeRaw == typeRaw
+                && $0.isHidden == false
+                && $0.id.starts(with: prefix)
+                && (!filtersCategories || !excluded.contains($0.id))
+        })
     }
 }
