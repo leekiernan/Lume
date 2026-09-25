@@ -89,14 +89,16 @@ extension SyncFrequency {
     static let epgLastSyncKey = "lume.epgLastSyncDate"
 
     /// UserDefaults key holding the guide-schema version the store was last
-    /// refreshed under. Bumped whenever a release starts capturing new XMLTV
-    /// signals (sub-titles, categories) so existing users' next launch treats
-    /// the guide refresh as due once and back-fills the new columns.
+    /// refreshed under. Bumped whenever a release changes what an XMLTV import
+    /// stores — new signals (v2: sub-titles, categories) or how existing ones
+    /// are read (v3: one value per repeated multi-language `<title>`/`<desc>`,
+    /// no longer run together) — so existing users' next launch treats the
+    /// guide refresh as due once and re-imports under the new rules.
     static let epgSchemaKey = "epg.schemaVersion"
 
     /// The guide-schema version this build ingests. A stored value below this
     /// forces one EPG refresh; see `EPGSyncService.isDue`.
-    static let epgCurrentSchemaVersion = 2
+    static let epgCurrentSchemaVersion = 3
 
     /// Resolves a stored raw value to a case, falling back to the EPG default.
     static func resolveEPG(_ raw: String) -> SyncFrequency {
