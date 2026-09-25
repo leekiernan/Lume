@@ -92,17 +92,17 @@ extension ContentSyncManager {
 
         for (index, cat) in cats.enumerated() where !cat.id.isEmpty {
             if let existing = lookup[cat.id] {
-                existing.name = cat.title
-                existing.sortOrder = index
-                existing.lastRefreshed = Date()
+                if existing.name != cat.title { existing.name = cat.title }
+                if existing.sortOrder != index { existing.sortOrder = index }
             } else {
                 let category = Category(apiId: cat.id, name: cat.title, parentId: 0, type: type, playlist: playlist)
                 category.sortOrder = index
-                category.lastRefreshed = Date()
                 context.insert(category)
             }
         }
-        try context.save()
+        if context.hasChanges {
+            try context.save()
+        }
 
         if !cats.isEmpty {
             pruneStaleCategories(playlistId: playlistId, type: type, seenApiIds: Set(cats.map(\.id)))
