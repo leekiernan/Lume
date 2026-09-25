@@ -21,7 +21,7 @@ extension ContentSyncManager {
         var shells = JellyfinShellIndex()
         var seen = seenSeries
         _ = try await pageThroughJellyfinItems(types: ["Series"], scope: scope, progress: nil, unit: "series") { items in
-            seen.formUnion(upsertJellyfinSeries(items, scope: scope))
+            try seen.formUnion(upsertJellyfinSeries(items, scope: scope))
             shells.insert(items)
         }
 
@@ -33,7 +33,7 @@ extension ContentSyncManager {
         var seenEp = seenEpisodes
         let resolvedShells = shells
         let episodeCount = try await pageThroughJellyfinItems(types: ["Episode"], scope: scope, progress: progress, unit: "episode(s)") { items in
-            let (series, episodes) = upsertJellyfinEpisodes(items, seriesShells: resolvedShells, scope: scope)
+            let (series, episodes) = try upsertJellyfinEpisodes(items, seriesShells: resolvedShells, scope: scope)
             seen.formUnion(series)
             seenEp.formUnion(episodes)
         }
@@ -42,7 +42,7 @@ extension ContentSyncManager {
         Logger.database.info("\(scope.flavor.displayName, privacy: .public) shows synced for library \(scope.view.name, privacy: .public): \(episodeCount, privacy: .public) episode(s)")
     }
 
-    private func upsertJellyfinSeries(_ items: [JellyfinItem], scope: JellyfinViewScope) -> Set<String> {
+    private func upsertJellyfinSeries(_ items: [JellyfinItem], scope: JellyfinViewScope) throws -> Set<String> {
         let context = ModelContext(modelContainer)
         context.autosaveEnabled = false
         let ids = items.map { scope.idPrefix + $0.id }
@@ -60,7 +60,7 @@ extension ContentSyncManager {
             applyJellyfinSeriesFields(item, to: series, scope: scope)
         }
         if context.hasChanges {
-            try? context.save()
+            try context.save()
         }
         return Set(ids)
     }
@@ -139,7 +139,7 @@ extension ContentSyncManager {
         }
     }
 
-    private func upsertJellyfinEpisodes(_ items: [JellyfinItem], seriesShells: JellyfinShellIndex, scope: JellyfinViewScope) -> (series: Set<String>, episodes: Set<String>) {
+    private func upsertJellyfinEpisodes(_ items: [JellyfinItem], seriesShells: JellyfinShellIndex, scope: JellyfinViewScope) throws -> (series: Set<String>, episodes: Set<String>) {
         let context = ModelContext(modelContainer)
         context.autosaveEnabled = false
 
@@ -159,7 +159,7 @@ extension ContentSyncManager {
             applyJellyfinEpisodeFields(item, to: episode, series: series, scope: scope)
         }
         if context.hasChanges {
-            try? context.save()
+            try context.save()
         }
         return (seenSeries, Set(episodeIds))
     }

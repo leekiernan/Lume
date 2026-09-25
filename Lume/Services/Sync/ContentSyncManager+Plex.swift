@@ -159,7 +159,7 @@ extension ContentSyncManager {
         scope: PlexSectionScope,
         progress: SyncProgress?,
         unit: String,
-        body: ([PlexMetadata]) -> Void
+        body: ([PlexMetadata]) throws -> Void
     ) async throws -> Int {
         var start = 0
         var total = Int.max
@@ -172,7 +172,7 @@ extension ContentSyncManager {
             )
             total = page.totalSize
             if !page.items.isEmpty {
-                body(page.items)
+                try body(page.items)
             }
             fetched += page.items.count
             start += page.items.count
@@ -229,7 +229,7 @@ extension ContentSyncManager {
         let fetched = try await pageThroughPlexItems(
             type: PlexClient.movieType, scope: scope, progress: progress, unit: "movie(s)"
         ) { items in
-            seen.formUnion(upsertPlexMovies(items, scope: scope))
+            try seen.formUnion(upsertPlexMovies(items, scope: scope))
         }
         seenIds = seen
         Logger.database.info("Plex movies synced for section \(scope.section.title, privacy: .public): \(fetched, privacy: .public) item(s)")
@@ -238,7 +238,7 @@ extension ContentSyncManager {
     /// Upserts one page of movies, returning the ids it saw for the prune
     /// sweep. A set (not an inout) so the paging loop can feed pages through a
     /// closure, which cannot capture an inout parameter.
-    private func upsertPlexMovies(_ items: [PlexMetadata], scope: PlexSectionScope) -> Set<String> {
+    private func upsertPlexMovies(_ items: [PlexMetadata], scope: PlexSectionScope) throws -> Set<String> {
         let context = ModelContext(modelContainer)
         context.autosaveEnabled = false
         let ids = items.map { scope.idPrefix + $0.ratingKey }
@@ -260,7 +260,7 @@ extension ContentSyncManager {
             applyPlexMovieFields(item, to: movie, scope: scope)
         }
         if context.hasChanges {
-            try? context.save()
+            try context.save()
         }
         return Set(ids)
     }

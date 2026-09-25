@@ -130,7 +130,7 @@ extension ContentSyncManager {
         scope: JellyfinViewScope,
         progress: SyncProgress?,
         unit: String,
-        body: ([JellyfinItem]) -> Void
+        body: ([JellyfinItem]) throws -> Void
     ) async throws -> Int {
         var startIndex = 0
         var total = Int.max
@@ -143,7 +143,7 @@ extension ContentSyncManager {
             )
             total = page.totalRecordCount
             if !page.items.isEmpty {
-                body(page.items)
+                try body(page.items)
             }
             fetched += page.items.count
             startIndex += page.items.count
@@ -206,7 +206,7 @@ extension ContentSyncManager {
     private func syncJellyfinMovies(scope: JellyfinViewScope, seenIds: inout Set<String>, progress: SyncProgress?) async throws {
         var seen = seenIds
         let fetched = try await pageThroughJellyfinItems(types: ["Movie"], scope: scope, progress: progress, unit: "movie(s)") { items in
-            seen.formUnion(upsertJellyfinMovies(items, scope: scope))
+            try seen.formUnion(upsertJellyfinMovies(items, scope: scope))
         }
         seenIds = seen
         Logger.database.info("\(scope.flavor.displayName, privacy: .public) movies synced for library \(scope.view.name, privacy: .public): \(fetched, privacy: .public) item(s)")
@@ -215,7 +215,7 @@ extension ContentSyncManager {
     /// Upserts one page of movies, returning the ids it saw for the prune
     /// sweep. A set (not an inout) so the paging loop can feed pages through a
     /// closure, which cannot capture an inout parameter.
-    private func upsertJellyfinMovies(_ items: [JellyfinItem], scope: JellyfinViewScope) -> Set<String> {
+    private func upsertJellyfinMovies(_ items: [JellyfinItem], scope: JellyfinViewScope) throws -> Set<String> {
         let context = ModelContext(modelContainer)
         context.autosaveEnabled = false
         let ids = items.map { scope.idPrefix + $0.id }
@@ -237,7 +237,7 @@ extension ContentSyncManager {
             applyJellyfinMovieFields(item, to: movie, scope: scope)
         }
         if context.hasChanges {
-            try? context.save()
+            try context.save()
         }
         return Set(ids)
     }
