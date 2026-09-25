@@ -92,8 +92,7 @@ enum SimklWatchedImporter {
         }
         guard !watchedIDs.isEmpty else { return 0 }
 
-        let descriptor = FetchDescriptor<Movie>(predicate: #Predicate { $0.tmdbId != nil })
-        let candidates = (try? context.fetch(descriptor)) ?? []
+        let candidates = TrackerCatalogLookup.movies(tmdbIDs: watchedIDs, in: context)
 
         var count = 0
         for movie in candidates where !movie.isWatched {
@@ -128,8 +127,7 @@ enum SimklWatchedImporter {
         }
         guard !showsByTMDB.isEmpty else { return (0, 0) }
 
-        let descriptor = FetchDescriptor<Series>(predicate: #Predicate { $0.tmdbId != nil })
-        let candidates = (try? context.fetch(descriptor)) ?? []
+        let candidates = TrackerCatalogLookup.series(tmdbIDs: Set(showsByTMDB.keys), in: context)
 
         var pending = SimklPendingWatchedStore.load()
         var pendingChanged = false
