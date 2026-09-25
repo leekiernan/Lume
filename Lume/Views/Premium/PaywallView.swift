@@ -71,9 +71,11 @@ struct PaywallView: View {
     }
 
     /// The features shown as benefits — the highlighted one first, if any.
+    /// Only what this platform offers.
     private var orderedFeatures: [PremiumFeature] {
-        guard let highlight else { return PremiumFeature.allCases }
-        return [highlight] + PremiumFeature.allCases.filter { $0 != highlight }
+        let features = PremiumFeature.availableOnThisPlatform
+        guard let highlight, highlight.isAvailableOnThisPlatform else { return features }
+        return [highlight] + features.filter { $0 != highlight }
     }
 
     // MARK: - iOS / macOS
