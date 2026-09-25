@@ -414,7 +414,7 @@ struct SettingsView: View {
             NavigationStack {
                 HStack(spacing: 0) {
                     tvSidebar
-                    tvDetailContainer
+                    tvDetail
                 }
                 .tvSettingsBackground()
                 .paywall(isPresented: $showPaywall, highlight: paywallHighlight)
@@ -497,10 +497,6 @@ struct SettingsView: View {
             SettingsCategory.allCases.filter {
                 $0 != .integrations || hasAnyIntegration
             }
-        }
-
-        private var tvDetailContainer: some View {
-            tvDetail
         }
 
         /// The detail pane scrolls, and owns the `ScrollViewReader` the Library
