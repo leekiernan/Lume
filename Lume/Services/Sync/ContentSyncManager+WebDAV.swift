@@ -18,13 +18,11 @@ extension ContentSyncManager {
             throw WebDAVError.invalidURL
         }
 
-        // The share competes for the same connection allowance as an Xtream
-        // phase and the EPG guide download (PR #139). The walk itself is
-        // strictly sequential — one PROPFIND at a time — and `EPGSyncService`
-        // already stands down while this playlist's `syncStatus` is `.syncing`;
-        // this pays whatever gap a preceding content phase still owes.
-        try await spaceContentPhaseRequests()
-
+        // No phase spacing here: that gap is owed to an Xtream provider's
+        // connection slot (`spaceContentPhaseRequests`), and a WebDAV share is
+        // a different server. The walk itself is strictly sequential — one
+        // PROPFIND at a time — and `EPGSyncService` already stands down while
+        // this playlist's `syncStatus` is `.syncing`.
         await progress?.start(.directoryWalk)
         let walk = try await walkShare(root: root, credentials: credentials, progress: progress)
         await progress?.complete(.directoryWalk)
