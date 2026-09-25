@@ -44,18 +44,10 @@ struct MovieDetailView: View {
     init(movie: Movie, animationNamespace: Namespace.ID? = nil) {
         self.movie = movie
         self.animationNamespace = animationNamespace
-        let needsFetch = if movie.tmdbId != nil, TMDBClient.shared.isConfigured {
-            if let enrichedAt = movie.tmdbEnrichedAt,
-               Date().timeIntervalSince(enrichedAt) < 14 * 24 * 3600
-            {
-                false
-            } else {
-                true
-            }
-        } else {
-            false
-        }
-        _isLoadingTMDB = State(initialValue: needsFetch)
+        _isLoadingTMDB = State(initialValue: detailNeedsTMDBFetch(
+            tmdbId: movie.tmdbId,
+            enrichedAt: movie.tmdbEnrichedAt
+        ))
     }
 
     var body: some View {
@@ -287,49 +279,14 @@ struct MovieDetailView: View {
     // MARK: - Enrichment
 
     private func enrichIfNeeded() async {
-        guard let tmdbId = movie.tmdbId else { return }
-        if let enrichedAt = movie.tmdbEnrichedAt,
-           Date().timeIntervalSince(enrichedAt) < 14 * 24 * 3600
-        {
-            return
+        // Applied on the view's own context — see `enrichMovieDetailsIfNeeded`.
+        if await enrichMovieDetailsIfNeeded(movie, context: modelContext) {
+            refreshToken = UUID()
         }
-        let manager = ContentSyncManager(modelContainer: modelContext.container)
-        // Same fix as SeriesDetailView: apply on the view's own context to avoid
-        // the fault-after-background-deletion race (see SeriesDetailView).
-        guard let details = try? await manager.fetchTMDBMovieDetails(tmdbId: tmdbId) else { return }
-        applyMovieDetails(details, to: movie, context: modelContext)
-        try? modelContext.save()
-        refreshToken = UUID()
     }
 
     private func resolveSimilar() {
-        let ids = movie.similarTitleIds
-        guard !ids.isEmpty else { similar = []; return }
-
-        // Scope to the same playlist this movie belongs to.
-        let playlistPrefix = movie.id.components(separatedBy: "-movie-").first
-        func owned(_ id: String) -> Bool {
-            guard let prefix = playlistPrefix else { return true }
-            return id.hasPrefix(prefix)
-        }
-
-        var resolved: [HomeMediaItem] = []
-        for tmdbId in ids {
-            let movieMatches = (try? modelContext.fetch(
-                FetchDescriptor<Movie>(predicate: #Predicate { $0.tmdbId == tmdbId })
-            )) ?? []
-            if let match = movieMatches.first(where: { owned($0.id) && $0.id != movie.id }) {
-                resolved.append(.movie(match))
-                continue
-            }
-            let seriesMatches = (try? modelContext.fetch(
-                FetchDescriptor<Series>(predicate: #Predicate { $0.tmdbId == tmdbId })
-            )) ?? []
-            if let match = seriesMatches.first(where: { owned($0.id) }) {
-                resolved.append(.series(match))
-            }
-        }
-        similar = Array(resolved.prefix(12))
+        similar = RelatedTitlesResolver.similar(to: movie, in: modelContext)
     }
 
     private func resolveCollection() async {
@@ -347,22 +304,7 @@ struct MovieDetailView: View {
             return
         }
 
-        let playlistPrefix = movie.id.components(separatedBy: "-movie-").first
-        func owned(_ id: String) -> Bool {
-            guard let prefix = playlistPrefix else { return true }
-            return id.hasPrefix(prefix)
-        }
-
-        var resolved: [HomeMediaItem] = []
-        for tmdbId in partIDs {
-            let movieMatches = (try? modelContext.fetch(
-                FetchDescriptor<Movie>(predicate: #Predicate { $0.tmdbId == tmdbId })
-            )) ?? []
-            if let match = movieMatches.first(where: { owned($0.id) && $0.id != movie.id }) {
-                resolved.append(.movie(match))
-            }
-        }
-        collectionMovies = resolved
+        collectionMovies = RelatedTitlesResolver.collectionParts(partIDs, of: movie, in: modelContext)
     }
 
     private func resolveOtherSources() {

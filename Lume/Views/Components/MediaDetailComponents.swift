@@ -440,6 +440,13 @@ enum DetailFormat {
         return "\(max(seconds / 60, 1))m"
     }
 
+    /// "1 Season" / "3 Seasons" for a series' season count. Two keys because
+    /// the catalog's "%lld Seasons" has no plural variants yet; once it does,
+    /// the singular branch can go.
+    static func seasonCount(_ count: Int) -> String {
+        count == 1 ? String(localized: "1 Season") : String(localized: "\(count) Seasons")
+    }
+
     /// A four-digit year pulled from a release date string in any common shape.
     static func year(from dateString: String?) -> String? {
         guard let dateString else { return nil }
