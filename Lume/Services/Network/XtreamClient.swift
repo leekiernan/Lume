@@ -301,23 +301,7 @@ class XtreamClient {
         return list.items
     }
 
-    /// 6. Get VOD Info
-    func getVODInfo(playlist: Playlist, vodId: Int) async throws -> XtreamVODInfo {
-        let queryItems = [
-            URLQueryItem(name: "username", value: playlist.username),
-            URLQueryItem(name: "password", value: playlist.password),
-            URLQueryItem(name: "action", value: "get_vod_info"),
-            URLQueryItem(name: "vod_id", value: String(vodId))
-        ]
-
-        guard let url = buildURL(serverURL: playlist.serverURL, path: "player_api.php", queryItems: queryItems) else {
-            throw XtreamError.invalidURL
-        }
-
-        return try await request(url, action: "get_vod_info")
-    }
-
-    /// 7. Get Series Categories
+    /// 6. Get Series Categories
     func getSeriesCategories(playlist: Playlist) async throws -> [XtreamCategory] {
         let queryItems = [
             URLQueryItem(name: "username", value: playlist.username),
@@ -333,7 +317,7 @@ class XtreamClient {
         return list.items
     }
 
-    /// 8. Get Series
+    /// 7. Get Series
     func getSeries(playlist: Playlist, categoryId: String? = nil) async throws -> [XtreamSeries] {
         var queryItems = [
             URLQueryItem(name: "username", value: playlist.username),
@@ -352,7 +336,7 @@ class XtreamClient {
         return list.items
     }
 
-    /// 9. Get Series Info
+    /// 8. Get Series Info
     func getSeriesInfo(playlist: Playlist, seriesId: Int) async throws -> XtreamSeriesInfoResponse {
         let queryItems = [
             URLQueryItem(name: "username", value: playlist.username),
@@ -366,70 +350,6 @@ class XtreamClient {
         }
 
         return try await request(url, action: "get_series_info")
-    }
-
-    /// 10. Get Short EPG
-    func getShortEPG(playlist: Playlist, streamId: Int, limit: Int? = nil) async throws -> [XtreamShortEPG] {
-        var queryItems = [
-            URLQueryItem(name: "username", value: playlist.username),
-            URLQueryItem(name: "password", value: playlist.password),
-            URLQueryItem(name: "action", value: "get_short_epg"),
-            URLQueryItem(name: "stream_id", value: String(streamId))
-        ]
-        if let limit {
-            queryItems.append(URLQueryItem(name: "limit", value: String(limit)))
-        }
-
-        guard let url = buildURL(serverURL: playlist.serverURL, path: "player_api.php", queryItems: queryItems) else {
-            throw XtreamError.invalidURL
-        }
-
-        do {
-            let response: ShortEPGResponse = try await request(url, action: "get_short_epg")
-            return response.epgListings.items
-        } catch {
-            // Try array fallback if not wrapped
-            if let arrayResponse: XtreamList<XtreamShortEPG> = try? await request(url, action: "get_short_epg") {
-                return arrayResponse.items
-            }
-            throw error
-        }
-    }
-
-    /// 11. Get XMLTV — download to temp file, then stream-parse in batches.
-    /// Returns the local file URL so the caller can parse incrementally.
-    func downloadXMLTV(playlist: Playlist) async throws -> URL {
-        let queryItems = [
-            URLQueryItem(name: "username", value: playlist.username),
-            URLQueryItem(name: "password", value: playlist.password)
-        ]
-
-        guard let url = buildURL(serverURL: playlist.serverURL, path: "xmltv.php", queryItems: queryItems) else {
-            throw XtreamError.invalidURL
-        }
-
-        let tempURL: URL
-        let response: URLResponse
-        do {
-            (tempURL, response) = try await session.download(from: url)
-        } catch {
-            throw XtreamError.networkError(error)
-        }
-
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw XtreamError.invalidResponse
-        }
-
-        guard (200 ... 299).contains(httpResponse.statusCode) else {
-            throw XtreamError.serverError(httpResponse.statusCode)
-        }
-
-        // Move to a stable location before the system cleans it up
-        let destination = FileManager.default.temporaryDirectory
-            .appendingPathComponent(UUID().uuidString + ".xmltv")
-        try? FileManager.default.removeItem(at: destination)
-        try FileManager.default.moveItem(at: tempURL, to: destination)
-        return destination
     }
 
     // MARK: - Stream URL Building
@@ -499,15 +419,6 @@ class XtreamClient {
 }
 
 // MARK: - Supporting Types
-
-/// Wrapper some panels put around `get_short_epg` listings.
-private struct ShortEPGResponse: Decodable {
-    let epgListings: XtreamList<XtreamShortEPG>
-
-    enum CodingKeys: String, CodingKey {
-        case epgListings = "epg_listings"
-    }
-}
 
 enum StreamFormat: String {
     case m3u8
