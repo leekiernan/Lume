@@ -52,7 +52,7 @@ struct MultiViewChannelPicker: View {
         guard let playlist = selectedPlaylist else { return [] }
         let prefix = "\(playlist.id.uuidString)-"
         let sort = CategorySortOption(rawValue: categorySortRaw) ?? .playlist
-        return sort.sort(categories.filter { $0.id.hasPrefix(prefix) && !restriction.hides(categoryID: $0.id) })
+        return sort.sort(LiveChannelQuery.visibleCategories(categories, playlistPrefix: prefix, restriction: restriction))
     }
 
     var body: some View {
