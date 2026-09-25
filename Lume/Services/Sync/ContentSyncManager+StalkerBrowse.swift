@@ -31,7 +31,7 @@ extension ContentSyncManager {
             type: type == .vod ? "vod" : "series", categoryId: apiId
         )
         let playlistPrefix = "\(playlistId.uuidString)-\(type.rawValue)-"
-        let entries = walk.items.map { (item: $0, categoryId: apiId) }
+        let entries: [StalkerCatalogEntry] = walk.items.map { (item: $0, categoryId: apiId) }
 
         var seen = Set<String>()
         var imported = 0
@@ -39,14 +39,14 @@ extension ContentSyncManager {
         for start in stride(from: 0, to: entries.count, by: batchSize) {
             try Task.checkCancellation()
             let batch = Array(entries[start ..< min(start + batchSize, entries.count)])
-            autoreleasepool {
+            try autoreleasepool {
                 switch type {
                 case .vod:
-                    imported += upsertStalkerMovies(
+                    imported += try upsertStalkerMovies(
                         batch, playlistPrefix: playlistPrefix, playlistId: playlistId, seenIds: &seen
                     )
                 case .series:
-                    imported += upsertStalkerSeries(
+                    imported += try upsertStalkerSeries(
                         batch, playlistPrefix: playlistPrefix, playlistId: playlistId, seenIds: &seen
                     )
                 case .live:
@@ -134,14 +134,23 @@ extension ContentSyncManager {
     ) -> [String] {
         guard !items.isEmpty else { return [] }
         let playlistPrefix = "\(playlistId.uuidString)-\(kind.rawValue)-"
-        let entries = items.map { (item: $0, categoryId: $0.categoryId ?? "*") }
+        // A hit's own `category_id` when the portal sends one; otherwise the
+        // row stays wherever it is already filed (see `stalkerCategoryId`).
+        let entries: [StalkerCatalogEntry] = items.map { (item: $0, categoryId: $0.categoryId) }
         var seen = Set<String>()
-        switch kind {
-        case .vod:
-            _ = upsertStalkerMovies(entries, playlistPrefix: playlistPrefix, playlistId: playlistId, seenIds: &seen)
-        case .series:
-            _ = upsertStalkerSeries(entries, playlistPrefix: playlistPrefix, playlistId: playlistId, seenIds: &seen)
-        case .live:
+        do {
+            switch kind {
+            case .vod:
+                _ = try upsertStalkerMovies(entries, playlistPrefix: playlistPrefix, playlistId: playlistId, seenIds: &seen)
+            case .series:
+                _ = try upsertStalkerSeries(entries, playlistPrefix: playlistPrefix, playlistId: playlistId, seenIds: &seen)
+            case .live:
+                return []
+            }
+        } catch {
+            // Search is best-effort, but ids for rows that never saved would
+            // resolve to nothing; report no hits for this kind instead.
+            Logger.database.error("Stalker: failed to store search hits: \(error.localizedDescription, privacy: .public)")
             return []
         }
         // Recompute the element ids in portal order. Movies without a `cmd`
