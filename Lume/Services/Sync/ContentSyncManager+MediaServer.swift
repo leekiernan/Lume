@@ -231,7 +231,7 @@ extension ContentSyncManager {
             if let found = lookup[id] {
                 movie = found
             } else {
-                movie = Movie(id: id, streamId: Self.mediaServerHash(item.id), name: item.name ?? "")
+                movie = Movie(id: id, streamId: M3UIdentity.numericId(for: item.id), name: item.name ?? "")
                 context.insert(movie)
             }
             applyJellyfinMovieFields(item, to: movie, scope: scope)
