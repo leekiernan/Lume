@@ -12,21 +12,18 @@
 import Foundation
 import SwiftData
 
-enum PlaylistOwner {
+nonisolated enum PlaylistOwner {
     /// The number of characters a canonical `UUID.uuidString` occupies. Ids are
     /// built from that exact spelling, so the owner's UUID is the leading slice.
     private static let uuidLength = 36
 
-    /// The playlist whose UUID prefixes `id`, falling back to the first
-    /// installed playlist — the same fallback the prefix scan it replaced made,
-    /// which is what keeps a hand-built or legacy id playable.
+    /// The playlist whose UUID prefixes `id`, or `nil` when `id` names no
+    /// installed playlist. Never a fallback to some other playlist: callers
+    /// build a `PlayableMedia` from the answer, so a guess would play the row
+    /// with the wrong provider's credentials on a multi-playlist install.
     static func playlist(forPrefixedID id: String, in context: ModelContext) -> Playlist? {
-        if let owner = declaredOwner(of: id), let found = playlist(withID: owner, in: context) {
-            return found
-        }
-        var descriptor = FetchDescriptor<Playlist>()
-        descriptor.fetchLimit = 1
-        return try? context.fetch(descriptor).first
+        guard let owner = declaredOwner(of: id) else { return nil }
+        return playlist(withID: owner, in: context)
     }
 
     private static func playlist(withID id: UUID, in context: ModelContext) -> Playlist? {

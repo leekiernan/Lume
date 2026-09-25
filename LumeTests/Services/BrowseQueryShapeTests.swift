@@ -365,9 +365,10 @@ struct BrowseQueryShapeTests {
 
     /// Episode and channel neighbours both resolve the owning playlist from the
     /// row's id prefix. That used to fetch every installed playlist and match in
-    /// Swift; it is an indexed lookup now, and the fallback that keeps a legacy
-    /// id playable has to survive it.
-    @Test func `the owning playlist is found by id, with the fallback intact`() throws {
+    /// Swift; it is an indexed lookup now. An id that names no installed
+    /// playlist resolves to none — a guessed owner would play the row with
+    /// another provider's credentials.
+    @Test func `the owning playlist is found by id, and a miss finds none`() throws {
         let container = try makeSQLiteContainer()
         let context = ModelContext(container)
         let ids = [makePlaylist(in: context), makePlaylist(in: context)].map(\.id)
@@ -375,11 +376,10 @@ struct BrowseQueryShapeTests {
 
         let owner = try #require(ids.last)
         #expect(PlaylistOwner.playlist(forPrefixedID: "\(owner.uuidString)-live-1", in: context)?.id == owner)
-        // Which playlist an id that names none falls back to is unspecified —
-        // an unsorted fetch has no order to promise — but it must still be one,
-        // or a legacy id stops resolving a stream URL at all.
-        let fallback = try #require(PlaylistOwner.playlist(forPrefixedID: "legacy-live-1", in: context))
-        #expect(ids.contains(fallback.id))
+        #expect(PlaylistOwner.playlist(forPrefixedID: "legacy-live-1", in: context) == nil)
+        // A well-formed prefix of a playlist that isn't installed (deleted, or
+        // another device's) is a miss too, not a hop to the first playlist.
+        #expect(PlaylistOwner.playlist(forPrefixedID: "\(UUID().uuidString)-live-1", in: context) == nil)
     }
 
     // MARK: - Helpers
