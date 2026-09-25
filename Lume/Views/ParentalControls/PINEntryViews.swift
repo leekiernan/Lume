@@ -6,6 +6,7 @@
 //    • `PINUnlockView`   — verify the existing PIN (gate switching / Content Mgmt).
 //    • `PINCreateView`   — choose a new PIN, entered twice to confirm.
 //    • `ChangePINFlow`   — verify the current PIN, then choose a new one.
+//    • `PINFlowView`     — set / change / turn off a PIN, over caller storage.
 //  Each clears the pad and shows an inline error on a wrong/mismatched entry.
 //
 
@@ -112,8 +113,8 @@ struct ChangePINFlow: View {
     }
 }
 
-/// Which operation the profile editor performs on one profile's PIN.
-enum ProfilePINFlow: String, Identifiable {
+/// Which PIN operation a flow performs. Identifiable so it can drive a sheet.
+enum PINFlow: String, Identifiable {
     case set, change, remove
 
     var id: String {
@@ -121,21 +122,28 @@ enum ProfilePINFlow: String, Identifiable {
     }
 }
 
-/// Reuses the standard PIN entry flows while verifying against one profile's
-/// synced hash instead of the global parental-control keychain item.
-struct ProfilePINFlowView: View {
-    let flow: ProfilePINFlow
-    let existingHash: String
-    let onUpdate: (String) -> Void
+/// Runs a single PIN operation to completion, then calls `onFinish` (which the
+/// presenter uses to dismiss). Storage is the caller's: the parental-control
+/// PIN (profile management) and a profile's own synced hash (the profile
+/// editor) run the same flows against different `verify` / `save` / `clear`.
+/// Changing or removing a PIN requires entering the current one first.
+struct PINFlowView: View {
+    let flow: PINFlow
+    /// Checks an entered PIN against the current one.
+    let verify: (String) -> Bool
+    /// Stores a newly chosen PIN.
+    let save: (String) -> Void
+    /// Turns the PIN off.
+    let clear: () -> Void
     let onFinish: () -> Void
 
     var body: some View {
         switch flow {
         case .set:
-            PINCreateView(onComplete: save, onCancel: onFinish)
+            PINCreateView(onComplete: complete, onCancel: onFinish)
         case .change:
             ChangePINFlow(
-                onComplete: save,
+                onComplete: complete,
                 onCancel: onFinish,
                 verifier: verify
             )
@@ -144,7 +152,7 @@ struct ProfilePINFlowView: View {
                 title: "Turn Off PIN",
                 subtitle: "Enter your current PIN to turn it off.",
                 onUnlock: {
-                    onUpdate("")
+                    clear()
                     onFinish()
                 },
                 onCancel: onFinish,
@@ -153,13 +161,9 @@ struct ProfilePINFlowView: View {
         }
     }
 
-    private func save(_ pin: String) {
-        onUpdate(ParentalControlsStore.hash(pin))
+    private func complete(_ pin: String) {
+        save(pin)
         onFinish()
-    }
-
-    private func verify(_ pin: String) -> Bool {
-        ParentalControlsStore.verify(pin: pin, against: existingHash)
     }
 }
 
