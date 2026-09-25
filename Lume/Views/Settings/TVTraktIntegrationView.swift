@@ -32,6 +32,12 @@
                 }
             }
             .paywall(isPresented: $showPaywall, highlight: .trakt)
+            .onDisappear {
+                // Stop polling if the user leaves the pane mid-connect.
+                if !trakt.isConnected {
+                    trakt.cancelConnect()
+                }
+            }
         }
 
         private var connect: some View {
@@ -163,7 +169,7 @@
 
                     Text(trakt.mutationSyncError ?? "\(trakt.pendingMutationCount) Trakt change(s) waiting to sync.")
                         .font(.system(size: 22))
-                        .foregroundStyle(trakt.failedMutationCount > 0 ? .red : .secondary)
+                        .foregroundStyle(trakt.mutationSyncError != nil ? .red : .secondary)
                         .padding(.horizontal, TVSettingsMetrics.rowHPadding)
                 }
 

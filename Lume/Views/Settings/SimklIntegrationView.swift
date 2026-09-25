@@ -2,11 +2,11 @@
 //  SimklIntegrationView.swift
 //  Lume
 //
-//  The iOS/macOS Simkl integration screen (the tvOS surface lives inline in
-//  SettingsView's Integrations pane). Drives the OAuth device flow: shows the
-//  activation code with a one-tap link to the pre-filled simkl.com/pin page,
-//  polls in the background, and surfaces the connected account with import and
-//  disconnect actions.
+//  The iOS/macOS Simkl integration screen (the tvOS surface is
+//  `TVSimklIntegrationView`, shown in SettingsView's Integrations pane). Drives
+//  the OAuth device flow: shows the activation code with a one-tap link to the
+//  pre-filled simkl.com/pin page, polls in the background, and surfaces the
+//  connected account with import and disconnect actions.
 //
 
 #if !os(tvOS)
