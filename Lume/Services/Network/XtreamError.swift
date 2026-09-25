@@ -19,17 +19,17 @@ nonisolated enum XtreamError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .invalidURL:
-            "The server URL is invalid."
+            String(localized: "The server URL is invalid.")
         case .authenticationFailed:
-            "Authentication failed. The provider rejected the request (this can also happen when the account's connection limit is reached)."
+            String(localized: "Authentication failed. The provider rejected the request (this can also happen when the account's connection limit is reached).")
         case let .networkError(error):
-            "Network error: \(error.localizedDescription)"
+            String(localized: "Network error: \(error.localizedDescription)")
         case let .decodingError(error):
-            "Failed to read the server response: \(error.localizedDescription)"
+            String(localized: "Failed to read the server response: \(error.localizedDescription)")
         case .invalidResponse:
-            "Received an invalid response from the server."
+            String(localized: "Received an invalid response from the server.")
         case let .serverError(code):
-            "Server error (HTTP \(code))."
+            String(localized: "Server error (HTTP \(code)).")
         }
     }
 
