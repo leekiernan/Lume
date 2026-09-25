@@ -196,9 +196,9 @@
                     .foregroundStyle(.green)
             } else {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Imported \(summary.moviesMarked) movie\(summary.moviesMarked == 1 ? "" : "s") and \(summary.episodesMarked) episode\(summary.episodesMarked == 1 ? "" : "s").")
+                    Text("Imported \(summary.moviesMarked) movies and \(summary.episodesMarked) episodes.")
                     if summary.showsQueued > 0 {
-                        Text("\(summary.showsQueued) show\(summary.showsQueued == 1 ? "" : "s") will be marked the first time you open them.")
+                        Text("\(summary.showsQueued) shows will be marked the first time you open them.")
                     }
                 }
                 .foregroundStyle(.green)
