@@ -4,8 +4,8 @@
 //
 //  The app-wide coordinator for the Simkl integration. Owns the OAuth token
 //  lifecycle (device-flow connect, refresh, disconnect), exposes connection
-//  state for the Settings UI to observe, and provides fire-and-forget watched
-//  syncing. Mirrors `TraktService` against the Simkl AUTH V2 API.
+//  state for the Settings UI to observe, and queues watched changes in a
+//  durable outbox. Mirrors `TraktService` against the Simkl AUTH V2 API.
 //
 //  A shared singleton because watched-state changes originate from many places
 //  (player completion, detail-screen toggles, model methods) that don't all
@@ -55,9 +55,11 @@ final class SimklService {
     /// The outbox partition for the connected account; see
     /// `SimklAccountIdentity.scope`.
     private var mutationAccountScope: String?
-    /// Matches Trakt's rotating-token protection: a refresh rejected because a
-    /// sibling device refreshed first should wait for CloudKit, not erase the
-    /// shared account from every device.
+    /// A refresh token Simkl rejected, so it isn't retried on every call.
+    /// Simkl's refresh token doesn't rotate, so a rejection means it was revoked
+    /// or expired; the pair is kept rather than erased, because clearing it
+    /// would sync the disconnect to every device, and a re-authorized pair may
+    /// still arrive through CloudKit.
     private var refreshFailedForToken: String?
     private var pollingTask: Task<Void, Never>?
     private var refreshTask: Task<String?, Never>?
@@ -112,8 +114,9 @@ final class SimklService {
             refreshFailedForToken = nil
         }
         guard let accessToken = await validAccessToken() else {
-            // A sibling device may be rotating this shared token pair. Keep it
-            // until CloudKit has had a chance to deliver the replacement.
+            // Offline, or the refresh was rejected. Keep the pair: the
+            // remembered identity still queues changes, and a re-authorized
+            // pair may yet arrive through CloudKit.
             return
         }
         if let settings = try? await client.userSettings(accessToken: accessToken) {
@@ -258,9 +261,9 @@ final class SimklService {
 
     // MARK: - Durable watched sync
 
-    /// Syncs a movie's watched state to Simkl. Captures the TMDB id and title
-    /// up front so the model never crosses an actor boundary. No-ops when not
-    /// connected or the movie has no TMDB id.
+    /// Queues a movie's watched state for Simkl. Captures the TMDB id up front
+    /// so the model never crosses an actor boundary; Simkl resolves the title
+    /// from it. No-ops when not connected or the movie has no TMDB id.
     func syncWatched(movie: Movie, watched: Bool) {
         guard let account = mutationAccount, let tmdbID = movie.tmdbId else { return }
         mutationOutbox.enqueue(target: .movie(tmdbID: tmdbID), watched: watched, account: account)
@@ -435,7 +438,9 @@ final class SimklService {
                 return tokens?.accessToken
             } catch let error as SimklError {
                 switch error {
-                case .server(400), .notAuthenticated:
+                // A rejected refresh token comes back as an OAuth error
+                // envelope at 400; `postOAuth` never throws notAuthenticated.
+                case .server(400):
                     if tokens?.refreshToken == current.refreshToken {
                         refreshFailedForToken = current.refreshToken
                     }

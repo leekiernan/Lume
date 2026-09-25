@@ -161,12 +161,12 @@ nonisolated struct SimklClient {
 
     /// Adds movies/episodes to the user's watched history.
     func addToHistory(_ items: SimklSyncItems, accessToken: String) async throws {
-        let _: SimklSyncResponse = try await post("/sync/history", body: items, accessToken: accessToken)
+        let _: EmptyResponse = try await post("/sync/history", body: items, accessToken: accessToken)
     }
 
     /// Removes movies/episodes from the user's watched history.
     func removeFromHistory(_ items: SimklSyncItems, accessToken: String) async throws {
-        let _: SimklSyncResponse = try await post("/sync/history/remove", body: items, accessToken: accessToken)
+        let _: EmptyResponse = try await post("/sync/history/remove", body: items, accessToken: accessToken)
     }
 
     // MARK: - Watched history (import)
@@ -185,7 +185,8 @@ nonisolated struct SimklClient {
             ],
             accessToken: accessToken
         )
-        let (data, _) = try await send(request)
+        let (data, response) = try await send(request)
+        try Self.requireSuccess(response)
         // An account with nothing in any list answers `null`, which no Decodable
         // type can decode — read it as an empty library instead.
         let trimmed = data.trimmingJSONWhitespace()
@@ -230,6 +231,8 @@ nonisolated struct SimklClient {
     }
 
     private static func decode<T: Decodable>(_ data: Data) throws -> T {
+        // Ignored replies decode `EmptyResponse`, which tolerates no body.
+        if data.isEmpty, let empty = EmptyResponse() as? T { return empty }
         do {
             return try JSONDecoder().decode(T.self, from: data)
         } catch {
@@ -438,8 +441,6 @@ nonisolated struct SimklSyncItems: Encodable {
         ])
     }
 }
-
-private nonisolated struct SimklSyncResponse: Decodable {} // We don't act on the add/remove summary.
 
 // MARK: - Watched history (import)
 

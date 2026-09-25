@@ -242,16 +242,19 @@ enum TraktWatchedImporter {
 
     // MARK: - Dates
 
-    /// Parses Trakt's ISO-8601 timestamps, which carry fractional seconds
-    /// (e.g. `2014-10-11T17:00:54.000Z`).
-    private static let formatter: ISO8601DateFormatter = {
+    /// Parses Trakt's ISO-8601 timestamps. They normally carry fractional
+    /// seconds (e.g. `2014-10-11T17:00:54.000Z`), but a formatter set up for
+    /// those rejects a plain `2014-10-11T17:00:54Z`, so both forms are tried.
+    private static let fractionalFormatter: ISO8601DateFormatter = {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         return formatter
     }()
 
-    private static func parse(_ string: String?) -> Date? {
+    private static let formatter = ISO8601DateFormatter()
+
+    static func parse(_ string: String?) -> Date? {
         guard let string else { return nil }
-        return formatter.date(from: string)
+        return fractionalFormatter.date(from: string) ?? formatter.date(from: string)
     }
 }
