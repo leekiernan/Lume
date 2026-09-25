@@ -202,7 +202,6 @@ import SwiftUI
             resolved = await SportsChannelResolver.resolve(
                 container: modelContext.container,
                 fixtures: fixtures,
-                now: Date(),
                 restriction: restriction
             )
         }

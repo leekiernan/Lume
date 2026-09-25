@@ -2,54 +2,14 @@
 //  SportsMatcher.swift
 //  Lume
 //
-//  Ties a `SportsFixture` from a `SportsDataProvider` to a programme in the
-//  user's own EPG, so a fixture can link straight to the channel carrying it.
-//  Pure, `nonisolated` logic over plain value types (no SwiftData, no network),
-//  fully unit-testable: the SwiftData channel resolver maps its `EPGListing`s to
-//  `EPGProgramCandidate`s and passes the fixture in.
+//  The token logic that ties a `SportsFixture` to programmes and channel names
+//  in the user's own EPG: team/name tokenizing, text normalization and the
+//  kickoff window. Pure, `nonisolated` logic over plain value types (no
+//  SwiftData, no network), fully unit-testable. `SportsChannelResolver` does
+//  the scoring and ranking on top of these primitives.
 //
 
 import Foundation
-
-/// A lightweight, value-type view of an EPG programme for matching.
-nonisolated struct EPGProgramCandidate {
-    let channelId: String
-    let title: String
-    let subtitle: String
-    let listingDescription: String
-    /// XMLTV `<category>` values joined into one string.
-    let category: String
-    let start: Date
-    let end: Date
-
-    init(
-        channelId: String,
-        title: String,
-        subtitle: String = "",
-        listingDescription: String = "",
-        category: String = "",
-        start: Date,
-        end: Date
-    ) {
-        self.channelId = channelId
-        self.title = title
-        self.subtitle = subtitle
-        self.listingDescription = listingDescription
-        self.category = category
-        self.start = start
-        self.end = end
-    }
-}
-
-/// The EPG programme a fixture was matched to.
-nonisolated struct SportMatch: Equatable {
-    let channelId: String
-    let programTitle: String
-    let programStart: Date
-    /// Weighted count of distinctive team tokens found — used to break ties
-    /// between several programmes in the kickoff window.
-    let score: Int
-}
 
 nonisolated enum SportsMatcher {
     /// How far before kickoff a broadcast may start (pre-match coverage) and how
@@ -57,122 +17,10 @@ nonisolated enum SportsMatcher {
     static let leadTime: TimeInterval = 2 * 3600
     static let lateStart: TimeInterval = 30 * 60
 
-    /// A subtitle hit is the fixture line itself ("Arsenal v Chelsea"), so it
-    /// weighs more than a title hit, which weighs more than a body-text hit.
-    private static let subtitleWeight = 3
-    private static let titleWeight = 2
-    private static let descriptionWeight = 1
-    private static let categoryBonus = 1
-
-    /// Only the head of a listing description is searched — sports bodies front-
-    /// load the fixture and bury unrelated names (pundits, other results) later.
-    private static let descriptionScanLength = 200
-
-    /// Finds the EPG programme that best carries `fixture` among `candidates`, or
-    /// `nil` when none is a confident match.
-    ///
-    /// A candidate qualifies only when it starts inside the kickoff window **and**
-    /// names both teams somewhere in its title, subtitle or the head of its
-    /// description. Among the qualifiers it picks the highest weighted score,
-    /// breaking ties toward the programme starting closest to kickoff.
-    static func bestMatch(
-        for fixture: SportsFixture,
-        in candidates: [EPGProgramCandidate],
-        aliases: SportsTeamAliases = .bundled
-    ) -> SportMatch? {
-        guard let home = fixture.home?.team, let away = fixture.away?.team else { return nil }
-        let homeTokens = tokens(for: home, aliases: aliases)
-        let awayTokens = tokens(for: away, aliases: aliases)
-        guard !homeTokens.isEmpty, !awayTokens.isEmpty else { return nil }
-
-        let windowStart = fixture.startDate.addingTimeInterval(-leadTime)
-        let windowEnd = fixture.startDate.addingTimeInterval(lateStart)
-
-        var best: SportMatch?
-        for candidate in candidates {
-            guard candidate.start >= windowStart, candidate.start <= windowEnd else { continue }
-
-            let title = normalize(candidate.title)
-            let subtitle = normalize(candidate.subtitle)
-            let description = normalize(String(candidate.listingDescription.prefix(descriptionScanLength)))
-
-            let home = teamScore(homeTokens, title: title, subtitle: subtitle, description: description)
-            let away = teamScore(awayTokens, title: title, subtitle: subtitle, description: description)
-            guard home.matched, away.matched else { continue }
-
-            let bonus = mentionsSport(candidate.category) ? categoryBonus : 0
-            let candidateMatch = SportMatch(
-                channelId: candidate.channelId,
-                programTitle: candidate.title,
-                programStart: candidate.start,
-                score: home.score + away.score + bonus
-            )
-            if isBetter(candidateMatch, than: best, kickoff: fixture.startDate) {
-                best = candidateMatch
-            }
-        }
-        return best
-    }
-
-    /// Prefer a higher score; on a tie prefer the programme starting closest to
-    /// kickoff.
-    private static func isBetter(_ lhs: SportMatch, than rhs: SportMatch?, kickoff: Date) -> Bool {
-        guard let rhs else { return true }
-        if lhs.score != rhs.score { return lhs.score > rhs.score }
-        let lhsGap = abs(lhs.programStart.timeIntervalSince(kickoff))
-        let rhsGap = abs(rhs.programStart.timeIntervalSince(kickoff))
-        return lhsGap < rhsGap
-    }
-
-    /// A team's weighted score across the fields, and whether it appeared at all.
-    /// Fields are pre-normalized haystacks.
-    private static func teamScore(
-        _ tokens: Set<String>,
-        title: String,
-        subtitle: String,
-        description: String
-    ) -> (score: Int, matched: Bool) {
-        let titleHits = matchCount(tokens, in: title)
-        let subtitleHits = matchCount(tokens, in: subtitle)
-        let descriptionHits = matchCount(tokens, in: description)
-        let score = titleHits * titleWeight
-            + subtitleHits * subtitleWeight
-            + descriptionHits * descriptionWeight
-        return (score, titleHits > 0 || subtitleHits > 0 || descriptionHits > 0)
-    }
-
-    /// Whether the category text names a sport we care about — a small bonus so a
-    /// sports-tagged listing outranks a same-name coincidence in generic text.
-    private static func mentionsSport(_ category: String) -> Bool {
-        let haystack = normalize(category)
-        return sportWords.contains { containsWord($0, in: haystack) }
-    }
-
-    /// Category words, across the app's languages, for every sport in the
-    /// catalogue. Lowercase and accent-free to match `normalize` output.
-    private static let sportWords: [String] = [
-        "sport", "sports", "deportes", "esporte", "esportes",
-        "soccer", "football", "fussball", "futbol", "futebol", "calcio", "voetbal",
-        "basketball", "basket", "baloncesto", "basquete",
-        "hockey", "eishockey",
-        "baseball", "beisbol", "softball",
-        "rugby", "afl",
-        "lacrosse",
-        "motorsport", "racing", "formel", "formula", "formule", "nascar", "indycar",
-        "mma", "ufc", "kampfsport", "boxing", "boxen"
-    ]
-
-    /// How many of a team's distinctive tokens appear in the normalized text.
-    private static func matchCount(_ tokens: Set<String>, in haystack: String) -> Int {
-        tokens.reduce(into: 0) { count, token in
-            if containsWord(token, in: haystack) { count += 1 }
-        }
-    }
-
     /// Whole-word-ish containment: the token must be bounded by non-letters so
-    /// "city" doesn't match inside "velocity". The haystack is already normalized
-    /// and space-padded by `normalize`.
-    private static func containsWord(_ token: String, in haystack: String) -> Bool {
+    /// "city" doesn't match inside "velocity". The haystack must already be
+    /// normalized and space-padded by `normalize`.
+    static func containsWord(_ token: String, in haystack: String) -> Bool {
         haystack.contains(" \(token) ")
     }
 

@@ -16,8 +16,10 @@
 //   2. One `EPGListing` fetch, bounded by the union kickoff window *and* the
 //      candidate channel ids, with the wide `listingDescription` column left
 //      out — never the unscoped time-only scan that froze the guide.
-//   3. Matching in Swift, via the pure `SportsMatcher` token logic, plus the
-//      viewer's remembered picks and a channel-name fallback.
+//   3. Matching in Swift on `SportsMatcher`'s tokens (both teams for a match,
+//      the event name for a race session or fight card), plus the viewer's
+//      remembered picks and a channel-name fallback. A word index built once
+//      per resolve limits each fixture to the channels sharing a word with it.
 //
 
 import Foundation
@@ -88,13 +90,15 @@ nonisolated struct ResolvedChannel: Codable, Hashable, Identifiable {
 // MARK: - Resolver
 
 nonisolated enum SportsChannelResolver {
-    /// A visible channel plus the pre-normalised name the channel-name fallback
-    /// matches against — built once in pass 1 so a wide fixture batch doesn't
-    /// re-fold the same names per fixture.
+    /// A visible channel plus what matching reads of it, derived once in pass 1
+    /// so a wide fixture batch doesn't re-fold the same names per fixture: the
+    /// pre-normalised name the channel-name fallback matches against, and the
+    /// key remembered picks are stored under.
     private struct Channel {
         let summary: ResolvedStreamSummary
         let playlistID: UUID
         let nameHaystack: String
+        let pickKey: String
     }
 
     /// The `EPGListing` fetch shape, exposed for the query-shape contract test.
@@ -113,7 +117,7 @@ nonisolated enum SportsChannelResolver {
             sortBy: [SortDescriptor(\.channelId), SortDescriptor(\.start)]
         )
         descriptor.propertiesToFetch = [
-            \.channelId, \.title, \.subtitle, \.category, \.listingDescription, \.start, \.end
+            \.channelId, \.title, \.subtitle, \.listingDescription, \.start, \.end
         ]
         return descriptor
     }
@@ -143,16 +147,19 @@ nonisolated enum SportsChannelResolver {
     /// profile never sees a locked category's channel. `picks` is read once, up
     /// front, into a `Sendable` snapshot so no `UserDefaults`-bearing value has
     /// to cross into the detached task.
+    ///
+    /// Results aren't shared across surfaces: a cache would need invalidating
+    /// on every guide refresh, channel sync, pick and restriction change.
     nonisolated static func resolve(
         container: ModelContainer,
         fixtures: [SportsFixture],
-        now: Date,
         restriction: ContentRestriction = ContentRestriction(),
         picks: SportsChannelPicks = SportsChannelPicks()
     ) async -> [String: [ResolvedChannel]] {
         // A finished game has nothing left to watch; skip it before the guide scan.
         let fixtures = fixtures.filter { $0.status.state != .final }
-        guard !fixtures.isEmpty else { return [:] }
+        guard let firstKickoff = fixtures.map(\.startDate).min(),
+              let lastKickoff = fixtures.map(\.startDate).max() else { return [:] }
         let pickIndex = picks.snapshot()
 
         return await Task.detached(priority: .utility) {
@@ -167,21 +174,23 @@ nonisolated enum SportsChannelResolver {
             let (channels, channelIds) = buildChannels(from: streams)
 
             // Pass 2 — one bounded EPG fetch over the union kickoff window.
-            let kickoffs = fixtures.map(\.startDate)
-            let windowStart = (kickoffs.min() ?? now).addingTimeInterval(-SportsMatcher.leadTime)
-            let windowEnd = (kickoffs.max() ?? now).addingTimeInterval(SportsMatcher.lateStart)
             let guide = buildGuide(
-                context: context, channelIds: channelIds, windowStart: windowStart, windowEnd: windowEnd
+                context: context,
+                channelIds: channelIds,
+                windowStart: firstKickoff.addingTimeInterval(-SportsMatcher.leadTime),
+                windowEnd: lastKickoff.addingTimeInterval(SportsMatcher.lateStart)
             )
+            let index = CandidateIndex(channels: channels, guide: guide, pickIndex: pickIndex)
 
-            // Pass 3 — match each fixture in Swift.
+            // Pass 3 — match each fixture in Swift, against only the channels
+            // that could possibly match it.
             var result: [String: [ResolvedChannel]] = [:]
             for fixture in fixtures {
                 result[fixture.id] = resolveOne(
                     fixture: fixture,
                     channels: channels,
                     guide: guide,
-                    pickIndex: pickIndex
+                    index: index
                 )
             }
             return result
@@ -189,8 +198,8 @@ nonisolated enum SportsChannelResolver {
     }
 
     /// Maps candidate `LiveStream`s to `Channel`s (with normalized name
-    /// haystacks) and collects their non-empty EPG channel ids for the Pass 2
-    /// fetch.
+    /// haystacks and pick keys) and collects their non-empty EPG channel ids for
+    /// the Pass 2 fetch.
     private nonisolated static func buildChannels(
         from streams: [LiveStream]
     ) -> (channels: [Channel], channelIds: Set<String>) {
@@ -207,7 +216,8 @@ nonisolated enum SportsChannelResolver {
                     epgChannelId: stream.epgChannelId
                 ),
                 playlistID: playlistID,
-                nameHaystack: SportsMatcher.normalize(stream.name)
+                nameHaystack: SportsMatcher.normalize(stream.name),
+                pickKey: SportsChannelPicks.channelKey(epgChannelId: stream.epgChannelId, name: stream.name)
             ))
             if let cid = stream.epgChannelId, !cid.isEmpty { channelIds.insert(cid) }
         }
@@ -257,7 +267,109 @@ nonisolated enum SportsChannelResolver {
         return guide
     }
 
+    // MARK: - Candidate index
+
+    /// Word → channel lookups built once per resolve, so each fixture examines
+    /// only the channels sharing a word with it instead of every channel in
+    /// every playlist. A match needs a fixture token present as a whole word in
+    /// a normalized haystack, and a normalized haystack is exactly its
+    /// space-separated words — so indexing those words drops no channel that
+    /// could have matched, and the results are identical to a full scan.
+    private struct CandidateIndex {
+        /// Channel indices whose own name contains the word.
+        let byNameWord: [String: [Int]]
+        /// Channel indices whose guide window has a listing containing the word
+        /// in its title, sub-title or scanned description.
+        let byGuideWord: [String: Set<Int>]
+        /// Channel indices by the key a remembered pick names them by.
+        let byPickKey: [String: [Int]]
+        let pickIndex: [String: String]
+
+        init(channels: [Channel], guide: [String: [NormalizedCandidate]], pickIndex: [String: String]) {
+            var byName: [String: [Int]] = [:]
+            var byEPGId: [String: [Int]] = [:]
+            var byPick: [String: [Int]] = [:]
+            for (offset, channel) in channels.enumerated() {
+                for word in Set(Self.words(channel.nameHaystack)) {
+                    byName[word, default: []].append(offset)
+                }
+                if let cid = channel.summary.epgChannelId, guide[cid] != nil {
+                    byEPGId[cid, default: []].append(offset)
+                }
+                byPick[channel.pickKey, default: []].append(offset)
+            }
+            var byGuide: [String: Set<Int>] = [:]
+            for (cid, offsets) in byEPGId {
+                var words: Set<String> = []
+                for candidate in guide[cid] ?? [] {
+                    words.formUnion(Self.words(candidate.normalizedTitle))
+                    words.formUnion(Self.words(candidate.normalizedSubtitle))
+                    words.formUnion(Self.words(candidate.normalizedDescription))
+                }
+                for word in words {
+                    byGuide[word, default: []].formUnion(offsets)
+                }
+            }
+            byNameWord = byName
+            byGuideWord = byGuide
+            byPickKey = byPick
+            self.pickIndex = pickIndex
+        }
+
+        private static func words(_ haystack: String) -> [String] {
+            haystack.split(separator: " ").map(String.init)
+        }
+
+        /// Every channel that could match a fixture seeded by `tokens` or picked
+        /// for `competitionKey`, in pass-1 order.
+        func candidates(seedTokens: Set<String>, competitionKey: String) -> [Int] {
+            var result: Set<Int> = []
+            for token in seedTokens {
+                result.formUnion(byNameWord[token] ?? [])
+                result.formUnion(byGuideWord[token] ?? [])
+            }
+            let prefix = SportsChannelPicks.compositeKey(competitionKey: competitionKey, channelKey: "")
+            for key in pickIndex.keys where key.hasPrefix(prefix) {
+                result.formUnion(byPickKey[String(key.dropFirst(prefix.count))] ?? [])
+            }
+            return result.sorted()
+        }
+    }
+
     // MARK: - Per-fixture matching
+
+    /// What a fixture is recognised by in the guide and in channel names.
+    private enum MatchTarget {
+        /// A match: both teams must be named.
+        case teams(home: Set<String>, away: Set<String>)
+        /// A competitor-less event (an F1 session, a UFC card): every token of
+        /// one of its names must be named. Only names of two or more tokens
+        /// qualify — a lone "italian" would match any cookery show at 3 pm.
+        case event(names: [Set<String>])
+
+        /// The tokens a candidate must contain at least one of.
+        var seedTokens: Set<String> {
+            switch self {
+            case let .teams(home, _): home
+            case let .event(names): names.reduce(into: []) { $0.formUnion($1) }
+            }
+        }
+    }
+
+    private static func target(for fixture: SportsFixture) -> MatchTarget? {
+        if let home = fixture.home?.team, let away = fixture.away?.team {
+            let homeTokens = SportsMatcher.tokens(for: home)
+            let awayTokens = SportsMatcher.tokens(for: away)
+            guard !homeTokens.isEmpty, !awayTokens.isEmpty else { return nil }
+            return .teams(home: homeTokens, away: awayTokens)
+        }
+        guard !fixture.hasTeams else { return nil }
+        let names = [fixture.name, fixture.shortName]
+            .compactMap(\.self)
+            .map(SportsMatcher.tokens(forName:))
+            .filter { $0.count >= 2 }
+        return names.isEmpty ? nil : .event(names: names)
+    }
 
     /// The best EPG signal for one channel and fixture.
     private struct EPGHit {
@@ -273,23 +385,23 @@ nonisolated enum SportsChannelResolver {
         fixture: SportsFixture,
         channels: [Channel],
         guide: [String: [NormalizedCandidate]],
-        pickIndex: [String: String]
+        index: CandidateIndex
     ) -> [ResolvedChannel] {
-        guard let home = fixture.home?.team, let away = fixture.away?.team else { return [] }
-        let homeTokens = SportsMatcher.tokens(for: home)
-        let awayTokens = SportsMatcher.tokens(for: away)
-        guard !homeTokens.isEmpty, !awayTokens.isEmpty else { return [] }
-
+        // With nothing to match by (a half-known pairing, a nameless event) the
+        // fixture still offers the channels pinned for its competition.
+        let target = target(for: fixture)
         let context = FixtureMatchContext(
             competitionKey: fixture.leagueId,
-            homeTokens: homeTokens,
-            awayTokens: awayTokens,
+            target: target,
             kickoff: fixture.startDate
         )
 
         var resolved: [ResolvedChannel] = []
-        for channel in channels {
-            if let match = matchChannel(channel, context: context, guide: guide, pickIndex: pickIndex) {
+        let candidates = index.candidates(
+            seedTokens: target?.seedTokens ?? [], competitionKey: context.competitionKey
+        )
+        for offset in candidates {
+            if let match = matchChannel(channels[offset], context: context, guide: guide, pickIndex: index.pickIndex) {
                 resolved.append(match)
             }
         }
@@ -308,12 +420,10 @@ nonisolated enum SportsChannelResolver {
         return resolved
     }
 
-    /// The tokens, competition and kickoff a channel is scored against — bundled
-    /// so `matchChannel` stays within the parameter-count limit.
+    /// What a channel is scored against, bundled for the parameter-count limit.
     private struct FixtureMatchContext {
         let competitionKey: String
-        let homeTokens: Set<String>
-        let awayTokens: Set<String>
+        let target: MatchTarget?
         let kickoff: Date
     }
 
@@ -325,20 +435,18 @@ nonisolated enum SportsChannelResolver {
         guide: [String: [NormalizedCandidate]],
         pickIndex: [String: String]
     ) -> ResolvedChannel? {
-        let homeTokens = context.homeTokens
-        let awayTokens = context.awayTokens
-        let channelKey = SportsChannelPicks.channelKey(
-            epgChannelId: channel.summary.epgChannelId, name: channel.summary.name
-        )
         let isPick = pickIndex[
-            SportsChannelPicks.compositeKey(competitionKey: context.competitionKey, channelKey: channelKey)
+            SportsChannelPicks.compositeKey(competitionKey: context.competitionKey, channelKey: channel.pickKey)
         ] != nil
 
-        let epg = channel.summary.epgChannelId
-            .flatMap { guide[$0] }
-            .flatMap { bestEPGHit(in: $0, homeTokens: homeTokens, awayTokens: awayTokens, kickoff: context.kickoff) }
-        let nameMatched = teamPresent(homeTokens, in: channel.nameHaystack)
-            && teamPresent(awayTokens, in: channel.nameHaystack)
+        var epg: EPGHit?
+        var nameMatched = false
+        if let target = context.target {
+            epg = channel.summary.epgChannelId
+                .flatMap { guide[$0] }
+                .flatMap { bestEPGHit(in: $0, target: target, kickoff: context.kickoff) }
+            nameMatched = isPresent(target, in: channel.nameHaystack)
+        }
 
         let source: ResolvedChannelSource
         let score: Int
@@ -366,15 +474,24 @@ nonisolated enum SportsChannelResolver {
         )
     }
 
+    private static func isPresent(_ target: MatchTarget, in haystack: String) -> Bool {
+        switch target {
+        case let .teams(home, away):
+            teamPresent(home, in: haystack) && teamPresent(away, in: haystack)
+        case let .event(names):
+            names.contains { allPresent($0, in: haystack) }
+        }
+    }
+
     /// The best-scoring EPG programme for a channel within the kickoff window,
-    /// or `nil` when none names both teams. `inOneField` is set when both teams
-    /// appear together in the title or the sub-title (the fixture line), the
-    /// stronger tier; a programme that names them only in its description — a
-    /// conference — still qualifies, as the weakest EPG tier.
+    /// or `nil` when none names the fixture. For a match, `inOneField` is set
+    /// when both teams appear together in the title or the sub-title (the
+    /// fixture line), the stronger tier; a programme that names them only in its
+    /// description — a conference — still qualifies, as the weakest EPG tier.
+    /// An event is matched on its title and sub-title only.
     private static func bestEPGHit(
         in candidates: [NormalizedCandidate],
-        homeTokens: Set<String>,
-        awayTokens: Set<String>,
+        target: MatchTarget,
         kickoff: Date
     ) -> EPGHit? {
         let windowStart = kickoff.addingTimeInterval(-SportsMatcher.leadTime)
@@ -383,36 +500,66 @@ nonisolated enum SportsChannelResolver {
         var best: EPGHit?
         for candidate in candidates {
             guard candidate.start >= windowStart, candidate.start <= windowEnd else { continue }
-            let title = candidate.normalizedTitle
-            let subtitle = candidate.normalizedSubtitle
-            let description = candidate.normalizedDescription
-
-            let homeInTitle = teamPresent(homeTokens, in: title)
-            let homeInSub = teamPresent(homeTokens, in: subtitle)
-            let awayInTitle = teamPresent(awayTokens, in: title)
-            let awayInSub = teamPresent(awayTokens, in: subtitle)
-            let homeInHeadline = homeInTitle || homeInSub
-            let awayInHeadline = awayInTitle || awayInSub
-            let homeInBody = homeInHeadline || teamPresent(homeTokens, in: description)
-            let awayInBody = awayInHeadline || teamPresent(awayTokens, in: description)
-            guard homeInBody, awayInBody else { continue }
-
-            let inOneField = (homeInTitle && awayInTitle) || (homeInSub && awayInSub)
-            let descriptionOnly = !(homeInHeadline && awayInHeadline)
-            let score = (homeInSub ? subtitleWeight : 0) + (awayInSub ? subtitleWeight : 0)
-                + (homeInTitle ? titleWeight : 0) + (awayInTitle ? titleWeight : 0)
-                + (descriptionOnly ? descriptionWeight : 0)
-            let hit = EPGHit(
-                score: score,
-                inOneField: inOneField,
-                descriptionOnly: descriptionOnly,
-                title: candidate.title,
-                start: candidate.start
-            )
-
-            if isBetterHit(hit, than: best, kickoff: kickoff) { best = hit }
+            let hit: EPGHit? = switch target {
+            case let .teams(home, away):
+                teamsHit(candidate, home: home, away: away)
+            case let .event(names):
+                names.compactMap { eventHit(candidate, tokens: $0) }
+                    .max { isBetterHit($1, than: $0, kickoff: kickoff) }
+            }
+            if let hit, isBetterHit(hit, than: best, kickoff: kickoff) { best = hit }
         }
         return best
+    }
+
+    private static func teamsHit(_ candidate: NormalizedCandidate, home: Set<String>, away: Set<String>) -> EPGHit? {
+        let title = candidate.normalizedTitle
+        let subtitle = candidate.normalizedSubtitle
+        let description = candidate.normalizedDescription
+
+        let homeInTitle = teamPresent(home, in: title)
+        let homeInSub = teamPresent(home, in: subtitle)
+        let awayInTitle = teamPresent(away, in: title)
+        let awayInSub = teamPresent(away, in: subtitle)
+        let homeInHeadline = homeInTitle || homeInSub
+        let awayInHeadline = awayInTitle || awayInSub
+        let homeInBody = homeInHeadline || teamPresent(home, in: description)
+        let awayInBody = awayInHeadline || teamPresent(away, in: description)
+        guard homeInBody, awayInBody else { return nil }
+
+        let inOneField = (homeInTitle && awayInTitle) || (homeInSub && awayInSub)
+        let descriptionOnly = !(homeInHeadline && awayInHeadline)
+        let score = (homeInSub ? subtitleWeight : 0) + (awayInSub ? subtitleWeight : 0)
+            + (homeInTitle ? titleWeight : 0) + (awayInTitle ? titleWeight : 0)
+            + (descriptionOnly ? descriptionWeight : 0)
+        return EPGHit(
+            score: score,
+            inOneField: inOneField,
+            descriptionOnly: descriptionOnly,
+            title: candidate.title,
+            start: candidate.start
+        )
+    }
+
+    /// An event programme names every token of one of the event's names across
+    /// its title and sub-title ("F1: Italian Grand Prix" / "Qualifying").
+    private static func eventHit(_ candidate: NormalizedCandidate, tokens: Set<String>) -> EPGHit? {
+        let title = candidate.normalizedTitle
+        let subtitle = candidate.normalizedSubtitle
+        var score = 0
+        for token in tokens {
+            let inTitle = SportsMatcher.containsWord(token, in: title)
+            let inSub = SportsMatcher.containsWord(token, in: subtitle)
+            guard inTitle || inSub else { return nil }
+            score += (inSub ? subtitleWeight : 0) + (inTitle ? titleWeight : 0)
+        }
+        return EPGHit(
+            score: score,
+            inOneField: allPresent(tokens, in: title) || allPresent(tokens, in: subtitle),
+            descriptionOnly: false,
+            title: candidate.title,
+            start: candidate.start
+        )
     }
 
     private static func isBetterHit(_ lhs: EPGHit, than rhs: EPGHit?, kickoff: Date) -> Bool {
@@ -431,12 +578,17 @@ nonisolated enum SportsChannelResolver {
     /// A team is present when any distinctive token appears as a whole word.
     /// `haystack` must already be `SportsMatcher.normalize`d (space-padded).
     private static func teamPresent(_ tokens: Set<String>, in haystack: String) -> Bool {
-        tokens.contains { haystack.contains(" \($0) ") }
+        tokens.contains { SportsMatcher.containsWord($0, in: haystack) }
     }
 
-    // Mirror `SportsMatcher`'s field weights so the EPG tier ordering agrees
-    // with the matcher's own scoring; a user pick outscores any EPG match, and
-    // a channel-name-only hit is the weakest positive signal.
+    private static func allPresent(_ tokens: Set<String>, in haystack: String) -> Bool {
+        tokens.allSatisfy { SportsMatcher.containsWord($0, in: haystack) }
+    }
+
+    // A sub-title hit is the fixture line itself, so it weighs more than a
+    // title hit, which weighs more than a description-only (conference) hit;
+    // a user pick outscores any EPG match, and a channel-name-only hit is the
+    // weakest positive signal.
     private static let subtitleWeight = 3
     private static let titleWeight = 2
     private static let descriptionWeight = 1
