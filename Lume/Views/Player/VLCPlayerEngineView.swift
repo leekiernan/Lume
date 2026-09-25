@@ -30,6 +30,9 @@ struct VLCPlayerEngineView: View {
     /// only the scrubber leaf reads it. `@Bindable` so the iOS/macOS overlay can
     /// still take plain bindings.
     @Bindable var clock: PlaybackClock
+    /// The host's stream-change serialiser (`FullScreenPlayerView.mediaSwapper`):
+    /// the Siri remote's channel surfing and the on-screen transport controls
+    /// share it, so two swaps can never be in flight at once.
     let mediaSwapper: PlayerMediaSwapper
     /// The episode queued after `media`, resolved by the host. Drives the
     /// end-of-episode Next Up affordances; `nil` when there is nothing to play
@@ -85,10 +88,6 @@ struct VLCPlayerEngineView: View {
     @State private var isPanelOpen = false
     /// Bumped to ask the overlay to close its open panel (Menu/back press).
     @State private var panelCloseToken = 0
-    // Serialises stream changes for this session — the Siri remote's channel
-    // surfing and the on-screen transport controls share it, so two swaps can
-    // never be in flight at once. `internal` so the transport step in
-    // `VLCPlayerEngineView+Navigation.swift` can reach it; never read from a body.
     #if os(tvOS)
         /// The full channel browser (categories + channels) raised by a left
         /// press while watching live TV with the controls hidden.

@@ -6,7 +6,8 @@
 //  this once per stream, in `.task(id: activeMedia.id)`, and hands the answer
 //  down to whichever engine is driving playback: resolving it in a body would
 //  put a SwiftData fetch on the main actor every time the controls re-render,
-//  and three of the four overlays re-render on the playback clock.
+//  and two of the four overlays (AVPlayer's and VLCKit's) re-render on the
+//  playback clock.
 //
 
 import SwiftData
