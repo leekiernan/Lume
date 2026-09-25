@@ -181,8 +181,7 @@
         /// Clears a channel's watch timestamp so it drops out of the Recently
         /// Watched list. The @Query-backed list updates once the change is saved.
         private func removeFromRecentlyWatched(_ stream: LiveStream) {
-            stream.lastWatchedDate = nil
-            try? modelContext.save()
+            LiveChannelHistory.removeFromRecents(stream, in: modelContext)
         }
 
         /// Empties the whole Recently Watched list for the active playlist. The

@@ -51,7 +51,7 @@
                 let now = Date()
                 epgNow = listings.first { $0.start <= now && now < $0.end }
                 epgNext = listings.first { $0.start > now }
-                recentChannels = TVPlayerContent.recentChannels(in: modelContext, restriction: restriction)
+                recentChannels = LiveChannelHistory.recentChannels(current: stream, in: modelContext, restriction: restriction)
                 recentNowTitles = TVPlayerContent.nowProgrammeTitles(for: recentChannels, in: modelContext)
             }
         }

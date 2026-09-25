@@ -150,8 +150,10 @@ enum StorageManager {
 
     /// Wipes the active profile's watch history: resets `watchProgress`,
     /// `isWatched` and `lastWatchedDate` on every movie and episode, and clears
-    /// `lastWatchedDate` on every series and channel. Favorites, watchlist and
-    /// recommendation votes are left untouched.
+    /// `lastWatchedDate` on every series and channel (via
+    /// `LiveChannelHistory.clearRecents`, which Live TV's "Clear" shares), and
+    /// forgets the live recall pair. Favorites, watchlist and recommendation
+    /// votes are left untouched.
     ///
     /// Runs on a private background context — like `clearMetadataEnrichment` —
     /// whose saves merge back into the main context, so the Continue Watching /
@@ -195,18 +197,14 @@ enum StorageManager {
                     show.lastWatchedDate = nil
                 }
 
-                let channels = try context.fetch(FetchDescriptor<LiveStream>(
-                    predicate: #Predicate { $0.lastWatchedDate != nil }
-                ))
-                for channel in channels {
-                    channel.lastWatchedDate = nil
-                }
-
                 try context.save()
+
+                try LiveChannelHistory.clearRecents(in: context, batchSize: clearBatchSize)
             } catch {
                 logger.error("Failed to clear watch history: \(error.localizedDescription)")
             }
         }.value
+        LiveChannelHistory.clearRecall()
     }
 
     /// Clears the active profile's Recently Watched *live channels* for a single
@@ -228,14 +226,9 @@ enum StorageManager {
             let context = ModelContext(container)
             context.autosaveEnabled = false
             do {
-                let channels = try context.fetch(FetchDescriptor<LiveStream>(
-                    predicate: #Predicate { $0.lastWatchedDate != nil }
-                )).filter { $0.id.hasPrefix(playlistPrefix) }
-                for (index, channel) in channels.enumerated() {
-                    channel.lastWatchedDate = nil
-                    if (index + 1).isMultiple(of: clearBatchSize) { try context.save() }
-                }
-                try context.save()
+                try LiveChannelHistory.clearRecents(
+                    in: context, playlistPrefix: playlistPrefix, batchSize: clearBatchSize
+                )
             } catch {
                 logger.error("Failed to clear recently watched channels: \(error.localizedDescription)")
             }
