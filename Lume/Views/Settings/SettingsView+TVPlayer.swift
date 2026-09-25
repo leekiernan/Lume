@@ -79,7 +79,9 @@ import SwiftUI
                         title: "Up & Down",
                         valueLabel: LiveSurfMode.resolve(liveSurfModeRaw).displayName
                     ) {
-                        liveSurfModeRaw = nextLiveSurfModeRaw(after: liveSurfModeRaw)
+                        liveSurfModeRaw = PlayerOptionCycle.next(
+                            liveSurfModeRaw, in: LiveSurfMode.self, fallback: .default
+                        )
                     }
 
                     Text("Up and down move to the next and previous channel, like a TV remote. List Order moves the way the channel list reads on screen instead — up goes to the row above.")
@@ -131,7 +133,8 @@ import SwiftUI
                         valueLabel: ExternalPlayer(rawValue: externalPlayerRaw)?.displayName
                             ?? String(localized: "Off")
                     ) {
-                        externalPlayerRaw = nextExternalPlayerRaw(after: externalPlayerRaw)
+                        // Off, then each player in turn, then back to Off.
+                        externalPlayerRaw = PlayerOptionCycle.next(externalPlayerRaw, in: ExternalPlayer.self, offValue: "")
                     }
 
                     // Only meaningful once a player is selected — some players
@@ -142,7 +145,9 @@ import SwiftUI
                             valueLabel: ExternalPlayerScope(rawValue: externalPlayerScopeRaw)?.displayName
                                 ?? ExternalPlayerScope.default.displayName
                         ) {
-                            externalPlayerScopeRaw = nextExternalPlayerScopeRaw(after: externalPlayerScopeRaw)
+                            externalPlayerScopeRaw = PlayerOptionCycle.next(
+                                externalPlayerScopeRaw, in: ExternalPlayerScope.self, fallback: .default
+                            )
                         }
                     }
 

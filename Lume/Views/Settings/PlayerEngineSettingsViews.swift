@@ -401,31 +401,40 @@ import SwiftUI
         }
     }
 
-    /// Helpers for cycling tvOS option rows to their next choice.
-    enum PlayerOptionCycle {
-        /// Advance to the next value in a preset list, wrapping around.
-        static func next(_ current: Int, in values: [Int]) -> Int {
-            guard let index = values.firstIndex(of: current) else { return values.first ?? current }
-            return values[(index + 1) % values.count]
-        }
+#endif
 
-        /// Advance to the next case of an `Int`-raw enum, wrapping around.
-        static func next<T: CaseIterable & RawRepresentable>(_ current: Int, in _: T.Type) -> Int where T.RawValue == Int {
-            let all = Array(T.allCases)
-            guard let index = all.firstIndex(where: { $0.rawValue == current }) else {
-                return all.first?.rawValue ?? current
-            }
-            return all[(index + 1) % all.count].rawValue
-        }
-
-        /// Advance to the next case of a `String`-raw enum, wrapping around.
-        static func next<T: CaseIterable & RawRepresentable>(_ current: String, in _: T.Type) -> String where T.RawValue == String {
-            let all = Array(T.allCases)
-            guard let index = all.firstIndex(where: { $0.rawValue == current }) else {
-                return all.first?.rawValue ?? current
-            }
-            return all[(index + 1) % all.count].rawValue
-        }
+/// Helpers for cycling tvOS option rows to their next choice. Pure value logic,
+/// so it isn't fenced to tvOS and stays unit-testable.
+enum PlayerOptionCycle {
+    /// Advance to the next value in a preset list, wrapping around.
+    static func next(_ current: Int, in values: [Int]) -> Int {
+        guard let index = values.firstIndex(of: current) else { return values.first ?? current }
+        return values[(index + 1) % values.count]
     }
 
-#endif
+    /// Advance to the next case of an `Int`-raw enum, wrapping around.
+    static func next<T: CaseIterable & RawRepresentable>(_ current: Int, in _: T.Type) -> Int where T.RawValue == Int {
+        let all = Array(T.allCases)
+        guard let index = all.firstIndex(where: { $0.rawValue == current }) else {
+            return all.first?.rawValue ?? current
+        }
+        return all[(index + 1) % all.count].rawValue
+    }
+
+    /// Advance to the next case of a `String`-raw enum, wrapping around.
+    /// `offValue`, when given, is an extra leading choice ahead of every case
+    /// (the empty "Off" of an optional setting). An unrecognised `current`
+    /// resets to `fallback`, or to the first choice when there is none.
+    static func next<T: CaseIterable & RawRepresentable>(
+        _ current: String,
+        in _: T.Type,
+        offValue: String? = nil,
+        fallback: T? = nil
+    ) -> String where T.RawValue == String {
+        let all = (offValue.map { [$0] } ?? []) + T.allCases.map(\.rawValue)
+        guard let index = all.firstIndex(of: current) else {
+            return fallback?.rawValue ?? all.first ?? current
+        }
+        return all[(index + 1) % all.count]
+    }
+}
