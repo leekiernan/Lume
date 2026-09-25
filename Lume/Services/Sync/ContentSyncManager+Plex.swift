@@ -141,14 +141,10 @@ extension ContentSyncManager {
     /// the next sync, which signs in whenever the stored one is gone.
     private func persistPlexToken(_ token: String?, playlistId: UUID) {
         guard let token, !token.isEmpty else { return }
-        let context = ModelContext(modelContainer)
-        context.autosaveEnabled = false
-        guard let playlist = try? context.fetch(
-            FetchDescriptor<Playlist>(predicate: #Predicate { $0.id == playlistId })
-        ).first else { return }
-        if playlist.plexAccessToken != token {
-            playlist.plexAccessToken = token
-            try? context.save()
+        updatePlaylist(playlistId) { playlist in
+            if playlist.plexAccessToken != token {
+                playlist.plexAccessToken = token
+            }
         }
     }
 

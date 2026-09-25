@@ -76,7 +76,7 @@ extension ContentSyncManager {
         }
         try await syncStalkerChannels(client: client, playlistId: playlistId, progress: progress)
 
-        markStalkerPlaylistUpdated(playlistId)
+        markPlaylistUpdated(playlistId)
     }
 
     // MARK: - Categories
@@ -479,24 +479,10 @@ extension ContentSyncManager {
     // MARK: - Playlist bookkeeping
 
     private func updateStalkerPlaylistInfo(_ playlistId: UUID, profile: StalkerProfile) {
-        let context = ModelContext(modelContainer)
-        context.autosaveEnabled = false
-        guard let playlist = try? context.fetch(
-            FetchDescriptor<Playlist>(predicate: #Predicate { $0.id == playlistId })
-        ).first else { return }
-        playlist.userStatus = profile.status
-        playlist.expDate = profile.expDate
-        playlist.lastUpdated = Date()
-        try? context.save()
-    }
-
-    private func markStalkerPlaylistUpdated(_ playlistId: UUID) {
-        let context = ModelContext(modelContainer)
-        context.autosaveEnabled = false
-        guard let playlist = try? context.fetch(
-            FetchDescriptor<Playlist>(predicate: #Predicate { $0.id == playlistId })
-        ).first else { return }
-        playlist.lastUpdated = Date()
-        try? context.save()
+        updatePlaylist(playlistId) { playlist in
+            playlist.userStatus = profile.status
+            playlist.expDate = profile.expDate
+            playlist.lastUpdated = Date()
+        }
     }
 }
