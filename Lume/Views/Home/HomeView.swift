@@ -145,6 +145,8 @@ struct HomeView: View {
     }
 
     var body: some View {
+        // Derived once per pass — see `DerivedContent`.
+        let content = derivedContent()
         NavigationStack {
             Group {
                 if playlists.isEmpty {
@@ -153,7 +155,7 @@ struct HomeView: View {
                         systemImage: "house",
                         description: Text("Add a playlist in Settings to get started")
                     )
-                } else if isEmpty {
+                } else if isEmpty(content) {
                     ContentUnavailableView(
                         "Nothing Here Yet",
                         systemImage: "house",
@@ -169,7 +171,7 @@ struct HomeView: View {
                             reservesHero: feed.heroState.reservesSpace,
                             warmStartBackdropURL: heroWarmStartBackdropURL,
                             onSelectHero: { selectedHero = $0 },
-                            rows: { homeRows }
+                            rows: { homeRows(content) }
                         )
                         .tvQuickSwitchHint(interacted: selectedHero != nil)
                     #else
@@ -180,7 +182,7 @@ struct HomeView: View {
                                 } else if feed.heroState.reservesSpace {
                                     HomeHeroWarmStart(backdropURL: heroWarmStartBackdropURL)
                                 }
-                                homeRows
+                                homeRows(content)
                             }
                             // The hero fills the top inset itself when it's
                             // showing; without one, Home takes the same inset as
@@ -280,20 +282,20 @@ struct HomeView: View {
     /// The horizontal rails, shared by the iOS/macOS scroll layout and the tvOS
     /// immersive home. Rows render in the user's chosen order (Settings › Layout ›
     /// Home); each only appears when it has content.
-    private var homeRows: some View {
+    private func homeRows(_ content: DerivedContent) -> some View {
         ForEach(HomeLayoutSettings.resolve(
-            orderRaw: sectionOrderRaw, custom: customSections, surface: .home,
+            orderRaw: sectionOrderRaw, custom: content.customSections, surface: .home,
             liveTVEnabled: AppAreaSettings.isEnabled(.liveTV, disabledRaw: disabledAreasRaw)
         )) { ref in
-            homeRow(for: ref)
+            homeRow(for: ref, content: content)
         }
     }
 
     @ViewBuilder
-    private func homeRow(for ref: HomeSectionRef) -> some View {
+    private func homeRow(for ref: HomeSectionRef, content: DerivedContent) -> some View {
         switch ref {
         case let .builtin(section):
-            builtinRow(for: section)
+            builtinRow(for: section, content: content)
         case let .custom(id):
             // A custom row's header is the user's own text, so it goes through
             // verbatim; the items are resolved in `HomeView+CustomSections`.
@@ -302,7 +304,7 @@ struct HomeView: View {
             // `SectionSurface.defaultHeroSourceURL`), so they need the same VOD
             // gate as the built-in trending rows.
             if vodAvailable, ref != heroRef,
-               let section = customSections.first(where: { $0.id == id }),
+               let section = content.customSections.first(where: { $0.id == id }),
                HomeLayoutSettings.isEnabled(ref, disabledRaw: disabledSectionsRaw)
             {
                 rail(Text(verbatim: section.title), feed.items(for: ref), section: ref, title: section.title)
@@ -311,13 +313,13 @@ struct HomeView: View {
     }
 
     @ViewBuilder
-    private func builtinRow(for section: HomeSection) -> some View {
+    private func builtinRow(for section: HomeSection, content: DerivedContent) -> some View {
         if isSectionEnabled(section), .builtin(section) != heroRef {
             switch section {
             case .recentlyWatched:
-                rail(Text("Recently Watched"), recentlyWatched, onRemove: removeFromRecentlyWatched)
+                rail(Text("Recently Watched"), content.recentlyWatched, onRemove: removeFromRecentlyWatched)
             case .favorites:
-                rail(Text("Favorites"), favorites)
+                rail(Text("Favorites"), content.favorites)
             case .forYou:
                 ForYouRow(
                     items: recommendations,
@@ -449,6 +451,12 @@ struct HomeView: View {
     /// minus the ones they've hidden. A hidden row costs no network. Not
     /// `private`: read by the HomeView+DerivedContent extension (separate file).
     var visibleCustomSections: [CustomHomeSection] {
+        visibleCustomSections(of: customSections)
+    }
+
+    /// `visibleCustomSections` over an already-decoded list, so a body pass
+    /// that has decoded it once doesn't decode it again.
+    func visibleCustomSections(of customSections: [CustomHomeSection]) -> [CustomHomeSection] {
         customSections.filter {
             // The promoted section is still fetched — it feeds the hero even
             // though it draws no row.
