@@ -36,7 +36,12 @@ final nonisolated class XtreamClient: Sendable {
         let config = URLSessionConfiguration.default
         config.httpMaximumConnectionsPerHost = 1
         config.timeoutIntervalForRequest = 30
-        config.timeoutIntervalForResource = 120
+        // `get_vod_streams` / `get_series` return a whole catalog in one body,
+        // as large as the m3u exports `M3UClient` allows 600 s for, and slow
+        // panels stream it slowly. The per-request idle timeout above still
+        // catches a stalled transfer; this caps only one still making progress,
+        // which at 120 s failed and then re-downloaded from scratch on retry.
+        config.timeoutIntervalForResource = 600
         // Some panels only return JSON to a recognized player UA; the default
         // CFNetwork UA gets an HTML block page that fails to decode.
         config.httpAdditionalHeaders = ["User-Agent": lumeCatalogUserAgent]
