@@ -181,7 +181,7 @@ extension SettingsView {
 
                 VStack(alignment: .leading, spacing: 16) {
                     TVSettingsSectionLabel(premium.isPremium ? "Included" : "Premium Features")
-                    ForEach(PremiumFeature.allCases) { feature in
+                    ForEach(PremiumFeature.availableOnThisPlatform) { feature in
                         HStack(alignment: .top, spacing: 18) {
                             Image(systemName: feature.systemImage)
                                 .font(.system(size: 26))
