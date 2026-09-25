@@ -14,7 +14,6 @@ import SwiftUI
 
 #if !os(tvOS)
 
-    @available(iOS 16.0, macOS 13.0, tvOS 16.0, *)
     extension KSPlayerEngineView {
         /// Re-read the video track's resolution / frame rate / codec. Cheap and
         /// idempotent; only republishes when the value actually changes.
