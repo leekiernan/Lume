@@ -3,7 +3,8 @@
 //  LumeTests
 //
 //  Covers the XMLTV signals the Sports Hub relies on: the streaming parser now
-//  captures `<sub-title>` and accumulates every `<category>`, and `XMLTVDate`
+//  captures `<sub-title>`, accumulates every `<category>`, keeps one value per
+//  repeated (multi-language) text element, and `XMLTVDate`
 //  parses offset-less timestamps as UTC (per the XMLTV DTD) instead of dropping
 //  the programme on the slow `DateFormatter` fallback. Also covers the parser's
 //  own error/empty-guide reporting, which the sync pipeline relies on to tell a
@@ -90,6 +91,65 @@ struct XMLTVParserTests {
         #expect(programme.subtitle == "Bayern München - Borussia Dortmund")
         #expect(programme.title == "Bundesliga")
         #expect(programme.description == "Matchday 4.")
+    }
+
+    // MARK: Repeated (multi-language) text elements
+
+    private static let bilingualGuide = """
+    <?xml version="1.0" encoding="UTF-8"?>
+    <tv>
+      <programme start="20260918200000 +0000" stop="20260918201500 +0000" channel="ard.de">
+        <title lang="de">Tagesschau</title>
+        <title lang="en">News</title>
+        <sub-title lang="de">Nachrichten</sub-title>
+        <sub-title lang="en">Headlines</sub-title>
+        <desc lang="de">Die Nachrichten.</desc>
+        <desc lang="en">The news.</desc>
+      </programme>
+    </tv>
+    """
+
+    private func parseAll(_ content: String, preferredLanguage: String?) throws -> [ParsedProgramme] {
+        let url = try writeTempGuide(content)
+        defer { try? FileManager.default.removeItem(at: url) }
+        var programmes: [ParsedProgramme] = []
+        _ = XMLTVParser.parse(fileURL: url, preferredLanguage: preferredLanguage) { batch in
+            programmes.append(contentsOf: batch)
+        }
+        return programmes
+    }
+
+    @Test func `repeated elements are not concatenated`() throws {
+        let programme = try #require(try parseAll(Self.bilingualGuide, preferredLanguage: nil).first)
+        #expect(programme.title == "Tagesschau")
+        #expect(programme.subtitle == "Nachrichten")
+        #expect(programme.description == "Die Nachrichten.")
+    }
+
+    @Test func `repeated elements prefer the preferred language`() throws {
+        let programme = try #require(try parseAll(Self.bilingualGuide, preferredLanguage: "en-GB").first)
+        #expect(programme.title == "News")
+        #expect(programme.subtitle == "Headlines")
+        #expect(programme.description == "The news.")
+    }
+
+    @Test func `an unmatched preferred language keeps the first value`() throws {
+        let programme = try #require(try parseAll(Self.bilingualGuide, preferredLanguage: "fr").first)
+        #expect(programme.title == "Tagesschau")
+    }
+
+    @Test func `an empty first title does not hide a later one`() throws {
+        let guide = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <tv>
+          <programme start="20260918200000 +0000" stop="20260918201500 +0000" channel="ard.de">
+            <title lang="de"></title>
+            <title lang="en">News</title>
+          </programme>
+        </tv>
+        """
+        let programme = try #require(try parseAll(guide, preferredLanguage: "de").first)
+        #expect(programme.title == "News")
     }
 
     @Test func `sub-title is nil when absent`() throws {
