@@ -214,6 +214,7 @@ struct FullScreenPlayerView: View {
     }
 
     var body: some View {
+        // Every engine draws its own controls overlay, close button included.
         ZStack(alignment: .topLeading) {
             Color.black.ignoresSafeArea()
 
@@ -230,17 +231,6 @@ struct FullScreenPlayerView: View {
                 playerView
                     .ignoresSafeArea()
             #endif
-
-            // VLCKit and KSPlayer ship their own close button inside the
-            // auto-hiding controls overlay — showing a second one here means
-            // the user sees duplicate X buttons whenever the controls are
-            // visible. Only render our custom close for engines that don't
-            // draw their own controls.
-            if !engine.rendersOwnControls {
-                closeButton
-                    .padding(.top, 4)
-                    .padding(.leading, 4)
-            }
         }
         #if os(iOS)
         .statusBarHidden(true)
@@ -472,26 +462,6 @@ struct FullScreenPlayerView: View {
     private func retryResolve() {
         engineAttempt = 0
         Task { await resolveActiveMedia() }
-    }
-
-    private var closeButton: some View {
-        Button {
-            persistProgressDetached(force: true)
-            closePlayer()
-        } label: {
-            Image(systemName: "xmark")
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(.white)
-                .frame(width: 36, height: 36)
-                .background(.ultraThinMaterial, in: Circle())
-                .overlay(Circle().strokeBorder(.white.opacity(0.15), lineWidth: 0.5))
-        }
-        .buttonStyle(.plain)
-        .padding(12)
-        .accessibilityLabel("Close player")
-        #if !os(tvOS)
-            .keyboardShortcut(.escape, modifiers: [])
-        #endif
     }
 
     private func closePlayer() {
