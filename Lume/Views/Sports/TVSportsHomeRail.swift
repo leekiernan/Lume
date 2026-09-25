@@ -17,6 +17,9 @@ import SwiftUI
     /// off-main pass, never per card. Hidden when there is nothing to show, save
     /// the onboarding card when nothing is followed and the paywall when locked.
     struct TVSportsHomeRail: View {
+        /// See `SportsHomeRail.isSyncBusy`.
+        var isSyncBusy = false
+
         @Environment(\.modelContext) private var modelContext
         @Environment(\.contentRestriction) private var restriction
 
@@ -187,9 +190,11 @@ import SwiftUI
             SportsSyncService.shared.catchUpIfStale()
         }
 
+        /// Re-runs when the fixture set changes or an EPG/catalog sync settles,
+        /// the same key as the phone rail's; it never waits for a sync to end.
         private var resolveKey: String {
             guard premium.isPremium else { return "idle" }
-            return railFixtures.map(\.id).joined(separator: ",") + "|" + String(epg.isSyncing)
+            return railFixtures.map(\.id).joined(separator: ",") + "|" + String(epg.isSyncing) + "|" + String(isSyncBusy)
         }
 
         private func runResolve() async {
@@ -202,7 +207,6 @@ import SwiftUI
             resolved = await SportsChannelResolver.resolve(
                 container: modelContext.container,
                 fixtures: fixtures,
-                now: Date(),
                 restriction: restriction
             )
         }

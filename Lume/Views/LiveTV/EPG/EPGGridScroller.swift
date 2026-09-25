@@ -43,7 +43,16 @@ struct EPGGridScroller: View {
     var onLeadingLeft: () -> Void = {}
 
     private let metrics = EPGMetrics.current
-    private let now = Date()
+
+    /// "Now" for everything the guide decides by the clock — the Now pill and
+    /// line, the live highlight, replay glyphs, play-vs-catch-up and the detail
+    /// sheet. Minute-granular (`EPGClock`) and advanced by `tickClock()`, so a
+    /// guide left open keeps up with the wall clock without rebuilding the grid
+    /// more than once a minute.
+    @State private var now = EPGClock.minute()
+    /// When the guide opened. The initial scroll target is pinned to it so a
+    /// ticking `now` never moves the viewer's scroll position.
+    @State private var openedAt = Date()
 
     @State private var sync = EPGScrollSync()
     @State private var selection: EPGSelection?
@@ -128,6 +137,7 @@ struct EPGGridScroller: View {
         #else
         .background(.background)
         #endif
+        .task { await tickClock() }
         .sheet(item: $selection) { selection in
             EPGProgramDetailView(
                 stream: selection.stream,
@@ -193,12 +203,27 @@ struct EPGGridScroller: View {
         timeline.x(for: date.addingTimeInterval(-Double(metrics.nowLeadInMinutes) * 60))
     }
 
-    /// The initial target, handed to the grid. Bound to the view's captured
-    /// `now` on purpose: the grid's `Equatable` gate compares it, so a value
-    /// that moved with the wall clock would re-render the whole subtree on
-    /// every parent update. Explicit jumps read the clock instead.
+    /// The initial target, handed to the grid. Pinned to the moment the guide
+    /// opened on purpose: the grid scrolls to it once on appear, and its
+    /// `Equatable` gate compares it, so a value that followed the ticking
+    /// `now` would re-render the subtree for a target it never scrolls to
+    /// again. Explicit jumps read the clock instead.
     private var nowScrollTarget: CGFloat {
-        scrollTarget(forNow: now)
+        scrollTarget(forNow: openedAt)
+    }
+
+    /// Advances `now` on each minute boundary for as long as the guide is on
+    /// screen.
+    private func tickClock() async {
+        while !Task.isCancelled {
+            let wait = EPGClock.nextMinute(after: Date()).timeIntervalSinceNow
+            try? await Task.sleep(for: .seconds(max(1, wait)))
+            guard !Task.isCancelled else { return }
+            let minute = EPGClock.minute()
+            if minute != now {
+                now = minute
+            }
+        }
     }
 
     /// Asks the grid to scroll. On tvOS the frozen panes' mirror is updated in

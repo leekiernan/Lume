@@ -29,10 +29,12 @@ struct SportsQueryShapeTests {
         // conference programme names its games only there. The kickoff window
         // and channel-id bound keep the row count small enough to afford it.
         for kept: PartialKeyPath<EPGListing> in [
-            \.channelId, \.title, \.subtitle, \.category, \.listingDescription, \.start, \.end
+            \.channelId, \.title, \.subtitle, \.listingDescription, \.start, \.end
         ] {
             #expect(props.contains(kept))
         }
+        // Matching never reads the categories; keep the column out of the rows.
+        #expect(!props.contains(\EPGListing.category))
     }
 
     /// The candidate-channel fetch must run its exclusion (hidden channels and

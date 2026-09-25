@@ -25,6 +25,10 @@ nonisolated extension EPGSlot {
     init(_ listing: EPGListing) {
         self.init(title: listing.title, start: listing.start, end: listing.end)
     }
+
+    init(_ listing: EPGWindowListing) {
+        self.init(title: listing.title, start: listing.start, end: listing.end)
+    }
 }
 
 /// The now/next programme pair shown on a single channel card.
@@ -114,6 +118,18 @@ nonisolated struct EPGWindowListing: Equatable {
     let end: Date
 }
 
+nonisolated extension EPGWindowListing {
+    init(_ listing: EPGListing) {
+        self.init(
+            id: listing.id,
+            title: listing.title,
+            detail: listing.listingDescription,
+            start: listing.start,
+            end: listing.end
+        )
+    }
+}
+
 /// Loads the full guide window for a set of channels in one indexed, off-main
 /// fetch, grouped by channel id and sorted by start. This is the guide grid's
 /// counterpart to `ChannelEPGLoader`: it keeps *every* listing in the window
@@ -147,15 +163,7 @@ enum EPGGuideLoader {
 
         var grouped: [String: [EPGWindowListing]] = [:]
         for listing in listings {
-            grouped[listing.channelId, default: []].append(
-                EPGWindowListing(
-                    id: listing.id,
-                    title: listing.title,
-                    detail: listing.listingDescription,
-                    start: listing.start,
-                    end: listing.end
-                )
-            )
+            grouped[listing.channelId, default: []].append(EPGWindowListing(listing))
         }
         return grouped
     }

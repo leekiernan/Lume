@@ -77,7 +77,10 @@ extension HomeView {
         switch item {
         case let .movie(movie): movie.lastWatchedDate = nil
         case let .series(series): series.lastWatchedDate = nil
-        case let .live(stream): stream.lastWatchedDate = nil
+        case let .live(stream):
+            // Shared with Live TV so the in-player rail and recall agree.
+            LiveChannelHistory.removeFromRecents(stream, in: modelContext)
+            return
         }
         try? modelContext.save()
     }

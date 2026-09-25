@@ -3,7 +3,8 @@
 //  LumeTests
 //
 //  Covers the live channel "recall" pair — the last-watched channel the tvOS
-//  player jumps back to on a right press (`LiveChannelHistory`).
+//  player jumps back to on a right press (`LiveChannelHistory`) — and the
+//  shared Recently Watched helpers the in-player rail and removals use.
 //
 
 import Foundation
@@ -186,63 +187,70 @@ struct LiveChannelHistoryTests {
         try context.save()
     }
 
-    // MARK: - Recents list
+    // MARK: - Recently watched
 
-    /// The id `record` stores for a stream — "<playlistUUID>-live-<streamId>".
-    private func channelId(forStreamId streamId: Int, playlist: Playlist) -> String {
-        "\(playlist.id.uuidString)-live-\(streamId)"
+    private func stream(_ streamId: Int, playlist: Playlist, in context: ModelContext) throws -> LiveStream {
+        let id = "\(playlist.id.uuidString)-live-\(streamId)"
+        var descriptor = FetchDescriptor<LiveStream>(predicate: #Predicate { $0.id == id })
+        descriptor.fetchLimit = 1
+        return try #require(try context.fetch(descriptor).first)
     }
 
-    @Test func `recents lists watched channels most-recent first`() throws {
+    /// The in-player rail reads the same `lastWatchedDate` list Live TV and
+    /// Home show, with the playing channel pinned first.
+    @Test func `recent channels lead with the playing channel then newest watched`() throws {
+        let (context, playlist) = try makeWorld(streams: threeChannels)
+        let alpha = try stream(100, playlist: playlist, in: context)
+        let bravo = try stream(101, playlist: playlist, in: context)
+        let charlie = try stream(102, playlist: playlist, in: context)
+        let now = Date()
+        alpha.lastWatchedDate = now.addingTimeInterval(-300)
+        bravo.lastWatchedDate = now.addingTimeInterval(-60)
+        try context.save()
+
+        // Charlie is playing but its first watch stamp hasn't landed yet.
+        let rail = LiveChannelHistory.recentChannels(current: charlie, in: context, restriction: unrestricted)
+        #expect(rail.map(\.name) == ["Charlie", "Bravo", "Alpha"])
+    }
+
+    @Test func `removing a channel drops it from the rail and the recall slot`() throws {
         let (context, playlist) = try makeWorld(streams: threeChannels)
         let defaults = try makeDefaults()
-        let alpha = try media(forStreamId: 100, playlist: playlist, in: context)
-        let bravo = try media(forStreamId: 101, playlist: playlist, in: context)
-        let charlie = try media(forStreamId: 102, playlist: playlist, in: context)
+        let alpha = try stream(100, playlist: playlist, in: context)
+        let charlie = try stream(102, playlist: playlist, in: context)
+        alpha.lastWatchedDate = Date()
+        try context.save()
+        try LiveChannelHistory.record(media(forStreamId: 100, playlist: playlist, in: context), defaults: defaults)
+        try LiveChannelHistory.record(media(forStreamId: 102, playlist: playlist, in: context), defaults: defaults)
 
-        LiveChannelHistory.record(alpha, defaults: defaults)
-        LiveChannelHistory.record(bravo, defaults: defaults)
-        LiveChannelHistory.record(charlie, defaults: defaults)
+        LiveChannelHistory.removeFromRecents(alpha, in: context, defaults: defaults)
 
-        #expect(LiveChannelHistory.recentChannelIds(defaults: defaults) == [
-            channelId(forStreamId: 102, playlist: playlist),
-            channelId(forStreamId: 101, playlist: playlist),
-            channelId(forStreamId: 100, playlist: playlist)
-        ])
+        #expect(alpha.lastWatchedDate == nil)
+        #expect(LiveChannelHistory.recentChannels(current: charlie, in: context, restriction: unrestricted).map(\.name) == ["Charlie"])
+        #expect(LiveChannelHistory.recallMedia(in: context, restriction: unrestricted, defaults: defaults) == nil)
     }
 
-    @Test func `re-watching a channel moves it to the front without duplicating`() throws {
+    @Test func `clearing recents can be scoped to one playlist`() throws {
         let (context, playlist) = try makeWorld(streams: threeChannels)
-        let defaults = try makeDefaults()
-        let alpha = try media(forStreamId: 100, playlist: playlist, in: context)
-        let bravo = try media(forStreamId: 101, playlist: playlist, in: context)
+        let other = LiveStream(id: "\(UUID().uuidString)-live-1", streamId: 1, name: "Elsewhere")
+        context.insert(other)
+        for streamId in 100 ... 102 {
+            try stream(streamId, playlist: playlist, in: context).lastWatchedDate = Date()
+        }
+        other.lastWatchedDate = Date()
+        try context.save()
 
-        LiveChannelHistory.record(alpha, defaults: defaults)
-        LiveChannelHistory.record(bravo, defaults: defaults)
-        LiveChannelHistory.record(alpha, defaults: defaults)
+        try LiveChannelHistory.clearRecents(in: context, playlistPrefix: "\(playlist.id.uuidString)-", batchSize: 2)
+        #expect(try stream(101, playlist: playlist, in: context).lastWatchedDate == nil)
+        #expect(other.lastWatchedDate != nil)
 
-        #expect(LiveChannelHistory.recentChannelIds(defaults: defaults) == [
-            channelId(forStreamId: 100, playlist: playlist),
-            channelId(forStreamId: 101, playlist: playlist)
-        ])
-    }
-
-    @Test func `non-live media stays out of the recents list`() throws {
-        let (_, playlist) = try makeWorld(streams: threeChannels)
-        let defaults = try makeDefaults()
-        let movie = try #require(PlayableMedia.from(
-            movie: Movie(id: "m-1", streamId: 1, name: "Film", containerExtension: "mp4"),
-            playlist: playlist
-        ))
-
-        LiveChannelHistory.record(movie, defaults: defaults)
-
-        #expect(LiveChannelHistory.recentChannelIds(defaults: defaults).isEmpty)
+        try LiveChannelHistory.clearRecents(in: context, batchSize: 2)
+        #expect(other.lastWatchedDate == nil)
     }
 
     // MARK: - Profile scoping
 
-    @Test func `recents and recall are isolated per profile`() throws {
+    @Test func `recall is isolated per profile`() throws {
         let (context, playlist) = try makeWorld(streams: threeChannels)
         let defaults = try makeDefaults()
         let alpha = try media(forStreamId: 100, playlist: playlist, in: context)
@@ -253,16 +261,11 @@ struct LiveChannelHistoryTests {
         LiveChannelHistory.record(alpha, profileID: profileA, defaults: defaults)
         LiveChannelHistory.record(bravo, profileID: profileA, defaults: defaults)
 
-        // Profile A sees its own recents and recall pair.
-        #expect(LiveChannelHistory.recentChannelIds(profileID: profileA, defaults: defaults) == [
-            channelId(forStreamId: 101, playlist: playlist),
-            channelId(forStreamId: 100, playlist: playlist)
-        ])
+        // Profile A sees its own recall pair.
         #expect(LiveChannelHistory.recallMedia(in: context, restriction: unrestricted, profileID: profileA, defaults: defaults)?
             .contentRef == alpha.contentRef)
 
         // Profile B starts empty — A's history doesn't leak across.
-        #expect(LiveChannelHistory.recentChannelIds(profileID: profileB, defaults: defaults).isEmpty)
         #expect(LiveChannelHistory.recallMedia(in: context, restriction: unrestricted, profileID: profileB, defaults: defaults) == nil)
     }
 
@@ -278,12 +281,9 @@ struct LiveChannelHistoryTests {
 
         // The default profile reads the same un-suffixed keys, so the history
         // carries over after the upgrade.
-        #expect(LiveChannelHistory.recentChannelIds(
-            profileID: UserProfile.defaultProfileID, defaults: defaults
-        ) == [
-            channelId(forStreamId: 101, playlist: playlist),
-            channelId(forStreamId: 100, playlist: playlist)
-        ])
+        #expect(LiveChannelHistory.recallMedia(
+            in: context, restriction: unrestricted, profileID: UserProfile.defaultProfileID, defaults: defaults
+        )?.contentRef == alpha.contentRef)
     }
 
     @Test func `purge clears a profile's history`() throws {
@@ -297,7 +297,6 @@ struct LiveChannelHistoryTests {
         LiveChannelHistory.record(bravo, profileID: profile, defaults: defaults)
         LiveChannelHistory.purge(profileID: profile, defaults: defaults)
 
-        #expect(LiveChannelHistory.recentChannelIds(profileID: profile, defaults: defaults).isEmpty)
         #expect(LiveChannelHistory.recallMedia(in: context, restriction: unrestricted, profileID: profile, defaults: defaults) == nil)
     }
 }

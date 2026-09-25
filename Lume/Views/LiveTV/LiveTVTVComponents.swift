@@ -181,8 +181,7 @@
         /// Clears a channel's watch timestamp so it drops out of the Recently
         /// Watched list. The @Query-backed list updates once the change is saved.
         private func removeFromRecentlyWatched(_ stream: LiveStream) {
-            stream.lastWatchedDate = nil
-            try? modelContext.save()
+            LiveChannelHistory.removeFromRecents(stream, in: modelContext)
         }
 
         /// Empties the whole Recently Watched list for the active playlist. The
@@ -248,7 +247,7 @@
                                 .font(.system(size: 22))
                                 .foregroundStyle(tertiaryColor)
                             }
-                        } else if stream.epgChannelId != nil {
+                        } else if stream.epgChannelId?.isEmpty == false {
                             Text("No EPG data")
                                 .font(.system(size: 22))
                                 .foregroundStyle(tertiaryColor)
@@ -258,8 +257,8 @@
                                 .foregroundStyle(secondaryColor)
                         }
 
-                        if stream.tvArchive > 0 {
-                            Label("Catchup: \(stream.tvArchiveDuration)d", systemImage: "clock.arrow.circlepath")
+                        if stream.supportsCatchup {
+                            Label("Catchup: \(stream.catchupArchiveDays)d", systemImage: "clock.arrow.circlepath")
                                 .font(.system(size: 22))
                                 .foregroundStyle(Color.blue)
                         }

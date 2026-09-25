@@ -220,6 +220,30 @@ struct PlayableMediaTests {
         #expect(!PlayableMedia.isCatchupAvailable(stream: stream, start: now.addingTimeInterval(-3600), now: now))
     }
 
+    /// Badges and the tvOS browser read `supportsCatchup` directly; an m3u
+    /// channel that advertises an archive must not be flagged, because
+    /// `catchup(stream:...)` would refuse to build it.
+    @Test func `supports catchup matches the catchup construction guard`() {
+        let xtream = LiveStream(id: "l-11", streamId: 308, name: "Xtream", tvArchive: 1, tvArchiveDuration: 0)
+        let m3u = LiveStream(id: "l-12", streamId: 309, name: "M3U", tvArchive: 1, tvArchiveDuration: 7)
+        m3u.directURL = "http://example.com/live/stream.m3u8"
+        #expect(xtream.supportsCatchup)
+        #expect(xtream.catchupArchiveDays == 1)
+        #expect(!m3u.supportsCatchup)
+    }
+
+    /// The guide's value snapshot must agree with the model-level check.
+    @Test @MainActor func `guide row snapshot agrees with catchup availability`() {
+        let stream = LiveStream(id: "l-13", streamId: 310, name: "Archive", tvArchive: 1, tvArchiveDuration: 3)
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        let timeline = EPGTimeline.live(now: now, pointsPerMinute: 4)
+        let row = EPGGridBuilder.rows(streams: [stream], cellsByChannel: [:], timeline: timeline)[0]
+        for daysAgo in [0.5, 2.9, 3.1, 5] {
+            let start = now.addingTimeInterval(-daysAgo * 86400)
+            #expect(row.isReplayable(start: start, now: now) == stream.isCatchupAvailable(start: start, now: now))
+        }
+    }
+
     // MARK: - Codable
 
     @Test func `playable media codable round trip`() throws {

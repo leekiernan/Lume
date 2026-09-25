@@ -83,7 +83,11 @@
         /// the cards: title-style scope menu on the left, the day switch and the
         /// Manage Teams button on the right, then the rails.
         private var content: some View {
-            ScrollView {
+            // One grouping pass per render: the fixtures and groups feed the
+            // rails, the default focus and the resolve key alike.
+            let fixtures = grouping.visibleFixtures
+            let groups = grouping.groups(for: fixtures)
+            return ScrollView {
                 LazyVStack(alignment: .leading, spacing: 36) {
                     header
                     if groups.isEmpty {
@@ -98,9 +102,9 @@
                 .padding(.bottom, 40)
             }
             .scrollClipDisabled()
-            .defaultFocus($focus, firstCardFocus)
+            .defaultFocus($focus, groups.first?.fixtures.first.map { TVSportsFocus.card($0.id) })
             .onExitCommand { returnFocusToFilter() }
-            .task(id: resolveKey) { await runResolve() }
+            .task(id: resolveKey(fixtures)) { await runResolve(fixtures) }
         }
 
         // MARK: - Header
@@ -332,10 +336,6 @@
 
         // MARK: - Focus
 
-        private var firstCardFocus: TVSportsFocus? {
-            groups.first?.fixtures.first.map { TVSportsFocus.card($0.id) }
-        }
-
         private func returnFocusToFilter() {
             Task { @MainActor in focus = .segment(segment) }
         }
@@ -348,15 +348,13 @@
             SportsSyncService.shared.refreshMissing()
             SportsSyncService.shared.catchUpIfStale()
             SportsSyncService.shared.beginLivePolling()
-            Task { await EPGSyncService.shared.refreshIfMissingSubtitles() }
         }
 
-        private var resolveKey: String {
-            visibleFixtures.map(\.id).joined(separator: ",") + "|" + String(epg.isSyncing)
+        private func resolveKey(_ fixtures: [SportsFixture]) -> String {
+            fixtures.map(\.id).joined(separator: ",") + "|" + String(epg.isSyncing)
         }
 
-        private func runResolve() async {
-            let fixtures = visibleFixtures
+        private func runResolve(_ fixtures: [SportsFixture]) async {
             guard !fixtures.isEmpty else {
                 resolved = [:]
                 return
@@ -364,7 +362,6 @@
             resolved = await SportsChannelResolver.resolve(
                 container: modelContext.container,
                 fixtures: fixtures,
-                now: Date(),
                 restriction: restriction
             )
         }
@@ -413,14 +410,6 @@
 
         private var followedLeagues: [SportsLeague] {
             grouping.followedLeagues
-        }
-
-        private var visibleFixtures: [SportsFixture] {
-            grouping.visibleFixtures
-        }
-
-        private var groups: [SportsFixtureGroup] {
-            grouping.groups
         }
 
         private var emptyChips: [String] {

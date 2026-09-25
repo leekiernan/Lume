@@ -280,14 +280,12 @@ extension PlayableMedia {
     }
 
     /// Whether a programme that started at `start` is still replayable from the
-    /// channel's catch-up archive at `now`. Mirrors the guards in
-    /// `catchup(stream:...)` so UI can offer the action only where construction
-    /// would succeed: catch-up needs Xtream credentials (no direct URL), an
-    /// advertised archive, and a start inside the archive window.
+    /// channel's catch-up archive at `now`. Shares `LiveStream.supportsCatchup`
+    /// with `catchup(stream:...)` so UI can offer the action only where
+    /// construction would succeed: catch-up needs Xtream credentials (no direct
+    /// URL), an advertised archive, and a start inside the archive window.
     static func isCatchupAvailable(stream: LiveStream, start: Date, now: Date) -> Bool {
-        guard stream.tvArchive > 0, stream.directURL == nil else { return false }
-        let archiveDays = max(1, stream.tvArchiveDuration)
-        return start >= now.addingTimeInterval(-TimeInterval(archiveDays) * 86400)
+        stream.isCatchupAvailable(start: start, now: now)
     }
 
     /// A past programme played from the channel's catch-up archive. Modelled as
@@ -303,7 +301,7 @@ extension PlayableMedia {
         end: Date,
         client: XtreamClient = XtreamClient()
     ) -> PlayableMedia? {
-        guard stream.tvArchive > 0, stream.directURL == nil else { return nil }
+        guard stream.supportsCatchup else { return nil }
         let durationMinutes = max(1, Int((end.timeIntervalSince(start) / 60).rounded(.up)))
         guard let url = client.buildCatchupURL(
             for: stream, playlist: playlist, start: start, durationMinutes: durationMinutes

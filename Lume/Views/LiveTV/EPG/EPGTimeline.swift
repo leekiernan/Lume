@@ -78,6 +78,24 @@ nonisolated struct EPGTimeline: Equatable {
     }
 }
 
+// MARK: - Clock
+
+/// The guide's minute-granular clock. The grid's `Equatable` gates compare
+/// "now", so it must change at most once a minute — often enough to move the
+/// live highlight and the replay decisions along, rarely enough that parent
+/// updates don't rebuild the grid.
+nonisolated enum EPGClock {
+    /// `date` floored to the start of its minute.
+    static func minute(of date: Date = Date()) -> Date {
+        Date(timeIntervalSinceReferenceDate: (date.timeIntervalSinceReferenceDate / 60).rounded(.down) * 60)
+    }
+
+    /// The start of the minute after the one `date` falls in.
+    static func nextMinute(after date: Date) -> Date {
+        minute(of: date).addingTimeInterval(60)
+    }
+}
+
 // MARK: - Sticky text
 
 /// How far a programme block's text has to shift to stay inside the viewport.
@@ -151,17 +169,17 @@ struct EPGChannelRow: Identifiable {
     let stream: LiveStream
     let name: String
     let logoURL: URL?
-    /// Whether the channel can serve catch-up at all (advertised archive,
-    /// Xtream stream) — mirrors the `PlayableMedia.catchup` guards.
+    /// Whether the channel can serve catch-up at all — a snapshot of
+    /// `LiveStream.supportsCatchup`.
     let catchupCapable: Bool
     /// How many days the archive reaches back (≥ 1 when `catchupCapable`).
     let archiveDays: Int
     let cells: [EPGProgramCell]
 
-    /// Snapshot equivalent of `PlayableMedia.isCatchupAvailable` for the
-    /// scroll path: whether a programme starting at `start` is replayable.
+    /// Snapshot equivalent of `LiveStream.isCatchupAvailable` for the scroll
+    /// path: whether a programme starting at `start` is replayable.
     func isReplayable(start: Date, now: Date) -> Bool {
-        catchupCapable && start >= now.addingTimeInterval(-TimeInterval(archiveDays) * 86400)
+        catchupCapable && CatchupWindow.contains(start: start, archiveDays: archiveDays, now: now)
     }
 }
 
@@ -186,8 +204,8 @@ enum EPGGridBuilder {
                 stream: stream,
                 name: stream.name,
                 logoURL: URL(string: stream.streamIcon ?? ""),
-                catchupCapable: stream.tvArchive > 0 && stream.directURL == nil,
-                archiveDays: max(1, stream.tvArchiveDuration),
+                catchupCapable: stream.supportsCatchup,
+                archiveDays: stream.catchupArchiveDays,
                 cells: cells
             )
         }
