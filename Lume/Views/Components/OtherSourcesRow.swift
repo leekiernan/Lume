@@ -40,7 +40,8 @@ struct OtherSourcesRow: View {
                             DetailPosterCard(
                                 title: source.item.title,
                                 imageURL: source.item.imageURL,
-                                badge: source.playlistName
+                                badge: source.playlistName,
+                                isSeries: true
                             )
                             .matchedTransitionSourceIfAvailable(id: series.id, in: animationNamespace)
                         }
