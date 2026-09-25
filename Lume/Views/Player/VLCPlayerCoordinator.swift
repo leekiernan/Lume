@@ -69,6 +69,9 @@ final class VLCPlayerCoordinator: NSObject, ObservableObject {
     var onTime: ((TimeInterval) -> Void)?
     var onDuration: ((TimeInterval) -> Void)?
 
+    /// Catch-up seeks and programme-clock mapping — see `CatchupSeekRouter`.
+    let catchup = CatchupSeekRouter()
+
     let mediaPlayer = VLCMediaPlayer()
 
     private weak var hostView: VLCHostView?
@@ -165,6 +168,7 @@ final class VLCPlayerCoordinator: NSObject, ObservableObject {
         languageOptions = PlayerLanguageOptions.load()
         mediaURL = media.url
         httpHeaders = media.httpHeaders
+        catchup.load(media)
         retry.reset()
         hasStartedPlayback = false
         setBuffering(true)
@@ -207,6 +211,7 @@ final class VLCPlayerCoordinator: NSObject, ObservableObject {
         if media.url != mediaURL { hasManualTrackSelection = false }
         mediaURL = media.url
         httpHeaders = media.httpHeaders
+        catchup.load(media)
         lastKnownTime = 0
         retry.reset()
         hasStartedPlayback = false
@@ -417,6 +422,7 @@ final class VLCPlayerCoordinator: NSObject, ObservableObject {
     }
 
     func skip(by seconds: Double) {
+        if catchup.route(.by(seconds)) { return }
         if seconds < 0 {
             mediaPlayer.jumpBackward(-seconds)
         } else {
@@ -426,6 +432,7 @@ final class VLCPlayerCoordinator: NSObject, ObservableObject {
 
     /// Seek to an absolute time (in seconds).
     func seek(to seconds: TimeInterval) {
+        if catchup.route(.to(seconds)) { return }
         let millis = Int32((seconds * 1000).rounded())
         mediaPlayer.time = VLCTime(int: millis)
     }
@@ -567,6 +574,10 @@ extension VLCPlayerCoordinator: VLCDrawable, VLCPictureInPictureDrawable, VLCPic
     }
 
     func seek(by offset: Int64, completion: @escaping () -> Void) {
+        if catchup.route(.by(Double(offset) / 1000)) {
+            completion()
+            return
+        }
         mediaPlayer.jump(withOffset: Int32(offset), completion: completion)
     }
 

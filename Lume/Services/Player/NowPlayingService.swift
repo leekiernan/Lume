@@ -107,14 +107,27 @@ final class NowPlayingService {
         }
     }
 
+    /// A catch-up seek swapped in another segment of the programme already
+    /// published. The session — metadata, commands, artwork, Live Activity —
+    /// carries on (the host keys it on `playbackSessionID`); only the stream a
+    /// resume snapshot reopens moves to the new segment.
+    func continueSession(with media: PlayableMedia) {
+        guard let current = currentMedia, current.playbackSessionID == media.playbackSessionID else { return }
+        currentMedia = media
+        PlaybackResumeStore.save(media)
+    }
+
     /// Tear the whole session down: player dismissed. Also snapshots the final
     /// position so the Live Activity's tap-to-resume can reopen where playback
     /// left off even after the session is gone.
     func endSession() {
         if let media = currentMedia {
             let position = clock?.current ?? 0
+            // The clock is programme time for catch-up; the snapshot reopens
+            // this segment, so it resumes at the segment's own playhead.
+            let resumeAt = media.enginePosition(position)
             PlaybackResumeStore.save(
-                !media.isLive && position > 1 ? media.resuming(at: position) : media
+                !media.isLive && resumeAt > 1 ? media.resuming(at: resumeAt) : media
             )
         }
         currentMedia = nil
@@ -233,8 +246,9 @@ final class NowPlayingService {
 
     private func remoteSeek(to position: TimeInterval) -> MPRemoteCommandHandlerStatus {
         guard let transport else { return .noActionableNowPlayingItem }
-        transport.seek(position)
+        // Clock first: a catch-up seek re-places it on the segment it opens.
         clock?.current = position
+        transport.seek(position)
         publishDynamic()
         return .success
     }
@@ -311,7 +325,7 @@ final class NowPlayingService {
     private func loadArtwork(for media: PlayableMedia) async {
         guard let posterURL = media.posterURL else { return }
         guard let image = try? await ImagePipeline.shared.image(for: posterURL, maxPixelSize: 600) else { return }
-        guard currentMedia?.id == media.id else { return }
+        guard currentMedia?.playbackSessionID == media.playbackSessionID else { return }
         artwork = Self.makeArtwork(image)
         publish()
         #if os(iOS)

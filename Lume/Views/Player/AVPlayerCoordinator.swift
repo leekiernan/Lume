@@ -97,6 +97,10 @@ final class AVPlayerCoordinator: NSObject, ObservableObject {
     var onTime: ((TimeInterval) -> Void)?
     var onDuration: ((TimeInterval) -> Void)?
 
+    /// Sends a catch-up programme's seeks to the host and maps this player's
+    /// playhead onto the programme clock. See `CatchupSeekRouter`.
+    let catchup = CatchupSeekRouter()
+
     let player = AVPlayer()
 
     private weak var playerLayer: AVPlayerLayer?
@@ -200,6 +204,7 @@ final class AVPlayerCoordinator: NSObject, ObservableObject {
         }
         languageOptions = PlayerLanguageOptions.load()
         currentMedia = media
+        catchup.load(media)
         isLive = media.isLive
         startTime = media.startTime
         needsResume = !media.isLive && media.startTime > 1
@@ -301,6 +306,7 @@ final class AVPlayerCoordinator: NSObject, ObservableObject {
     }
 
     func skip(by seconds: Double) {
+        if catchup.route(.by(seconds)) { return }
         let current = player.currentTime().seconds
         let base = current.isFinite ? current : 0
         var target = base + seconds
@@ -312,6 +318,7 @@ final class AVPlayerCoordinator: NSObject, ObservableObject {
 
     /// Seek to an absolute time (in seconds).
     func seek(to seconds: TimeInterval) {
+        if catchup.route(.to(seconds)) { return }
         let time = CMTime(seconds: seconds, preferredTimescale: 600)
         player.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero)
     }

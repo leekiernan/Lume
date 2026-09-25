@@ -368,8 +368,9 @@ import SwiftUI
             if editing {
                 hideTask?.cancel()
             } else {
-                coordinator.seek(to: seekPosition)
+                // Clock first: a catch-up seek re-places it on the segment.
                 currentTime = seekPosition
+                coordinator.seek(to: seekPosition)
                 onScheduleHide()
             }
         }

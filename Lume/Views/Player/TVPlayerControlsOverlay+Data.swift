@@ -133,8 +133,9 @@
         /// been playing when scrubbing began.
         func commitScrub() {
             let target = min(max(scrubTarget, 0), max(clock.duration, 0))
-            coordinator.seek(to: target)
+            // Clock first: a catch-up seek re-places it on the segment.
             clock.current = target
+            coordinator.seek(to: target)
             finishScrub(resume: wasPlayingBeforeScrub)
         }
 
@@ -312,8 +313,8 @@
         var infoPrimaryAction: TVPlayerInfoAction? {
             guard !media.isLive else { return nil }
             return TVPlayerInfoAction(title: "Restart", systemImage: "gobackward") {
-                coordinator.seek(to: 0)
                 clock.current = 0
+                coordinator.seek(to: 0)
                 closePanel()
                 onResetHideTimer()
             }

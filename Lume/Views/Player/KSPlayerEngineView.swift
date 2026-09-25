@@ -61,8 +61,18 @@ struct KSPlayerEngineView: View {
     /// host and handed to `NowPlayingService` with this engine's transport.
     /// `nil` on tvOS, where the Siri Remote already owns stream changes.
     var onRemoteAdvance: ((PlayerMediaSwapper.Step) -> Bool)?
+    /// Takes every seek and skip on a catch-up programme — see `CatchupSeekRouter`.
+    var onCatchupSeek: ((CatchupSeek) -> Void)?
 
     @StateObject var coordinator = KSVideoPlayer.Coordinator()
+    /// KSPlayer's coordinator is the library's, so the catch-up routing lives
+    /// here and every seek goes through `seek(to:)` / `skip(by:)` in
+    /// `KSPlayerEngineView+Catchup`. A reference in `@State`, like `tick`.
+    @State var catchupRouter = CatchupSeekRouter()
+    /// Keeps the controls up while a catch-up seek loads its new segment, so
+    /// the viewer can keep seeking instead of waiting behind a spinner.
+    /// Cleared by the first frame or a failure.
+    @State var isCatchupSegmentLoading = false
     /// Drives bounded backoff reconnects when the stream drops (see
     /// `handleState`). KSPlayer otherwise stops dead on a mid-stream failure.
     /// Non-private so the playback/reconnect logic in `KSPlayerEngineView+Playback`
@@ -219,12 +229,8 @@ struct KSPlayerEngineView: View {
                         // frame" warnings.
                         DispatchQueue.main.async {
                             if !isSeeking {
-                                if current.isFinite {
-                                    clock.current = current
-                                }
-                                if total.isFinite, total > 0 {
-                                    clock.duration = total
-                                }
+                                catchupRouter.report(position: current, to: clock)
+                                catchupRouter.report(duration: total, to: clock)
                             }
                             notePlaybackProgress(current)
                             noteClockDrift()
@@ -250,7 +256,7 @@ struct KSPlayerEngineView: View {
                 // Suppress the controls (and their Play button) until the stream
                 // has actually started, so viewers see a loading indicator
                 // instead of a player that looks paused.
-                if isControlsVisible, hasStartedPlayback, !loadFailed {
+                if isControlsVisible, hasStartedPlayback || isCatchupSegmentLoading, !loadFailed {
                     TVPlayerControlsOverlay(
                         coordinator: engine,
                         media: media,
@@ -268,7 +274,7 @@ struct KSPlayerEngineView: View {
                 }
 
                 episodeOverlays(controlsVisible: isControlsVisible) { time in
-                    engine.seek(to: time)
+                    seek(to: time)
                     // The skip button held focus; hand it back to the tap-catcher
                     // so the remote keeps summoning controls.
                     Task { @MainActor in catcherFocused = true }
@@ -279,7 +285,7 @@ struct KSPlayerEngineView: View {
                 }
 
                 if isBuffering {
-                    PlayerLoadingIndicator(title: hasStartedPlayback ? nil : media.title)
+                    PlayerLoadingIndicator(title: hasStartedPlayback || isCatchupSegmentLoading ? nil : media.title)
                         .transition(.opacity)
                 }
 
@@ -295,7 +301,8 @@ struct KSPlayerEngineView: View {
             .subtitleSearch(isPresented: $isSearchingSubtitles, media: media, onPick: applyExternalSubtitle)
             .preferredColorScheme(.dark)
             .onAppear {
-                engine.attach(coordinator: coordinator)
+                loadCatchupRouter()
+                engine.attach(coordinator: coordinator, catchupRouter: catchupRouter)
                 attachNowPlayingTransport()
                 scheduleHide()
                 startStartupWatchdog()
@@ -320,10 +327,10 @@ struct KSPlayerEngineView: View {
                     coordinator.playerLayer?.pause()
                 }
             }
-            .onChange(of: media) { _, _ in
+            .onChange(of: media) { _, newMedia in
                 // The host swapped the stream (KSPlayer reloads its URL
                 // automatically). Reset local scrubbing / panel state.
-                resetForNewStream()
+                resetForNewStream(newMedia)
             }
             .onChange(of: isControlsVisible) { _, visible in
                 // Hand focus to the tap-catcher once the controls vanish so the
@@ -425,12 +432,8 @@ struct KSPlayerEngineView: View {
                     .onPlay { current, total in
                         DispatchQueue.main.async {
                             if !isSeeking {
-                                if current.isFinite {
-                                    clock.current = current
-                                }
-                                if total.isFinite, total > 0 {
-                                    clock.duration = total
-                                }
+                                catchupRouter.report(position: current, to: clock)
+                                catchupRouter.report(duration: total, to: clock)
                             }
                             notePlaybackProgress(current)
                             noteClockDrift()
@@ -447,15 +450,15 @@ struct KSPlayerEngineView: View {
                 // Hold the controls back until the stream starts, so the loading
                 // indicator stands in for a player that would otherwise look
                 // paused behind its Play button.
-                if isControlsVisible, hasStartedPlayback, !loadFailed {
+                if isControlsVisible, hasStartedPlayback || isCatchupSegmentLoading, !loadFailed {
                     controlsOverlay
                         .transition(.opacity.animation(.easeInOut(duration: 0.2)))
                 }
 
-                episodeOverlays(controlsVisible: isControlsVisible) { coordinator.seek(time: $0) }
+                episodeOverlays(controlsVisible: isControlsVisible) { seek(to: $0) }
 
                 if isBuffering {
-                    PlayerLoadingIndicator(title: hasStartedPlayback ? nil : media.title)
+                    PlayerLoadingIndicator(title: hasStartedPlayback || isCatchupSegmentLoading ? nil : media.title)
                         .transition(.opacity)
                 }
 
@@ -471,6 +474,7 @@ struct KSPlayerEngineView: View {
             .subtitleSearch(isPresented: $isSearchingSubtitles, media: media, onPick: applyExternalSubtitle)
             .preferredColorScheme(.dark)
             .onAppear {
+                loadCatchupRouter()
                 attachNowPlayingTransport()
                 scheduleHide()
                 observePipState()
@@ -490,7 +494,7 @@ struct KSPlayerEngineView: View {
             .onChange(of: media.id) { _, _ in
                 // Same reset as tvOS: re-arms the startup watchdog and raises
                 // the spinner until the new stream's first frame.
-                resetForNewStream()
+                resetForNewStream(media)
                 resetVideoInfo()
                 // An in-player swap reuses the KSPlayerLayer but re-prepares it;
                 // re-arm the observation so the task can never be left awaiting a
@@ -523,8 +527,8 @@ struct KSPlayerEngineView: View {
                     }
                 }
             }
-            .onKeyPress(.leftArrow) { coordinator.skip(interval: -15); resetHideTimer(); return .handled }
-            .onKeyPress(.rightArrow) { coordinator.skip(interval: 15); resetHideTimer(); return .handled }
+            .onKeyPress(.leftArrow) { skip(by: -15); resetHideTimer(); return .handled }
+            .onKeyPress(.rightArrow) { skip(by: 15); resetHideTimer(); return .handled }
             .liveChannelKeyNavigation(
                 neighbours: itemNeighbours, swapper: mediaSwapper,
                 onSelect: { onSelectMedia?($0) }, onResetHideTimer: resetHideTimer

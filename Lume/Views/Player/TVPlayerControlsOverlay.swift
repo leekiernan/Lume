@@ -135,8 +135,8 @@
                     closePanel()
                 }
             }
-            .task(id: media.id) { await resolveContent() }
-            .task(id: media.id) { await resolveStreamInfo() }
+            .task(id: media.playbackSessionID) { await resolveContent() }
+            .task(id: media.playbackSessionID) { await resolveStreamInfo() }
             .onAppear {
                 // Every time the controls reappear this is a fresh subtree;
                 // `defaultFocus` alone is unreliable here, so place focus on the

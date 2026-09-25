@@ -55,6 +55,8 @@ final class LumeEngineCoordinator: NSObject, ObservableObject {
     /// reconnect budget.
     var onRecovered: (() -> Void)?
     var startupTimeout: TimeInterval = 40
+    /// Catch-up seeks and programme-clock mapping — see `CatchupSeekRouter`.
+    let catchup = CatchupSeekRouter()
 
     /// Silences this player without pausing it — Multi-View mutes every tile
     /// except the one carrying the audio.
@@ -127,6 +129,7 @@ final class LumeEngineCoordinator: NSObject, ObservableObject {
             hasManualTrackSelection = false
         }
         currentMedia = media
+        catchup.load(media)
         reportedFailure = false
         // Up from the start of every (re)load, not only once the engine
         // reports `.opening`, so a swap never shows a blank, idle surface.
@@ -262,6 +265,7 @@ final class LumeEngineCoordinator: NSObject, ObservableObject {
     }
 
     func skip(by seconds: Double) {
+        if catchup.route(.by(seconds)) { return }
         let session = session
         Task {
             guard let session else { return }
@@ -271,6 +275,7 @@ final class LumeEngineCoordinator: NSObject, ObservableObject {
     }
 
     func seek(to seconds: TimeInterval) {
+        if catchup.route(.to(seconds)) { return }
         let session = session
         Task { await session?.seek(to: seconds) }
     }

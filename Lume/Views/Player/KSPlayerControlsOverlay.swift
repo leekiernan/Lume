@@ -32,6 +32,10 @@ import SwiftUI
         var onTogglePlay: () -> Void
         var onResetHideTimer: () -> Void
         var onScheduleHide: () -> Void
+        /// Seek / skip through the engine view, which hands a catch-up
+        /// programme's seeks to the host (`KSPlayerEngineView+Catchup`).
+        var onSeek: (TimeInterval) -> Void
+        var onSkip: (TimeInterval) -> Void
         /// Raises the OpenSubtitles browser. `nil` when the search isn't
         /// available for this stream, which also drops the menu entry.
         var onSearchSubtitles: (() -> Void)?
@@ -155,7 +159,7 @@ import SwiftUI
 
                 if !media.isLive {
                     Button {
-                        coordinator.skip(interval: -15)
+                        onSkip(-15)
                         onResetHideTimer()
                     } label: {
                         circleGlyph("gobackward.15", size: 22, diameter: 60)
@@ -176,7 +180,7 @@ import SwiftUI
 
                 if !media.isLive {
                     Button {
-                        coordinator.skip(interval: 15)
+                        onSkip(15)
                         onResetHideTimer()
                     } label: {
                         circleGlyph("goforward.15", size: 22, diameter: 60)
@@ -388,8 +392,9 @@ import SwiftUI
                 hideTask?.cancel()
                 coordinator.playerLayer?.pause()
             } else {
-                coordinator.seek(time: seekPosition)
+                // Clock first: a catch-up seek re-places it on the segment.
                 clock.current = seekPosition
+                onSeek(seekPosition)
                 if isPlaying {
                     coordinator.playerLayer?.play()
                 }
