@@ -152,6 +152,11 @@ struct AVPlayerEngineView: View {
                 }
             #endif
 
+            if coordinator.isBuffering, !loadFailed {
+                PlayerLoadingIndicator(title: coordinator.hasStartedPlayback ? nil : media.title)
+                    .transition(.opacity)
+            }
+
             if loadFailed {
                 PlayerErrorIndicator(
                     title: media.title,

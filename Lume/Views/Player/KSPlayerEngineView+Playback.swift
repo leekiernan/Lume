@@ -231,6 +231,31 @@ extension KSPlayerEngineView {
         retryPlayback()
     }
 
+    // MARK: - Stream swaps
+
+    /// Back to a fresh session's baseline for a newly swapped-in stream: both
+    /// bodies run this, so a swap re-arms the startup watchdog and raises the
+    /// spinner until the new stream's first frame on every platform (iOS and
+    /// macOS used to keep the previous stream's state, with no watchdog and
+    /// no spinner while the new one loaded).
+    func resetForNewStream() {
+        isSeeking = false
+        seekPosition = 0
+        hasStartedPlayback = false
+        hasSeenReadyToPlay = false
+        isBuffering = true
+        loadFailed = false
+        tick.reset()
+        cancelStallWatchdog()
+        reconnector.reset()
+        #if os(tvOS)
+            isPanelOpen = false
+            engine.reset()
+        #endif
+        startStartupWatchdog()
+        resetHideTimer()
+    }
+
     // MARK: - Dead-stream handling
 
     /// Arm the startup watchdog. Started on open and on each stream swap; the
