@@ -368,7 +368,7 @@ struct SimilarRow: View {
                             .buttonStyle(.plain)
                         case let .series(series):
                             NavigationLink(value: series) {
-                                DetailPosterCard(title: item.title, imageURL: item.imageURL)
+                                DetailPosterCard(title: item.title, imageURL: item.imageURL, isSeries: true)
                                     .matchedTransitionSourceIfAvailable(id: series.id, in: animationNamespace)
                             }
                             .buttonStyle(.plain)
@@ -389,9 +389,11 @@ struct DetailPosterCard: View {
     let title: String
     let imageURL: URL?
     var badge: String?
+    /// Picks the series fallback symbol, matching `SeriesCardView`.
+    var isSeries: Bool = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: PosterCardMetrics.titleSpacing) {
             CachedAsyncImage(url: imageURL, maxPixelSize: PosterCardMetrics.posterHeight) { phase in
                 switch phase {
                 case .empty:
@@ -401,7 +403,7 @@ struct DetailPosterCard: View {
                 case .failure:
                     Rectangle().fill(Color.gray.opacity(0.3))
                         .overlay {
-                            Image(systemName: "film")
+                            Image(systemName: isSeries ? "tv" : "film")
                                 .foregroundStyle(.secondary)
                                 .font(.largeTitle)
                         }
@@ -409,15 +411,17 @@ struct DetailPosterCard: View {
                     EmptyView()
                 }
             }
-            .frame(width: 120, height: 180)
-            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .posterArtworkFrame(fillsWidth: false)
+            .clipShape(RoundedRectangle(cornerRadius: PosterCardMetrics.cornerRadius))
             .posterBadge(badge)
-            .shadow(radius: 2)
+            #if !os(tvOS)
+                .shadow(radius: 2)
+            #endif
 
             Text(title)
-                .font(.caption)
+                .font(PosterCardMetrics.titleFont)
                 .lineLimit(2)
-                .frame(width: 120, alignment: .leading)
+                .posterTitleFrame(fillsWidth: false)
         }
     }
 }
@@ -438,6 +442,13 @@ enum DetailFormat {
     static func minutes(_ seconds: Int?) -> String? {
         guard let seconds, seconds > 0 else { return nil }
         return "\(max(seconds / 60, 1))m"
+    }
+
+    /// "1 Season" / "3 Seasons" for a series' season count. Two keys because
+    /// the catalog's "%lld Seasons" has no plural variants yet; once it does,
+    /// the singular branch can go.
+    static func seasonCount(_ count: Int) -> String {
+        count == 1 ? String(localized: "1 Season") : String(localized: "\(count) Seasons")
     }
 
     /// A four-digit year pulled from a release date string in any common shape.

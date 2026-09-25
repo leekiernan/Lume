@@ -34,12 +34,11 @@ extension SectionFeed {
         }
     }
 
-    /// Missing hero artwork is enriched in the background. The 14-day guard
-    /// avoids repeatedly asking TMDB for artwork it does not have.
+    /// Missing hero artwork is enriched in the background. The freshness
+    /// window avoids repeatedly asking TMDB for artwork it does not have.
     private static func heroNeedsArtwork(backdropPath: String?, logoPath: String?, enrichedAt: Date?) -> Bool {
         guard (backdropPath ?? "").isEmpty || (logoPath ?? "").isEmpty else { return false }
-        guard let enrichedAt else { return true }
-        return Date().timeIntervalSince(enrichedAt) >= 14 * 24 * 3600
+        return !TMDBFreshness.isFresh(enrichedAt)
     }
 
     /// Fetches artwork only for the carousel's bounded visible candidates.

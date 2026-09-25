@@ -19,8 +19,8 @@ struct SeriesView: View {
     @Environment(DeepLinkRouter.self) private var router: DeepLinkRouter?
     @State private var fallbackPath = NavigationPath()
     @Query private var playlists: [Playlist]
-    @Query(filter: #Predicate<Category> { $0.typeRaw == "series" && $0.isHidden == false })
-    private var categories: [Category]
+    /// The active playlist's visible categories, scoped in SQL — see `init`.
+    @Query private var categories: [Category]
 
     @AppStorage(PlaylistSelectionStore.key) private var selectedPlaylistID: String = ""
     @State private var showingSync = false
@@ -39,6 +39,9 @@ struct SeriesView: View {
     /// thread so the rails don't fault each series' episodes — see
     /// `SeriesResumeLoader`.
     @State private var seriesResume: [String: Double] = [:]
+    /// The active playlist's most recently watched series. Only its stamp is
+    /// read, to key the resume lookup — see `seriesResumeKey`.
+    @Query private var newestWatchedSeries: [Series]
 
     @AppStorage(SortStorageKey.seriesCategories) private var categorySortRaw: String = CategorySortOption.playlist.rawValue
     @AppStorage(SortStorageKey.seriesContent) private var contentSortRaw: String = ContentSortOption.playlist.rawValue
@@ -47,7 +50,29 @@ struct SeriesView: View {
         CategorySortOption(rawValue: categorySortRaw) ?? .playlist
     }
 
+    /// The playlist scope and the viewer's hidden/restricted categories are
+    /// passed in by `MainTabView`, as for `HomeView`: a `@Query` can't read view
+    /// state, but it can be built from init arguments, so the category list is
+    /// selected in SQL instead of fetching every playlist's categories and
+    /// filtering them on every body pass.
+    init(playlistPrefix: String? = nil, restriction: ContentRestriction = ContentRestriction()) {
+        _categories = Query(LibraryCategoryQuery.descriptor(
+            type: .series,
+            playlistPrefix: playlistPrefix ?? "",
+            excludedCategoryIDs: restriction.excludedCategoryIDs
+        ))
+        var newestWatched = HomeQuery.watchedSeries(
+            playlistPrefix: playlistPrefix ?? "",
+            excludedCategoryIDs: restriction.excludedCategoryIDs
+        )
+        newestWatched.fetchLimit = 1
+        _newestWatchedSeries = Query(newestWatched)
+    }
+
     var body: some View {
+        // Sorted once per pass: the empty check, the sidebar toggle and the
+        // sidebar itself all read it.
+        let sortedCategories = categorySort.sort(categories)
         NavigationStack(path: navigationPath) {
             Group {
                 if playlists.isEmpty {
@@ -122,6 +147,22 @@ struct SeriesView: View {
             .task(id: playlistPrefix) {
                 genres = await GenreDerivation.seriesGenres(in: modelContext.container, playlistPrefix: playlistPrefix, restriction: restriction)
             }
+            .task(id: seriesResumeKey) {
+                let container = modelContext.container
+                seriesResume = await Task.detached(priority: .userInitiated) {
+                    SeriesResumeLoader.load(container: container)
+                }.value
+            }
+    }
+
+    /// Identity of the series resume lookup, keyed like Home's: resuming or
+    /// finishing an episode stamps its series' `lastWatchedDate`
+    /// (`WatchProgressWriter`), so the newest stamp moves whenever a resume bar
+    /// would. Keyed on the playlist alone, the bars never refreshed after
+    /// watching something from this tab.
+    private var seriesResumeKey: String {
+        let newest = newestWatchedSeries.first?.lastWatchedDate?.timeIntervalSince1970 ?? 0
+        return "resume-\(newest)-\(playlistPrefix)"
     }
 
     /// The same slideshow Home shows, filtered to this page's medium, above the
@@ -174,6 +215,7 @@ struct SeriesView: View {
                 SeriesCollectionRow(
                     kind: kind,
                     playlistPrefix: playlistPrefix,
+                    excludedCategoryIDs: restriction.excludedCategoryIDs,
                     animationNamespace: animationNamespace,
                     onLeadingLeft: { showingBrowse = true }
                 )
@@ -181,12 +223,6 @@ struct SeriesView: View {
         )
 
         BrowseCategoriesButton(isPresented: $showingBrowse)
-            .task(id: playlistPrefix) {
-                let container = modelContext.container
-                seriesResume = await Task.detached(priority: .userInitiated) {
-                    SeriesResumeLoader.load(container: container)
-                }.value
-            }
     }
 
     // MARK: - Navigation
@@ -225,8 +261,9 @@ struct SeriesView: View {
         playlists.active(for: selectedPlaylistID)
     }
 
-    /// The id prefix every Series/Category of the active playlist shares. Used to
-    /// scope the cross-category collection rows in-memory.
+    /// The id prefix every Series/Category of the active playlist shares. Scopes
+    /// the collection rows' queries, the genre list and the "Show All" grids.
+    /// `MainTabView` derives the same prefix for this view's category query.
     private var playlistPrefix: String {
         activePlaylist.map { "\($0.id.uuidString)-" } ?? ""
     }
@@ -260,15 +297,6 @@ struct SeriesView: View {
 
     private func rememberHeroWarmStart(_ backdropURL: URL?) {
         heroWarmStart.remember(backdropURL, hero: heroRef, catalogScope: heroWarmStartScope)
-    }
-
-    /// Categories scoped to the active playlist. The `@Query` fetches every
-    /// playlist's categories (SwiftData can't parameterize a `@Query` on view
-    /// state), so we isolate by the playlist-prefixed category `id` here.
-    private var sortedCategories: [Category] {
-        guard let playlistId = activePlaylist?.id else { return [] }
-        let prefix = "\(playlistId.uuidString)-"
-        return categorySort.sort(categories.filter { $0.id.hasPrefix(prefix) && !restriction.hides(categoryID: $0.id) })
     }
 }
 

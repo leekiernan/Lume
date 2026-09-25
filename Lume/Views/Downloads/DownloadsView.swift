@@ -357,3 +357,36 @@ import SwiftUI
     }
 
 #endif
+
+// MARK: - Downloads sheet presentation
+
+extension View {
+    /// Presents the downloads list as a sheet, in the same navigation + dismiss
+    /// chrome Settings gives it. The download Live Activity's tap target, so it
+    /// is reachable without disturbing whatever tab the user had open (see
+    /// `MainTabView`). Declared on every platform so the root can apply it
+    /// unconditionally.
+    @ViewBuilder
+    func downloadsSheet(isPresented: Binding<Bool>) -> some View {
+        #if os(tvOS)
+            // tvOS has no downloads feature to show.
+            self
+        #else
+            sheet(isPresented: isPresented) {
+                NavigationStack {
+                    DownloadsView()
+                        .toolbar {
+                            ToolbarItem(placement: .confirmationAction) {
+                                Button("Done") { isPresented.wrappedValue = false }
+                            }
+                        }
+                }
+                #if os(macOS)
+                // A `List` in a frameless macOS sheet collapses to zero
+                // height, leaving the sheet rendering as a bare toolbar.
+                .frame(minWidth: 480, minHeight: 440)
+                #endif
+            }
+        #endif
+    }
+}

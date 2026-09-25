@@ -13,10 +13,10 @@
 //  answers itself. Scoping in memory instead meant every row hydrated every
 //  playlist's matches and then threw most of them away, on every catalog write
 //  — 0.85 ms for a fresh library, 59 ms once 3,035 movies carried a watch date.
-//  Preview rows apply the viewer's hidden-category state to their small bounded
-//  result in Swift. Full grids include that state in each paged query, so hidden
-//  rows cannot consume a page before being discarded. Rows render nothing when
-//  empty so a fresh library degrades gracefully.
+//  The viewer's hidden-category state is part of every query too — preview rows
+//  and full-grid pages alike — so hidden rows cannot consume a limit before being
+//  discarded, the same way Home's rows are built (`HomeQuery`). Rows render
+//  nothing when empty so a fresh library degrades gracefully.
 //
 
 import SwiftData
@@ -56,20 +56,17 @@ struct LibraryCollection: Hashable {
 /// How many items each preview row shows before "Show All".
 let collectionPreviewLimit = 20
 
-/// Upper bound on a preview row's fetch. A row renders `collectionPreviewLimit`
-/// items and only needs to know whether one more exists, but the hidden-category
-/// filter runs in memory *after* the fetch, so this keeps a wide margin over the
-/// preview length rather than the tight `limit + 1` a single-category row can
-/// use — a viewer with many hidden categories must not end up with a short row
-/// or a missing "Show All". Unbounded, Recently Watched and Favorites re-fetched
-/// every matching row in the store on every catalog write.
-let collectionRowFetchLimit = 200
+/// Upper bound on a preview row's fetch: the preview plus one, which is all a
+/// row needs to know whether "Show All" has anything more to show. Tight because
+/// the hidden-category filter runs in the query, before the limit. Unbounded,
+/// Recently Watched and Favorites re-fetched every matching row in the store on
+/// every catalog write.
+let collectionRowFetchLimit = collectionPreviewLimit + 1
 
 // MARK: - Shared preview row
 
 /// A titled horizontal rail with a trailing "Show All" link into the full
-/// collection grid. Mirrors `CategoryPreviewRow`, but its header is a plain
-/// title plus a `LibraryCollection` destination rather than a `Category`.
+/// collection grid, keyed by a `LibraryCollection` destination.
 private struct CollectionPreviewRow<Item: Identifiable & Hashable & WatchlistFavoritable, Card: View>: View {
     let title: LocalizedStringKey
     let collection: LibraryCollection
@@ -144,34 +141,38 @@ struct MovieCollectionRow: View {
     /// tvOS: pressing left on the row's first card — see `onLeadingEdgeLeft`.
     var onLeadingLeft: (() -> Void)?
     @Environment(\.modelContext) private var modelContext
-    @Environment(\.contentRestriction) private var restriction
     @Query private var movies: [Movie]
 
+    /// `excludedCategoryIDs` is the viewer's `ContentRestriction`, passed in
+    /// rather than read from the environment because the `@Query` is built
+    /// here, before the environment exists.
     init(
         kind: LibraryCollection.Kind,
         playlistPrefix: String,
+        excludedCategoryIDs: Set<String>,
         animationNamespace: Namespace.ID? = nil,
         onLeadingLeft: (() -> Void)? = nil
     ) {
         self.kind = kind
         self.animationNamespace = animationNamespace
         self.onLeadingLeft = onLeadingLeft
-        _movies = Query(MovieCollectionQuery.rowDescriptor(for: kind, playlistPrefix: playlistPrefix))
-    }
-
-    private var visible: [Movie] {
-        movies.excludingRestricted(restriction).deduplicatedByTitle()
+        _movies = Query(MovieCollectionQuery.rowDescriptor(
+            for: kind,
+            playlistPrefix: playlistPrefix,
+            excludedCategoryIDs: excludedCategoryIDs
+        ))
     }
 
     var body: some View {
-        let matches = visible
-        let items = Array(matches.prefix(collectionPreviewLimit))
+        let items = Array(movies.deduplicatedByTitle().prefix(collectionPreviewLimit))
         if !items.isEmpty {
             CollectionPreviewRow(
                 title: kind.title,
                 collection: LibraryCollection(kind: kind, type: .vod),
                 items: items,
-                hasMore: matches.count > items.count,
+                // Against the raw fetch: a title collapsed as a duplicate still
+                // means the full grid holds more than this row.
+                hasMore: movies.count > items.count,
                 animationNamespace: animationNamespace,
                 removeAction: kind == .recentlyWatched ? { movie in
                     movie.lastWatchedDate = nil
@@ -255,8 +256,12 @@ struct MovieCollectionView: View {
 enum MovieCollectionQuery {
     /// The fetch behind a preview row — always bounded, see
     /// `collectionRowFetchLimit`.
-    static func rowDescriptor(for kind: LibraryCollection.Kind, playlistPrefix: String) -> FetchDescriptor<Movie> {
-        var descriptor = base(for: kind, playlistPrefix: playlistPrefix)
+    static func rowDescriptor(
+        for kind: LibraryCollection.Kind,
+        playlistPrefix: String,
+        excludedCategoryIDs: Set<String>
+    ) -> FetchDescriptor<Movie> {
+        var descriptor = base(for: kind, playlistPrefix: playlistPrefix, excludedCategoryIDs: excludedCategoryIDs)
         descriptor.fetchLimit = collectionRowFetchLimit
         return descriptor
     }
@@ -312,7 +317,9 @@ enum MovieCollectionQuery {
                         && $0.id.starts(with: prefix)
                         && (!filtersCategories || $0.categoryId == nil || !excluded.contains($0.categoryId))
                 },
-                sortBy: [SortDescriptor(\.name), SortDescriptor(\.id)]
+                // The user's arrangement from Content Management › Favorites,
+                // as on Home. Never-reordered favorites (nil) sort by name.
+                sortBy: [SortDescriptor(\.favoriteOrder), SortDescriptor(\.name), SortDescriptor(\.id)]
             )
         case .recentlyAdded:
             // `comparator: .lexical`, not the `.localizedStandard` default:
@@ -346,34 +353,38 @@ struct SeriesCollectionRow: View {
     /// tvOS: pressing left on the row's first card — see `onLeadingEdgeLeft`.
     var onLeadingLeft: (() -> Void)?
     @Environment(\.modelContext) private var modelContext
-    @Environment(\.contentRestriction) private var restriction
     @Query private var series: [Series]
 
+    /// `excludedCategoryIDs` is the viewer's `ContentRestriction`, passed in
+    /// rather than read from the environment because the `@Query` is built
+    /// here, before the environment exists.
     init(
         kind: LibraryCollection.Kind,
         playlistPrefix: String,
+        excludedCategoryIDs: Set<String>,
         animationNamespace: Namespace.ID? = nil,
         onLeadingLeft: (() -> Void)? = nil
     ) {
         self.kind = kind
         self.animationNamespace = animationNamespace
         self.onLeadingLeft = onLeadingLeft
-        _series = Query(SeriesCollectionQuery.rowDescriptor(for: kind, playlistPrefix: playlistPrefix))
-    }
-
-    private var visible: [Series] {
-        series.excludingRestricted(restriction).deduplicatedByTitle()
+        _series = Query(SeriesCollectionQuery.rowDescriptor(
+            for: kind,
+            playlistPrefix: playlistPrefix,
+            excludedCategoryIDs: excludedCategoryIDs
+        ))
     }
 
     var body: some View {
-        let matches = visible
-        let items = Array(matches.prefix(collectionPreviewLimit))
+        let items = Array(series.deduplicatedByTitle().prefix(collectionPreviewLimit))
         if !items.isEmpty {
             CollectionPreviewRow(
                 title: kind.title,
                 collection: LibraryCollection(kind: kind, type: .series),
                 items: items,
-                hasMore: matches.count > items.count,
+                // Against the raw fetch: a title collapsed as a duplicate still
+                // means the full grid holds more than this row.
+                hasMore: series.count > items.count,
                 animationNamespace: animationNamespace,
                 removeAction: kind == .recentlyWatched ? { series in
                     series.lastWatchedDate = nil
@@ -453,8 +464,12 @@ struct SeriesCollectionView: View {
 enum SeriesCollectionQuery {
     /// The fetch behind a preview row — always bounded, see
     /// `collectionRowFetchLimit`.
-    static func rowDescriptor(for kind: LibraryCollection.Kind, playlistPrefix: String) -> FetchDescriptor<Series> {
-        var descriptor = base(for: kind, playlistPrefix: playlistPrefix)
+    static func rowDescriptor(
+        for kind: LibraryCollection.Kind,
+        playlistPrefix: String,
+        excludedCategoryIDs: Set<String>
+    ) -> FetchDescriptor<Series> {
+        var descriptor = base(for: kind, playlistPrefix: playlistPrefix, excludedCategoryIDs: excludedCategoryIDs)
         descriptor.fetchLimit = collectionRowFetchLimit
         return descriptor
     }
@@ -509,7 +524,9 @@ enum SeriesCollectionQuery {
                         && $0.id.starts(with: prefix)
                         && (!filtersCategories || $0.categoryId == nil || !excluded.contains($0.categoryId))
                 },
-                sortBy: [SortDescriptor(\.name), SortDescriptor(\.id)]
+                // The user's arrangement from Content Management › Favorites,
+                // as on Home. Never-reordered favorites (nil) sort by name.
+                sortBy: [SortDescriptor(\.favoriteOrder), SortDescriptor(\.name), SortDescriptor(\.id)]
             )
         case .recentlyAdded:
             // `comparator: .lexical` for the same reason as the movie side:

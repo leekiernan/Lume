@@ -46,18 +46,10 @@ struct SeriesDetailView: View {
     init(series: Series, animationNamespace: Namespace.ID? = nil) {
         self.series = series
         self.animationNamespace = animationNamespace
-        let needsFetch = if series.tmdbId != nil, TMDBClient.shared.isConfigured {
-            if let enrichedAt = series.tmdbEnrichedAt,
-               Date().timeIntervalSince(enrichedAt) < 14 * 24 * 3600
-            {
-                false
-            } else {
-                true
-            }
-        } else {
-            false
-        }
-        _isLoadingTMDB = State(initialValue: needsFetch)
+        _isLoadingTMDB = State(initialValue: detailNeedsTMDBFetch(
+            tmdbId: series.tmdbId,
+            enrichedAt: series.tmdbEnrichedAt
+        ))
     }
 
     var body: some View {
@@ -123,75 +115,6 @@ struct SeriesDetailView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    // MARK: - Content
-
-    private var detailView: some View {
-        GeometryReader { proxy in
-            ScrollView {
-                VStack(alignment: .leading, spacing: DetailMetrics.sectionSpacing) {
-                    DetailHero(
-                        title: series.name,
-                        backdropURL: TMDBClient.backdropURL(series.backdropPath),
-                        posterFallbackURL: URL(string: series.cover ?? ""),
-                        logoURL: TMDBClient.logoURL(series.logoPath),
-                        tagline: series.tagline,
-                        metadata: metadata,
-                        height: DetailMetrics.heroHeight(for: proxy.size),
-                        fallbackSymbol: "tv"
-                    )
-
-                    actions
-                        .padding(.horizontal, DetailMetrics.contentPadding)
-
-                    if let plot = series.plot, !plot.isEmpty {
-                        ExpandableText(text: plot)
-                            .padding(.horizontal, DetailMetrics.contentPadding)
-                    }
-
-                    if !series.externalRatings.isEmpty {
-                        ExternalRatingsView(ratings: series.externalRatings)
-                            .padding(.horizontal, DetailMetrics.contentPadding)
-                    }
-
-                    episodesSection
-
-                    if !series.orderedCast.isEmpty {
-                        section(title: "Cast") {
-                            CastRow(cast: series.orderedCast)
-                        }
-                    }
-
-                    if !series.trailers.isEmpty {
-                        section(title: "Videos") {
-                            VideoRow(videos: series.trailers) { video in
-                                openVideo(video)
-                            }
-                        }
-                    }
-
-                    information
-                        .padding(.horizontal, DetailMetrics.contentPadding)
-
-                    if !similar.isEmpty {
-                        section(title: "You May Also Like") {
-                            SimilarRow(items: similar, animationNamespace: animationNamespace)
-                        }
-                    }
-
-                    if !otherSources.isEmpty {
-                        section(title: "Other Sources") {
-                            OtherSourcesRow(sources: otherSources, animationNamespace: animationNamespace)
-                        }
-                    }
-                }
-                .frame(width: proxy.size.width, alignment: .leading)
-                .padding(.bottom, 32)
-            }
-            .scrollIndicators(.hidden)
-            .ignoresSafeArea(edges: .top)
-        }
-    }
-
     // MARK: - Sections
 
     private func section(title: LocalizedStringKey, @ViewBuilder content: () -> some View) -> some View {
@@ -208,49 +131,6 @@ struct SeriesDetailView: View {
             isEnabled: nextEpisode != nil && seriesPlaylist != nil,
             action: { if let episode = nextEpisode { playEpisode(episode) } }
         )
-    }
-
-    private var episodesSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                DetailSectionHeader(title: "Episodes")
-                Spacer()
-                if availableSeasons.count > 1 {
-                    seasonMenu
-                }
-            }
-            .padding(.horizontal, DetailMetrics.contentPadding)
-
-            if series.episodes.isEmpty {
-                episodesPlaceholder
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 24)
-            } else {
-                LazyVStack(spacing: 16) {
-                    ForEach(seasonEpisodes) { episode in
-                        #if os(tvOS)
-                            EpisodeCard(
-                                episode: episode,
-                                onPlay: { playEpisode(episode) },
-                                onToggleWatched: { toggleWatched(episode) },
-                                onMarkPreviousWatched: { markPreviousWatched(episode) },
-                                onMarkFollowingUnwatched: { markFollowingUnwatched(episode) }
-                            )
-                        #else
-                            DownloadableEpisodeCard(
-                                episode: episode,
-                                playlist: seriesPlaylist,
-                                onPlay: { playEpisode(episode) },
-                                onToggleWatched: { toggleWatched(episode) },
-                                onMarkPreviousWatched: { markPreviousWatched(episode) },
-                                onMarkFollowingUnwatched: { markFollowingUnwatched(episode) }
-                            )
-                        #endif
-                    }
-                }
-                .padding(.horizontal, DetailMetrics.contentPadding)
-            }
-        }
     }
 
     private var seasonMenu: some View {
@@ -370,7 +250,7 @@ struct SeriesDetailView: View {
             genre: series.genre,
             year: DetailFormat.year(from: series.releaseDate),
             duration: nil,
-            seasonInfo: availableSeasons.isEmpty ? nil : seasonCountLabel,
+            seasonInfo: availableSeasons.isEmpty ? nil : DetailFormat.seasonCount(availableSeasons.count),
             rating: (ratingValue ?? 0) > 0 ? ratingValue : nil,
             contentRating: series.contentRating
         )
@@ -408,15 +288,15 @@ struct SeriesDetailView: View {
         SeriesEpisodeProgress.nextEpisode(in: series.episodes, fallback: seasonEpisodes.first)
     }
 
-    private var backgroundColor: Color {
-        #if os(macOS)
-            Color(nsColor: .windowBackgroundColor)
-        #elseif os(tvOS)
-            Color.black
-        #else
-            Color(uiColor: .systemBackground)
-        #endif
-    }
+    #if !os(tvOS)
+        private var backgroundColor: Color {
+            #if os(macOS)
+                Color(nsColor: .windowBackgroundColor)
+            #else
+                Color(uiColor: .systemBackground)
+            #endif
+        }
+    #endif
 
     private var seriesPlaylist: Playlist? {
         playlists.first { series.id.hasPrefix($0.id.uuidString) } ?? playlists.first
@@ -468,55 +348,126 @@ struct SeriesDetailView: View {
     }
 
     private func enrichIfNeeded() async {
-        guard let tmdbId = series.tmdbId else { return }
-        if let enrichedAt = series.tmdbEnrichedAt,
-           Date().timeIntervalSince(enrichedAt) < 14 * 24 * 3600
-        {
-            return
+        // Applied on the view's own context — see `enrichSeriesDetailsIfNeeded`.
+        if await enrichSeriesDetailsIfNeeded(series, context: modelContext) {
+            refreshToken = UUID()
         }
-        let manager = ContentSyncManager(modelContainer: modelContext.container)
-        // Fetch off-thread, then apply on the view's own context. Using the
-        // background enrichSeries() path deletes-and-reinserts CastMember rows
-        // from a separate ModelContext; if the main context holds faulted
-        // references to those objects and a render fires before the merge lands,
-        // SwiftData fires a fault against a deleted store row → _assertionFailure.
-        guard let details = try? await manager.fetchTMDBTVDetails(tmdbId: tmdbId) else { return }
-        applySeriesDetails(details, to: series, context: modelContext)
-        try? modelContext.save()
-        refreshToken = UUID()
     }
 }
+
+// MARK: - Content
+
+// Only the iOS / macOS body reaches these: on tvOS `body` hands off to
+// `TVSeriesDetailView`, and the episode rows are download-aware.
+#if !os(tvOS)
+    private extension SeriesDetailView {
+        var detailView: some View {
+            GeometryReader { proxy in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: DetailMetrics.sectionSpacing) {
+                        DetailHero(
+                            title: series.name,
+                            backdropURL: TMDBClient.backdropURL(series.backdropPath),
+                            posterFallbackURL: URL(string: series.cover ?? ""),
+                            logoURL: TMDBClient.logoURL(series.logoPath),
+                            tagline: series.tagline,
+                            metadata: metadata,
+                            height: DetailMetrics.heroHeight(for: proxy.size),
+                            fallbackSymbol: "tv"
+                        )
+
+                        actions
+                            .padding(.horizontal, DetailMetrics.contentPadding)
+
+                        if let plot = series.plot, !plot.isEmpty {
+                            ExpandableText(text: plot)
+                                .padding(.horizontal, DetailMetrics.contentPadding)
+                        }
+
+                        if !series.externalRatings.isEmpty {
+                            ExternalRatingsView(ratings: series.externalRatings)
+                                .padding(.horizontal, DetailMetrics.contentPadding)
+                        }
+
+                        episodesSection
+
+                        if !series.orderedCast.isEmpty {
+                            section(title: "Cast") {
+                                CastRow(cast: series.orderedCast)
+                            }
+                        }
+
+                        if !series.trailers.isEmpty {
+                            section(title: "Videos") {
+                                VideoRow(videos: series.trailers) { video in
+                                    openVideo(video)
+                                }
+                            }
+                        }
+
+                        information
+                            .padding(.horizontal, DetailMetrics.contentPadding)
+
+                        if !similar.isEmpty {
+                            section(title: "You May Also Like") {
+                                SimilarRow(items: similar, animationNamespace: animationNamespace)
+                            }
+                        }
+
+                        if !otherSources.isEmpty {
+                            section(title: "Other Sources") {
+                                OtherSourcesRow(sources: otherSources, animationNamespace: animationNamespace)
+                            }
+                        }
+                    }
+                    .frame(width: proxy.size.width, alignment: .leading)
+                    .padding(.bottom, 32)
+                }
+                .scrollIndicators(.hidden)
+                .ignoresSafeArea(edges: .top)
+            }
+        }
+
+        var episodesSection: some View {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    DetailSectionHeader(title: "Episodes")
+                    Spacer()
+                    if availableSeasons.count > 1 {
+                        seasonMenu
+                    }
+                }
+                .padding(.horizontal, DetailMetrics.contentPadding)
+
+                if series.episodes.isEmpty {
+                    episodesPlaceholder
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 24)
+                } else {
+                    LazyVStack(spacing: 16) {
+                        ForEach(seasonEpisodes) { episode in
+                            DownloadableEpisodeCard(
+                                episode: episode,
+                                playlist: seriesPlaylist,
+                                onPlay: { playEpisode(episode) },
+                                onToggleWatched: { toggleWatched(episode) },
+                                onMarkPreviousWatched: { markPreviousWatched(episode) },
+                                onMarkFollowingUnwatched: { markFollowingUnwatched(episode) }
+                            )
+                        }
+                    }
+                    .padding(.horizontal, DetailMetrics.contentPadding)
+                }
+            }
+        }
+    }
+#endif
 
 // MARK: - Related titles
 
 private extension SeriesDetailView {
     func resolveSimilar() {
-        let ids = series.similarTitleIds
-        guard !ids.isEmpty else { similar = []; return }
-
-        let playlistPrefix = series.id.components(separatedBy: "-series-").first
-        func owned(_ id: String) -> Bool {
-            guard let prefix = playlistPrefix else { return true }
-            return id.hasPrefix(prefix)
-        }
-
-        var resolved: [HomeMediaItem] = []
-        for tmdbId in ids {
-            let seriesMatches = (try? modelContext.fetch(
-                FetchDescriptor<Series>(predicate: #Predicate { $0.tmdbId == tmdbId })
-            )) ?? []
-            if let match = seriesMatches.first(where: { owned($0.id) && $0.id != series.id }) {
-                resolved.append(.series(match))
-                continue
-            }
-            let movieMatches = (try? modelContext.fetch(
-                FetchDescriptor<Movie>(predicate: #Predicate { $0.tmdbId == tmdbId })
-            )) ?? []
-            if let match = movieMatches.first(where: { owned($0.id) }) {
-                resolved.append(.movie(match))
-            }
-        }
-        similar = Array(resolved.prefix(12))
+        similar = RelatedTitlesResolver.similar(to: series, in: modelContext)
     }
 
     func resolveOtherSources() {
@@ -568,10 +519,6 @@ private extension SeriesDetailView {
 // MARK: - Derived helpers
 
 private extension SeriesDetailView {
-    var seasonCountLabel: String {
-        availableSeasons.count == 1 ? String(localized: "1 Season") : String(localized: "\(availableSeasons.count) Seasons")
-    }
-
     var playTitle: LocalizedStringKey {
         guard let episode = nextEpisode else { return "Play" }
         let resume = !episode.isWatched && episode.watchProgress > 1
