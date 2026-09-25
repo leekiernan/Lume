@@ -21,10 +21,7 @@ nonisolated enum PlayerContentLookup {
         case let .movie(id), let .episode(id), let .live(id):
             id
         }
-        guard let playlistId = UUID(uuidString: String(rawId.prefix(36))) else { return nil }
-        var descriptor = FetchDescriptor<Playlist>(predicate: #Predicate { $0.id == playlistId })
-        descriptor.fetchLimit = 1
-        return try? context.fetch(descriptor).first
+        return PlaylistOwner.playlist(forPrefixedID: rawId, in: context)
     }
 
     static func episode(_ id: String, in context: ModelContext) -> Episode? {
