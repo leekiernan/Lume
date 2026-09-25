@@ -207,4 +207,11 @@ struct TraktWatchedImporterTests {
         #expect(summary.moviesMarked == 0)
         #expect(movie.isWatched == false)
     }
+
+    @Test func `timestamps parse with and without fractional seconds`() {
+        let expected = Date(timeIntervalSince1970: 1_413_046_854)
+        #expect(TraktWatchedImporter.parse("2014-10-11T17:00:54.000Z") == expected)
+        #expect(TraktWatchedImporter.parse("2014-10-11T17:00:54Z") == expected)
+        #expect(TraktWatchedImporter.parse("not a date") == nil)
+    }
 }

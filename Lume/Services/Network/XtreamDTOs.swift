@@ -6,7 +6,7 @@ import Foundation
 /// arrive as a string on one provider and a number on the next. These helpers
 /// accept either representation (and swallow null / absent keys) so a single
 /// odd field can't fail a whole response.
-extension KeyedDecodingContainer {
+nonisolated extension KeyedDecodingContainer {
     func lenientString(forKey key: Key) -> String? {
         if let string = try? decodeIfPresent(String.self, forKey: key) { return string }
         if let int = try? decodeIfPresent(Int.self, forKey: key) { return String(int) }
@@ -38,7 +38,7 @@ extension KeyedDecodingContainer {
 /// happens to be JSON, or an `{"error": …}` body), the first element error is
 /// rethrown: reporting garbage as "zero items" would let the sync prune the
 /// entire catalog.
-struct XtreamList<Element: Decodable>: Decodable {
+nonisolated struct XtreamList<Element: Decodable>: Decodable {
     let items: [Element]
 
     /// Decoded in place of an element that failed, purely to advance the
@@ -101,9 +101,13 @@ struct XtreamList<Element: Decodable>: Decodable {
     }
 }
 
+/// Spelled out because the list crosses from `XtreamClient`'s off-actor
+/// decode back to its caller.
+nonisolated extension XtreamList: Sendable where Element: Sendable {}
+
 // MARK: - Server & User Info
 
-struct XtreamAuthResponse: Decodable {
+nonisolated struct XtreamAuthResponse: Decodable {
     let userInfo: XtreamUserInfo
     let serverInfo: XtreamServerInfo
 
@@ -113,7 +117,7 @@ struct XtreamAuthResponse: Decodable {
     }
 }
 
-struct XtreamUserInfo: Decodable {
+nonisolated struct XtreamUserInfo: Decodable {
     let username: String?
     let status: String?
     let expDate: String?
@@ -140,7 +144,7 @@ struct XtreamUserInfo: Decodable {
     }
 }
 
-struct XtreamServerInfo: Decodable {
+nonisolated struct XtreamServerInfo: Decodable {
     let url: String?
     let port: String?
     let httpsPort: String?
@@ -171,7 +175,7 @@ struct XtreamServerInfo: Decodable {
 
 // MARK: - Categories
 
-struct XtreamCategory: Decodable {
+nonisolated struct XtreamCategory: Decodable {
     let categoryId: String
     let categoryName: String
     let parentId: Int?
@@ -203,7 +207,7 @@ struct XtreamCategory: Decodable {
 
 // MARK: - Live Streams
 
-struct XtreamLiveStream: Decodable {
+nonisolated struct XtreamLiveStream: Decodable {
     let num: Int?
     let name: String?
     let streamType: String?
@@ -250,7 +254,7 @@ struct XtreamLiveStream: Decodable {
 
 // MARK: - VOD Streams
 
-struct XtreamVODStream: Decodable {
+nonisolated struct XtreamVODStream: Decodable {
     let num: Int?
     let name: String?
     let streamType: String?
@@ -297,84 +301,9 @@ struct XtreamVODStream: Decodable {
     }
 }
 
-// MARK: - VOD Info
-
-struct XtreamVODInfo: Decodable {
-    let info: XtreamVODMetadata?
-    let movieData: XtreamVODStreamData?
-
-    enum CodingKeys: String, CodingKey {
-        case info
-        case movieData = "movie_data"
-    }
-
-    init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        // Panels emit an empty array instead of an object when a section has
-        // no data — tolerate any malformed section rather than fail the call.
-        info = try? container.decodeIfPresent(XtreamVODMetadata.self, forKey: .info)
-        movieData = try? container.decodeIfPresent(XtreamVODStreamData.self, forKey: .movieData)
-    }
-}
-
-struct XtreamVODMetadata: Decodable {
-    let tmdbId: String?
-    let name: String?
-    let movieImage: String?
-    let releaseDate: String?
-    let durationSecs: Int?
-    let youtubeTrailer: String?
-    let director: String?
-    let actors: String?
-    let description: String?
-    let plot: String?
-    let genre: String?
-
-    enum CodingKeys: String, CodingKey {
-        case tmdbId = "tmdb_id"
-        case name
-        case movieImage = "movie_image"
-        case releaseDate = "releasedate"
-        case durationSecs = "duration_secs"
-        case youtubeTrailer = "youtube_trailer"
-        case director, actors, description, plot, genre
-    }
-
-    init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        tmdbId = container.lenientString(forKey: .tmdbId)
-        name = container.lenientString(forKey: .name)
-        movieImage = container.lenientString(forKey: .movieImage)
-        releaseDate = container.lenientString(forKey: .releaseDate)
-        durationSecs = container.lenientInt(forKey: .durationSecs)
-        youtubeTrailer = container.lenientString(forKey: .youtubeTrailer)
-        director = container.lenientString(forKey: .director)
-        actors = container.lenientString(forKey: .actors)
-        description = container.lenientString(forKey: .description)
-        plot = container.lenientString(forKey: .plot)
-        genre = container.lenientString(forKey: .genre)
-    }
-}
-
-struct XtreamVODStreamData: Decodable {
-    let streamId: Int?
-    let containerExtension: String?
-
-    enum CodingKeys: String, CodingKey {
-        case streamId = "stream_id"
-        case containerExtension = "container_extension"
-    }
-
-    init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        streamId = container.lenientInt(forKey: .streamId)
-        containerExtension = container.lenientString(forKey: .containerExtension)
-    }
-}
-
 // MARK: - Series
 
-struct XtreamSeries: Decodable {
+nonisolated struct XtreamSeries: Decodable {
     let num: Int?
     let name: String?
     let seriesId: Int?
@@ -425,7 +354,7 @@ struct XtreamSeries: Decodable {
 
 // MARK: - Series Info
 
-struct XtreamSeriesInfoResponse: Decodable {
+nonisolated struct XtreamSeriesInfoResponse: Decodable {
     let info: XtreamSeriesInfo?
     let episodes: [String: [XtreamEpisode]]?
 
@@ -456,7 +385,7 @@ struct XtreamSeriesInfoResponse: Decodable {
     }
 }
 
-struct XtreamSeriesInfo: Decodable {
+nonisolated struct XtreamSeriesInfo: Decodable {
     let name: String?
     let cover: String?
     let plot: String?
@@ -490,7 +419,7 @@ struct XtreamSeriesInfo: Decodable {
     }
 }
 
-struct XtreamEpisode: Decodable {
+nonisolated struct XtreamEpisode: Decodable {
     let id: String?
     let episodeNum: Int?
     let title: String?
@@ -526,7 +455,7 @@ struct XtreamEpisode: Decodable {
     }
 }
 
-struct XtreamEpisodeInfo: Decodable {
+nonisolated struct XtreamEpisodeInfo: Decodable {
     let airDate: String?
     let movieImage: String?
     let durationSecs: Int?
@@ -549,52 +478,5 @@ struct XtreamEpisodeInfo: Decodable {
         durationSecs = container.lenientInt(forKey: .durationSecs)
         rating = container.lenientDouble(forKey: .rating)
         plot = container.lenientString(forKey: .plot)
-    }
-}
-
-// MARK: - EPG
-
-struct XtreamShortEPG: Decodable {
-    let start: String?
-    let end: String?
-    let title: String?
-    let description: String?
-
-    enum CodingKeys: String, CodingKey {
-        case start, end, title, description
-    }
-
-    init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        start = container.lenientString(forKey: .start)
-        end = container.lenientString(forKey: .end)
-        title = container.lenientString(forKey: .title)
-        description = container.lenientString(forKey: .description)
-    }
-}
-
-// MARK: - Bulk EPG (get_simple_data_table)
-
-struct XtreamDataTableEPG: Decodable {
-    let epgId: String?
-    let title: String?
-    let description: String?
-    let startTimestamp: String?
-    let endTimestamp: String?
-    let start: String?
-    let end: String?
-    let channelId: String?
-    let streamId: String?
-    let id: String?
-
-    enum CodingKeys: String, CodingKey {
-        case epgId = "epg_id"
-        case title, description
-        case startTimestamp = "start_timestamp"
-        case endTimestamp = "end_timestamp"
-        case start, end
-        case channelId = "channel_id"
-        case streamId = "stream_id"
-        case id
     }
 }

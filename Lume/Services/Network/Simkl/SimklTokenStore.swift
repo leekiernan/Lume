@@ -122,3 +122,59 @@ nonisolated enum SimklTokenStore {
         return status == errSecSuccess || status == errSecItemNotFound
     }
 }
+
+// MARK: - Account identity
+
+nonisolated struct SimklAccountIdentity: Codable, Equatable {
+    let username: String
+    /// The outbox partition for this account: the stable Simkl account id
+    /// where the settings response carries one, else the normalized username.
+    let scope: String
+
+    init(username: String, scope: String) {
+        self.username = username
+        self.scope = scope
+    }
+
+    init(settings: SimklUserSettings) {
+        username = settings.user.name
+        if let id = settings.account?.id {
+            scope = "simkl:\(id)"
+        } else {
+            scope = "username:\(Self.normalized(settings.user.name))"
+        }
+    }
+
+    /// The partition the outbox used before identities were persisted — the
+    /// bare normalized username. Changes queued under it are adopted into
+    /// `scope` so an upgrade doesn't strand them.
+    var legacyScope: String {
+        Self.normalized(username)
+    }
+
+    private static func normalized(_ username: String) -> String {
+        username.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    }
+}
+
+/// The account identity is not secret. Remembering it alongside the keychain
+/// token lets an offline cold launch stay connected and keep queueing watched
+/// changes; the next successful `/users/settings` response refreshes it.
+/// Mirrors `TraktAccountIdentityStore`.
+nonisolated enum SimklAccountIdentityStore {
+    private static let key = "simkl.lastAccountIdentity.v1"
+
+    static func load(defaults: UserDefaults = .standard) -> SimklAccountIdentity? {
+        guard let data = defaults.data(forKey: key) else { return nil }
+        return try? JSONDecoder().decode(SimklAccountIdentity.self, from: data)
+    }
+
+    static func save(_ identity: SimklAccountIdentity, defaults: UserDefaults = .standard) {
+        guard let data = try? JSONEncoder().encode(identity) else { return }
+        defaults.set(data, forKey: key)
+    }
+
+    static func clear(defaults: UserDefaults = .standard) {
+        defaults.removeObject(forKey: key)
+    }
+}

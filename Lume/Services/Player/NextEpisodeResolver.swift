@@ -16,8 +16,7 @@ enum NextEpisodeResolver {
     /// playlist can build a URL for it.
     static func nextMedia(
         after ref: PlayableMedia.ContentRef,
-        in context: ModelContext,
-        client: XtreamClient = XtreamClient()
+        in context: ModelContext
     ) -> PlayableMedia? {
         guard case let .episode(id) = ref else { return nil }
 
@@ -28,7 +27,7 @@ enum NextEpisodeResolver {
 
         guard let next = neighbour(of: current, in: series, after: true),
               let playlist = playlist(for: series, in: context) else { return nil }
-        return PlayableMedia.from(episode: next, playlist: playlist, client: client)
+        return PlayableMedia.from(episode: next, playlist: playlist)
     }
 
     /// The episode before `ref` as `PlayableMedia`, or `nil` when `ref` is not an
@@ -36,8 +35,7 @@ enum NextEpisodeResolver {
     /// playlist can build a URL for it.
     static func previousMedia(
         before ref: PlayableMedia.ContentRef,
-        in context: ModelContext,
-        client: XtreamClient = XtreamClient()
+        in context: ModelContext
     ) -> PlayableMedia? {
         guard case let .episode(id) = ref else { return nil }
 
@@ -48,7 +46,7 @@ enum NextEpisodeResolver {
 
         guard let previous = neighbour(of: current, in: series, after: false),
               let playlist = playlist(for: series, in: context) else { return nil }
-        return PlayableMedia.from(episode: previous, playlist: playlist, client: client)
+        return PlayableMedia.from(episode: previous, playlist: playlist)
     }
 
     /// The episode adjacent to `current` across the whole series, ordered by

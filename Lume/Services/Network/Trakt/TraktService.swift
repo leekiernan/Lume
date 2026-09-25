@@ -402,12 +402,6 @@ final class TraktService {
 
     // MARK: - Watchlist
 
-    /// Best-effort compatibility wrapper for callers where an unavailable
-    /// watchlist and an empty one are intentionally equivalent.
-    func fetchWatchlist() async -> [TraktWatchlistItem] {
-        await (try? watchlistItems()) ?? []
-    }
-
     /// Fetches the watchlist without collapsing a transport/auth failure into
     /// an authoritative empty result. Feed caches use this to retain stale data
     /// until a later successful revalidation.

@@ -86,8 +86,7 @@ enum TraktWatchedImporter {
         }
         guard !watchedIDs.isEmpty else { return 0 }
 
-        let descriptor = FetchDescriptor<Movie>(predicate: #Predicate { $0.tmdbId != nil })
-        let candidates = (try? context.fetch(descriptor)) ?? []
+        let candidates = TrackerCatalogLookup.movies(tmdbIDs: watchedIDs, in: context)
 
         var count = 0
         for movie in candidates where !movie.isWatched {
@@ -122,8 +121,7 @@ enum TraktWatchedImporter {
         }
         guard !showsByTMDB.isEmpty else { return (0, 0) }
 
-        let descriptor = FetchDescriptor<Series>(predicate: #Predicate { $0.tmdbId != nil })
-        let candidates = (try? context.fetch(descriptor)) ?? []
+        let candidates = TrackerCatalogLookup.series(tmdbIDs: Set(showsByTMDB.keys), in: context)
 
         var pending = TraktPendingWatchedStore.load()
         var pendingChanged = false
@@ -244,16 +242,19 @@ enum TraktWatchedImporter {
 
     // MARK: - Dates
 
-    /// Parses Trakt's ISO-8601 timestamps, which carry fractional seconds
-    /// (e.g. `2014-10-11T17:00:54.000Z`).
-    private static let formatter: ISO8601DateFormatter = {
+    /// Parses Trakt's ISO-8601 timestamps. They normally carry fractional
+    /// seconds (e.g. `2014-10-11T17:00:54.000Z`), but a formatter set up for
+    /// those rejects a plain `2014-10-11T17:00:54Z`, so both forms are tried.
+    private static let fractionalFormatter: ISO8601DateFormatter = {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         return formatter
     }()
 
-    private static func parse(_ string: String?) -> Date? {
+    private static let formatter = ISO8601DateFormatter()
+
+    static func parse(_ string: String?) -> Date? {
         guard let string else { return nil }
-        return formatter.date(from: string)
+        return fractionalFormatter.date(from: string) ?? formatter.date(from: string)
     }
 }

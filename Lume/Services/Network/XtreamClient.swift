@@ -10,44 +10,20 @@ import OSLog
 
 // MARK: - XtreamClient
 
-class XtreamClient: APIClient {
-    nonisolated struct Configuration {
-        let serverURL: String
-        let username: String
-        let password: String
-        let timeout: TimeInterval
-
-        init(serverURL: String, username: String, password: String, timeout: TimeInterval = 30) {
-            self.serverURL = serverURL
-            self.username = username
-            self.password = password
-            self.timeout = timeout
-        }
-    }
-
-    let configuration: Configuration
+/// `nonisolated` so the bulk catalog decodes stay off the main actor, and
+/// `Sendable` because it holds nothing but its session: every request takes
+/// the playlist it is for. The URL builders are static — building a playback
+/// URL needs no client at all.
+final nonisolated class XtreamClient: Sendable {
     let session: URLSession
 
-    /// When the most recent request released the connection, on a monotonic
-    /// clock. Read by `ContentSyncManager` to space consecutive bulk requests
-    /// apart without re-paying wall clock the sync has already spent elsewhere.
-    /// Stamped on failures too — a 401/403 still occupied the slot.
-    private(set) var lastRequestFinishedAt: ContinuousClock.Instant?
+    /// Every production client shares one session, so the one-connection-per-
+    /// host cap below holds across them — a login check and a running sync
+    /// queue for the same slot instead of racing for it.
+    private static let sharedSession = makeSession()
 
-    nonisolated init(configuration: Configuration, urlSession: URLSession? = nil) {
-        self.configuration = configuration
-        session = urlSession ?? Self.makeSession(timeout: configuration.timeout)
-    }
-
-    /// Convenience initializer for backward compatibility
-    convenience nonisolated init(urlSession: URLSession? = nil) {
-        let config = Configuration(
-            serverURL: "",
-            username: "",
-            password: "",
-            timeout: 30
-        )
-        self.init(configuration: config, urlSession: urlSession)
+    init(urlSession: URLSession? = nil) {
+        session = urlSession ?? Self.sharedSession
     }
 
     /// Builds a dedicated session for Xtream API calls.
@@ -55,13 +31,17 @@ class XtreamClient: APIClient {
     /// Uses a single connection per host: many Xtream providers cap an account
     /// to one concurrent connection and reject extra requests with 401/403.
     /// Serializing connections (instead of reusing `.shared`'s pool, which the
-    /// server may RST after a heavy transfer) avoids tripping that limit. Also
-    /// applies the configured timeout, which was previously ignored.
-    private nonisolated static func makeSession(timeout: TimeInterval) -> URLSession {
+    /// server may RST after a heavy transfer) avoids tripping that limit.
+    private static func makeSession() -> URLSession {
         let config = URLSessionConfiguration.default
         config.httpMaximumConnectionsPerHost = 1
-        config.timeoutIntervalForRequest = timeout
-        config.timeoutIntervalForResource = 120
+        config.timeoutIntervalForRequest = 30
+        // `get_vod_streams` / `get_series` return a whole catalog in one body,
+        // as large as the m3u exports `M3UClient` allows 600 s for, and slow
+        // panels stream it slowly. The per-request idle timeout above still
+        // catches a stalled transfer; this caps only one still making progress,
+        // which at 120 s failed and then re-downloaded from scratch on retry.
+        config.timeoutIntervalForResource = 600
         // Some panels only return JSON to a recognized player UA; the default
         // CFNetwork UA gets an HTML block page that fails to decode.
         config.httpAdditionalHeaders = ["User-Agent": lumeCatalogUserAgent]
@@ -74,7 +54,7 @@ class XtreamClient: APIClient {
     /// account credentials). Exposed so `EPGSourceReconciler` can store it as a
     /// standalone EPG source — the guide is no longer fetched during a playlist
     /// sync.
-    nonisolated static func xmltvURL(for playlist: Playlist) -> URL? {
+    static func xmltvURL(for playlist: Playlist) -> URL? {
         guard !playlist.serverURL.isEmpty else { return nil }
         var components = URLComponents(string: playlist.serverURL)
         guard components != nil else { return nil }
@@ -107,7 +87,7 @@ class XtreamClient: APIClient {
     /// Signposts wrapping the two halves of a bulk request, so a trace can tell
     /// a slow transfer apart from a slow decode. Only the three catalog
     /// endpoints supply one; every other call leaves the phases unnamed.
-    nonisolated struct RequestPhases {
+    struct RequestPhases {
         let fetch: PerfSignpost
         let decode: PerfSignpost
     }
@@ -125,7 +105,7 @@ class XtreamClient: APIClient {
     ///   has already proven the credentials, a 401/403 is almost always the
     ///   provider's connection/rate limit rather than bad credentials. Login
     ///   (`getInfo`) leaves it `false` so wrong credentials fail fast.
-    private func request<T: Decodable>(
+    private func request<T: Decodable & Sendable>(
         _ url: URL,
         action: String,
         retryAuthFailure: Bool = true,
@@ -163,17 +143,18 @@ class XtreamClient: APIClient {
 
     /// A single request attempt. Network-level failures are wrapped into
     /// `XtreamError.networkError` so callers see a consistent error type.
-    private func performRequest<T: Decodable>(_ url: URL, action: String, phases: RequestPhases? = nil) async throws -> T {
-        #if DEBUG
-            // VERIFIED, not defensive: `XtreamClient` declares no isolation, so
-            // `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor` infers `@MainActor` for the
-            // whole type (unlike the sibling `nonisolated class M3UClient`). This
-            // holds even when the caller is `actor ContentSyncManager`, and the body
-            // never leaves that domain, so the bulk transfer's continuation and the
-            // multi-hundred-thousand-element `decoder.decode` below both run on the
-            // main actor. Remove only together with making the type `nonisolated`.
-            MainActor.assertIsolated("XtreamClient.performRequest runs on the main actor")
-        #endif
+    ///
+    /// `@concurrent` is load-bearing: `SWIFT_APPROACHABLE_CONCURRENCY` runs a
+    /// plain `nonisolated async` function on its caller's actor, so without it
+    /// a login from a view would decode on the main actor, and a sync would hold
+    /// `ContentSyncManager`'s executor through a multi-hundred-thousand-element
+    /// `decoder.decode`.
+    @concurrent
+    private func performRequest<T: Decodable & Sendable>(
+        _ url: URL,
+        action: String,
+        phases: RequestPhases? = nil
+    ) async throws -> T {
         let data: Data
         let response: URLResponse
         let fetchInterval = phases.map { Perf.begin($0.fetch) }
@@ -181,11 +162,9 @@ class XtreamClient: APIClient {
             (data, response) = try await session.data(from: url)
         } catch {
             if let fetchInterval { Perf.end(fetchInterval) }
-            lastRequestFinishedAt = ContinuousClock.now
             throw XtreamError.networkError(error)
         }
         if let fetchInterval { Perf.end(fetchInterval) }
-        lastRequestFinishedAt = ContinuousClock.now
 
         let byteCount = data.count
         Logger.network.info(
@@ -301,23 +280,7 @@ class XtreamClient: APIClient {
         return list.items
     }
 
-    /// 6. Get VOD Info
-    func getVODInfo(playlist: Playlist, vodId: Int) async throws -> XtreamVODInfo {
-        let queryItems = [
-            URLQueryItem(name: "username", value: playlist.username),
-            URLQueryItem(name: "password", value: playlist.password),
-            URLQueryItem(name: "action", value: "get_vod_info"),
-            URLQueryItem(name: "vod_id", value: String(vodId))
-        ]
-
-        guard let url = buildURL(serverURL: playlist.serverURL, path: "player_api.php", queryItems: queryItems) else {
-            throw XtreamError.invalidURL
-        }
-
-        return try await request(url, action: "get_vod_info")
-    }
-
-    /// 7. Get Series Categories
+    /// 6. Get Series Categories
     func getSeriesCategories(playlist: Playlist) async throws -> [XtreamCategory] {
         let queryItems = [
             URLQueryItem(name: "username", value: playlist.username),
@@ -333,7 +296,7 @@ class XtreamClient: APIClient {
         return list.items
     }
 
-    /// 8. Get Series
+    /// 7. Get Series
     func getSeries(playlist: Playlist, categoryId: String? = nil) async throws -> [XtreamSeries] {
         var queryItems = [
             URLQueryItem(name: "username", value: playlist.username),
@@ -352,7 +315,7 @@ class XtreamClient: APIClient {
         return list.items
     }
 
-    /// 9. Get Series Info
+    /// 8. Get Series Info
     func getSeriesInfo(playlist: Playlist, seriesId: Int) async throws -> XtreamSeriesInfoResponse {
         let queryItems = [
             URLQueryItem(name: "username", value: playlist.username),
@@ -368,80 +331,16 @@ class XtreamClient: APIClient {
         return try await request(url, action: "get_series_info")
     }
 
-    /// 10. Get Short EPG
-    func getShortEPG(playlist: Playlist, streamId: Int, limit: Int? = nil) async throws -> [XtreamShortEPG] {
-        var queryItems = [
-            URLQueryItem(name: "username", value: playlist.username),
-            URLQueryItem(name: "password", value: playlist.password),
-            URLQueryItem(name: "action", value: "get_short_epg"),
-            URLQueryItem(name: "stream_id", value: String(streamId))
-        ]
-        if let limit {
-            queryItems.append(URLQueryItem(name: "limit", value: String(limit)))
-        }
-
-        guard let url = buildURL(serverURL: playlist.serverURL, path: "player_api.php", queryItems: queryItems) else {
-            throw XtreamError.invalidURL
-        }
-
-        do {
-            let response: ShortEPGResponse = try await request(url, action: "get_short_epg")
-            return response.epgListings.items
-        } catch {
-            // Try array fallback if not wrapped
-            if let arrayResponse: XtreamList<XtreamShortEPG> = try? await request(url, action: "get_short_epg") {
-                return arrayResponse.items
-            }
-            throw error
-        }
-    }
-
-    /// 11. Get XMLTV — download to temp file, then stream-parse in batches.
-    /// Returns the local file URL so the caller can parse incrementally.
-    func downloadXMLTV(playlist: Playlist) async throws -> URL {
-        let queryItems = [
-            URLQueryItem(name: "username", value: playlist.username),
-            URLQueryItem(name: "password", value: playlist.password)
-        ]
-
-        guard let url = buildURL(serverURL: playlist.serverURL, path: "xmltv.php", queryItems: queryItems) else {
-            throw XtreamError.invalidURL
-        }
-
-        let tempURL: URL
-        let response: URLResponse
-        do {
-            (tempURL, response) = try await session.download(from: url)
-        } catch {
-            throw XtreamError.networkError(error)
-        }
-
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw XtreamError.invalidResponse
-        }
-
-        guard (200 ... 299).contains(httpResponse.statusCode) else {
-            throw XtreamError.serverError(httpResponse.statusCode)
-        }
-
-        // Move to a stable location before the system cleans it up
-        let destination = FileManager.default.temporaryDirectory
-            .appendingPathComponent(UUID().uuidString + ".xmltv")
-        try? FileManager.default.removeItem(at: destination)
-        try FileManager.default.moveItem(at: tempURL, to: destination)
-        return destination
-    }
-
     // MARK: - Stream URL Building
 
     /// Builds a playback URL for a movie
-    func buildMovieURL(for movie: Movie, playlist: Playlist) -> URL? {
+    static func buildMovieURL(for movie: Movie, playlist: Playlist) -> URL? {
         let ext = movie.containerExtension ?? "mp4"
         return URL(string: "\(playlist.serverURL)/movie/\(playlist.username)/\(playlist.password)/\(movie.streamId).\(ext)")
     }
 
     /// Builds a playback URL for an episode
-    func buildEpisodeURL(for episode: Episode, playlist: Playlist) -> URL? {
+    static func buildEpisodeURL(for episode: Episode, playlist: Playlist) -> URL? {
         let ext = episode.containerExtension
         return URL(string: "\(playlist.serverURL)/series/\(playlist.username)/\(playlist.password)/\(episode.episodeId).\(ext)")
     }
@@ -449,12 +348,12 @@ class XtreamClient: APIClient {
     /// Builds a playback URL for a live stream. `format` overrides the
     /// playlist's own container preference; when omitted the playlist decides,
     /// falling back to HLS.
-    func buildLiveStreamURL(for stream: LiveStream, playlist: Playlist, format: StreamFormat? = nil) -> URL? {
+    static func buildLiveStreamURL(for stream: LiveStream, playlist: Playlist, format: StreamFormat? = nil) -> URL? {
         let ext = Self.resolvedFormat(format, playlist: playlist, fallback: .m3u8).rawValue
         return URL(string: "\(playlist.serverURL)/live/\(playlist.username)/\(playlist.password)/\(stream.streamId).\(ext)")
     }
 
-    private nonisolated static func resolvedFormat(
+    private static func resolvedFormat(
         _ requested: StreamFormat?,
         playlist: Playlist,
         fallback: StreamFormat
@@ -466,7 +365,7 @@ class XtreamClient: APIClient {
     /// path. The value is wall-clock time in the timezone advertised by the
     /// account. Fall back to the device timezone for older panels that omit it,
     /// preserving Lume's historical behaviour for those providers.
-    private nonisolated static func timeshiftStartString(for start: Date, playlist: Playlist) -> String {
+    private static func timeshiftStartString(for start: Date, playlist: Playlist) -> String {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd:HH-mm"
         formatter.locale = Locale(identifier: "en_US_POSIX")
@@ -481,7 +380,7 @@ class XtreamClient: APIClient {
     /// where the duration is the programme length in minutes and the start is the
     /// programme's air time. Only meaningful for Xtream streams (m3u channels
     /// carry no credentials).
-    nonisolated func buildCatchupURL(
+    static func buildCatchupURL(
         for stream: LiveStream,
         playlist: Playlist,
         start: Date,
@@ -500,16 +399,7 @@ class XtreamClient: APIClient {
 
 // MARK: - Supporting Types
 
-/// Wrapper some panels put around `get_short_epg` listings.
-private struct ShortEPGResponse: Decodable {
-    let epgListings: XtreamList<XtreamShortEPG>
-
-    enum CodingKeys: String, CodingKey {
-        case epgListings = "epg_listings"
-    }
-}
-
-enum StreamFormat: String {
+nonisolated enum StreamFormat: String {
     case m3u8
     case tsStream = "ts"
 }

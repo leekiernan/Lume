@@ -45,6 +45,14 @@ struct XtreamErrorTests {
         #expect(error.isAuthFailure == false)
     }
 
+    @Test func `network errors that fail the same way every time are not retried`() {
+        for code in [URLError.Code.cancelled, .unsupportedURL, .secureConnectionFailed, .serverCertificateUntrusted] {
+            #expect(XtreamError.networkError(URLError(code)).isRetriable == false)
+        }
+        #expect(XtreamError.networkError(CancellationError()).isRetriable == false)
+        #expect(XtreamError.networkError(URLError(.networkConnectionLost)).isRetriable == true)
+    }
+
     @Test func `error decoding error`() {
         let underlying = NSError(domain: "test", code: 0)
         let error = XtreamError.decodingError(underlying)

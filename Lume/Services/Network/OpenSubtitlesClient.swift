@@ -38,6 +38,9 @@ enum OpenSubtitlesError: Error, Equatable {
     case invalidCredentials
     /// The account's daily download allowance is spent.
     case quotaExceeded
+    /// The API's rate limiter (HTTP 429): too many requests in a short window,
+    /// which clears in seconds — unlike the daily quota.
+    case rateLimited
     case server(Int)
     case decoding
 
@@ -55,6 +58,8 @@ enum OpenSubtitlesError: Error, Equatable {
             "Sign in to your OpenSubtitles account to download subtitles."
         case .quotaExceeded:
             "You've used up today's OpenSubtitles downloads. Try again tomorrow."
+        case .rateLimited:
+            "OpenSubtitles is busy right now. Wait a moment and try again."
         case .invalidResponse, .decoding:
             "OpenSubtitles sent an unexpected response."
         case let .server(code):
@@ -414,23 +419,32 @@ nonisolated struct OpenSubtitlesClient {
         return request
     }
 
+    /// The error for a non-2xx status.
+    static func error(forStatus status: Int, isLogin: Bool) -> OpenSubtitlesError {
+        switch status {
+        case 401 where isLogin:
+            .invalidCredentials
+        case 401, 403:
+            .notAuthenticated
+        case 406:
+            // The documented "download quota reached".
+            .quotaExceeded
+        case 429:
+            .rateLimited
+        default:
+            .server(status)
+        }
+    }
+
     private func send<T: Decodable>(_ request: URLRequest) async throws -> T {
         let (data, response) = try await session.data(for: request)
         guard let http = response as? HTTPURLResponse else { throw OpenSubtitlesError.invalidResponse }
 
         guard (200 ... 299).contains(http.statusCode) else {
-            switch http.statusCode {
-            case 401 where request.url?.lastPathComponent == "login":
-                throw OpenSubtitlesError.invalidCredentials
-            case 401, 403:
-                throw OpenSubtitlesError.notAuthenticated
-            case 406, 429:
-                // 406 is the documented "download quota reached"; 429 is the
-                // rate limiter, which reads the same way to the viewer.
-                throw OpenSubtitlesError.quotaExceeded
-            default:
-                throw OpenSubtitlesError.server(http.statusCode)
-            }
+            throw Self.error(
+                forStatus: http.statusCode,
+                isLogin: request.url?.lastPathComponent == "login"
+            )
         }
 
         // `/logout` answers with an empty body.

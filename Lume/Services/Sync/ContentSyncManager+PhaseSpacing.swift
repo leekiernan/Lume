@@ -13,12 +13,23 @@ extension ContentSyncManager {
     /// phase's first.
     static let contentPhaseRequestSpacing: Duration = .seconds(2)
 
+    /// Runs one Xtream request and stamps `lastXtreamRequestFinishedAt` when it
+    /// returns — on failure too, since a 401/403 still occupied the slot.
+    ///
+    /// The stamp lands after the client's (off-actor) decode, so that decode
+    /// is not counted towards the spacing. That errs towards waiting slightly
+    /// longer, never towards racing the connection slot.
+    func xtreamRequest<T>(_ request: (XtreamClient) async throws -> T) async rethrows -> T {
+        defer { lastXtreamRequestFinishedAt = ContinuousClock.now }
+        return try await request(xtreamClient)
+    }
+
     /// How much of `contentPhaseRequestSpacing` is still outstanding.
     ///
     /// Measured from when the request *finished*, not from when the phase
-    /// returned — a phase spends tens of seconds decoding and writing after its
-    /// download, and that time already spaces the requests. `nil` means nothing
-    /// has been requested yet and nothing has to be spaced.
+    /// returned — a phase spends tens of seconds writing after its download,
+    /// and that time already spaces the requests. `nil` means nothing has been
+    /// requested yet and nothing has to be spaced.
     nonisolated static func outstandingPhaseSpacing(
         since lastRequestFinishedAt: ContinuousClock.Instant?,
         now: ContinuousClock.Instant = ContinuousClock.now
@@ -46,7 +57,7 @@ extension ContentSyncManager {
     /// sync has not already spent: a slow device pays nothing here, a fast one
     /// still spaces its requests.
     func spaceContentPhaseRequests() async throws {
-        let remaining = await Self.outstandingPhaseSpacing(since: xtreamClient.lastRequestFinishedAt)
+        let remaining = Self.outstandingPhaseSpacing(since: lastXtreamRequestFinishedAt)
         guard remaining > .zero else {
             Logger.database.info("Xtream phase spacing already elapsed; continuing immediately")
             return
