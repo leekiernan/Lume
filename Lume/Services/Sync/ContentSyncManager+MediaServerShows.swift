@@ -54,7 +54,7 @@ extension ContentSyncManager {
             if let found = lookup[id] {
                 series = found
             } else {
-                series = Series(id: id, seriesId: Self.mediaServerHash(item.id), name: item.name ?? "")
+                series = Series(id: id, seriesId: M3UIdentity.numericId(for: item.id), name: item.name ?? "")
                 context.insert(series)
             }
             applyJellyfinSeriesFields(item, to: series, scope: scope)
@@ -133,7 +133,7 @@ extension ContentSyncManager {
                 return seriesId
             }
             if let name = item.seriesName, !name.isEmpty {
-                return byName[name]?.id ?? "name-\(ContentSyncManager.mediaServerHash(name))"
+                return byName[name]?.id ?? "name-\(M3UIdentity.numericId(for: name))"
             }
             return item.seriesId ?? item.id
         }
@@ -180,7 +180,7 @@ extension ContentSyncManager {
             return found
         }
         let shellName = item.seriesName ?? seriesShells.byId[shellJellyfinId]?.name ?? item.name ?? ""
-        let series = Series(id: seriesId, seriesId: Self.mediaServerHash(shellJellyfinId), name: shellName)
+        let series = Series(id: seriesId, seriesId: M3UIdentity.numericId(for: shellJellyfinId), name: shellName)
         if let shell = seriesShells.byId[shellJellyfinId] {
             applyJellyfinSeriesFields(shell, to: series, scope: scope)
         } else if series.categoryId != scope.categoryId {
@@ -280,18 +280,5 @@ extension ContentSyncManager {
         let idPrefix = Self.mediaServerIdPrefix(playlistId, flavor: flavor)
         pruneSeries(playlistId: playlistId, idPrefix: idPrefix, seenIds: seenSeries)
         pruneEpisodes(playlistId: playlistId, idPrefix: idPrefix, seenIds: seenEpisodes)
-    }
-
-    /// Stable string→Int for the `streamId`/`seriesId` columns a media server
-    /// has no number for. FNV-1a, not `Hasher` — the latter is seeded per
-    /// process, so ids would change on every launch and orphan user state.
-    /// Only ever used as an opaque key: playback builds from `directURL`.
-    nonisolated static func mediaServerHash(_ string: String) -> Int {
-        var hash: UInt64 = 14_695_981_039_346_656_037
-        for byte in string.utf8 {
-            hash ^= UInt64(byte)
-            hash = hash &* 1_099_511_628_211
-        }
-        return Int(truncatingIfNeeded: Int64(bitPattern: hash & 0x7FFF_FFFF_FFFF_FFFF))
     }
 }

@@ -355,7 +355,7 @@ extension ContentSyncManager {
     /// practice, but the API types it as a string) falls back to the same
     /// launch-stable hash the Jellyfin/Emby pipeline uses.
     nonisolated static func plexStreamId(_ ratingKey: String) -> Int {
-        Int(ratingKey) ?? mediaServerHash(ratingKey)
+        Int(ratingKey) ?? M3UIdentity.numericId(for: ratingKey)
     }
 
     /// `addedAt` is Unix seconds; the catalog's `added` column is the
