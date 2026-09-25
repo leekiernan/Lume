@@ -495,12 +495,6 @@ extension ContentSyncManager {
     }
 
     func markPlaylistUpdated(_ playlistId: UUID) {
-        let context = ModelContext(modelContainer)
-        context.autosaveEnabled = false
-        guard let playlist = try? context.fetch(
-            FetchDescriptor<Playlist>(predicate: #Predicate { $0.id == playlistId })
-        ).first else { return }
-        playlist.lastUpdated = Date()
-        try? context.save()
+        updatePlaylist(playlistId) { $0.lastUpdated = Date() }
     }
 }

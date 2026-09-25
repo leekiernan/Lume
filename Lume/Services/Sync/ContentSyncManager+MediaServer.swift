@@ -161,14 +161,10 @@ extension ContentSyncManager {
     /// authenticate without logging in again. A rotated or revoked token is
     /// simply replaced on the next sync, which always logs in first.
     private func persistJellyfinSession(_ session: JellyfinSession, playlistId: UUID) {
-        let context = ModelContext(modelContainer)
-        context.autosaveEnabled = false
-        guard let playlist = try? context.fetch(
-            FetchDescriptor<Playlist>(predicate: #Predicate { $0.id == playlistId })
-        ).first else { return }
-        playlist.jellyfinAccessToken = session.accessToken
-        playlist.jellyfinUserId = session.userId
-        try? context.save()
+        updatePlaylist(playlistId) { playlist in
+            playlist.jellyfinAccessToken = session.accessToken
+            playlist.jellyfinUserId = session.userId
+        }
     }
 
     // MARK: - Categories
