@@ -248,7 +248,7 @@
                                 .font(.system(size: 22))
                                 .foregroundStyle(tertiaryColor)
                             }
-                        } else if stream.epgChannelId != nil {
+                        } else if stream.epgChannelId?.isEmpty == false {
                             Text("No EPG data")
                                 .font(.system(size: 22))
                                 .foregroundStyle(tertiaryColor)

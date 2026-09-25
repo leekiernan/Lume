@@ -82,7 +82,7 @@ struct LiveStreamCardView: View {
                                 .foregroundStyle(.tertiary)
                         }
                     }
-                } else if stream.epgChannelId != nil {
+                } else if stream.epgChannelId?.isEmpty == false {
                     Text("No EPG data")
                         .font(.caption)
                         .foregroundStyle(.tertiary)
