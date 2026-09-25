@@ -98,6 +98,26 @@ struct PlaybackQoETests {
     }
 
     @Test
+    func `a cleared stall is persisted at the session boundary, not mid-playback`() throws {
+        let suiteName = "PlaybackQoETests-\(UUID().uuidString)"
+        defer { tearDown(suiteName) }
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+
+        let qoe = PlaybackQoE(defaults: defaults)
+        qoe.beginStartup(engine: .ksPlayer, isLive: true)
+        qoe.noteFirstFrame()
+        qoe.noteStallBegan()
+        qoe.noteStallEnded()
+
+        let midPlayback = PlaybackQoE(defaults: defaults)
+        #expect(midPlayback.summary.engines[PlayerEngineKind.ksPlayer.rawValue]?.rebuffers == 0)
+
+        qoe.endSession()
+        let afterSession = PlaybackQoE(defaults: defaults)
+        #expect(afterSession.summary.engines[PlayerEngineKind.ksPlayer.rawValue]?.rebuffers == 1)
+    }
+
+    @Test
     func `an unclosed stall is still accounted for when the session ends`() {
         let (qoe, suite) = makeTracker()
         defer { tearDown(suite) }
