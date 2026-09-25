@@ -271,30 +271,15 @@ extension ContentSyncManager {
         }
     }
 
+    /// Removes shows, and episodes of surviving shows, the server no longer
+    /// lists. Same `fetched` gate and guarded paged sweeps as
+    /// `pruneJellyfinMovies`: unseen series first (episodes and cast cascade),
+    /// then whatever a surviving show dropped, on the episodes' own id range.
     func pruneJellyfinSeries(playlistId: UUID, flavor: MediaServerFlavor, seenSeries: Set<String>, seenEpisodes: Set<String>, fetched: Bool) {
         guard fetched else { return }
-        let context = ModelContext(modelContainer)
-        context.autosaveEnabled = false
-        let prefix = playlistId.uuidString
-        let rows = (try? context.fetch(FetchDescriptor<Series>(
-            predicate: #Predicate { $0.id.starts(with: prefix) }
-        ))) ?? []
-        let infix = "-\(flavor.idInfix)-"
-        for series in rows where series.id.contains(infix) {
-            if seenSeries.contains(series.id) {
-                // The shell survives, but dropped episodes don't: delete them
-                // explicitly (no cascade from a surviving parent).
-                for episode in series.episodes where !seenEpisodes.contains(episode.id) {
-                    context.delete(episode)
-                }
-            } else {
-                // Episodes and cast cascade from the deleted series.
-                context.delete(series)
-            }
-        }
-        if context.hasChanges {
-            try? context.save()
-        }
+        let idPrefix = Self.mediaServerIdPrefix(playlistId, flavor: flavor)
+        pruneSeries(playlistId: playlistId, idPrefix: idPrefix, seenIds: seenSeries)
+        pruneEpisodes(playlistId: playlistId, idPrefix: idPrefix, seenIds: seenEpisodes)
     }
 
     /// Stable string→Int for the `streamId`/`seriesId` columns a media server

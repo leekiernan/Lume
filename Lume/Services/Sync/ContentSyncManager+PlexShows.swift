@@ -236,28 +236,13 @@ extension ContentSyncManager {
         }
     }
 
+    /// Removes shows, and episodes of surviving shows, the server no longer
+    /// lists — see `pruneJellyfinSeries`, which this mirrors on the `-plex-`
+    /// id prefix.
     func prunePlexSeries(playlistId: UUID, seenSeries: Set<String>, seenEpisodes: Set<String>, fetched: Bool) {
         guard fetched else { return }
-        let context = ModelContext(modelContainer)
-        context.autosaveEnabled = false
-        let prefix = playlistId.uuidString
-        let rows = (try? context.fetch(FetchDescriptor<Series>(
-            predicate: #Predicate { $0.id.starts(with: prefix) }
-        ))) ?? []
-        for series in rows where series.id.contains("-plex-") {
-            if seenSeries.contains(series.id) {
-                // The shell survives, but dropped episodes don't: delete them
-                // explicitly (no cascade from a surviving parent).
-                for episode in series.episodes where !seenEpisodes.contains(episode.id) {
-                    context.delete(episode)
-                }
-            } else {
-                // Episodes and cast cascade from the deleted series.
-                context.delete(series)
-            }
-        }
-        if context.hasChanges {
-            try? context.save()
-        }
+        let idPrefix = Self.plexIdPrefix(playlistId)
+        pruneSeries(playlistId: playlistId, idPrefix: idPrefix, seenIds: seenSeries)
+        pruneEpisodes(playlistId: playlistId, idPrefix: idPrefix, seenIds: seenEpisodes)
     }
 }

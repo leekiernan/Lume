@@ -221,13 +221,13 @@ actor ContentSyncManager {
             try context.save()
         }
 
-        // Remove categories of this type the provider has dropped. Gated on a
-        // non-empty fetch: an empty category list is the transient-failure
-        // signature, and sweeping then would drop every category for the type.
-        if !dtos.isEmpty {
-            let seenApiIds = Set(dtos.map(\.categoryId))
-            pruneStaleCategories(playlistId: playlistId, type: type, seenApiIds: seenApiIds)
-        }
+        // Remove categories of this type the provider has dropped. The guarded
+        // entry skips an empty list (the transient-failure signature) and holds
+        // back a list too short to cover the stored categories, exactly as the
+        // content sweeps do.
+        pruneCategories(
+            playlistId: playlistId, type: type, seenApiIds: Set(dtos.map(\.categoryId)), importedCount: dtos.count
+        )
     }
 
     // MARK: - Content Sync (Batched)

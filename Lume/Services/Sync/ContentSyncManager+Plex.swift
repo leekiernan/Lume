@@ -30,7 +30,7 @@ extension ContentSyncManager {
         /// The id prefix every row of this section carries. The `plex` infix
         /// scopes the prune sweeps to rows this pipeline owns.
         var idPrefix: String {
-            "\(playlistId.uuidString)-plex-"
+            ContentSyncManager.plexIdPrefix(playlistId)
         }
     }
 
@@ -219,9 +219,7 @@ extension ContentSyncManager {
             try context.save()
         }
 
-        if !sections.isEmpty {
-            pruneStaleCategories(playlistId: playlistId, type: type, seenApiIds: Set(sections.map(\.key)))
-        }
+        pruneCategories(playlistId: playlistId, type: type, seenApiIds: Set(sections.map(\.key)), importedCount: sections.count)
     }
 
     // MARK: - Movies
@@ -337,23 +335,17 @@ extension ContentSyncManager {
 
     /// Removes movies the server no longer lists. Gated on `fetched`: an empty
     /// section list is the transient-failure signature, and sweeping then
-    /// would drop the whole catalog.
+    /// would drop the whole catalog. Past that, the paged, coverage-gated
+    /// sweep in `ContentSyncManager+Prune.swift`, scoped to the `-plex-` id
+    /// prefix so rows of any other source are never read.
     private func prunePlexMovies(playlistId: UUID, seenIds: Set<String>, fetched: Bool) {
         guard fetched else { return }
-        let context = ModelContext(modelContainer)
-        context.autosaveEnabled = false
-        let prefix = playlistId.uuidString
-        let rows = (try? context.fetch(FetchDescriptor<Movie>(
-            predicate: #Predicate { $0.id.starts(with: prefix) }
-        ))) ?? []
-        // Only rows this pipeline owns carry the `-plex-` infix; anything else
-        // under the prefix belongs to another source and is left alone.
-        for movie in rows where movie.id.contains("-plex-") && !seenIds.contains(movie.id) {
-            context.delete(movie)
-        }
-        if context.hasChanges {
-            try? context.save()
-        }
+        pruneMovies(playlistId: playlistId, idPrefix: Self.plexIdPrefix(playlistId), seenIds: seenIds)
+    }
+
+    /// The prefix every Plex row of this playlist carries.
+    nonisolated static func plexIdPrefix(_ playlistId: UUID) -> String {
+        "\(playlistId.uuidString)-plex-"
     }
 
     // MARK: - Helpers
