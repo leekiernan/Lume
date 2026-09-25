@@ -30,11 +30,14 @@ extension ContentSyncManager {
         /// The id prefix every row of this section carries. The `plex` infix
         /// scopes the prune sweeps to rows this pipeline owns.
         var idPrefix: String {
-            "\(playlistId.uuidString)-plex-"
+            ContentSyncManager.plexIdPrefix(playlistId)
         }
     }
 
-    func performPlexSync(playlist: Playlist, playlistId: UUID, progress: SyncProgress?) async throws {
+    /// Syncs the movie and TV-show sections of the kinds in `areas`; a
+    /// switched-off kind is neither fetched nor swept (see
+    /// `ContentSyncManager+AreaGating`).
+    func performPlexSync(playlist: Playlist, playlistId: UUID, progress: SyncProgress?, areas: Set<AppArea>) async throws {
         guard let base = URL(string: playlist.serverURL), base.scheme != nil, base.host != nil else {
             throw PlexError.invalidURL
         }
@@ -60,27 +63,30 @@ extension ContentSyncManager {
             Logger.database.info("Plex sync: no movie or TV-show sections; catalog untouched")
         }
 
-        try syncPlexCategories(sections: movieSections, type: .vod, playlistId: playlistId)
-        try syncPlexCategories(sections: showSections, type: .series, playlistId: playlistId)
-
-        await progress?.start(.movies)
-        var seenMovies = Set<String>()
-        for section in movieSections {
-            let scope = scope(server: server, token: token, playlistId: playlistId, section: section, type: .vod)
-            try await syncPlexMovies(scope: scope, seenIds: &seenMovies, progress: progress)
+        if areas.contains(.movies) {
+            try syncPlexCategories(sections: movieSections, type: .vod, playlistId: playlistId)
+            await progress?.start(.movies)
+            var seenMovies = Set<String>()
+            for section in movieSections {
+                let scope = scope(server: server, token: token, playlistId: playlistId, section: section, type: .vod)
+                try await syncPlexMovies(scope: scope, seenIds: &seenMovies, progress: progress)
+            }
+            prunePlexMovies(playlistId: playlistId, seenIds: seenMovies, fetched: !movieSections.isEmpty)
+            await progress?.complete(.movies)
         }
-        prunePlexMovies(playlistId: playlistId, seenIds: seenMovies, fetched: !movieSections.isEmpty)
-        await progress?.complete(.movies)
 
-        await progress?.start(.series)
-        var seenSeries = Set<String>()
-        var seenEpisodes = Set<String>()
-        for section in showSections {
-            let scope = scope(server: server, token: token, playlistId: playlistId, section: section, type: .series)
-            try await syncPlexShows(scope: scope, seenSeries: &seenSeries, seenEpisodes: &seenEpisodes, progress: progress)
+        if areas.contains(.series) {
+            try syncPlexCategories(sections: showSections, type: .series, playlistId: playlistId)
+            await progress?.start(.series)
+            var seenSeries = Set<String>()
+            var seenEpisodes = Set<String>()
+            for section in showSections {
+                let scope = scope(server: server, token: token, playlistId: playlistId, section: section, type: .series)
+                try await syncPlexShows(scope: scope, seenSeries: &seenSeries, seenEpisodes: &seenEpisodes, progress: progress)
+            }
+            prunePlexSeries(playlistId: playlistId, seenSeries: seenSeries, seenEpisodes: seenEpisodes, fetched: !showSections.isEmpty)
+            await progress?.complete(.series)
         }
-        prunePlexSeries(playlistId: playlistId, seenSeries: seenSeries, seenEpisodes: seenEpisodes, fetched: !showSections.isEmpty)
-        await progress?.complete(.series)
 
         markPlaylistUpdated(playlistId)
     }
@@ -141,14 +147,10 @@ extension ContentSyncManager {
     /// the next sync, which signs in whenever the stored one is gone.
     private func persistPlexToken(_ token: String?, playlistId: UUID) {
         guard let token, !token.isEmpty else { return }
-        let context = ModelContext(modelContainer)
-        context.autosaveEnabled = false
-        guard let playlist = try? context.fetch(
-            FetchDescriptor<Playlist>(predicate: #Predicate { $0.id == playlistId })
-        ).first else { return }
-        if playlist.plexAccessToken != token {
-            playlist.plexAccessToken = token
-            try? context.save()
+        updatePlaylist(playlistId) { playlist in
+            if playlist.plexAccessToken != token {
+                playlist.plexAccessToken = token
+            }
         }
     }
 
@@ -163,7 +165,7 @@ extension ContentSyncManager {
         scope: PlexSectionScope,
         progress: SyncProgress?,
         unit: String,
-        body: ([PlexMetadata]) -> Void
+        body: ([PlexMetadata]) throws -> Void
     ) async throws -> Int {
         var start = 0
         var total = Int.max
@@ -176,7 +178,7 @@ extension ContentSyncManager {
             )
             total = page.totalSize
             if !page.items.isEmpty {
-                body(page.items)
+                try body(page.items)
             }
             fetched += page.items.count
             start += page.items.count
@@ -213,11 +215,9 @@ extension ContentSyncManager {
                 if existing.sortOrder != index {
                     existing.sortOrder = index
                 }
-                existing.lastRefreshed = Date()
             } else {
                 let category = Category(apiId: section.key, name: section.title, parentId: 0, type: type, playlist: playlist)
                 category.sortOrder = index
-                category.lastRefreshed = Date()
                 context.insert(category)
             }
         }
@@ -225,9 +225,7 @@ extension ContentSyncManager {
             try context.save()
         }
 
-        if !sections.isEmpty {
-            pruneStaleCategories(playlistId: playlistId, type: type, seenApiIds: Set(sections.map(\.key)))
-        }
+        pruneCategories(playlistId: playlistId, type: type, seenApiIds: Set(sections.map(\.key)), importedCount: sections.count)
     }
 
     // MARK: - Movies
@@ -237,7 +235,7 @@ extension ContentSyncManager {
         let fetched = try await pageThroughPlexItems(
             type: PlexClient.movieType, scope: scope, progress: progress, unit: "movie(s)"
         ) { items in
-            seen.formUnion(upsertPlexMovies(items, scope: scope))
+            try seen.formUnion(upsertPlexMovies(items, scope: scope))
         }
         seenIds = seen
         Logger.database.info("Plex movies synced for section \(scope.section.title, privacy: .public): \(fetched, privacy: .public) item(s)")
@@ -246,7 +244,7 @@ extension ContentSyncManager {
     /// Upserts one page of movies, returning the ids it saw for the prune
     /// sweep. A set (not an inout) so the paging loop can feed pages through a
     /// closure, which cannot capture an inout parameter.
-    private func upsertPlexMovies(_ items: [PlexMetadata], scope: PlexSectionScope) -> Set<String> {
+    private func upsertPlexMovies(_ items: [PlexMetadata], scope: PlexSectionScope) throws -> Set<String> {
         let context = ModelContext(modelContainer)
         context.autosaveEnabled = false
         let ids = items.map { scope.idPrefix + $0.ratingKey }
@@ -268,7 +266,7 @@ extension ContentSyncManager {
             applyPlexMovieFields(item, to: movie, scope: scope)
         }
         if context.hasChanges {
-            try? context.save()
+            try context.save()
         }
         return Set(ids)
     }
@@ -343,23 +341,17 @@ extension ContentSyncManager {
 
     /// Removes movies the server no longer lists. Gated on `fetched`: an empty
     /// section list is the transient-failure signature, and sweeping then
-    /// would drop the whole catalog.
+    /// would drop the whole catalog. Past that, the paged, coverage-gated
+    /// sweep in `ContentSyncManager+Prune.swift`, scoped to the `-plex-` id
+    /// prefix so rows of any other source are never read.
     private func prunePlexMovies(playlistId: UUID, seenIds: Set<String>, fetched: Bool) {
         guard fetched else { return }
-        let context = ModelContext(modelContainer)
-        context.autosaveEnabled = false
-        let prefix = playlistId.uuidString
-        let rows = (try? context.fetch(FetchDescriptor<Movie>(
-            predicate: #Predicate { $0.id.starts(with: prefix) }
-        ))) ?? []
-        // Only rows this pipeline owns carry the `-plex-` infix; anything else
-        // under the prefix belongs to another source and is left alone.
-        for movie in rows where movie.id.contains("-plex-") && !seenIds.contains(movie.id) {
-            context.delete(movie)
-        }
-        if context.hasChanges {
-            try? context.save()
-        }
+        pruneMovies(playlistId: playlistId, idPrefix: Self.plexIdPrefix(playlistId), seenIds: seenIds)
+    }
+
+    /// The prefix every Plex row of this playlist carries.
+    nonisolated static func plexIdPrefix(_ playlistId: UUID) -> String {
+        "\(playlistId.uuidString)-plex-"
     }
 
     // MARK: - Helpers
@@ -369,7 +361,7 @@ extension ContentSyncManager {
     /// practice, but the API types it as a string) falls back to the same
     /// launch-stable hash the Jellyfin/Emby pipeline uses.
     nonisolated static func plexStreamId(_ ratingKey: String) -> Int {
-        Int(ratingKey) ?? mediaServerHash(ratingKey)
+        Int(ratingKey) ?? M3UIdentity.numericId(for: ratingKey)
     }
 
     /// `addedAt` is Unix seconds; the catalog's `added` column is the

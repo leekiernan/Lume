@@ -110,4 +110,33 @@ struct StorageManagerTests {
         #expect(refetched.tmdbEnrichedAt == nil)
         #expect(refetched.similarTMDBIds == nil)
     }
+
+    /// The language-change invalidation only re-arms enrichment; the cached
+    /// metadata stays until the re-fetch replaces it.
+    @Test func `invalidateTMDBEnrichment clears only the enrichment stamp`() async throws {
+        let container = try makeTestContainer()
+        let context = container.mainContext
+
+        let movie = Movie(id: "m1", streamId: 1, name: "Movie")
+        movie.tagline = "Kept"
+        movie.tmdbEnrichedAt = Date(timeIntervalSince1970: 1)
+        movie.ratingsEnrichedAt = Date(timeIntervalSince1970: 2)
+        context.insert(movie)
+        let show = Series(id: "s1", seriesId: 1, name: "Show")
+        show.backdropPath = "/kept.jpg"
+        show.tmdbEnrichedAt = Date(timeIntervalSince1970: 1)
+        context.insert(show)
+        try context.save()
+
+        await StorageManager.invalidateTMDBEnrichment(container: container)
+
+        let verifyContext = ModelContext(container)
+        let refetchedMovie = try #require(try verifyContext.fetch(FetchDescriptor<Movie>()).first)
+        #expect(refetchedMovie.tmdbEnrichedAt == nil)
+        #expect(refetchedMovie.tagline == "Kept")
+        #expect(refetchedMovie.ratingsEnrichedAt == Date(timeIntervalSince1970: 2))
+        let refetchedShow = try #require(try verifyContext.fetch(FetchDescriptor<Series>()).first)
+        #expect(refetchedShow.tmdbEnrichedAt == nil)
+        #expect(refetchedShow.backdropPath == "/kept.jpg")
+    }
 }

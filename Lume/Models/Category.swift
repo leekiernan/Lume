@@ -58,6 +58,9 @@ final class Category {
     /// a dense value so it survives re-syncs (which only touch `sortOrder`).
     var customOrder: Int?
     var customIcon: String?
+    /// Legacy: nothing reads it and no sync writes it any more — stamping it on
+    /// every pass dirtied every category and defeated the upserts' dirty
+    /// checks. Kept only so the store schema does not change.
     var lastRefreshed: Date?
     /// When this category's full content was last imported from the portal on
     /// demand. Stalker playlists don't sync their whole catalog (the portal

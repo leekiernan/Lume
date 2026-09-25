@@ -50,11 +50,20 @@ extension ContentSyncManager {
         /// The id prefix every row of this library carries. The flavour infix
         /// is what scopes the prune sweeps (see `MediaServerFlavor.idInfix`).
         var idPrefix: String {
-            "\(playlistId.uuidString)-\(flavor.idInfix)-"
+            ContentSyncManager.mediaServerIdPrefix(playlistId, flavor: flavor)
         }
     }
 
-    func performMediaServerSync(playlist: Playlist, playlistId: UUID, flavor: MediaServerFlavor, progress: SyncProgress?) async throws {
+    /// Syncs the movie and TV-show libraries of the kinds in `areas`; a
+    /// switched-off kind is neither fetched nor swept (see
+    /// `ContentSyncManager+AreaGating`).
+    func performMediaServerSync(
+        playlist: Playlist,
+        playlistId: UUID,
+        flavor: MediaServerFlavor,
+        progress: SyncProgress?,
+        areas: Set<AppArea>
+    ) async throws {
         guard let base = URL(string: playlist.serverURL), base.scheme != nil, base.host != nil else {
             throw JellyfinError.invalidURL
         }
@@ -87,27 +96,30 @@ extension ContentSyncManager {
             Logger.database.info("\(flavor.displayName, privacy: .public) sync: no movie or TV-show libraries; catalog untouched")
         }
 
-        try await syncJellyfinCategories(views: movieViews, type: .vod, playlistId: playlistId)
-        try await syncJellyfinCategories(views: showViews, type: .series, playlistId: playlistId)
-
-        await progress?.start(.movies)
-        var seenMovies = Set<String>()
-        for view in movieViews {
-            let viewScope = scope(connection, playlistId: playlistId, view: view, type: .vod)
-            try await syncJellyfinMovies(scope: viewScope, seenIds: &seenMovies, progress: progress)
+        if areas.contains(.movies) {
+            try await syncJellyfinCategories(views: movieViews, type: .vod, playlistId: playlistId)
+            await progress?.start(.movies)
+            var seenMovies = Set<String>()
+            for view in movieViews {
+                let viewScope = scope(connection, playlistId: playlistId, view: view, type: .vod)
+                try await syncJellyfinMovies(scope: viewScope, seenIds: &seenMovies, progress: progress)
+            }
+            pruneJellyfinMovies(playlistId: playlistId, flavor: flavor, seenIds: seenMovies, fetched: !movieViews.isEmpty)
+            await progress?.complete(.movies)
         }
-        pruneJellyfinMovies(playlistId: playlistId, flavor: flavor, seenIds: seenMovies, fetched: !movieViews.isEmpty)
-        await progress?.complete(.movies)
 
-        await progress?.start(.series)
-        var seenSeries = Set<String>()
-        var seenEpisodes = Set<String>()
-        for view in showViews {
-            let viewScope = scope(connection, playlistId: playlistId, view: view, type: .series)
-            try await syncJellyfinShows(scope: viewScope, seenSeries: &seenSeries, seenEpisodes: &seenEpisodes, progress: progress)
+        if areas.contains(.series) {
+            try await syncJellyfinCategories(views: showViews, type: .series, playlistId: playlistId)
+            await progress?.start(.series)
+            var seenSeries = Set<String>()
+            var seenEpisodes = Set<String>()
+            for view in showViews {
+                let viewScope = scope(connection, playlistId: playlistId, view: view, type: .series)
+                try await syncJellyfinShows(scope: viewScope, seenSeries: &seenSeries, seenEpisodes: &seenEpisodes, progress: progress)
+            }
+            pruneJellyfinSeries(playlistId: playlistId, flavor: flavor, seenSeries: seenSeries, seenEpisodes: seenEpisodes, fetched: !showViews.isEmpty)
+            await progress?.complete(.series)
         }
-        pruneJellyfinSeries(playlistId: playlistId, flavor: flavor, seenSeries: seenSeries, seenEpisodes: seenEpisodes, fetched: !showViews.isEmpty)
-        await progress?.complete(.series)
 
         markPlaylistUpdated(playlistId)
     }
@@ -130,7 +142,7 @@ extension ContentSyncManager {
         scope: JellyfinViewScope,
         progress: SyncProgress?,
         unit: String,
-        body: ([JellyfinItem]) -> Void
+        body: ([JellyfinItem]) throws -> Void
     ) async throws -> Int {
         var startIndex = 0
         var total = Int.max
@@ -143,7 +155,7 @@ extension ContentSyncManager {
             )
             total = page.totalRecordCount
             if !page.items.isEmpty {
-                body(page.items)
+                try body(page.items)
             }
             fetched += page.items.count
             startIndex += page.items.count
@@ -161,14 +173,10 @@ extension ContentSyncManager {
     /// authenticate without logging in again. A rotated or revoked token is
     /// simply replaced on the next sync, which always logs in first.
     private func persistJellyfinSession(_ session: JellyfinSession, playlistId: UUID) {
-        let context = ModelContext(modelContainer)
-        context.autosaveEnabled = false
-        guard let playlist = try? context.fetch(
-            FetchDescriptor<Playlist>(predicate: #Predicate { $0.id == playlistId })
-        ).first else { return }
-        playlist.jellyfinAccessToken = session.accessToken
-        playlist.jellyfinUserId = session.userId
-        try? context.save()
+        updatePlaylist(playlistId) { playlist in
+            playlist.jellyfinAccessToken = session.accessToken
+            playlist.jellyfinUserId = session.userId
+        }
     }
 
     // MARK: - Categories
@@ -192,11 +200,9 @@ extension ContentSyncManager {
                 if existing.sortOrder != index {
                     existing.sortOrder = index
                 }
-                existing.lastRefreshed = Date()
             } else {
                 let category = Category(apiId: view.id, name: view.name, parentId: 0, type: type, playlist: playlist)
                 category.sortOrder = index
-                category.lastRefreshed = Date()
                 context.insert(category)
             }
         }
@@ -204,9 +210,7 @@ extension ContentSyncManager {
             try context.save()
         }
 
-        if !views.isEmpty {
-            pruneStaleCategories(playlistId: playlistId, type: type, seenApiIds: Set(views.map(\.id)))
-        }
+        pruneCategories(playlistId: playlistId, type: type, seenApiIds: Set(views.map(\.id)), importedCount: views.count)
     }
 
     // MARK: - Movies
@@ -214,7 +218,7 @@ extension ContentSyncManager {
     private func syncJellyfinMovies(scope: JellyfinViewScope, seenIds: inout Set<String>, progress: SyncProgress?) async throws {
         var seen = seenIds
         let fetched = try await pageThroughJellyfinItems(types: ["Movie"], scope: scope, progress: progress, unit: "movie(s)") { items in
-            seen.formUnion(upsertJellyfinMovies(items, scope: scope))
+            try seen.formUnion(upsertJellyfinMovies(items, scope: scope))
         }
         seenIds = seen
         Logger.database.info("\(scope.flavor.displayName, privacy: .public) movies synced for library \(scope.view.name, privacy: .public): \(fetched, privacy: .public) item(s)")
@@ -223,7 +227,7 @@ extension ContentSyncManager {
     /// Upserts one page of movies, returning the ids it saw for the prune
     /// sweep. A set (not an inout) so the paging loop can feed pages through a
     /// closure, which cannot capture an inout parameter.
-    private func upsertJellyfinMovies(_ items: [JellyfinItem], scope: JellyfinViewScope) -> Set<String> {
+    private func upsertJellyfinMovies(_ items: [JellyfinItem], scope: JellyfinViewScope) throws -> Set<String> {
         let context = ModelContext(modelContainer)
         context.autosaveEnabled = false
         let ids = items.map { scope.idPrefix + $0.id }
@@ -239,13 +243,13 @@ extension ContentSyncManager {
             if let found = lookup[id] {
                 movie = found
             } else {
-                movie = Movie(id: id, streamId: Self.mediaServerHash(item.id), name: item.name ?? "")
+                movie = Movie(id: id, streamId: M3UIdentity.numericId(for: item.id), name: item.name ?? "")
                 context.insert(movie)
             }
             applyJellyfinMovieFields(item, to: movie, scope: scope)
         }
         if context.hasChanges {
-            try? context.save()
+            try context.save()
         }
         return Set(ids)
     }
@@ -321,23 +325,17 @@ extension ContentSyncManager {
 
     /// Removes movies the server no longer lists. Gated on `fetched`: an empty
     /// library list is the transient-failure signature, and sweeping then
-    /// would drop the whole catalog.
+    /// would drop the whole catalog. Past that, the paged, coverage-gated
+    /// sweep in `ContentSyncManager+Prune.swift`, scoped to the flavour's own
+    /// id prefix so rows of any other source are never read.
     private func pruneJellyfinMovies(playlistId: UUID, flavor: MediaServerFlavor, seenIds: Set<String>, fetched: Bool) {
         guard fetched else { return }
-        let context = ModelContext(modelContainer)
-        context.autosaveEnabled = false
-        let prefix = playlistId.uuidString
-        let rows = (try? context.fetch(FetchDescriptor<Movie>(
-            predicate: #Predicate { $0.id.starts(with: prefix) }
-        ))) ?? []
-        // Only rows this pipeline owns carry the flavour infix; anything else
-        // under the prefix belongs to another source and is left alone.
-        let infix = "-\(flavor.idInfix)-"
-        for movie in rows where movie.id.contains(infix) && !seenIds.contains(movie.id) {
-            context.delete(movie)
-        }
-        if context.hasChanges {
-            try? context.save()
-        }
+        pruneMovies(playlistId: playlistId, idPrefix: Self.mediaServerIdPrefix(playlistId, flavor: flavor), seenIds: seenIds)
+    }
+
+    /// The prefix every row of `flavor` for this playlist carries — the same
+    /// string `JellyfinViewScope.idPrefix` builds.
+    nonisolated static func mediaServerIdPrefix(_ playlistId: UUID, flavor: MediaServerFlavor) -> String {
+        "\(playlistId.uuidString)-\(flavor.idInfix)-"
     }
 }

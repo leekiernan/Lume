@@ -21,7 +21,7 @@ extension ContentSyncManager {
         var shells = JellyfinShellIndex()
         var seen = seenSeries
         _ = try await pageThroughJellyfinItems(types: ["Series"], scope: scope, progress: nil, unit: "series") { items in
-            seen.formUnion(upsertJellyfinSeries(items, scope: scope))
+            try seen.formUnion(upsertJellyfinSeries(items, scope: scope))
             shells.insert(items)
         }
 
@@ -33,7 +33,7 @@ extension ContentSyncManager {
         var seenEp = seenEpisodes
         let resolvedShells = shells
         let episodeCount = try await pageThroughJellyfinItems(types: ["Episode"], scope: scope, progress: progress, unit: "episode(s)") { items in
-            let (series, episodes) = upsertJellyfinEpisodes(items, seriesShells: resolvedShells, scope: scope)
+            let (series, episodes) = try upsertJellyfinEpisodes(items, seriesShells: resolvedShells, scope: scope)
             seen.formUnion(series)
             seenEp.formUnion(episodes)
         }
@@ -42,7 +42,7 @@ extension ContentSyncManager {
         Logger.database.info("\(scope.flavor.displayName, privacy: .public) shows synced for library \(scope.view.name, privacy: .public): \(episodeCount, privacy: .public) episode(s)")
     }
 
-    private func upsertJellyfinSeries(_ items: [JellyfinItem], scope: JellyfinViewScope) -> Set<String> {
+    private func upsertJellyfinSeries(_ items: [JellyfinItem], scope: JellyfinViewScope) throws -> Set<String> {
         let context = ModelContext(modelContainer)
         context.autosaveEnabled = false
         let ids = items.map { scope.idPrefix + $0.id }
@@ -54,13 +54,13 @@ extension ContentSyncManager {
             if let found = lookup[id] {
                 series = found
             } else {
-                series = Series(id: id, seriesId: Self.mediaServerHash(item.id), name: item.name ?? "")
+                series = Series(id: id, seriesId: M3UIdentity.numericId(for: item.id), name: item.name ?? "")
                 context.insert(series)
             }
             applyJellyfinSeriesFields(item, to: series, scope: scope)
         }
         if context.hasChanges {
-            try? context.save()
+            try context.save()
         }
         return Set(ids)
     }
@@ -133,13 +133,13 @@ extension ContentSyncManager {
                 return seriesId
             }
             if let name = item.seriesName, !name.isEmpty {
-                return byName[name]?.id ?? "name-\(ContentSyncManager.mediaServerHash(name))"
+                return byName[name]?.id ?? "name-\(M3UIdentity.numericId(for: name))"
             }
             return item.seriesId ?? item.id
         }
     }
 
-    private func upsertJellyfinEpisodes(_ items: [JellyfinItem], seriesShells: JellyfinShellIndex, scope: JellyfinViewScope) -> (series: Set<String>, episodes: Set<String>) {
+    private func upsertJellyfinEpisodes(_ items: [JellyfinItem], seriesShells: JellyfinShellIndex, scope: JellyfinViewScope) throws -> (series: Set<String>, episodes: Set<String>) {
         let context = ModelContext(modelContainer)
         context.autosaveEnabled = false
 
@@ -159,7 +159,7 @@ extension ContentSyncManager {
             applyJellyfinEpisodeFields(item, to: episode, series: series, scope: scope)
         }
         if context.hasChanges {
-            try? context.save()
+            try context.save()
         }
         return (seenSeries, Set(episodeIds))
     }
@@ -180,7 +180,7 @@ extension ContentSyncManager {
             return found
         }
         let shellName = item.seriesName ?? seriesShells.byId[shellJellyfinId]?.name ?? item.name ?? ""
-        let series = Series(id: seriesId, seriesId: Self.mediaServerHash(shellJellyfinId), name: shellName)
+        let series = Series(id: seriesId, seriesId: M3UIdentity.numericId(for: shellJellyfinId), name: shellName)
         if let shell = seriesShells.byId[shellJellyfinId] {
             applyJellyfinSeriesFields(shell, to: series, scope: scope)
         } else if series.categoryId != scope.categoryId {
@@ -271,42 +271,14 @@ extension ContentSyncManager {
         }
     }
 
+    /// Removes shows, and episodes of surviving shows, the server no longer
+    /// lists. Same `fetched` gate and guarded paged sweeps as
+    /// `pruneJellyfinMovies`: unseen series first (episodes and cast cascade),
+    /// then whatever a surviving show dropped, on the episodes' own id range.
     func pruneJellyfinSeries(playlistId: UUID, flavor: MediaServerFlavor, seenSeries: Set<String>, seenEpisodes: Set<String>, fetched: Bool) {
         guard fetched else { return }
-        let context = ModelContext(modelContainer)
-        context.autosaveEnabled = false
-        let prefix = playlistId.uuidString
-        let rows = (try? context.fetch(FetchDescriptor<Series>(
-            predicate: #Predicate { $0.id.starts(with: prefix) }
-        ))) ?? []
-        let infix = "-\(flavor.idInfix)-"
-        for series in rows where series.id.contains(infix) {
-            if seenSeries.contains(series.id) {
-                // The shell survives, but dropped episodes don't: delete them
-                // explicitly (no cascade from a surviving parent).
-                for episode in series.episodes where !seenEpisodes.contains(episode.id) {
-                    context.delete(episode)
-                }
-            } else {
-                // Episodes and cast cascade from the deleted series.
-                context.delete(series)
-            }
-        }
-        if context.hasChanges {
-            try? context.save()
-        }
-    }
-
-    /// Stable string→Int for the `streamId`/`seriesId` columns a media server
-    /// has no number for. FNV-1a, not `Hasher` — the latter is seeded per
-    /// process, so ids would change on every launch and orphan user state.
-    /// Only ever used as an opaque key: playback builds from `directURL`.
-    nonisolated static func mediaServerHash(_ string: String) -> Int {
-        var hash: UInt64 = 14_695_981_039_346_656_037
-        for byte in string.utf8 {
-            hash ^= UInt64(byte)
-            hash = hash &* 1_099_511_628_211
-        }
-        return Int(truncatingIfNeeded: Int64(bitPattern: hash & 0x7FFF_FFFF_FFFF_FFFF))
+        let idPrefix = Self.mediaServerIdPrefix(playlistId, flavor: flavor)
+        pruneSeries(playlistId: playlistId, idPrefix: idPrefix, seenIds: seenSeries)
+        pruneEpisodes(playlistId: playlistId, idPrefix: idPrefix, seenIds: seenEpisodes)
     }
 }

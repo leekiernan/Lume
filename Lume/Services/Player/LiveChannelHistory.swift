@@ -119,11 +119,16 @@ enum LiveChannelHistory {
         playlistPrefix: String? = nil,
         batchSize: Int
     ) throws {
-        let channels = try context.fetch(FetchDescriptor<LiveStream>(
-            predicate: #Predicate { $0.lastWatchedDate != nil }
-        ))
+        // Scoped in the predicate itself: `starts(with:)` is a range seek on the
+        // unique `id` index, so no other playlist's channels are hydrated.
+        let predicate: Predicate<LiveStream> = if let playlistPrefix {
+            #Predicate { $0.id.starts(with: playlistPrefix) && $0.lastWatchedDate != nil }
+        } else {
+            #Predicate { $0.lastWatchedDate != nil }
+        }
+        let channels = try context.fetch(FetchDescriptor<LiveStream>(predicate: predicate))
         var cleared = 0
-        for channel in channels where playlistPrefix.map({ channel.id.hasPrefix($0) }) ?? true {
+        for channel in channels {
             channel.lastWatchedDate = nil
             cleared += 1
             if cleared.isMultiple(of: batchSize) { try context.save() }

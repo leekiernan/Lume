@@ -15,6 +15,14 @@ import OSLog
 /// Mutable registries that live across import batches: which categories exist,
 /// which series have been created, and running provider-order counters.
 final nonisolated class M3UImportState {
+    /// The content areas this import writes and sweeps; entries of any other
+    /// area are dropped (see `M3UClassifiedBatch.restricted(to:)`).
+    let areas: Set<AppArea>
+
+    init(areas: Set<AppArea>) {
+        self.areas = areas
+    }
+
     /// Ensured category unique-ids, keyed by "\(typeRaw)|\(groupName)".
     var knownCategories: Set<String> = []
     /// Next first-appearance sort order per category type.

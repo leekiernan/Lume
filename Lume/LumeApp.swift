@@ -237,8 +237,8 @@ struct LumeApp: App {
                     // via the per-app language override in iOS Settings), drop
                     // cached TMDB enrichment so detail views re-fetch text,
                     // videos and artwork in the new language.
-                    TMDBLanguageWatcher.invalidateEnrichmentIfLanguageChanged(
-                        in: catalogContainer.mainContext
+                    await TMDBLanguageWatcher.invalidateEnrichmentIfLanguageChanged(
+                        container: catalogContainer
                     )
 
                     // Resolve the active profile and claim any pre-profiles

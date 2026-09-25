@@ -36,44 +36,41 @@ extension ContentSyncManager {
 // MARK: - Helper Methods
 
 extension ContentSyncManager {
-    func markPlaylistError(playlistId: UUID) {
-        let errContext = ModelContext(modelContainer)
-        errContext.autosaveEnabled = false
-        if let epl = try? errContext.fetch(
-            FetchDescriptor<Playlist>(predicate: #Predicate { $0.id == playlistId })
-        ).first {
-            epl.syncStatus = .error
-            try? errContext.save()
-        }
-    }
-
-    /// Restores a playlist to `.idle` after an aborted sync, leaving whatever was
-    /// already synced in place so the next attempt can pick up cleanly.
-    func markPlaylistIdle(playlistId: UUID) {
-        let context = ModelContext(modelContainer)
-        context.autosaveEnabled = false
-        if let playlist = try? context.fetch(
-            FetchDescriptor<Playlist>(predicate: #Predicate { $0.id == playlistId })
-        ).first {
-            playlist.syncStatus = .idle
-            try? context.save()
-        }
-    }
-
-    func updatePlaylistInfo(_ playlistId: UUID, with authResponse: XtreamAuthResponse) {
+    /// Fetches `playlistId` on a fresh autosave-off context, applies `mutate`
+    /// and saves. The playlist-bookkeeping writes all share this shape, and all
+    /// of them are best-effort: a playlist deleted mid-sync is simply skipped,
+    /// and a failed save leaves the previous values in place.
+    func updatePlaylist(_ playlistId: UUID, _ mutate: (Playlist) -> Void) {
         let context = ModelContext(modelContainer)
         context.autosaveEnabled = false
         guard let playlist = try? context.fetch(
             FetchDescriptor<Playlist>(predicate: #Predicate { $0.id == playlistId })
         ).first else { return }
+        mutate(playlist)
+        if context.hasChanges {
+            try? context.save()
+        }
+    }
 
-        playlist.userStatus = authResponse.userInfo.status
-        playlist.maxConnections = authResponse.userInfo.maxConnections
-        playlist.activeConnections = authResponse.userInfo.activeCons
-        playlist.expDate = authResponse.userInfo.expDate
-        playlist.serverTimezone = authResponse.serverInfo.timezone
-        playlist.lastUpdated = Date()
-        try? context.save()
+    func markPlaylistError(playlistId: UUID) {
+        updatePlaylist(playlistId) { $0.syncStatus = .error }
+    }
+
+    /// Restores a playlist to `.idle` after an aborted sync, leaving whatever was
+    /// already synced in place so the next attempt can pick up cleanly.
+    func markPlaylistIdle(playlistId: UUID) {
+        updatePlaylist(playlistId) { $0.syncStatus = .idle }
+    }
+
+    func updatePlaylistInfo(_ playlistId: UUID, with authResponse: XtreamAuthResponse) {
+        updatePlaylist(playlistId) { playlist in
+            playlist.userStatus = authResponse.userInfo.status
+            playlist.maxConnections = authResponse.userInfo.maxConnections
+            playlist.activeConnections = authResponse.userInfo.activeCons
+            playlist.expDate = authResponse.userInfo.expDate
+            playlist.serverTimezone = authResponse.serverInfo.timezone
+            playlist.lastUpdated = Date()
+        }
     }
 
     // MARK: - Existing-row lookups for in-place upsert
@@ -240,16 +237,19 @@ extension ContentSyncManager {
         }
     }
 
+    /// This playlist's categories of `type`, keyed by provider `apiId`. The
+    /// `"<playlist>-<type>-"` id prefix scopes both at once, and `starts(with:)`
+    /// compiles to a range seek on the unique `id` index — no other playlist's
+    /// rows are read.
     func buildExistingCategoryLookup(context: ModelContext, playlistId: UUID, type: CategoryType) -> [String: Category] {
         let prefix = "\(playlistId.uuidString)-\(type.rawValue)-"
-        let typeRaw = type.rawValue
         let descriptor = FetchDescriptor<Category>(
-            predicate: #Predicate { $0.typeRaw == typeRaw }
+            predicate: #Predicate { $0.id.starts(with: prefix) }
         )
-        guard let allCategories = try? context.fetch(descriptor) else { return [:] }
+        guard let categories = try? context.fetch(descriptor) else { return [:] }
         var lookup: [String: Category] = [:]
-        lookup.reserveCapacity(allCategories.count)
-        for category in allCategories where category.id.hasPrefix(prefix) {
+        lookup.reserveCapacity(categories.count)
+        for category in categories {
             lookup[category.apiId] = category
         }
         return lookup
