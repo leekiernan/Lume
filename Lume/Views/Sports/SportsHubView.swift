@@ -213,7 +213,6 @@ struct SportsHubView: View {
         SportsSyncService.shared.refreshMissing()
         SportsSyncService.shared.catchUpIfStale()
         SportsSyncService.shared.beginLivePolling()
-        Task { await EPGSyncService.shared.refreshIfMissingSubtitles() }
     }
 
     /// Resolves the currently visible fixtures to the viewer's channels in one
