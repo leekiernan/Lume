@@ -5,7 +5,6 @@ import SwiftUI
 /// bodies. `controlsVisible` and the seek action are passed in because each body
 /// owns them differently — the tvOS body also restores remote focus after a
 /// skip, the iOS/macOS body seeks straight through the coordinator.
-@available(iOS 16.0, macOS 13.0, tvOS 16.0, *)
 extension KSPlayerEngineView {
     func episodeOverlays(
         controlsVisible: Bool,

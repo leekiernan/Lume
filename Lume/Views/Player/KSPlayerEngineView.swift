@@ -10,7 +10,6 @@ import SwiftUI
 /// Apple-TV-style overlay the VLCKit engine uses — via the `KSTVPlaybackEngine`
 /// adapter, so both engines present an identical player UI. On iOS / macOS it
 /// layers its own Apple-style controls (`KSPlayerControlsOverlay`).
-@available(iOS 16.0, macOS 13.0, tvOS 16.0, *)
 struct KSPlayerEngineView: View {
     let media: PlayableMedia
     /// High-frequency playback clock, threaded down as the `@Observable` object

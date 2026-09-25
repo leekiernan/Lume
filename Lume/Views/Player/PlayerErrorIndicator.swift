@@ -14,7 +14,6 @@ import SwiftUI
 /// Centered "playback failed" overlay. `title` is the stream name (shown so the
 /// viewer knows which stream failed); `onRetry` re-prepares the stream in place
 /// and `onClose` leaves the player.
-@available(iOS 16.0, macOS 13.0, tvOS 16.0, *)
 struct PlayerErrorIndicator: View {
     let title: String?
     let onRetry: () -> Void
