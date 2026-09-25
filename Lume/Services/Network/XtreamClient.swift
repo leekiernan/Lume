@@ -10,7 +10,7 @@ import OSLog
 
 // MARK: - XtreamClient
 
-class XtreamClient: APIClient {
+class XtreamClient {
     nonisolated struct Configuration {
         let serverURL: String
         let username: String
