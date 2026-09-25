@@ -16,7 +16,27 @@ struct SportsHubGrouping {
     let segment: SportsHubSegment
     let follows: [SportsFollow]
     let store: SportsStore
-    var now: Date = .init()
+    let now: Date
+    /// Followed team / league keys, built once per grouping rather than per
+    /// fixture — `involvesFollowedTeam` runs for every fixture on screen.
+    let followedTeamKeys: Set<String>
+    let followedLeagueKeys: Set<String>
+
+    init(
+        scope: SportsHubScope,
+        segment: SportsHubSegment,
+        follows: [SportsFollow],
+        store: SportsStore,
+        now: Date = .init()
+    ) {
+        self.scope = scope
+        self.segment = segment
+        self.follows = follows
+        self.store = store
+        self.now = now
+        followedTeamKeys = Set(follows.filter { $0.kind == .team }.map(\.key))
+        followedLeagueKeys = Set(follows.filter { $0.kind == .league }.map(\.key))
+    }
 
     /// The league ids the current scope draws from: one for a league scope, or
     /// every followed league plus the league of each followed team (deduped,
@@ -31,14 +51,6 @@ struct SportsHubGrouping {
     /// full list, not just the league currently selected.
     var followedLeagues: [SportsLeague] {
         SportsRailPlanner.displayLeagueIds(for: follows).compactMap { SportsCatalog.league(id: $0) }
-    }
-
-    var followedTeamKeys: Set<String> {
-        Set(follows.filter { $0.kind == .team }.map(\.key))
-    }
-
-    var followedLeagueKeys: Set<String> {
-        Set(follows.filter { $0.kind == .league }.map(\.key))
     }
 
     var scopeIsLeague: Bool {
@@ -74,14 +86,9 @@ struct SportsHubGrouping {
         return byID.values.sorted(by: SportsFixture.displayOrder)
     }
 
-    /// The display groups the sections view renders. Upcoming groups by day;
+    /// The display groups the sections view renders, for the `visibleFixtures`
+    /// the caller computed once per render. Upcoming groups by day;
     /// Today/Yesterday group by "My Teams" then followed league.
-    var groups: [SportsFixtureGroup] {
-        groups(for: visibleFixtures)
-    }
-
-    /// The display groups for an already-resolved fixture set, so a caller that has
-    /// computed `visibleFixtures` once per render need not recompute it here.
     func groups(for fixtures: [SportsFixture]) -> [SportsFixtureGroup] {
         if segment == .upcoming {
             return SportsFixtureGroup.byDay(fixtures)
