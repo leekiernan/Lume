@@ -125,6 +125,11 @@ import VLCKit
             }
         }
 
+        /// ∓15 s, or a drop-in minute on catch-up.
+        private var skipStep: PlayerSkipStep {
+            PlayerSkipStep(seconds: media.skipInterval(default: 15))
+        }
+
         private func transportRow(spacing: CGFloat) -> some View {
             HStack(spacing: spacing) {
                 if itemNeighbours.axis != nil {
@@ -138,13 +143,13 @@ import VLCKit
 
                 if !media.isLive {
                     Button {
-                        coordinator.skip(by: -15)
+                        coordinator.skip(by: -skipStep.seconds)
                         onResetHideTimer()
                     } label: {
-                        circleGlyph("gobackward.15", size: 22, diameter: 60)
+                        circleGlyph(skipStep.backSymbol, size: 22, diameter: 60)
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("Skip back 15 seconds")
+                    .accessibilityLabel(skipStep.backLabel)
                 }
 
                 Button(action: onTogglePlay) {
@@ -159,13 +164,13 @@ import VLCKit
 
                 if !media.isLive {
                     Button {
-                        coordinator.skip(by: 15)
+                        coordinator.skip(by: skipStep.seconds)
                         onResetHideTimer()
                     } label: {
-                        circleGlyph("goforward.15", size: 22, diameter: 60)
+                        circleGlyph(skipStep.forwardSymbol, size: 22, diameter: 60)
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("Skip forward 15 seconds")
+                    .accessibilityLabel(skipStep.forwardLabel)
                 }
 
                 if itemNeighbours.axis != nil {

@@ -281,8 +281,8 @@ struct LumeEngineEngineView: View {
                     }
                 }
             }
-            .onKeyPress(.leftArrow) { coordinator.skip(by: -15); resetHideTimer(); return .handled }
-            .onKeyPress(.rightArrow) { coordinator.skip(by: 15); resetHideTimer(); return .handled }
+            .onKeyPress(.leftArrow) { coordinator.skip(by: -media.skipInterval(default: 15)); resetHideTimer(); return .handled }
+            .onKeyPress(.rightArrow) { coordinator.skip(by: media.skipInterval(default: 15)); resetHideTimer(); return .handled }
             .liveChannelKeyNavigation(
                 neighbours: itemNeighbours, swapper: mediaSwapper,
                 onSelect: { onSelectMedia?($0) }, onResetHideTimer: resetHideTimer

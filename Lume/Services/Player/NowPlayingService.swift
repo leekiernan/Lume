@@ -201,12 +201,14 @@ final class NowPlayingService {
             guard let self, let event = event as? MPChangePlaybackPositionCommandEvent else { return .commandFailed }
             return remoteSeek(to: event.positionTime)
         }
-        center.skipForwardCommand.preferredIntervals = [15]
+        // A drop-in minute on catch-up, like the on-screen skip buttons.
+        let skipInterval = NSNumber(value: media.skipInterval(default: 15))
+        center.skipForwardCommand.preferredIntervals = [skipInterval]
         addTarget(center.skipForwardCommand) { [weak self] event in
             guard let self, let event = event as? MPSkipIntervalCommandEvent else { return .commandFailed }
             return remoteSeek(to: (clock?.current ?? 0) + event.interval)
         }
-        center.skipBackwardCommand.preferredIntervals = [15]
+        center.skipBackwardCommand.preferredIntervals = [skipInterval]
         addTarget(center.skipBackwardCommand) { [weak self] event in
             guard let self, let event = event as? MPSkipIntervalCommandEvent else { return .commandFailed }
             return remoteSeek(to: max(0, (clock?.current ?? 0) - event.interval))
