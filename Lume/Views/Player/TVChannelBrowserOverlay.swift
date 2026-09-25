@@ -10,8 +10,8 @@
 //  focused channel. The playing channel's category and the channel itself are
 //  pre-selected; moving focus across categories loads their channels in place,
 //  and selecting a channel switches the stream without leaving the player.
-//  Channels with an archive (`tvArchive`) are flagged, and their guide lets the
-//  viewer pick an already-aired programme to replay via catch-up.
+//  Channels that can serve catch-up (`LiveStream.supportsCatchup`) are flagged,
+//  and their guide lets the viewer pick an already-aired programme to replay.
 //
 
 #if os(tvOS)
@@ -262,7 +262,7 @@
 
                 // Flag channels with an archive so the viewer knows the guide
                 // column offers replays before they move into it.
-                if channel.tvArchive > 0 {
+                if channel.supportsCatchup {
                     Image(systemName: "clock.arrow.circlepath")
                         .font(.system(size: 18, weight: .semibold))
                         .foregroundStyle(.blue)
@@ -286,12 +286,16 @@
                     .padding(.vertical, 40)
             } else {
                 let now = Date()
-                let hasCatchup = (guideStream?.tvArchive ?? 0) > 0
+                let stream = guideStream
                 ForEach(guideEntries) { entry in
                     Button {
                         selectGuide(entry)
                     } label: {
-                        guideRowLabel(entry, now: now, hasCatchup: hasCatchup)
+                        guideRowLabel(
+                            entry,
+                            now: now,
+                            canReplay: stream?.isCatchupAvailable(start: entry.start, now: now) ?? false
+                        )
                     }
                     .buttonStyle(TVBrowserRowStyle(isSelected: entry.isLive(at: now)))
                     .focused($focus, equals: .guide(entry.id))
@@ -300,12 +304,13 @@
             }
         }
 
-        private func guideRowLabel(_ entry: GuideEntry, now: Date, hasCatchup: Bool) -> some View {
+        private func guideRowLabel(_ entry: GuideEntry, now: Date, canReplay: Bool) -> some View {
             let isLive = entry.isLive(at: now)
             let isPast = entry.isPast(at: now)
-            // A past programme is replayable only on a catch-up channel; the live
-            // one always plays; an upcoming one can't be played yet.
-            let playable = isLive || (isPast && hasCatchup)
+            // A past programme is replayable only inside the channel's catch-up
+            // archive; the live one always plays; an upcoming one can't be
+            // played yet.
+            let playable = isLive || (isPast && canReplay)
             return HStack(spacing: 16) {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(entry.title)
@@ -323,7 +328,7 @@
 
                 Spacer(minLength: 0)
 
-                if isPast, hasCatchup {
+                if isPast, canReplay {
                     Image(systemName: "play.circle")
                         .font(.system(size: 24, weight: .semibold))
                         .foregroundStyle(.blue)
@@ -394,13 +399,29 @@
             selectedSectionID = initialID
             if let initialID, let section = rail.first(where: { $0.id == initialID }) {
                 channels = fetchChannels(scope: section.scope)
-                nowTitles = TVPlayerContent.nowProgrammeTitles(for: channels, in: modelContext)
+                loadNowTitles(for: channels)
             }
 
             // Fill the guide column with the playing channel up front, so the
             // third column isn't blank before focus first settles on a channel.
             if let currentChannelID, channels.contains(where: { $0.id == currentChannelID }) {
-                loadGuide(channelID: currentChannelID)
+                guideLoadTask = Task { @MainActor in
+                    await loadGuide(channelID: currentChannelID)
+                }
+            }
+        }
+
+        /// Fills the channel column's "on now" lines off the main actor. Guarded
+        /// on the column still holding the same channels, so a slow result for a
+        /// category the viewer already swept past doesn't land on the next one.
+        private func loadNowTitles(for loaded: [LiveStream]) {
+            nowTitles = [:]
+            let container = modelContext.container
+            let ids = loaded.map(\.id)
+            Task { @MainActor in
+                let titles = await TVPlayerContent.nowProgrammeTitles(for: loaded, container: container)
+                guard channels.map(\.id) == ids else { return }
+                nowTitles = titles
             }
         }
 
@@ -431,9 +452,10 @@
                       let section = sections.first(where: { $0.id == sectionID }) else { return }
                 selectedSectionID = sectionID
                 channels = fetchChannels(scope: section.scope)
-                nowTitles = TVPlayerContent.nowProgrammeTitles(for: channels, in: modelContext)
+                loadNowTitles(for: channels)
                 // The previous channel's guide no longer belongs to this column;
                 // clear it until focus lands on a channel in the new category.
+                guideLoadTask?.cancel()
                 guideChannelID = nil
                 guideEntries = []
             }
@@ -448,23 +470,28 @@
             guideLoadTask = Task { @MainActor in
                 try? await Task.sleep(nanoseconds: 150_000_000)
                 guard !Task.isCancelled else { return }
-                loadGuide(channelID: channelID)
+                await loadGuide(channelID: channelID)
             }
         }
 
-        /// Fetch the focused channel's guide. Catch-up channels reach back over
-        /// their archive window so aired programmes are replayable; others show
-        /// only what's on now and next.
-        private func loadGuide(channelID: String) {
-            guideChannelID = channelID
+        /// Fetch the focused channel's guide, off the main actor. Catch-up
+        /// channels reach back over their archive window so aired programmes
+        /// are replayable; others start at what's on now.
+        private func loadGuide(channelID: String) async {
             guard let stream = channels.first(where: { $0.id == channelID }) else {
+                guideChannelID = channelID
                 guideEntries = []
                 return
             }
-            let archiveDays = stream.tvArchive > 0 ? max(1, stream.tvArchiveDuration) : 0
-            let listings = TVPlayerContent.guideListings(
-                channelId: stream.epgChannelId, archiveDays: archiveDays, in: modelContext
+            let archiveDays = stream.supportsCatchup ? stream.catchupArchiveDays : 0
+            let listings = await TVPlayerContent.guideListings(
+                channelId: stream.epgChannelId, archiveDays: archiveDays, container: modelContext.container
             )
+            // Focus moved on while the fetch ran: the next load owns the column.
+            guard !Task.isCancelled else { return }
+            // The channel and its entries swap together, so the column never
+            // pairs one channel's programmes with another's catch-up rules.
+            guideChannelID = channelID
             guideEntries = listings.map {
                 GuideEntry(id: $0.id, title: $0.title, start: $0.start, end: $0.end)
             }
@@ -518,7 +545,7 @@
             let now = Date()
             if entry.isLive(at: now) {
                 select(channel: stream)
-            } else if entry.isPast(at: now) {
+            } else if entry.isPast(at: now), stream.isCatchupAvailable(start: entry.start, now: now) {
                 guard let target = PlayableMedia.catchup(
                     stream: stream,
                     playlist: playlist,

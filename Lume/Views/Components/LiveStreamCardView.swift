@@ -82,7 +82,7 @@ struct LiveStreamCardView: View {
                                 .foregroundStyle(.tertiary)
                         }
                     }
-                } else if stream.epgChannelId != nil {
+                } else if stream.epgChannelId?.isEmpty == false {
                     Text("No EPG data")
                         .font(.caption)
                         .foregroundStyle(.tertiary)
@@ -92,10 +92,10 @@ struct LiveStreamCardView: View {
                         .foregroundStyle(.secondary)
                 }
 
-                if stream.tvArchive > 0 {
+                if stream.supportsCatchup {
                     HStack(spacing: 4) {
                         Image(systemName: "clock.arrow.circlepath")
-                        Text("Catchup: \(stream.tvArchiveDuration)d")
+                        Text("Catchup: \(stream.catchupArchiveDays)d")
                     }
                     .font(.caption2)
                     .foregroundStyle(.blue)

@@ -443,7 +443,6 @@
                 selfResolved = await SportsChannelResolver.resolve(
                     container: modelContext.container,
                     fixtures: [fixture],
-                    now: Date(),
                     restriction: restriction
                 )[fixture.id] ?? []
             }

@@ -7,7 +7,8 @@
 //  predicates and a partial `propertiesToFetch`, both of which an in-memory
 //  store evaluates in Swift and so cannot prove). Covers exclusion of hidden and
 //  restricted channels, the kickoff-window bound, the source-tier ordering,
-//  channel-name fallback, remembered picks, and single-vs-ambiguous confidence.
+//  channel-name fallback, remembered picks, single-vs-ambiguous confidence, and
+//  competitor-less events (race sessions, fight cards).
 //
 
 import Foundation
@@ -101,7 +102,7 @@ struct SportsChannelResolverTests {
         try context.save()
 
         let fixture = bayernVsDortmund(kickoff: kickoff)
-        let result = await SportsChannelResolver.resolve(container: container, fixtures: [fixture], now: kickoff)
+        let result = await SportsChannelResolver.resolve(container: container, fixtures: [fixture])
 
         let channels = try #require(result[fixture.id])
         #expect(channels.count == 1)
@@ -127,7 +128,7 @@ struct SportsChannelResolverTests {
         try context.save()
 
         let fixture = bayernVsDortmund(kickoff: kickoff)
-        let result = await SportsChannelResolver.resolve(container: container, fixtures: [fixture], now: kickoff)
+        let result = await SportsChannelResolver.resolve(container: container, fixtures: [fixture])
 
         let channels = try #require(result[fixture.id])
         #expect(channels.count == 1)
@@ -149,7 +150,7 @@ struct SportsChannelResolverTests {
         try context.save()
 
         let fixture = bayernVsDortmund(kickoff: kickoff)
-        let result = await SportsChannelResolver.resolve(container: container, fixtures: [fixture], now: kickoff)
+        let result = await SportsChannelResolver.resolve(container: container, fixtures: [fixture])
 
         let channels = try #require(result[fixture.id])
         #expect(channels.map(\.source) == [.epgTitleSubtitle, .epgDescription])
@@ -169,7 +170,7 @@ struct SportsChannelResolverTests {
         try context.save()
 
         let fixture = bayernVsDortmund(kickoff: kickoff)
-        let result = await SportsChannelResolver.resolve(container: container, fixtures: [fixture], now: kickoff)
+        let result = await SportsChannelResolver.resolve(container: container, fixtures: [fixture])
 
         #expect((result[fixture.id] ?? []).isEmpty)
     }
@@ -185,7 +186,7 @@ struct SportsChannelResolverTests {
         try context.save()
 
         let fixture = bayernVsDortmund(kickoff: kickoff)
-        let result = await SportsChannelResolver.resolve(container: container, fixtures: [fixture], now: kickoff)
+        let result = await SportsChannelResolver.resolve(container: container, fixtures: [fixture])
 
         let channels = try #require(result[fixture.id])
         #expect(channels.count == 2)
@@ -207,7 +208,7 @@ struct SportsChannelResolverTests {
         let fixture = bayernVsDortmund(kickoff: kickoff)
         let restriction = ContentRestriction(isActive: true, restrictedCategoryIDs: ["adult-cat"])
         let result = await SportsChannelResolver.resolve(
-            container: container, fixtures: [fixture], now: kickoff, restriction: restriction
+            container: container, fixtures: [fixture], restriction: restriction
         )
 
         let channels = try #require(result[fixture.id])
@@ -227,7 +228,7 @@ struct SportsChannelResolverTests {
         try context.save()
 
         let fixture = bayernVsDortmund(kickoff: kickoff)
-        let result = await SportsChannelResolver.resolve(container: container, fixtures: [fixture], now: kickoff)
+        let result = await SportsChannelResolver.resolve(container: container, fixtures: [fixture])
         #expect(result[fixture.id]?.isEmpty == true)
     }
 
@@ -239,7 +240,7 @@ struct SportsChannelResolverTests {
 
         let kickoff = Date()
         let fixture = bayernVsDortmund(kickoff: kickoff)
-        let result = await SportsChannelResolver.resolve(container: container, fixtures: [fixture], now: kickoff)
+        let result = await SportsChannelResolver.resolve(container: container, fixtures: [fixture])
 
         let channels = try #require(result[fixture.id])
         #expect(channels.count == 1)
@@ -262,13 +263,83 @@ struct SportsChannelResolverTests {
 
         let fixture = bayernVsDortmund(kickoff: kickoff)
         let result = await SportsChannelResolver.resolve(
-            container: container, fixtures: [fixture], now: kickoff, picks: picks
+            container: container, fixtures: [fixture], picks: picks
         )
 
         let channels = try #require(result[fixture.id])
         #expect(channels.first?.source == .userPick)
         #expect(channels.first?.stream.epgChannelId == "mine.de")
         #expect(channels.first?.isConfident == true)
+    }
+
+    // MARK: - Competitor-less events
+
+    private func italianGrandPrixQualifying(kickoff: Date) -> SportsFixture {
+        SportsFixture(
+            id: "f1-monza#Qual",
+            leagueId: "espn:racing/f1",
+            leagueName: "Formula 1",
+            leagueAbbreviation: "F1",
+            startDate: kickoff,
+            status: SportsFixtureStatus(state: .scheduled),
+            name: "Italian Grand Prix",
+            shortName: "Italian GP",
+            sessionKind: .qualifying
+        )
+    }
+
+    @Test func `a teamless event matches a programme naming it`() async throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        context.insert(stream("1", name: "Sky Sport F1", epgChannelId: "skyf1.de"))
+        context.insert(stream("2", name: "Cooking TV", epgChannelId: "cook.de"))
+        let kickoff = Date()
+        context.insert(listing(
+            channelId: "skyf1.de", title: "Formula 1: Italian Grand Prix", subtitle: "Qualifying", start: kickoff
+        ))
+        // Shares only the short name's lone token — not enough to match.
+        context.insert(listing(channelId: "cook.de", title: "Italian Kitchen", subtitle: "", start: kickoff))
+        try context.save()
+
+        let fixture = italianGrandPrixQualifying(kickoff: kickoff)
+        let result = await SportsChannelResolver.resolve(container: container, fixtures: [fixture])
+
+        let channels = try #require(result[fixture.id])
+        #expect(channels.map(\.stream.epgChannelId) == ["skyf1.de"])
+        #expect(channels[0].source == .epgTitleSubtitle)
+        #expect(channels[0].isConfident)
+    }
+
+    @Test func `a teamless event honours a competition pick`() async throws {
+        let defaults = try #require(UserDefaults(suiteName: UUID().uuidString))
+        let picks = SportsChannelPicks(defaults: defaults)
+
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        context.insert(stream("pick", name: "My Racing Channel", epgChannelId: "mine.de"))
+        try context.save()
+        picks.remember(competitionKey: "espn:racing/f1", channelKey: "mine.de", playlistID: playlistID)
+
+        let kickoff = Date()
+        let fixture = italianGrandPrixQualifying(kickoff: kickoff)
+        let result = await SportsChannelResolver.resolve(container: container, fixtures: [fixture], picks: picks)
+
+        let channels = try #require(result[fixture.id])
+        #expect(channels.map(\.source) == [.userPick])
+        #expect(channels[0].stream.epgChannelId == "mine.de")
+    }
+
+    @Test func `a teamless event falls back to a channel named for it`() async throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        context.insert(stream("1", name: "PPV 1 | Italian Grand Prix", epgChannelId: nil))
+        try context.save()
+
+        let fixture = italianGrandPrixQualifying(kickoff: Date())
+        let result = await SportsChannelResolver.resolve(container: container, fixtures: [fixture])
+
+        let channels = try #require(result[fixture.id])
+        #expect(channels.map(\.source) == [.channelName])
     }
 }
 

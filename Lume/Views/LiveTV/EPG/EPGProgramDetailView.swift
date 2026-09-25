@@ -71,8 +71,8 @@ struct EPGProgramDetailView: View {
                                 .frame(maxWidth: .infinity, alignment: .leading)
                         }
 
-                        if stream.tvArchive > 0 {
-                            Label("Catch-up available for \(stream.tvArchiveDuration) days", systemImage: "clock.arrow.circlepath")
+                        if stream.supportsCatchup {
+                            Label("Catch-up available for \(stream.catchupArchiveDays) days", systemImage: "clock.arrow.circlepath")
                                 .font(.subheadline)
                                 .foregroundStyle(.blue)
                         }
@@ -131,8 +131,8 @@ struct EPGProgramDetailView: View {
                                 .frame(maxWidth: 520)
                         }
 
-                        if stream.tvArchive > 0 {
-                            Label("Catch-up available for \(stream.tvArchiveDuration) days", systemImage: "clock.arrow.circlepath")
+                        if stream.supportsCatchup {
+                            Label("Catch-up available for \(stream.catchupArchiveDays) days", systemImage: "clock.arrow.circlepath")
                                 .font(.system(size: 26))
                                 .foregroundStyle(.blue)
                         }

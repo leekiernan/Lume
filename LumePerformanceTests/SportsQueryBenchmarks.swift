@@ -77,9 +77,8 @@ final class SportsQueryBenchmarks: XCTestCase {
         let semaphore = DispatchSemaphore(value: 0)
         let box = ResultBox()
         let container = store.container
-        let when = kickoff
         Task.detached {
-            box.value = await SportsChannelResolver.resolve(container: container, fixtures: fixtures, now: when)
+            box.value = await SportsChannelResolver.resolve(container: container, fixtures: fixtures)
             semaphore.signal()
         }
         semaphore.wait()

@@ -187,4 +187,16 @@ struct EPGGridBuilderTests {
         let cell = Self.programCell(startMinutes: 30, endMinutes: 60, isGap: true)
         #expect(!cell.isReplayEligible(at: now))
     }
+
+    // MARK: - Clock
+
+    /// The guide's gates compare "now", so it must only move on minute
+    /// boundaries.
+    @Test func `the guide clock is floored to the minute`() {
+        let base = Date(timeIntervalSinceReferenceDate: 60 * 1_000_000)
+        #expect(EPGClock.minute(of: base) == base)
+        #expect(EPGClock.minute(of: base.addingTimeInterval(59.9)) == base)
+        #expect(EPGClock.minute(of: base.addingTimeInterval(60)) == base.addingTimeInterval(60))
+        #expect(EPGClock.nextMinute(after: base.addingTimeInterval(12)) == base.addingTimeInterval(60))
+    }
 }

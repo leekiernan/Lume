@@ -66,8 +66,8 @@
         @State var episodeNav: PlayerItemNavigation.Neighbours = .none
         @State var movie: Movie?
         @State var liveStream: LiveStream?
-        @State var epgNow: EPGListing?
-        @State var epgNext: EPGListing?
+        @State var epgNow: EPGWindowListing?
+        @State var epgNext: EPGWindowListing?
         @State var seriesPlaylist: Playlist?
         @State var recentChannels: [LiveStream] = []
         @State var recentNowTitles: [String: String] = [:]
@@ -135,7 +135,7 @@
                     closePanel()
                 }
             }
-            .task(id: media.id) { resolveContent() }
+            .task(id: media.id) { await resolveContent() }
             .task(id: media.id) { await resolveStreamInfo() }
             .onAppear {
                 // Every time the controls reappear this is a fresh subtree;
@@ -490,7 +490,7 @@
     /// scrubber.
     private struct TVPlayerScrubber: View {
         let isLive: Bool
-        let epgNow: EPGListing?
+        let epgNow: EPGWindowListing?
         /// The high-frequency clock. Held as the `@Observable` object and read
         /// only here, so ticking it invalidates *only* this leaf view — not the
         /// overlay or the engine view above it (see the `@Binding`-to-observable
