@@ -16,10 +16,6 @@ import Foundation
 /// match the stream being played must therefore never win, so every window is
 /// sanity-checked against the engine-reported duration before it is trusted.
 nonisolated enum OutroTrigger {
-    /// The legacy fraction-of-duration arm point, matched to
-    /// `WatchProgressWriter`'s ≥90% "watched" line.
-    static let fallbackFraction = 0.90
-
     /// How far before the end of the file the credits may end and still be
     /// plausible for this encode.
     private static let maxEndSlack: TimeInterval = 90
@@ -34,10 +30,11 @@ nonisolated enum OutroTrigger {
     /// arm — or `nil` when `duration` is unknown or the stream is live, in
     /// which case callers keep whatever behaviour they had.
     ///
-    /// A trusted outro arms at `max(outro.start, duration * fallbackFraction)`.
+    /// Without a trusted outro it arms at `WatchCompletion.threshold` of the
+    /// duration; a trusted outro arms at the later of its start and that line.
     /// The `max()` is deliberate and required, not a clamp that can be dropped:
-    /// `WatchProgressWriter` marks an episode watched only at
-    /// `progress / duration >= 0.9`, so a button armed below that line lets the
+    /// `WatchProgressWriter` marks an episode watched only from that same
+    /// threshold (90%), so a button armed below that line lets the
     /// viewer advance while the episode is still incomplete — it stays in
     /// Continue Watching forever and never scrobbles to Trakt. Arming *later*
     /// than 90% is the whole point (credits routinely start at 96%, leaving the
@@ -46,7 +43,7 @@ nonisolated enum OutroTrigger {
     static func armTime(outro: IntroSegments.Segment?, duration: TimeInterval) -> TimeInterval? {
         guard duration > 1 else { return nil }
 
-        let fallback = duration * fallbackFraction
+        let fallback = duration * WatchCompletion.threshold
 
         guard let outro,
               outro.duration >= IntroSegments.minimumUsableDuration,
