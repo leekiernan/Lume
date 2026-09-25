@@ -56,15 +56,29 @@ extension HomeView {
             .deduplicatedByTitle()
     }
 
+    /// Home's local rows plus the decoded custom-section list. The empty-state
+    /// check and the rails both read all three, and each is a filter/map/sort/
+    /// dedupe (or a JSON decode) — so `body` derives them once and hands the
+    /// result to both, rather than each reader recomputing them.
+    struct DerivedContent {
+        let recentlyWatched: [HomeMediaItem]
+        let favorites: [HomeMediaItem]
+        let customSections: [CustomHomeSection]
+    }
+
+    func derivedContent() -> DerivedContent {
+        DerivedContent(recentlyWatched: recentlyWatched, favorites: favorites, customSections: customSections)
+    }
+
     /// Truly empty home — only show the empty state once trending has settled
     /// so async-loaded content doesn't make the empty view flash on launch.
-    var isEmpty: Bool {
-        recentlyWatched.isEmpty
-            && favorites.isEmpty
+    func isEmpty(_ content: DerivedContent) -> Bool {
+        content.recentlyWatched.isEmpty
+            && content.favorites.isEmpty
             && feed.items(for: .builtin(.trendingMovies)).isEmpty
             && feed.items(for: .builtin(.trendingSeries)).isEmpty
             && feed.items(for: .builtin(.traktWatchlist)).isEmpty
-            && visibleCustomSections.allSatisfy { feed.items(for: .custom($0.id)).isEmpty }
+            && visibleCustomSections(of: content.customSections).allSatisfy { feed.items(for: .custom($0.id)).isEmpty }
             && !sportsRailHasContent
             && feed.isSettled
     }
