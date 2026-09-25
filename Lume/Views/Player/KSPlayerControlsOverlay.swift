@@ -32,6 +32,10 @@ import SwiftUI
         var onTogglePlay: () -> Void
         var onResetHideTimer: () -> Void
         var onScheduleHide: () -> Void
+        /// Seek / skip through the engine view, which hands a catch-up
+        /// programme's seeks to the host (`KSPlayerEngineView+Catchup`).
+        var onSeek: (TimeInterval) -> Void
+        var onSkip: (TimeInterval) -> Void
         /// Raises the OpenSubtitles browser. `nil` when the search isn't
         /// available for this stream, which also drops the menu entry.
         var onSearchSubtitles: (() -> Void)?
@@ -142,6 +146,11 @@ import SwiftUI
             }
         }
 
+        /// ∓15 s, or a drop-in minute on catch-up.
+        private var skipStep: PlayerSkipStep {
+            PlayerSkipStep(seconds: media.skipInterval(default: 15))
+        }
+
         private func transportRow(spacing: CGFloat) -> some View {
             HStack(spacing: spacing) {
                 if itemNeighbours.axis != nil {
@@ -155,13 +164,13 @@ import SwiftUI
 
                 if !media.isLive {
                     Button {
-                        coordinator.skip(interval: -15)
+                        onSkip(-skipStep.seconds)
                         onResetHideTimer()
                     } label: {
-                        circleGlyph("gobackward.15", size: 22, diameter: 60)
+                        circleGlyph(skipStep.backSymbol, size: 22, diameter: 60)
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("Skip back 15 seconds")
+                    .accessibilityLabel(skipStep.backLabel)
                 }
 
                 Button(action: onTogglePlay) {
@@ -176,13 +185,13 @@ import SwiftUI
 
                 if !media.isLive {
                     Button {
-                        coordinator.skip(interval: 15)
+                        onSkip(skipStep.seconds)
                         onResetHideTimer()
                     } label: {
-                        circleGlyph("goforward.15", size: 22, diameter: 60)
+                        circleGlyph(skipStep.forwardSymbol, size: 22, diameter: 60)
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("Skip forward 15 seconds")
+                    .accessibilityLabel(skipStep.forwardLabel)
                 }
 
                 if itemNeighbours.axis != nil {
@@ -388,8 +397,9 @@ import SwiftUI
                 hideTask?.cancel()
                 coordinator.playerLayer?.pause()
             } else {
-                coordinator.seek(time: seekPosition)
+                // Clock first: a catch-up seek re-places it on the segment.
                 clock.current = seekPosition
+                onSeek(seekPosition)
                 if isPlaying {
                     coordinator.playerLayer?.play()
                 }

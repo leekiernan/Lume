@@ -135,8 +135,8 @@
                     closePanel()
                 }
             }
-            .task(id: media.id) { await resolveContent() }
-            .task(id: media.id) { await resolveStreamInfo() }
+            .task(id: media.playbackSessionID) { await resolveContent() }
+            .task(id: media.playbackSessionID) { await resolveStreamInfo() }
             .onAppear {
                 // Every time the controls reappear this is a fresh subtree;
                 // `defaultFocus` alone is unreliable here, so place focus on the
@@ -300,8 +300,8 @@
             HStack(spacing: 26) {
                 if !media.isLive {
                     leadingTransportButton
-                    circleButton(systemImage: "gobackward.10", focus: .skipBackward) {
-                        coordinator.skip(by: -10)
+                    circleButton(systemImage: skipStep.backSymbol, focus: .skipBackward) {
+                        coordinator.skip(by: -skipStep.seconds)
                         onResetHideTimer()
                     }
                 }
@@ -314,13 +314,18 @@
                 .focused($focus, equals: .transport)
 
                 if !media.isLive {
-                    circleButton(systemImage: "goforward.10", focus: .skipForward) {
-                        coordinator.skip(by: 10)
+                    circleButton(systemImage: skipStep.forwardSymbol, focus: .skipForward) {
+                        coordinator.skip(by: skipStep.seconds)
                         onResetHideTimer()
                     }
                     trailingTransportButton
                 }
             }
+        }
+
+        /// ∓10 s, or a drop-in minute on catch-up.
+        private var skipStep: PlayerSkipStep {
+            PlayerSkipStep(seconds: media.skipInterval(default: 10))
         }
 
         /// Leading outer button: previous episode for series, otherwise a longer

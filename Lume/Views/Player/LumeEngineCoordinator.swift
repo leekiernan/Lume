@@ -5,27 +5,6 @@ import LumeEngine
 import OSLog
 import SwiftUI
 
-/// Holds the engine's active subtitle cue text, refreshed from the coordinator's
-/// 10 Hz playback tick. Deliberately a separate `ObservableObject` from
-/// `LumeEngineCoordinator`: were the cue text `@Published` on the coordinator,
-/// every per-tick update would fire the coordinator's `objectWillChange` and
-/// re-render every overlay that observes it — flickering an open audio/subtitle
-/// `Menu` and cancelling in-flight taps. Only the subtitle-rendering leaf
-/// observes this model, so a cue change invalidates that leaf alone. Mirrors why
-/// KSPlayer keeps its `SubtitleModel` off the controls overlay's observed surface.
-@MainActor
-final class SubtitleCueModel: ObservableObject {
-    @Published private(set) var text: String?
-
-    /// Assigns only on an actual change, so an unchanged cue repeated across
-    /// ticks doesn't invalidate the leaf ten times a second.
-    func update(_ newText: String?) {
-        if text != newText {
-            text = newText
-        }
-    }
-}
-
 /// Playback surface for the LumeEngine (FFmpeg) backend.
 ///
 /// Wraps a `PlayerSession` per stream — the engine has no rebuild-in-place, so
@@ -76,6 +55,8 @@ final class LumeEngineCoordinator: NSObject, ObservableObject {
     /// reconnect budget.
     var onRecovered: (() -> Void)?
     var startupTimeout: TimeInterval = 40
+    /// Catch-up seeks and programme-clock mapping — see `CatchupSeekRouter`.
+    let catchup = CatchupSeekRouter()
 
     /// Silences this player without pausing it — Multi-View mutes every tile
     /// except the one carrying the audio.
@@ -148,7 +129,11 @@ final class LumeEngineCoordinator: NSObject, ObservableObject {
             hasManualTrackSelection = false
         }
         currentMedia = media
+        catchup.load(media)
         reportedFailure = false
+        // Up from the start of every (re)load, not only once the engine
+        // reports `.opening`, so a swap never shows a blank, idle surface.
+        isBuffering = true
         // After `tearDown` (which closes any previous session) so a reload counts
         // as its own startup attempt rather than extending the last one.
         PlaybackQoE.shared.beginStartup(engine: .lumeEngine, isLive: media.isLive)
@@ -280,6 +265,7 @@ final class LumeEngineCoordinator: NSObject, ObservableObject {
     }
 
     func skip(by seconds: Double) {
+        if catchup.route(.by(seconds)) { return }
         let session = session
         Task {
             guard let session else { return }
@@ -289,6 +275,7 @@ final class LumeEngineCoordinator: NSObject, ObservableObject {
     }
 
     func seek(to seconds: TimeInterval) {
+        if catchup.route(.to(seconds)) { return }
         let session = session
         Task { await session?.seek(to: seconds) }
     }

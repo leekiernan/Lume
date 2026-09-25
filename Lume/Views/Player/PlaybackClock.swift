@@ -32,12 +32,63 @@ final class PlaybackClock {
     /// play/pause boundaries.
     var isPlaying = false
 
+    /// A catch-up seek parks the clock on the segment it is heading for; the
+    /// stream still on screen keeps ticking until the swap lands, and letting
+    /// its playhead through would drag the scrubber back. Engine reports for
+    /// this media id are dropped until one arrives from another stream.
+    /// Unobserved: it gates writes, nothing renders it.
+    @ObservationIgnored private var heldMediaID: String?
+
     /// Reset to zero when the host swaps to a different stream.
     func reset() {
         current = 0
         duration = 0
         isPlaying = false
         hasEstablishedPosition = false
+        heldMediaID = nil
+    }
+
+    /// `reset()`, then place the clock where `media` starts on its programme
+    /// timeline. The same as `reset()` for anything but catch-up.
+    func reset(for media: PlayableMedia) {
+        reset()
+        rebase(onto: media)
+    }
+
+    /// Move to a new catch-up segment of the programme already on screen: the
+    /// playhead jumps to the segment's offset, the programme's duration stays,
+    /// and play state and any hold survive. A no-op for other media.
+    func rebase(onto media: PlayableMedia) {
+        guard let timeline = media.catchup else { return }
+        current = timeline.offset
+        if timeline.duration > 0 { duration = timeline.duration }
+    }
+
+    /// Ignore engine reports from `mediaID` until a different stream reports.
+    func holdEngineReports(from mediaID: String) {
+        heldMediaID = mediaID
+    }
+
+    func releaseHold() {
+        heldMediaID = nil
+    }
+
+    /// The one place an engine's playhead reaches the clock: mapped onto
+    /// `media`'s timeline (programme time for catch-up, unchanged otherwise)
+    /// and dropped while a catch-up seek holds `media`'s reports.
+    func applyEngine(position: TimeInterval, of media: PlayableMedia?) {
+        guard position.isFinite else { return }
+        if let heldMediaID {
+            guard heldMediaID != media?.id else { return }
+            self.heldMediaID = nil
+        }
+        current = media?.timelinePosition(position) ?? position
+    }
+
+    /// The engine's reported duration, mapped like `applyEngine(position:of:)`.
+    func applyEngine(duration total: TimeInterval, of media: PlayableMedia?) {
+        guard total.isFinite, total > 0 else { return }
+        duration = media?.timelineDuration(total) ?? total
     }
 
     /// Uses saved resume progress only while the engine is still emitting its

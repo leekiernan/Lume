@@ -73,6 +73,14 @@ struct FullScreenPlayerView: View {
     /// `PlaybackClock`.
     @State var clock = PlaybackClock()
 
+    /// Catch-up seeking (see `FullScreenPlayerView+Catchup`): the programme
+    /// offset a debounced seek is heading for, the debounce itself, and a
+    /// counter bumped to rebuild the engine when a seek restarts the segment
+    /// already playing (same URL, so there is no swap to make).
+    @State var pendingCatchupTarget: TimeInterval?
+    @State var catchupSeekTask: Task<Void, Never>?
+    @State var catchupRestartCount = 0
+
     /// De-duplicates the low-frequency engine state changes into one ordered
     /// Trakt start/pause/stop lifecycle for the active movie or episode.
     @State var traktScrobbler = TraktPlaybackScrobbler()
@@ -142,6 +150,10 @@ struct FullScreenPlayerView: View {
     init(media: PlayableMedia) {
         self.media = media
         _activeMedia = State(initialValue: media)
+        // A catch-up programme shows its own timeline from the first frame.
+        let clock = PlaybackClock()
+        clock.reset(for: media)
+        _clock = State(initialValue: clock)
         let defaults = UserDefaults.standard
         enginePriority = PlayerEnginePriority.resolve(
             priorityRaw: defaults.string(forKey: PlayerSettings.enginePriorityKey) ?? "",
@@ -208,8 +220,9 @@ struct FullScreenPlayerView: View {
         Logger.player.log("AirPlay: AVPlayer can't play this stream; reverting to \(priorityEngine.rawValue, privacy: .public) locally with audio-only AirPlay")
         airPlayVideoUnsupported.insert(activeMedia.id)
         // Resume the local engine where the cast attempt left off (VOD only).
-        if !activeMedia.isLive, clock.current > 1 {
-            resumeActiveMedia(at: clock.current)
+        let resumeAt = activeMedia.enginePosition(clock.current)
+        if !activeMedia.isLive, resumeAt > 1 {
+            resumeActiveMedia(at: resumeAt)
         }
     }
 
@@ -258,16 +271,17 @@ struct FullScreenPlayerView: View {
             // stream URL before the engine loads it. No-op for Xtream / m3u.
             await resolveActiveMedia()
         }
-        .task(id: activeMedia.id) {
+        .task(id: activeMedia.playbackSessionID) {
             // Publish the session system-wide: Now Playing metadata + remote
             // commands (lock screen, Control Center, the iPhone's Apple TV
             // remote) and the iOS Live Activity. Runs per active stream so a
-            // channel surf / next episode republishes; cancelled on swap.
+            // channel surf / next episode republishes; cancelled on swap. A
+            // catch-up seek keeps the session (`playbackSessionID`).
             await NowPlayingService.shared.runSession(
                 media: activeMedia, clock: clock, container: modelContext.container
             )
         }
-        .task(id: activeMedia.id) {
+        .task(id: activeMedia.playbackSessionID) {
             // Resolve the transport neighbours (previous/next episode or channel)
             // and the IntroDB segments for the active stream. Runs on appear and
             // whenever the stream swaps, so what the controls play always trails
@@ -330,10 +344,12 @@ struct FullScreenPlayerView: View {
             // where it was rather than jumping back to the saved resume point.
             // Live streams have no position, and if the user is already on
             // AVPlayer there's no swap to bridge.
-            guard engineSwaps, priorityEngine != .avPlayer, !activeMedia.isLive, clock.current > 1 else { return }
-            resumeActiveMedia(at: clock.current)
+            let resumeAt = activeMedia.enginePosition(clock.current)
+            guard engineSwaps, priorityEngine != .avPlayer, !activeMedia.isLive, resumeAt > 1 else { return }
+            resumeActiveMedia(at: resumeAt)
         }
         .onDisappear {
+            cancelPendingCatchupSeek()
             stopTraktScrobble()
             // Capture the clock synchronously, then flush off the main thread.
             persistProgressDetached()
@@ -369,6 +385,12 @@ struct FullScreenPlayerView: View {
         }
     }
 
+    /// Rebuilt on an engine fallback, and on a catch-up seek that restarts the
+    /// segment already playing.
+    private var engineIdentity: [Int] {
+        [engineAttempt, catchupRestartCount]
+    }
+
     @ViewBuilder
     private func engineView(for media: PlayableMedia) -> some View {
         // Keyed on the engine attempt so falling back tears the failed engine
@@ -383,9 +405,9 @@ struct FullScreenPlayerView: View {
                 usesQuickStartupTimeout: hasFallbackEngine,
                 onPlaybackFailed: fallBackToNextEngine,
                 onSelectMedia: switchMedia,
-                onCompleteCurrentItem: completeActiveEpisode, onRemoteAdvance: remoteAdvanceHandler
+                onCompleteCurrentItem: completeActiveEpisode, onRemoteAdvance: remoteAdvanceHandler, onCatchupSeek: handleCatchupSeek
             )
-            .id(engineAttempt)
+            .id(engineIdentity)
         case .avPlayer:
             AVPlayerEngineView(
                 media: media, clock: clock, mediaSwapper: mediaSwapper,
@@ -401,9 +423,9 @@ struct FullScreenPlayerView: View {
                 usesQuickStartupTimeout: hasFallbackEngine,
                 onPlaybackFailed: handlePlaybackFailure,
                 onSelectMedia: switchMedia,
-                onCompleteCurrentItem: completeActiveEpisode, onRemoteAdvance: remoteAdvanceHandler
+                onCompleteCurrentItem: completeActiveEpisode, onRemoteAdvance: remoteAdvanceHandler, onCatchupSeek: handleCatchupSeek
             )
-            .id(engineAttempt)
+            .id(engineIdentity)
         case .ksPlayer:
             KSPlayerEngineView(
                 media: media, clock: clock, mediaSwapper: mediaSwapper,
@@ -413,9 +435,9 @@ struct FullScreenPlayerView: View {
                 usesQuickStartupTimeout: hasFallbackEngine,
                 onPlaybackFailed: fallBackToNextEngine,
                 onSelectMedia: switchMedia,
-                onCompleteCurrentItem: completeActiveEpisode, onRemoteAdvance: remoteAdvanceHandler
+                onCompleteCurrentItem: completeActiveEpisode, onRemoteAdvance: remoteAdvanceHandler, onCatchupSeek: handleCatchupSeek
             )
-            .id(engineAttempt)
+            .id(engineIdentity)
         case .vlcKit:
             VLCPlayerEngineView(
                 media: media, clock: clock, mediaSwapper: mediaSwapper,
@@ -425,9 +447,9 @@ struct FullScreenPlayerView: View {
                 usesQuickStartupTimeout: hasFallbackEngine,
                 onPlaybackFailed: fallBackToNextEngine,
                 onSelectMedia: switchMedia,
-                onCompleteCurrentItem: completeActiveEpisode, onRemoteAdvance: remoteAdvanceHandler
+                onCompleteCurrentItem: completeActiveEpisode, onRemoteAdvance: remoteAdvanceHandler, onCatchupSeek: handleCatchupSeek
             )
-            .id(engineAttempt)
+            .id(engineIdentity)
         }
     }
 

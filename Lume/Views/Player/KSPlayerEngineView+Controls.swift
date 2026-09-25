@@ -27,6 +27,8 @@ import SwiftUI
                 onTogglePlay: { togglePlay() },
                 onResetHideTimer: { resetHideTimer() },
                 onScheduleHide: { scheduleHide() },
+                onSeek: { seek(to: $0) },
+                onSkip: { skip(by: $0) },
                 onSearchSubtitles: subtitleSearchAction,
                 videoInfo: videoInfo,
                 itemNeighbours: itemNeighbours,
