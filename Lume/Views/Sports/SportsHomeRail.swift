@@ -15,13 +15,14 @@ import SwiftData
 import SwiftUI
 
 struct SportsHomeRail: View {
-    /// Mirrors `ForYouRow`: the resolve is deferred while a playlist / iCloud /
-    /// EPG sync is running, and retries once it settles.
+    /// Whether a playlist / iCloud / EPG sync is running. Part of the resolve
+    /// key, so the rail resolves right away and again once the sync settles
+    /// (fresh listings sharpen matching) — it never waits for the sync.
     var isSyncBusy = false
 
     var body: some View {
         #if os(tvOS)
-            TVSportsHomeRail()
+            TVSportsHomeRail(isSyncBusy: isSyncBusy)
         #else
             PhoneSportsHomeRail(isSyncBusy: isSyncBusy)
         #endif
