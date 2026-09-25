@@ -24,7 +24,7 @@ enum TMDBLanguageWatcher {
     /// TMDB language differs from the one previous enrichment ran with, so the
     /// content re-enriches lazily in the new language. A no-op on first launch
     /// and whenever the language is unchanged.
-    static func invalidateEnrichmentIfLanguageChanged(in context: ModelContext) {
+    static func invalidateEnrichmentIfLanguageChanged(container: ModelContainer) async {
         let current = TMDBClient.preferredLanguageCode()
         let previous = UserDefaults.standard.string(forKey: storedLanguageKey)
 
@@ -36,28 +36,8 @@ enum TMDBLanguageWatcher {
         guard previous != nil else { return }
 
         logger.info("Preferred language changed (\(previous ?? "nil") → \(current)); invalidating TMDB enrichment")
-        resetEnrichment(in: context)
-    }
-
-    private static func resetEnrichment(in context: ModelContext) {
-        do {
-            // Filter in SQLite so only already-enriched rows are hydrated, instead
-            // of loading the entire catalog onto the main thread to clear a field.
-            let movies = try context.fetch(FetchDescriptor<Movie>(
-                predicate: #Predicate { $0.tmdbEnrichedAt != nil }
-            ))
-            for movie in movies {
-                movie.tmdbEnrichedAt = nil
-            }
-            let series = try context.fetch(FetchDescriptor<Series>(
-                predicate: #Predicate { $0.tmdbEnrichedAt != nil }
-            ))
-            for show in series {
-                show.tmdbEnrichedAt = nil
-            }
-            try context.save()
-        } catch {
-            logger.error("Failed to invalidate TMDB enrichment: \(error.localizedDescription)")
-        }
+        // Off the main context: hydrating every enriched title there stalled
+        // launch on a large library.
+        await StorageManager.invalidateTMDBEnrichment(container: container)
     }
 }
