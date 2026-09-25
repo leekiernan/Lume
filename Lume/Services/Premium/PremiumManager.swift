@@ -68,6 +68,12 @@ final class PremiumManager {
     private(set) var subscriptionStatus: SubscriptionStatus?
     /// True while a purchase or restore is in flight, for button spinners.
     private(set) var isWorking = false
+    /// True while `loadProducts()` is in flight, so a retry doesn't overlap it.
+    private(set) var isLoadingProducts = false
+    /// True when the last `loadProducts()` came back with nothing to sell (offline,
+    /// or the App Store didn't answer), so the paywall can offer a retry instead
+    /// of a spinner that never resolves.
+    private(set) var productsLoadFailed = false
 
     #if SIDE_LOAD
         /// Sideloaded / self-compiled builds unlock everything. No StoreKit, no
@@ -138,7 +144,12 @@ final class PremiumManager {
 
     // MARK: - StoreKit
 
+    /// Loads the purchasable products. Runs at launch, and again from the paywall
+    /// when that first attempt left nothing to show.
     func loadProducts() async {
+        guard !isLoadingProducts else { return }
+        isLoadingProducts = true
+        defer { isLoadingProducts = false }
         do {
             let ids = Plan.purchasable.map(\.rawValue)
             let loaded = try await Product.products(for: ids)
@@ -147,8 +158,10 @@ final class PremiumManager {
                 let missing = Set(ids).subtracting(products.map(\.id))
                 Logger.premium.error("Missing products (not configured?): \(missing, privacy: .public)")
             }
+            productsLoadFailed = products.isEmpty
         } catch {
             Logger.premium.error("Failed to load products: \(error.localizedDescription, privacy: .public)")
+            productsLoadFailed = products.isEmpty
         }
     }
 
