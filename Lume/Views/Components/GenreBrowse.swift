@@ -113,42 +113,6 @@ nonisolated protocol GenreCarrying {
 nonisolated extension Movie: GenreCarrying {}
 nonisolated extension Series: GenreCarrying {}
 
-// MARK: - Browse-by-genre section
-
-/// A tile grid of the genres present in the active playlist, most-common first.
-/// Each tile navigates to that genre's full grid.
-///
-/// The owning view derives the genres and renders this only when the list is
-/// non-empty: a view that collapses to nothing never receives `.task`/`.onAppear`
-/// (the same EmptyView lifecycle trap `CachedAsyncImage` hit), so the derivation
-/// must live on an always-present host — the browse `ScrollView` — not here.
-struct GenreGridSection: View {
-    let genres: [String]
-    let type: CategoryType
-
-    private let columns = [GridItem(.adaptive(minimum: CategoryTileMetrics.minimum), spacing: CategoryTileMetrics.spacing)]
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Browse by Genre")
-                .font(.headline)
-                .fontWeight(.bold)
-                .foregroundStyle(.secondary)
-                .padding(.horizontal)
-
-            LazyVGrid(columns: columns, spacing: CategoryTileMetrics.spacing) {
-                ForEach(genres, id: \.self) { genre in
-                    NavigationLink(value: GenreSelection(genre: genre, type: type)) {
-                        CategoryTile(name: genre)
-                    }
-                    .posterCardButtonStyle()
-                }
-            }
-            .padding(.horizontal)
-        }
-    }
-}
-
 // MARK: - Off-main genre page fetch
 
 /// How many source rows one page load may walk before handing control back to

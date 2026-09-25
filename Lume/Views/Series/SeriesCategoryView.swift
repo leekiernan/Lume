@@ -151,40 +151,6 @@ struct SeriesCategoryView: View {
     }
 }
 
-// MARK: - Series Category Preview
-
-struct SeriesCategoryPreview: View {
-    let category: Category
-    private let limit: Int
-    @Query private var series: [Series]
-    var animationNamespace: Namespace.ID?
-
-    init(category: Category, limit: Int, sort: ContentSortOption, animationNamespace: Namespace.ID? = nil) {
-        self.category = category
-        self.limit = limit
-        self.animationNamespace = animationNamespace
-        let categoryId = category.id
-        var descriptor = FetchDescriptor<Series>(
-            predicate: #Predicate<Series> { $0.categoryId == categoryId },
-            sortBy: sort.seriesDescriptors
-        )
-        // Fetch one extra so we can tell whether a full grid would show more.
-        descriptor.fetchLimit = limit + 1
-        _series = Query(descriptor)
-    }
-
-    var body: some View {
-        CategoryPreviewRow(
-            category: category,
-            items: Array(series.prefix(limit)),
-            hasMore: series.count > limit,
-            animationNamespace: animationNamespace,
-            emptyMessage: "No series in this category",
-            card: { SeriesCardView(series: $0) }
-        )
-    }
-}
-
 // MARK: - Previews
 
 #Preview("Series Category Grid") {

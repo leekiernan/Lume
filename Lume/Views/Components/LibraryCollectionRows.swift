@@ -68,8 +68,7 @@ let collectionRowFetchLimit = 200
 // MARK: - Shared preview row
 
 /// A titled horizontal rail with a trailing "Show All" link into the full
-/// collection grid. Mirrors `CategoryPreviewRow`, but its header is a plain
-/// title plus a `LibraryCollection` destination rather than a `Category`.
+/// collection grid, keyed by a `LibraryCollection` destination.
 private struct CollectionPreviewRow<Item: Identifiable & Hashable & WatchlistFavoritable, Card: View>: View {
     let title: LocalizedStringKey
     let collection: LibraryCollection
