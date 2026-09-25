@@ -213,8 +213,10 @@ extension ContentSyncManager {
     /// overlap, and — unlike the synchronous loop this replaces — the import now
     /// has real suspension points, so cancellation is cooperative rather than
     /// something that has to travel through `M3UImportState.firstError`.
-    func importM3UFile(_ fileURL: URL, playlistId: UUID, progress: SyncProgress?) async throws -> M3UImportSummary {
-        let state = M3UImportState()
+    func importM3UFile(
+        _ fileURL: URL, playlistId: UUID, areas: Set<AppArea>, progress: SyncProgress?
+    ) async throws -> M3UImportSummary {
+        let state = M3UImportState(areas: areas)
         // Bytes, not entries: the parse learns the entry count only once it has
         // finished, so the file size is the only denominator a running import
         // can report a fraction against. 0 means "unknown" — the fraction then
