@@ -59,32 +59,6 @@
 
         // MARK: - Recent channels
 
-        /// The recently-watched live channels, current channel first, resolved
-        /// into models for the in-player "Recent" rail. Order follows
-        /// `LiveChannelHistory`; channels that no longer resolve (e.g. removed in
-        /// a sync) are simply dropped.
-        ///
-        /// `restriction` is required, like `LiveChannelQuery.scoped`'s: this rail
-        /// is a channel list the viewer can tune from, and history cuts across
-        /// categories, so a channel watched *before* its category was locked
-        /// would otherwise stay one tab away for a child mid-playback. Hidden
-        /// channels drop out for the same reason every other channel query
-        /// filters them.
-        static func recentChannels(
-            in context: ModelContext,
-            restriction: ContentRestriction,
-            defaults: UserDefaults = .standard
-        ) -> [LiveStream] {
-            let ids = LiveChannelHistory.recentChannelIds(defaults: defaults)
-            guard !ids.isEmpty else { return [] }
-            let descriptor = FetchDescriptor<LiveStream>(
-                predicate: #Predicate { ids.contains($0.id) && $0.isHidden == false }
-            )
-            let visible = ((try? context.fetch(descriptor)) ?? []).excludingRestricted(restriction)
-            let byId = Dictionary(visible.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
-            return ids.compactMap { byId[$0] }
-        }
-
         /// The titles of the programmes airing right now on the given channels,
         /// keyed by EPG channel id — a single fetch that backs the subtitle line
         /// on each card in the "Recent" rail.
