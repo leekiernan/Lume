@@ -100,7 +100,7 @@ private struct HomeItemCell: View {
                 .posterCardButtonStyle()
             case let .series(series):
                 NavigationLink(value: series) {
-                    HomePosterCard(title: item.title, imageURL: item.imageURL, progress: progress)
+                    HomePosterCard(title: item.title, imageURL: item.imageURL, progress: progress, isSeries: true)
                         .matchedTransitionSourceIfAvailable(id: series.id, in: animationNamespace)
                 }
                 .posterCardButtonStyle()
@@ -231,6 +231,8 @@ private struct HomePosterCard: View {
     let imageURL: URL?
     var progress: Double?
     var isLive: Bool = false
+    /// Picks the series fallback symbol, matching `SeriesCardView`.
+    var isSeries: Bool = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: PosterCardMetrics.titleSpacing) {
@@ -254,7 +256,7 @@ private struct HomePosterCard: View {
                     case .failure:
                         placeholder
                             .overlay {
-                                Image(systemName: isLive ? "antenna.radiowaves.left.and.right" : "film")
+                                Image(systemName: fallbackSymbol)
                                     .foregroundStyle(isLive ? Color.white.opacity(0.6) : Color.secondary)
                                     .font(.largeTitle)
                             }
@@ -286,15 +288,25 @@ private struct HomePosterCard: View {
                         .padding(.bottom, 6)
                 }
             }
-            .frame(width: PosterCardMetrics.posterWidth, height: PosterCardMetrics.posterHeight)
+            .posterArtworkFrame(fillsWidth: false)
             .clipShape(RoundedRectangle(cornerRadius: PosterCardMetrics.cornerRadius))
-            .shadow(radius: 2)
+            // Skipped on tvOS for the same reason as `MovieCardView`: a shadow
+            // after clipShape costs an offscreen pass per card and is invisible
+            // at 10 feet.
+            #if !os(tvOS)
+                .shadow(radius: 2)
+            #endif
 
             Text(title)
                 .font(PosterCardMetrics.titleFont)
                 .lineLimit(2)
                 .frame(width: PosterCardMetrics.posterWidth, alignment: .leading)
         }
+    }
+
+    private var fallbackSymbol: String {
+        if isLive { return "antenna.radiowaves.left.and.right" }
+        return isSeries ? "tv" : "film"
     }
 
     /// Loading/failure backdrop. Live cards keep their gradient plate so the
