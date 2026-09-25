@@ -12,7 +12,6 @@ import SwiftUI
 
 #if !os(tvOS)
 
-    @available(iOS 16.0, macOS 13.0, tvOS 16.0, *)
     extension KSPlayerEngineView {
         var controlsOverlay: some View {
             KSPlayerControlsOverlay(

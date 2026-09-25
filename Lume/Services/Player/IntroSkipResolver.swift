@@ -21,9 +21,7 @@ enum IntroSkipResolver {
     static func lookup(for ref: PlayableMedia.ContentRef, in context: ModelContext) -> Lookup? {
         guard case let .episode(id) = ref else { return nil }
 
-        var descriptor = FetchDescriptor<Episode>(predicate: #Predicate { $0.id == id })
-        descriptor.fetchLimit = 1
-        guard let episode = try? context.fetch(descriptor).first,
+        guard let episode = PlayerContentLookup.episode(id, in: context),
               let imdbId = episode.series?.imdbId?.trimmingCharacters(in: .whitespaces),
               !imdbId.isEmpty else { return nil }
 

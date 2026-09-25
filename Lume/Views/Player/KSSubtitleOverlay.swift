@@ -37,7 +37,6 @@ enum KSSubtitleCue: Equatable {
     }
 }
 
-@available(iOS 16.0, macOS 13.0, tvOS 16.0, *)
 struct KSSubtitleOverlay: View {
     @ObservedObject var subtitleModel: SubtitleModel
 
@@ -61,7 +60,6 @@ struct KSSubtitleOverlay: View {
 /// A single subtitle cue — a bitmap (PGS / VobSub) or styled text (SRT / WebVTT
 /// / mov_text) — laid out at the position the cue requests, falling back to the
 /// player-wide default. Mirrors KSPlayer's private `SubtitlePart.subtitleView`.
-@available(iOS 16.0, macOS 13.0, tvOS 16.0, *)
 private struct KSSubtitlePartView: View {
     let part: SubtitlePart
 

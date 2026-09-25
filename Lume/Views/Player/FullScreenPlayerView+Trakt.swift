@@ -19,16 +19,12 @@ extension FullScreenPlayerView {
     ) -> (target: TraktScrobbleTarget, duration: TimeInterval)? {
         switch ref {
         case let .movie(id):
-            var descriptor = FetchDescriptor<Movie>(predicate: #Predicate { $0.id == id })
-            descriptor.fetchLimit = 1
-            guard let movie = try? modelContext.fetch(descriptor).first,
+            guard let movie = PlayerContentLookup.movie(id, in: modelContext),
                   let tmdbID = movie.tmdbId
             else { return nil }
             return (.movie(tmdbID: tmdbID), TimeInterval(movie.durationSecs ?? 0))
         case let .episode(id):
-            var descriptor = FetchDescriptor<Episode>(predicate: #Predicate { $0.id == id })
-            descriptor.fetchLimit = 1
-            guard let episode = try? modelContext.fetch(descriptor).first,
+            guard let episode = PlayerContentLookup.episode(id, in: modelContext),
                   let showTMDBID = episode.series?.tmdbId
             else { return nil }
             return (

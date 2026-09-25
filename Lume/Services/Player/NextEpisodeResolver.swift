@@ -75,9 +75,8 @@ enum NextEpisodeResolver {
         return best
     }
 
-    /// The playlist that owns a series, mirroring the detail screen and tvOS
-    /// overlay logic: prefix-match on the playlist UUID, falling back to the
-    /// first playlist.
+    /// The playlist that owns a series, from the UUID prefixing its id; `nil`
+    /// when that playlist is gone (see `PlaylistOwner`).
     private static func playlist(for series: Series, in context: ModelContext) -> Playlist? {
         PlaylistOwner.playlist(forPrefixedID: series.id, in: context)
     }

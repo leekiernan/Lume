@@ -32,15 +32,6 @@ nonisolated enum PlayerEngineKind: String, CaseIterable, Identifiable {
         }
     }
 
-    /// Engines that draw their own in-player controls overlay (close button,
-    /// transport, scrubber). The host should not render its own close button
-    /// for these, to avoid duplicate controls.
-    var rendersOwnControls: Bool {
-        switch self {
-        case .vlcKit, .ksPlayer, .avPlayer, .lumeEngine: true
-        }
-    }
-
     /// The default engine, and the primary of the default priority list. KSPlayer
     /// leads (it handles most IPTV streams while supporting Picture in Picture and
     /// per-stream decoder tuning), falling back to VLCKit then AVPlayer — the order

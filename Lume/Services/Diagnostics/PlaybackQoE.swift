@@ -166,7 +166,8 @@ final class PlaybackQoE {
         Perf.event(.playerRebuffer)
     }
 
-    /// The stall cleared. Adds its duration to the rebuffer total.
+    /// The stall cleared. Adds its duration to the rebuffer total in memory
+    /// only — this fires mid-playback, so the flush waits for `endSession()`.
     func noteStallEnded() {
         guard !isSuspended, let stallBegan, let engine else { return }
         let seconds = Date().timeIntervalSince(stallBegan)
@@ -175,7 +176,6 @@ final class PlaybackQoE {
             $0.rebuffers += 1
             $0.rebufferSeconds += seconds
         }
-        persist()
     }
 
     /// The engine gave up before producing a frame.
@@ -249,8 +249,9 @@ final class PlaybackQoE {
         summary.engines[engine.rawValue] = stats
     }
 
-    /// Flushed only at boundaries — first frame, stall end, session end — never
-    /// on a timer, so playback is never interrupted by our own bookkeeping.
+    /// Flushed only at session boundaries — first frame, startup failure, engine
+    /// fallback, session end — never mid-playback or on a timer, so playback is
+    /// never interrupted by our own bookkeeping.
     private func persist() {
         summary.updatedAt = Date()
         guard let data = try? JSONEncoder().encode(summary) else { return }

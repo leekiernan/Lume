@@ -61,7 +61,6 @@ final nonisolated class LumeKSOptions: KSOptions {
     }
 }
 
-@available(iOS 16.0, macOS 13.0, tvOS 16.0, *)
 extension KSVideoPlayer.Coordinator {
     /// The one sanctioned way to pick an audio track by hand: the
     /// preferred-audio-language pass has to stand down for the rest of the
@@ -144,7 +143,6 @@ enum KSPlayerOptionsFactory {
     }
 }
 
-@available(iOS 16.0, macOS 13.0, tvOS 16.0, *)
 extension KSPlayerEngineView {
     func makeOptions() -> KSOptions {
         KSPlayerOptionsFactory.make(for: media)

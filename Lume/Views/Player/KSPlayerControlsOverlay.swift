@@ -13,7 +13,6 @@ import SwiftUI
 // scrubber. tvOS uses the shared `TVPlayerControlsOverlay` instead (see
 // `KSPlayerEngineView.tvBody`).
 #if !os(tvOS)
-    @available(iOS 16.0, macOS 13.0, *)
     struct KSPlayerControlsOverlay: View {
         @ObservedObject var coordinator: KSVideoPlayer.Coordinator
         let media: PlayableMedia
@@ -442,7 +441,6 @@ import SwiftUI
     /// invalidates just this leaf: the overlay above (menus, buttons) never
     /// re-renders with it, which is what keeps an open track menu stable and
     /// tappable.
-    @available(iOS 16.0, macOS 13.0, *)
     private struct PlaybackTimeline: View {
         var clock: PlaybackClock
         @Binding var isSeeking: Bool

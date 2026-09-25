@@ -293,9 +293,24 @@ final class LumeEngineCoordinator: NSObject, ObservableObject {
         Task { await session?.seek(to: seconds) }
     }
 
+    /// PiP starts and stops asynchronously; `syncPipState` picks up the result.
     func togglePictureInPicture() {
         pipBridge?.toggle()
-        isPipActive = pipBridge?.isActive ?? false
+    }
+
+    /// Pause for backgrounding, unless Picture in Picture is carrying the video.
+    /// Reads the bridge, not the `isPipActive` mirror, which can trail a tick.
+    func pauseForBackground() {
+        guard pipBridge?.isActive != true, isPlaying else { return }
+        let session = session
+        Task { await session?.pause() }
+    }
+
+    /// Mirror the bridge's delegate-driven PiP state (start, stop, system close;
+    /// no change callback exists) into `isPipActive` from the 10 Hz tick.
+    private func syncPipState() {
+        let active = pipBridge?.isActive ?? false
+        if active != isPipActive { isPipActive = active }
     }
 
     // MARK: Tracks
@@ -445,6 +460,7 @@ final class LumeEngineCoordinator: NSObject, ObservableObject {
     }
 
     private func tick() async {
+        syncPipState()
         guard let session else { return }
         let position = await session.position
         let duration = await session.duration ?? 0
