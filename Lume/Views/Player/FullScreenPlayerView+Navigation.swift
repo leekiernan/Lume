@@ -57,7 +57,7 @@ extension FullScreenPlayerView {
         stopTraktScrobble()
         // Flush the outgoing stream's progress before the clock resets — capture
         // happens synchronously inside `persistProgressDetached`.
-        persistProgressDetached(force: true)
+        persistProgressDetached()
         // The completion claim covers exactly that one flush. Left standing, a
         // step back onto the same episode would never record progress again.
         completedRef = nil
@@ -131,7 +131,6 @@ extension FullScreenPlayerView {
             // stream settles first, so the completion is the last word.
             await previous?.value
             let completion = await writer.markWatched(ref: ref, duration: total)
-            WatchProgressBuffer.remove(ref: ref)
             if let completion {
                 syncWatchedServices(ref: completion.ref)
                 AppStoreReviewPrompt.shared.noteCompletedTitle()
