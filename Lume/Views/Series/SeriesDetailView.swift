@@ -46,18 +46,10 @@ struct SeriesDetailView: View {
     init(series: Series, animationNamespace: Namespace.ID? = nil) {
         self.series = series
         self.animationNamespace = animationNamespace
-        let needsFetch = if series.tmdbId != nil, TMDBClient.shared.isConfigured {
-            if let enrichedAt = series.tmdbEnrichedAt,
-               Date().timeIntervalSince(enrichedAt) < 14 * 24 * 3600
-            {
-                false
-            } else {
-                true
-            }
-        } else {
-            false
-        }
-        _isLoadingTMDB = State(initialValue: needsFetch)
+        _isLoadingTMDB = State(initialValue: detailNeedsTMDBFetch(
+            tmdbId: series.tmdbId,
+            enrichedAt: series.tmdbEnrichedAt
+        ))
     }
 
     var body: some View {
@@ -370,7 +362,7 @@ struct SeriesDetailView: View {
             genre: series.genre,
             year: DetailFormat.year(from: series.releaseDate),
             duration: nil,
-            seasonInfo: availableSeasons.isEmpty ? nil : seasonCountLabel,
+            seasonInfo: availableSeasons.isEmpty ? nil : DetailFormat.seasonCount(availableSeasons.count),
             rating: (ratingValue ?? 0) > 0 ? ratingValue : nil,
             contentRating: series.contentRating
         )
@@ -468,22 +460,10 @@ struct SeriesDetailView: View {
     }
 
     private func enrichIfNeeded() async {
-        guard let tmdbId = series.tmdbId else { return }
-        if let enrichedAt = series.tmdbEnrichedAt,
-           Date().timeIntervalSince(enrichedAt) < 14 * 24 * 3600
-        {
-            return
+        // Applied on the view's own context — see `enrichSeriesDetailsIfNeeded`.
+        if await enrichSeriesDetailsIfNeeded(series, context: modelContext) {
+            refreshToken = UUID()
         }
-        let manager = ContentSyncManager(modelContainer: modelContext.container)
-        // Fetch off-thread, then apply on the view's own context. Using the
-        // background enrichSeries() path deletes-and-reinserts CastMember rows
-        // from a separate ModelContext; if the main context holds faulted
-        // references to those objects and a render fires before the merge lands,
-        // SwiftData fires a fault against a deleted store row → _assertionFailure.
-        guard let details = try? await manager.fetchTMDBTVDetails(tmdbId: tmdbId) else { return }
-        applySeriesDetails(details, to: series, context: modelContext)
-        try? modelContext.save()
-        refreshToken = UUID()
     }
 }
 
@@ -491,32 +471,7 @@ struct SeriesDetailView: View {
 
 private extension SeriesDetailView {
     func resolveSimilar() {
-        let ids = series.similarTitleIds
-        guard !ids.isEmpty else { similar = []; return }
-
-        let playlistPrefix = series.id.components(separatedBy: "-series-").first
-        func owned(_ id: String) -> Bool {
-            guard let prefix = playlistPrefix else { return true }
-            return id.hasPrefix(prefix)
-        }
-
-        var resolved: [HomeMediaItem] = []
-        for tmdbId in ids {
-            let seriesMatches = (try? modelContext.fetch(
-                FetchDescriptor<Series>(predicate: #Predicate { $0.tmdbId == tmdbId })
-            )) ?? []
-            if let match = seriesMatches.first(where: { owned($0.id) && $0.id != series.id }) {
-                resolved.append(.series(match))
-                continue
-            }
-            let movieMatches = (try? modelContext.fetch(
-                FetchDescriptor<Movie>(predicate: #Predicate { $0.tmdbId == tmdbId })
-            )) ?? []
-            if let match = movieMatches.first(where: { owned($0.id) }) {
-                resolved.append(.movie(match))
-            }
-        }
-        similar = Array(resolved.prefix(12))
+        similar = RelatedTitlesResolver.similar(to: series, in: modelContext)
     }
 
     func resolveOtherSources() {
@@ -568,10 +523,6 @@ private extension SeriesDetailView {
 // MARK: - Derived helpers
 
 private extension SeriesDetailView {
-    var seasonCountLabel: String {
-        availableSeasons.count == 1 ? String(localized: "1 Season") : String(localized: "\(availableSeasons.count) Seasons")
-    }
-
     var playTitle: LocalizedStringKey {
         guard let episode = nextEpisode else { return "Play" }
         let resume = !episode.isWatched && episode.watchProgress > 1

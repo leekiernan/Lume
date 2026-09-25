@@ -20,6 +20,11 @@
         @Query private var playlists: [Playlist]
 
         @State private var selectedSeason: Int = 1
+        /// The series' distinct season numbers, cached like `SeriesDetailView`'s
+        /// so the body (season chips, hero metadata, default season) doesn't
+        /// rebuild a Set over every episode on each render. Recomputed when the
+        /// episodes relationship changes (see `recomputeSeasons`).
+        @State private var availableSeasons: [Int] = []
         @State private var isLoadingEpisodes = false
         @State private var playingMedia: PlayableMedia?
         @State private var similar: [HomeMediaItem] = []
@@ -38,18 +43,10 @@
 
         init(series: Series) {
             self.series = series
-            let needsFetch = if series.tmdbId != nil, TMDBClient.shared.isConfigured {
-                if let enrichedAt = series.tmdbEnrichedAt,
-                   Date().timeIntervalSince(enrichedAt) < 14 * 24 * 3600
-                {
-                    false
-                } else {
-                    true
-                }
-            } else {
-                false
-            }
-            _isLoadingTMDB = State(initialValue: needsFetch)
+            _isLoadingTMDB = State(initialValue: detailNeedsTMDBFetch(
+                tmdbId: series.tmdbId,
+                enrichedAt: series.tmdbEnrichedAt
+            ))
         }
 
         var body: some View {
@@ -93,6 +90,7 @@
             .task(id: series.id) { await refreshEpisodesIfStale() }
             .onChange(of: series.similarTMDBIds) { resolveSimilar() }
             .onChange(of: refreshToken) { resolveSimilar() }
+            .onChange(of: series.episodes.count) { recomputeSeasons() }
         }
 
         private var content: some View {
@@ -330,7 +328,7 @@
                 items.append(TVMetaItem(label: "Genre", value: shortGenre(genre)))
             }
             if !availableSeasons.isEmpty {
-                items.append(TVMetaItem(label: "Seasons", value: seasonCountLabel))
+                items.append(TVMetaItem(label: "Seasons", value: DetailFormat.seasonCount(availableSeasons.count)))
             }
             return items
         }
@@ -359,12 +357,8 @@
                 .joined(separator: ", ")
         }
 
-        private var seasonCountLabel: String {
-            availableSeasons.count == 1 ? "1 Season" : "\(availableSeasons.count) Seasons"
-        }
-
-        private var availableSeasons: [Int] {
-            Set(series.episodes.map(\.seasonNum)).sorted()
+        private func recomputeSeasons() {
+            availableSeasons = Set(series.episodes.map(\.seasonNum)).sorted()
         }
 
         private func determineDefaultSeason() -> Int {
@@ -414,6 +408,7 @@
             if series.episodes.isEmpty {
                 await loadEpisodes()
             }
+            recomputeSeasons()
             selectedSeason = determineDefaultSeason()
         }
 
@@ -455,21 +450,18 @@
             // through a background context left the relationship stale until a later
             // cross-context merge, so episodes only appeared after navigating back.
             await MainActor.run { series.insertEpisodes(parsed, into: modelContext) }
+            recomputeSeasons()
             if resetsSeason {
                 selectedSeason = determineDefaultSeason()
             }
         }
 
         private func enrichIfNeeded() async {
-            guard let tmdbId = series.tmdbId else { return }
-            if let enrichedAt = series.tmdbEnrichedAt,
-               Date().timeIntervalSince(enrichedAt) < 14 * 24 * 3600
-            {
-                return
+            // Applied on the view's own context, never the background
+            // `enrichSeries` path — see `enrichSeriesDetailsIfNeeded`.
+            if await enrichSeriesDetailsIfNeeded(series, context: modelContext) {
+                refreshToken = UUID()
             }
-            let manager = ContentSyncManager(modelContainer: modelContext.container)
-            await manager.enrichSeries(id: series.id, tmdbId: tmdbId)
-            refreshToken = UUID()
         }
     }
 
@@ -505,32 +497,7 @@
         }
 
         func resolveSimilar() {
-            let ids = series.similarTitleIds
-            guard !ids.isEmpty else { similar = []; return }
-
-            let playlistPrefix = series.id.components(separatedBy: "-series-").first
-            func owned(_ id: String) -> Bool {
-                guard let prefix = playlistPrefix else { return true }
-                return id.hasPrefix(prefix)
-            }
-
-            var resolved: [HomeMediaItem] = []
-            for tmdbId in ids {
-                let seriesMatches = (try? modelContext.fetch(
-                    FetchDescriptor<Series>(predicate: #Predicate { $0.tmdbId == tmdbId })
-                )) ?? []
-                if let match = seriesMatches.first(where: { owned($0.id) && $0.id != series.id }) {
-                    resolved.append(.series(match))
-                    continue
-                }
-                let movieMatches = (try? modelContext.fetch(
-                    FetchDescriptor<Movie>(predicate: #Predicate { $0.tmdbId == tmdbId })
-                )) ?? []
-                if let match = movieMatches.first(where: { owned($0.id) }) {
-                    resolved.append(.movie(match))
-                }
-            }
-            similar = Array(resolved.prefix(12))
+            similar = RelatedTitlesResolver.similar(to: series, in: modelContext)
         }
 
         func resolveOtherSources() {

@@ -33,18 +33,10 @@
 
         init(movie: Movie) {
             self.movie = movie
-            let needsFetch = if movie.tmdbId != nil, TMDBClient.shared.isConfigured {
-                if let enrichedAt = movie.tmdbEnrichedAt,
-                   Date().timeIntervalSince(enrichedAt) < 14 * 24 * 3600
-                {
-                    false
-                } else {
-                    true
-                }
-            } else {
-                false
-            }
-            _isLoadingTMDB = State(initialValue: needsFetch)
+            _isLoadingTMDB = State(initialValue: detailNeedsTMDBFetch(
+                tmdbId: movie.tmdbId,
+                enrichedAt: movie.tmdbEnrichedAt
+            ))
         }
 
         var body: some View {
@@ -112,7 +104,7 @@
                     }
 
                     if !collectionMovies.isEmpty, let name = movie.collectionName {
-                        TVRail(title: "\(name) Collection", items: collectionMovies) { item in
+                        TVRail(title: "Part of \(name)", items: collectionMovies) { item in
                             posterLink(for: item)
                                 .mediaFavoriteMenu(item, in: modelContext)
                         }
@@ -279,44 +271,15 @@
         // MARK: - Enrichment
 
         private func enrichIfNeeded() async {
-            guard let tmdbId = movie.tmdbId else { return }
-            if let enrichedAt = movie.tmdbEnrichedAt,
-               Date().timeIntervalSince(enrichedAt) < 14 * 24 * 3600
-            {
-                return
+            // Applied on the view's own context, never the background
+            // `enrichMovie` path — see `enrichMovieDetailsIfNeeded`.
+            if await enrichMovieDetailsIfNeeded(movie, context: modelContext) {
+                refreshToken = UUID()
             }
-            let manager = ContentSyncManager(modelContainer: modelContext.container)
-            await manager.enrichMovie(id: movie.id, tmdbId: tmdbId)
-            refreshToken = UUID()
         }
 
         private func resolveSimilar() {
-            let ids = movie.similarTitleIds
-            guard !ids.isEmpty else { similar = []; return }
-
-            let playlistPrefix = movie.id.components(separatedBy: "-movie-").first
-            func owned(_ id: String) -> Bool {
-                guard let prefix = playlistPrefix else { return true }
-                return id.hasPrefix(prefix)
-            }
-
-            var resolved: [HomeMediaItem] = []
-            for tmdbId in ids {
-                let movieMatches = (try? modelContext.fetch(
-                    FetchDescriptor<Movie>(predicate: #Predicate { $0.tmdbId == tmdbId })
-                )) ?? []
-                if let match = movieMatches.first(where: { owned($0.id) && $0.id != movie.id }) {
-                    resolved.append(.movie(match))
-                    continue
-                }
-                let seriesMatches = (try? modelContext.fetch(
-                    FetchDescriptor<Series>(predicate: #Predicate { $0.tmdbId == tmdbId })
-                )) ?? []
-                if let match = seriesMatches.first(where: { owned($0.id) }) {
-                    resolved.append(.series(match))
-                }
-            }
-            similar = Array(resolved.prefix(12))
+            similar = RelatedTitlesResolver.similar(to: movie, in: modelContext)
         }
 
         private func resolveCollection() async {
@@ -334,22 +297,7 @@
                 return
             }
 
-            let playlistPrefix = movie.id.components(separatedBy: "-movie-").first
-            func owned(_ id: String) -> Bool {
-                guard let prefix = playlistPrefix else { return true }
-                return id.hasPrefix(prefix)
-            }
-
-            var resolved: [HomeMediaItem] = []
-            for tmdbId in partIDs {
-                let movieMatches = (try? modelContext.fetch(
-                    FetchDescriptor<Movie>(predicate: #Predicate { $0.tmdbId == tmdbId })
-                )) ?? []
-                if let match = movieMatches.first(where: { owned($0.id) && $0.id != movie.id }) {
-                    resolved.append(.movie(match))
-                }
-            }
-            collectionMovies = resolved
+            collectionMovies = RelatedTitlesResolver.collectionParts(partIDs, of: movie, in: modelContext)
         }
 
         private func resolveOtherSources() {
