@@ -4,7 +4,6 @@ import OSLog
 import QuartzCore
 import SwiftUI
 
-@available(iOS 16.0, macOS 13.0, tvOS 16.0, *)
 extension KSPlayerEngineView {
     // MARK: - Loading state
 
@@ -363,7 +362,6 @@ extension KSPlayerEngineView {
 // MARK: - PiP observation
 
 #if !os(tvOS)
-    @available(iOS 16.0, macOS 13.0, *)
     extension KSPlayerEngineView {
         /// Poll until playerLayer is available, then observe its published isPipActive.
         /// The `for await` holds the layer strongly, so this task must be cancelled on

@@ -1,22 +1,28 @@
 import Foundation
 import SwiftData
 
+/// Where a movie or episode counts as watched: the fraction of its duration
+/// `WatchProgressWriter` marks it finished at, and the earliest point
+/// `OutroTrigger` may arm the Next Episode button — one line, so advancing
+/// never leaves an unfinished item behind.
+nonisolated enum WatchCompletion {
+    static let threshold = 0.9
+
+    static func isComplete(progress: TimeInterval, duration: TimeInterval) -> Bool {
+        duration > 0 && progress / duration >= threshold
+    }
+}
+
 /// Persists VOD watch progress on a private background `ModelContext` so that
 /// saving never runs on the main thread.
 ///
 /// KSPlayer's render loop drops frames if a `ModelContext.save()` blocks the
-/// main actor mid-playback — the periodic progress sampler used to do exactly
-/// that every 5s. This actor owns its own context off the main thread (the same
-/// pattern `ContentSyncManager` uses), so the player host only has to hand it a
-/// few `Sendable` values; the fetch and the disk write happen here, away from
-/// the render thread.
+/// main actor mid-playback. This actor owns its own context off the main thread
+/// (the same pattern `ContentSyncManager` uses), so the player host only has to
+/// hand it a few `Sendable` values; the fetch and the disk write happen here,
+/// away from the render thread.
 actor WatchProgressWriter {
     private let context: ModelContext
-
-    /// The ref + progress of the most recent write, so the periodic sampler can
-    /// skip redundant saves while playback is paused (the clock isn't moving).
-    private var lastRef: PlayableMedia.ContentRef?
-    private var lastProgress: TimeInterval = -1
 
     /// Surfaced when an item crosses the "watched" line on this write, so the
     /// caller can fire a one-time Trakt sync back on the main actor.
@@ -31,44 +37,17 @@ actor WatchProgressWriter {
         context.autosaveEnabled = false
     }
 
-    /// Commit any progress left in `WatchProgressBuffer` by a crashed/killed
-    /// session into SwiftData. Runs once at launch, off the main thread, so the
-    /// one resulting store merge happens before playback ever starts.
-    static func reconcilePending(container: ModelContainer) async {
-        let entries = WatchProgressBuffer.drain()
-        guard !entries.isEmpty else { return }
-        let writer = WatchProgressWriter(container: container)
-        for entry in entries {
-            await writer.record(
-                ref: entry.contentRef,
-                progress: entry.progress,
-                duration: entry.duration,
-                force: true
-            )
-        }
-    }
-
     /// Write `progress` for `ref` and return a `Completion` if the item just
-    /// became watched (≥ 90%). `force` bypasses the paused-playback dedup so
-    /// the final save on close/switch always lands.
+    /// became watched (`WatchCompletion.threshold`).
     @discardableResult
     func record(
         ref: PlayableMedia.ContentRef,
         progress: TimeInterval,
-        duration: TimeInterval,
-        force: Bool
+        duration: TimeInterval
     ) -> Completion? {
         guard progress > 0 else { return nil }
 
-        // Reset dedup state when the active stream changes (in-player episode swaps).
-        if ref != lastRef {
-            lastRef = ref
-            lastProgress = -1
-        }
-        if !force, progress == lastProgress { return nil }
-        lastProgress = progress
-
-        let completed = duration > 0 && progress / duration >= 0.9
+        let completed = WatchCompletion.isComplete(progress: progress, duration: duration)
 
         do {
             switch ref {
@@ -81,8 +60,8 @@ actor WatchProgressWriter {
                 return nil
             }
         } catch {
-            // A dropped progress write is recoverable on the next tick; never
-            // crash playback over it.
+            // A dropped progress write is recoverable at the next boundary;
+            // never crash playback over it.
             return nil
         }
     }
@@ -96,8 +75,6 @@ actor WatchProgressWriter {
     /// its place in Continue Watching and never reach Trakt.
     @discardableResult
     func markWatched(ref: PlayableMedia.ContentRef, duration: TimeInterval) -> Completion? {
-        lastRef = ref
-        lastProgress = duration
         do {
             switch ref {
             case let .movie(id):
@@ -118,9 +95,7 @@ actor WatchProgressWriter {
         completed: Bool,
         ref: PlayableMedia.ContentRef
     ) throws -> Completion? {
-        var descriptor = FetchDescriptor<Movie>(predicate: #Predicate { $0.id == id })
-        descriptor.fetchLimit = 1
-        guard let movie = try context.fetch(descriptor).first else { return nil }
+        guard let movie = PlayerContentLookup.movie(id, in: context) else { return nil }
 
         movie.watchProgress = progress
         movie.lastWatchedDate = Date()
@@ -141,9 +116,7 @@ actor WatchProgressWriter {
         completed: Bool,
         ref: PlayableMedia.ContentRef
     ) throws -> Completion? {
-        var descriptor = FetchDescriptor<Episode>(predicate: #Predicate { $0.id == id })
-        descriptor.fetchLimit = 1
-        guard let episode = try context.fetch(descriptor).first else { return nil }
+        guard let episode = PlayerContentLookup.episode(id, in: context) else { return nil }
 
         episode.watchProgress = progress
         episode.lastWatchedDate = Date()
@@ -162,9 +135,7 @@ actor WatchProgressWriter {
     }
 
     private func touchLive(id: String) throws {
-        var descriptor = FetchDescriptor<LiveStream>(predicate: #Predicate { $0.id == id })
-        descriptor.fetchLimit = 1
-        guard let stream = try context.fetch(descriptor).first else { return }
+        guard let stream = PlayerContentLookup.liveStream(id, in: context) else { return }
         stream.lastWatchedDate = Date()
         try context.save()
     }

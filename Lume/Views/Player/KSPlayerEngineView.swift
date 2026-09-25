@@ -10,7 +10,6 @@ import SwiftUI
 /// Apple-TV-style overlay the VLCKit engine uses — via the `KSTVPlaybackEngine`
 /// adapter, so both engines present an identical player UI. On iOS / macOS it
 /// layers its own Apple-style controls (`KSPlayerControlsOverlay`).
-@available(iOS 16.0, macOS 13.0, tvOS 16.0, *)
 struct KSPlayerEngineView: View {
     let media: PlayableMedia
     /// High-frequency playback clock, threaded down as the `@Observable` object
@@ -22,6 +21,9 @@ struct KSPlayerEngineView: View {
     /// `duration`; only the scrubber leaf does, so a tick invalidates nothing
     /// but that leaf.
     var clock: PlaybackClock
+    /// The host's stream-change serialiser (`FullScreenPlayerView.mediaSwapper`):
+    /// the Siri remote's channel surfing and the on-screen transport controls
+    /// share it, so two swaps can never be in flight at once.
     let mediaSwapper: PlayerMediaSwapper
     /// The episode queued after `media`, resolved by the host. Drives the
     /// end-of-episode Next Up affordances; `nil` when there is nothing to play
@@ -118,10 +120,6 @@ struct KSPlayerEngineView: View {
     @State var hideTask: Task<Void, Never>?
     @State private var hoverHideTask: Task<Void, Never>?
     @State var pipObservationTask: Task<Void, Never>?
-    // Serialises stream changes for this session — the Siri remote's channel
-    // surfing and the on-screen transport controls share it, so two swaps can
-    // never be in flight at once. `internal` so the channel switching in
-    // `KSPlayerEngineView+TVChannels.swift` can reach it; never read from a body.
 
     #if os(tvOS)
         /// Republishes KSPlayer state to the shared overlay (`isPlaying`,

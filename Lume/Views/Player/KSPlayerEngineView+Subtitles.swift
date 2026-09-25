@@ -10,7 +10,6 @@
 
 import SwiftUI
 
-@available(iOS 16.0, macOS 13.0, tvOS 16.0, *)
 extension KSPlayerEngineView {
     /// Raises the OpenSubtitles browser, or `nil` when this stream can't use it
     /// (a live channel, or no API key in the build). A `nil` action also drops

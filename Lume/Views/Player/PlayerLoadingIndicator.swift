@@ -14,7 +14,6 @@ import SwiftUI
 /// optional `title` is supplied only on the first open — where the dimmed
 /// backdrop reads as "Loading <title>…" — and dropped for mid-stream stalls so
 /// the spinner sits unobtrusively over the paused frame.
-@available(iOS 16.0, macOS 13.0, tvOS 16.0, *)
 struct PlayerLoadingIndicator: View {
     let title: String?
 

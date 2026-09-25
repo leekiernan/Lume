@@ -24,9 +24,7 @@ enum SubtitleSearchQuery {
     static func resolve(for ref: PlayableMedia.ContentRef, in context: ModelContext) -> OpenSubtitlesQuery? {
         switch ref {
         case let .movie(id):
-            var descriptor = FetchDescriptor<Movie>(predicate: #Predicate { $0.id == id })
-            descriptor.fetchLimit = 1
-            guard let movie = try? context.fetch(descriptor).first else { return nil }
+            guard let movie = PlayerContentLookup.movie(id, in: context) else { return nil }
             return OpenSubtitlesQuery(
                 text: movie.name,
                 imdbId: movie.imdbId,
@@ -34,9 +32,7 @@ enum SubtitleSearchQuery {
             )
 
         case let .episode(id):
-            var descriptor = FetchDescriptor<Episode>(predicate: #Predicate { $0.id == id })
-            descriptor.fetchLimit = 1
-            guard let episode = try? context.fetch(descriptor).first else { return nil }
+            guard let episode = PlayerContentLookup.episode(id, in: context) else { return nil }
             let series = episode.series
             return OpenSubtitlesQuery(
                 // The series name, not the episode title: OpenSubtitles matches

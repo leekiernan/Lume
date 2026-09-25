@@ -6,7 +6,8 @@
 //  this once per stream, in `.task(id: activeMedia.id)`, and hands the answer
 //  down to whichever engine is driving playback: resolving it in a body would
 //  put a SwiftData fetch on the main actor every time the controls re-render,
-//  and three of the four overlays re-render on the playback clock.
+//  and two of the four overlays (AVPlayer's and VLCKit's) re-render on the
+//  playback clock.
 //
 
 import SwiftData
@@ -57,7 +58,7 @@ extension FullScreenPlayerView {
         stopTraktScrobble()
         // Flush the outgoing stream's progress before the clock resets — capture
         // happens synchronously inside `persistProgressDetached`.
-        persistProgressDetached(force: true)
+        persistProgressDetached()
         // The completion claim covers exactly that one flush. Left standing, a
         // step back onto the same episode would never record progress again.
         completedRef = nil
@@ -131,7 +132,6 @@ extension FullScreenPlayerView {
             // stream settles first, so the completion is the last word.
             await previous?.value
             let completion = await writer.markWatched(ref: ref, duration: total)
-            WatchProgressBuffer.remove(ref: ref)
             if let completion {
                 syncWatchedServices(ref: completion.ref)
                 AppStoreReviewPrompt.shared.noteCompletedTitle()
