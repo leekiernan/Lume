@@ -237,16 +237,19 @@ extension ContentSyncManager {
         }
     }
 
+    /// This playlist's categories of `type`, keyed by provider `apiId`. The
+    /// `"<playlist>-<type>-"` id prefix scopes both at once, and `starts(with:)`
+    /// compiles to a range seek on the unique `id` index — no other playlist's
+    /// rows are read.
     func buildExistingCategoryLookup(context: ModelContext, playlistId: UUID, type: CategoryType) -> [String: Category] {
         let prefix = "\(playlistId.uuidString)-\(type.rawValue)-"
-        let typeRaw = type.rawValue
         let descriptor = FetchDescriptor<Category>(
-            predicate: #Predicate { $0.typeRaw == typeRaw }
+            predicate: #Predicate { $0.id.starts(with: prefix) }
         )
-        guard let allCategories = try? context.fetch(descriptor) else { return [:] }
+        guard let categories = try? context.fetch(descriptor) else { return [:] }
         var lookup: [String: Category] = [:]
-        lookup.reserveCapacity(allCategories.count)
-        for category in allCategories where category.id.hasPrefix(prefix) {
+        lookup.reserveCapacity(categories.count)
+        for category in categories {
             lookup[category.apiId] = category
         }
         return lookup
