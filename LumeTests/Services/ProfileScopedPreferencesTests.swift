@@ -64,6 +64,40 @@ struct ProfileScopedPreferencesTests {
         }
     }
 
+    /// The one key table drives the key list, the boolean subset and each
+    /// boolean's default; pin them to the values the three hand-kept lists had.
+    @Test func `key table derives the historical lists`() {
+        var expectedBases = [
+            AppAreaSettings.baseDisabledAreasKey,
+            RecommendationSettings.baseEnabledKey,
+            SportsSyncService.baseEnabledKey,
+            SportsSyncService.baseTabEnabledKey,
+            SportsSyncService.baseSyncFrequencyKey
+        ]
+        for surface in SectionSurface.allCases {
+            expectedBases.append(HomeLayoutSettings.baseSectionOrderKey(surface))
+            expectedBases.append(HomeLayoutSettings.baseDisabledSectionsKey(surface))
+            expectedBases.append(HomeLayoutSettings.baseHeroSectionKey(surface))
+            expectedBases.append(HomeLayoutSettings.baseHeroSeededKey(surface))
+            expectedBases.append(CustomHomeSections.baseStorageKey(surface))
+        }
+        #expect(ProfileScopedPreferences.scopedBaseKeys == expectedBases)
+        #expect(ProfileScopedPreferences.booleanBaseKeys == [
+            RecommendationSettings.baseEnabledKey,
+            SportsSyncService.baseEnabledKey,
+            SportsSyncService.baseTabEnabledKey
+        ])
+
+        let defaults = Dictionary(uniqueKeysWithValues: ProfileScopedPreferences.scopedKeys.compactMap { entry in
+            if case let .bool(value) = entry.kind { (entry.base, value) } else { nil }
+        })
+        #expect(defaults == [
+            RecommendationSettings.baseEnabledKey: RecommendationSettings.enabledDefault,
+            SportsSyncService.baseEnabledKey: SportsSyncService.enabledDefault,
+            SportsSyncService.baseTabEnabledKey: SportsSyncService.tabEnabledDefault
+        ])
+    }
+
     @Test func `scoped keys are unique across surfaces`() {
         withActiveProfile(Self.profileA) {
             let keys = ProfileScopedPreferences.scopedBaseKeys

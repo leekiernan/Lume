@@ -20,7 +20,7 @@ import Testing
 struct PremiumPlanTests {
     /// The IDs must match App Store Connect exactly — a typo here means
     /// `Product.products(for:)` silently returns fewer products and the paywall
-    /// renders a spinner forever.
+    /// has fewer (or no) plans to offer.
     @Test func `product ids match app store connect`() {
         #expect(PremiumManager.Plan.monthly.rawValue == "com.bilipp.lume.pro.monthly")
         #expect(PremiumManager.Plan.lifetime.rawValue == "com.bilipp.lume.premium.lifetime")
@@ -49,5 +49,16 @@ struct PremiumPlanTests {
     @Test func `every plan is still honoured as an entitlement`() {
         #expect(PremiumManager.Plan.allCases.count == 3)
         #expect(Set(PremiumManager.Plan.allCases.map(\.rawValue)).count == 3)
+    }
+
+    /// The benefits lists only advertise what the platform offers: Apple TV has
+    /// no offline downloads, everywhere else has every feature.
+    @Test func `benefits list only this platform's features`() {
+        #if os(tvOS)
+            #expect(!PremiumFeature.availableOnThisPlatform.contains(.downloads))
+            #expect(PremiumFeature.availableOnThisPlatform.count == PremiumFeature.allCases.count - 1)
+        #else
+            #expect(PremiumFeature.availableOnThisPlatform == PremiumFeature.allCases)
+        #endif
     }
 }

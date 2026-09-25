@@ -30,12 +30,7 @@ import SwiftUI
                 tvActionsSection
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .alert("Delete Playlist", isPresented: $showDeleteConfirmation) {
-                Button("Cancel", role: .cancel) {}
-                Button("Delete", role: .destructive) { deletePlaylist() }
-            } message: {
-                Text("All synced content for this playlist will also be removed.")
-            }
+            .playlistDeletionConfirmation(isPresented: $showDeleteConfirmation) { deletePlaylist() }
             .fullScreenCover(isPresented: $showSync) {
                 SyncProgressView(playlist: playlist)
             }
