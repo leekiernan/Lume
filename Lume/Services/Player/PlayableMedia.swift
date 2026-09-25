@@ -36,6 +36,11 @@ struct PlayableMedia: Identifiable, Hashable, Codable {
     /// and `id` stay clean, and a restored window carries no credential-bearing
     /// MRL into a deep link, a Cast payload or a download task description.
     let httpHeaders: [String: String]?
+    /// Where this stream sits inside the programme it replays, for catch-up
+    /// (timeshift) media; `nil` for everything else. Its presence is what
+    /// makes the player keep programme time on screen and answer seeks by
+    /// opening a new segment — see `CatchupTimeline`.
+    let catchup: CatchupTimeline?
 
     nonisolated init(
         id: String,
@@ -47,7 +52,8 @@ struct PlayableMedia: Identifiable, Hashable, Codable {
         startTime: TimeInterval,
         contentRef: ContentRef,
         channelScope: LiveChannelScope? = nil,
-        httpHeaders: [String: String]? = nil
+        httpHeaders: [String: String]? = nil,
+        catchup: CatchupTimeline? = nil
     ) {
         self.id = id
         self.url = url
@@ -59,6 +65,7 @@ struct PlayableMedia: Identifiable, Hashable, Codable {
         self.contentRef = contentRef
         self.channelScope = channelScope
         self.httpHeaders = httpHeaders
+        self.catchup = catchup
     }
 
     var isLive: Bool {
@@ -82,7 +89,8 @@ struct PlayableMedia: Identifiable, Hashable, Codable {
             startTime: position,
             contentRef: contentRef,
             channelScope: channelScope,
-            httpHeaders: httpHeaders
+            httpHeaders: httpHeaders,
+            catchup: catchup
         )
     }
 
@@ -103,7 +111,8 @@ struct PlayableMedia: Identifiable, Hashable, Codable {
             startTime: startTime,
             contentRef: contentRef,
             channelScope: channelScope,
-            httpHeaders: httpHeaders
+            httpHeaders: httpHeaders,
+            catchup: catchup
         )
     }
 }
@@ -299,20 +308,55 @@ extension PlayableMedia {
         start: Date,
         end: Date
     ) -> PlayableMedia? {
+        catchup(stream: stream, playlist: playlist, programTitle: programTitle, start: start, end: end, segmentStart: start)
+    }
+
+    // The opening overload's five parameters, plus where to start.
+    // swiftlint:disable function_parameter_count
+    /// One segment of a catch-up programme: the archive opened at
+    /// `segmentStart` (floored to its wall-clock minute, the granularity a
+    /// timeshift URL can name, and kept inside the programme) and running to
+    /// the programme's end. The player seeks a catch-up programme by opening a
+    /// new segment rather than byte-seeking one long stream — see
+    /// `CatchupTimeline`. Every segment has its own `id`, so the host's swap
+    /// path lets a new one through; they share `playbackSessionID`.
+    static func catchup(
+        stream: LiveStream,
+        playlist: Playlist,
+        programTitle: String,
+        start: Date,
+        end: Date,
+        segmentStart: Date
+    ) -> PlayableMedia? {
         guard stream.supportsCatchup else { return nil }
-        let durationMinutes = max(1, Int((end.timeIntervalSince(start) / 60).rounded(.up)))
+        let origin = CatchupTimeline.minuteFloor(start)
+        let latest = max(origin, CatchupTimeline.minuteFloor(end.addingTimeInterval(-CatchupSeekPlanner.step)))
+        let segment = min(max(CatchupTimeline.minuteFloor(segmentStart), origin), latest)
+        // Measured from the programme's own start for the opening segment, so
+        // a programme that starts mid-minute still asks for its listed length.
+        let from = max(segment, start)
+        let durationMinutes = max(1, Int((end.timeIntervalSince(from) / 60).rounded(.up)))
         guard let url = XtreamClient.buildCatchupURL(
-            for: stream, playlist: playlist, start: start, durationMinutes: durationMinutes
+            for: stream, playlist: playlist, start: segment, durationMinutes: durationMinutes
         ) else { return nil }
+        let timeline = CatchupTimeline(
+            streamID: stream.id,
+            programmeTitle: programTitle,
+            programmeStart: start,
+            programmeEnd: end,
+            segmentStart: segment
+        )
         return PlayableMedia(
-            id: "catchup-\(stream.id)-\(Int(start.timeIntervalSince1970))",
+            id: "catchup-\(stream.id)-\(Int(start.timeIntervalSince1970))-\(Int(segment.timeIntervalSince1970))",
             url: url,
             title: stream.name,
             subtitle: programTitle,
             posterURL: URL(string: stream.streamIcon ?? ""),
             kind: .vod,
             startTime: 0,
-            contentRef: .live(stream.id)
+            contentRef: .live(stream.id),
+            catchup: timeline
         )
     }
+    // swiftlint:enable function_parameter_count
 }
