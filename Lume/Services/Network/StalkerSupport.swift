@@ -200,8 +200,8 @@ enum StalkerError: LocalizedError {
     /// Whether the failure is likely transient and worth retrying.
     var isRetriable: Bool {
         switch self {
-        case .networkError:
-            true
+        case let .networkError(error):
+            TransientNetworkError.isTransient(error)
         case let .serverError(code):
             code >= 500
         case .invalidURL, .handshakeFailed, .authenticationFailed, .noStreamURL,

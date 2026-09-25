@@ -40,9 +40,10 @@ nonisolated enum XtreamError: LocalizedError {
     /// rate limit, so those call sites opt in via `retryAuthFailure`.
     var isRetriable: Bool {
         switch self {
-        case .networkError:
-            // Timeouts, connection reset (RST), lost connection — transient.
-            true
+        case let .networkError(error):
+            // Timeouts, connection reset (RST), lost connection — but not a
+            // cancellation, an unsupported URL or a TLS failure.
+            TransientNetworkError.isTransient(error)
         case let .serverError(code):
             code >= 500
         case .invalidURL, .authenticationFailed, .decodingError, .invalidResponse:

@@ -139,6 +139,12 @@ struct StalkerSupportTests {
         #expect(!error.isAuthFailure)
     }
 
+    @Test func `error networkError is not retriable when cancelled or TLS failed`() {
+        #expect(!StalkerError.networkError(URLError(.cancelled)).isRetriable)
+        #expect(!StalkerError.networkError(URLError(.secureConnectionFailed)).isRetriable)
+        #expect(StalkerError.networkError(URLError(.timedOut)).isRetriable)
+    }
+
     @Test func `error serverError above 500 is retriable`() {
         let error = StalkerError.serverError(503)
         #expect(error.isRetriable)
