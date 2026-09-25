@@ -276,6 +276,14 @@ struct OpenSubtitlesClientTests {
 
     /// The engines pick their subtitle parser from the path extension, so the
     /// `.srt` suffix is load-bearing.
+    @Test func `status codes map to distinct errors`() {
+        #expect(OpenSubtitlesClient.error(forStatus: 401, isLogin: true) == .invalidCredentials)
+        #expect(OpenSubtitlesClient.error(forStatus: 401, isLogin: false) == .notAuthenticated)
+        #expect(OpenSubtitlesClient.error(forStatus: 406, isLogin: false) == .quotaExceeded)
+        #expect(OpenSubtitlesClient.error(forStatus: 429, isLogin: false) == .rateLimited)
+        #expect(OpenSubtitlesClient.error(forStatus: 500, isLogin: false) == .server(500))
+    }
+
     @Test func `cached files are named srt and keyed by subtitle id`() {
         let subtitle = OnlineSubtitle(
             id: "42",
