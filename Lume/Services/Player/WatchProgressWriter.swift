@@ -1,6 +1,18 @@
 import Foundation
 import SwiftData
 
+/// Where a movie or episode counts as watched: the fraction of its duration
+/// `WatchProgressWriter` marks it finished at, and the earliest point
+/// `OutroTrigger` may arm the Next Episode button — one line, so advancing
+/// never leaves an unfinished item behind.
+nonisolated enum WatchCompletion {
+    static let threshold = 0.9
+
+    static func isComplete(progress: TimeInterval, duration: TimeInterval) -> Bool {
+        duration > 0 && progress / duration >= threshold
+    }
+}
+
 /// Persists VOD watch progress on a private background `ModelContext` so that
 /// saving never runs on the main thread.
 ///
@@ -26,7 +38,7 @@ actor WatchProgressWriter {
     }
 
     /// Write `progress` for `ref` and return a `Completion` if the item just
-    /// became watched (≥ 90%).
+    /// became watched (`WatchCompletion.threshold`).
     @discardableResult
     func record(
         ref: PlayableMedia.ContentRef,
@@ -35,7 +47,7 @@ actor WatchProgressWriter {
     ) -> Completion? {
         guard progress > 0 else { return nil }
 
-        let completed = duration > 0 && progress / duration >= 0.9
+        let completed = WatchCompletion.isComplete(progress: progress, duration: duration)
 
         do {
             switch ref {

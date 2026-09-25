@@ -86,4 +86,14 @@ struct OutroTriggerTests {
         let rounding = IntroSegments.Segment(start: 950, end: 1001)
         #expect(OutroTrigger.armTime(outro: rounding, duration: duration) == 950)
     }
+
+    @Test func `fallback arm point is where the writer counts the episode watched`() throws {
+        let armed = try #require(OutroTrigger.armTime(outro: nil, duration: duration))
+        #expect(WatchCompletion.isComplete(progress: armed, duration: duration))
+        #expect(!WatchCompletion.isComplete(progress: armed - 1, duration: duration))
+    }
+
+    @Test func `nothing is complete without a known duration`() {
+        #expect(!WatchCompletion.isComplete(progress: 100, duration: 0))
+    }
 }
