@@ -527,8 +527,8 @@ struct KSPlayerEngineView: View {
                     }
                 }
             }
-            .onKeyPress(.leftArrow) { skip(by: -15); resetHideTimer(); return .handled }
-            .onKeyPress(.rightArrow) { skip(by: 15); resetHideTimer(); return .handled }
+            .onKeyPress(.leftArrow) { skip(by: -media.skipInterval(default: 15)); resetHideTimer(); return .handled }
+            .onKeyPress(.rightArrow) { skip(by: media.skipInterval(default: 15)); resetHideTimer(); return .handled }
             .liveChannelKeyNavigation(
                 neighbours: itemNeighbours, swapper: mediaSwapper,
                 onSelect: { onSelectMedia?($0) }, onResetHideTimer: resetHideTimer
