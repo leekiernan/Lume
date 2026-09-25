@@ -186,6 +186,25 @@ final class TrackerMutationOutbox {
         }
     }
 
+    /// Moves everything queued under `legacyAccount` into `account`, for a
+    /// tracker whose partition key changed. The legacy changes are older, so
+    /// they go first, and one the new partition already supersedes (same kind
+    /// and target) is dropped.
+    func adoptMutations(from legacyAccount: String, into account: String) {
+        let legacyAccount = Self.normalize(legacyAccount)
+        guard legacyAccount != Self.normalize(account),
+              let legacy = state.accounts[legacyAccount]
+        else { return }
+        state.accounts[legacyAccount] = nil
+        mutateAccount(account) { mutations in
+            let superseded = legacy.filter { old in
+                mutations.contains { $0.kind == old.kind && $0.target == old.target }
+            }
+            let kept = legacy.filter { old in !superseded.contains { $0.id == old.id } }
+            mutations.insert(contentsOf: kept, at: 0)
+        }
+    }
+
     func status(account: String) -> TrackerMutationStatus {
         let mutations = state.accounts[Self.normalize(account)] ?? []
         return TrackerMutationStatus(

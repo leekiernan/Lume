@@ -151,10 +151,10 @@ nonisolated struct SimklClient {
 
     // MARK: - User
 
-    /// The connected user's profile (used to show "Connected as …").
-    func currentUser(accessToken: String) async throws -> SimklUser {
-        let settings: SimklUserSettings = try await get("/users/settings", accessToken: accessToken)
-        return settings.user
+    /// The connected user's settings: the display name for "Connected as …"
+    /// and the account id that scopes queued watched changes.
+    func userSettings(accessToken: String) async throws -> SimklUserSettings {
+        try await get("/users/settings", accessToken: accessToken)
     }
 
     // MARK: - Watched history (sync)
@@ -360,10 +360,18 @@ private nonisolated struct SimklOAuthError: Decodable {
 
 nonisolated struct SimklUserSettings: Decodable {
     let user: SimklUser
+    /// Optional so a sparse response still yields a name; without it the
+    /// account falls back to a username scope.
+    let account: SimklAccount?
 }
 
 nonisolated struct SimklUser: Decodable {
     let name: String
+}
+
+/// Simkl's numeric account id is stable; the display name is not.
+nonisolated struct SimklAccount: Decodable {
+    let id: Int?
 }
 
 // MARK: - Sync payloads
