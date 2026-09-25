@@ -14,9 +14,12 @@ of the existing catalog: it never adds channels, and playback only ever targets 
 ```
 Services/Sports/
 ├── SportsModels.swift        Value types: SportsFixture / Competitor / Team /
-│                             League / StandingRow / EventDetail / F1 sessions
+│                             League / StandingRow / F1 sessions
+├── SportsEventDetail.swift   Game-detail value types: key events, stats, lineups
+├── SportsTennis.swift        Set scores, the tour's singles draw, round labels
 ├── SportsDataProvider.swift  The source-agnostic protocol (below)
 ├── ESPNClient.swift          v1 provider — ESPN's keyless site/web API
+├── ESPNClient+Tennis.swift   Tennis's tournament/draw shape and the rankings
 ├── ESPNDTOs.swift            All-optional Codable DTOs for the ESPN JSON
 ├── SportsCatalog.swift       League lookups, browse order, per-region defaults
 ├── SportsCatalog+Leagues.swift  The curated table itself (~160 leagues, 23 sections)
@@ -27,6 +30,8 @@ Services/Sports/
 ├── SportsFollowService.swift Follows (per profile, ordered) + region pre-follows
 ├── SportsMatcher.swift       Pure team-token matching (+ SportsTeamAliases.json)
 ├── SportsChannelResolver.swift  Fixture → channel resolve (below)
+├── SportsChannelResolver+Racing.swift  Race sessions: series + session words
+├── SportsChannelResolver+Competition.swift  Tour-wide blocks (tennis)
 └── SportsChannelPicks.swift  Device-local remembered channel picks
 ```
 
@@ -79,6 +84,30 @@ the single source every sports view reads. `SportsSyncService` fills it: a
 scheduled refresh (`SyncFrequency`, key `sports.syncFrequency`) plus a 60 s
 live-score poll that runs only while the hub is visible and is paused during
 playback.
+
+## Tennis
+
+ESPN has two tennis leagues, `tennis/atp` and `tennis/wta`, and neither looks
+like a team sport. A scoreboard event is a whole tournament; its matches sit in
+`groupings[]` per draw (men's singles, women's doubles…), not in `competitions`.
+`ESPNClient+Tennis` makes each match its own two-sided fixture, and keeps only
+the tour's own main-draw singles: the WTA feed carries a combined event's men's
+draw too, and qualifying, doubles and TBD slots would add hundreds of cards a
+month. `name` is the tournament and `round` its stage, which the card and the
+detail sheets show as "China Open · Quarterfinal". A match not yet on an order
+of play has `timeValid: false` and a placeholder start, so it shows "TBD".
+
+A player stands in for a team: the athlete id is the team id, the country flag
+is the crest (headshots exist only for the top players), and `sets` carries the
+games per set while `score` is the sets won. `/teams` and `/standings` come back
+empty, so the world ranking (`/rankings`, top 150) supplies both the followable
+players and the table (`SportsStandingKind.player`). `/summary` is an HTTP 400
+for every id, so a match has no timeline or stats. The channel matcher uses a
+player's surname only, since a first name alone would match every namesake.
+Tennis channels mostly air a tour-wide block for hours ("Live ATP & WTA: Die
+Topspiele des Tages"), so a match with a real time slot also picks up any
+programme naming its tour that is on air at its start, as the lowest tier
+(`epgCompetition`), ranked by the tournament name ("Chengdu") in the headline.
 
 ## Team colours and the crest fallback
 
@@ -133,12 +162,32 @@ match `score`, then on proximity to kickoff:
 | 2 | `epgSingleField` | The EPG programme names both teams, but split across the title and sub-title. |
 | 3 | `epgDescription` | Both teams appear only in the programme's description — a multi-game conference whose title says nothing about this fixture. |
 | 4 | `channelName` | No EPG match; the channel's own name names both teams (`"DAZN 5 | Bayern vs Dortmund"`). |
+| 5 | `epgCompetition` | A tour-wide block on air at the start that names no match (`"Live ATP & WTA: Die Topspiele des Tages"`) — tennis only, see `SportsChannelResolver+Competition`. Never confident: the block may not show this match. |
 
 A team is "present" when any distinctive token from `SportsMatcher.tokens(for:)`
 (aliases from the bundled `SportsTeamAliases.json`) appears as a whole word in a
 `SportsMatcher.normalize`d haystack.
 
-A competitor-less event (an F1 session, a UFC card) has no teams, so it is
+### Race sessions
+
+A race session (an F1 weekend card per session, see `expandedBySession`) has no
+two teams, so `SportsChannelResolver+Racing` matches it on the **series**
+(`SportsRaceMatcher.seriesPhrases`: "F1", "Formel 1", "Formula 1"…) and the
+**session** named in the guide ("1. Freies Training", "Practice Two", "Quali",
+"Das Rennen"…, in the app's languages). The same tiers apply:
+
+| Tier | Race signal |
+|---|---|
+| `epgTitleSubtitle` | Series and this session together in one field — or the session on a series-named channel ("Sky Sports F1" · "1. Freies Training"). |
+| `epgSingleField` | The series in the headline, the session split off or not named at all ("Formel 1 - Grand Prix von Aserbaidschan"); the kickoff window decides. |
+| `epgDescription` | The series only in the description. |
+| `channelName` | A series-named channel with nothing in its guide at the session's start. |
+
+A programme naming a **different** session of the weekend, or a support series
+(F2, F3, F1 Academy, Supercup), is never offered. The series phrase is cut before
+session words are read, so the "1" of "Formel 1 Training" isn't practice 1.
+
+Any other competitor-less event (a UFC card, say) has no teams either, so it is
 matched on its event name instead: every token of its `name` or `shortName`
 (names of at least two tokens only) must appear across a programme's title and
 sub-title, or in the channel's own name. A remembered pick for the competition

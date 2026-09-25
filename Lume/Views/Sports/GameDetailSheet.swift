@@ -34,6 +34,7 @@ struct GameDetailSheet: View {
     @State private var isLoadingDetail = false
     @State private var fetchedStandings: [SportsStandingRow] = []
     @State private var selfResolved: [ResolvedChannel] = []
+    @AppStorage(SportsSyncService.hideScoresKey) private var hidesScores = false
 
     private var channels: [ResolvedChannel] {
         resolved.isEmpty ? selfResolved : resolved
@@ -88,6 +89,19 @@ struct GameDetailSheet: View {
     }
 
     private var leagueLine: some View {
+        VStack(spacing: 4) {
+            leagueNameLine
+            if let tournament = fixture.tournamentLine {
+                Text(verbatim: tournament)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .multilineTextAlignment(.center)
+    }
+
+    private var leagueNameLine: some View {
         HStack(spacing: 8) {
             if let logo = leagueLogoURL {
                 CachedAsyncImage(url: logo, maxPixelSize: 40) { phase in
@@ -190,15 +204,17 @@ struct GameDetailSheet: View {
                 .font(.headline)
                 .multilineTextAlignment(.center)
                 .lineLimit(2)
-            if let record = competitor.record, !record.isEmpty {
-                Text(verbatim: record)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            if let form = competitor.form, !form.isEmpty {
-                Text(verbatim: form)
-                    .font(.caption.monospaced())
-                    .foregroundStyle(.secondary)
+            if showsRecordAndForm {
+                if let record = competitor.record, !record.isEmpty {
+                    Text(verbatim: record)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                if let form = competitor.form, !form.isEmpty {
+                    Text(verbatim: form)
+                        .font(.caption.monospaced())
+                        .foregroundStyle(.secondary)
+                }
             }
             followButton(competitor.team)
         }
@@ -211,8 +227,9 @@ struct GameDetailSheet: View {
         case .final:
             VStack(spacing: 6) {
                 scoreText
+                setsText
                 EndedBadge(fontSize: 12)
-                if let qualifier = fixture.status.localizedEndingQualifier(family: fixture.periodFamily) {
+                if !hidesScores, let qualifier = fixture.status.localizedEndingQualifier(family: fixture.periodFamily) {
                     Text(verbatim: qualifier)
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -221,17 +238,35 @@ struct GameDetailSheet: View {
         case .inProgress:
             VStack(spacing: 6) {
                 scoreText
+                setsText
                 LiveBadge(fontSize: 12)
-                if let line = fixture.status.localizedLiveDetail(family: fixture.periodFamily) {
+                if let line = fixture.status.liveDetail(family: fixture.periodFamily, hidingScores: hidesScores) {
                     Text(verbatim: line)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
             }
         case .scheduled, .postponed:
-            Text(fixture.startDate, format: .dateTime.hour().minute())
+            Text(fixture.startDate, format: fixture.startTimeIsTentative == true
+                ? .dateTime.weekday(.abbreviated).day().month(.abbreviated)
+                : .dateTime.hour().minute())
                 .font(.system(size: 34, weight: .semibold, design: .rounded))
                 .monospacedDigit()
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+        }
+    }
+
+    /// A tennis match set by set, under the sets-won score.
+    @ViewBuilder
+    private var setsText: some View {
+        if !hidesScores, let sets = fixture.setsLine {
+            Text(verbatim: sets)
+                .font(.subheadline.weight(.semibold))
+                .monospacedDigit()
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
         }
     }
 
@@ -241,7 +276,7 @@ struct GameDetailSheet: View {
     /// truncates to "19…" — and shrinks rather than clips if even that is tight.
     @ViewBuilder
     private var scoreText: some View {
-        if fixture.hasTeams {
+        if fixture.hasTeams, !hidesScores {
             Text(verbatim: fixture.scoreLine)
                 .font(.system(size: fixture.hasTextScores ? 26 : 44, weight: .bold, design: .rounded))
                 .monospacedDigit()
@@ -331,12 +366,13 @@ struct GameDetailSheet: View {
 
     @ViewBuilder
     private var detailTabsSection: some View {
-        if let eventDetail, eventDetail.hasTabContent {
+        if let eventDetail, eventDetail.hasTabContent(hidingScores: hidesScores) {
             GameDetailTabs(
                 detail: eventDetail,
                 fixture: fixture,
                 homePalette: fixture.homePalette,
-                awayPalette: fixture.awayPalette
+                awayPalette: fixture.awayPalette,
+                hidesScores: hidesScores
             )
         } else if isLoadingDetail {
             GameDetailTabsSkeleton()
@@ -395,6 +431,11 @@ struct GameDetailSheet: View {
     }
 
     // MARK: - Derived
+
+    /// A finished game's record and form already count its result.
+    private var showsRecordAndForm: Bool {
+        !hidesScores || fixture.status.state != .final
+    }
 
     private var leagueLogoURL: URL? {
         fixture.leagueLogoURL ?? SportsCatalog.league(id: fixture.leagueId)?.logoURL

@@ -158,7 +158,6 @@ struct SportsHubView: View {
                         SportsSectionsView(
                             groups: grouping.groups(for: fixtures),
                             resolved: resolved,
-                            emptyChips: emptyChips,
                             isFollowed: isFollowed,
                             onOpenDetail: { selectedFixture = $0 },
                             onWatch: watch,
@@ -298,10 +297,6 @@ struct SportsHubView: View {
 
     private var visibleFixtures: [SportsFixture] {
         grouping.visibleFixtures
-    }
-
-    private var emptyChips: [String] {
-        grouping.emptyChips
     }
 
     private var scopeTitle: String {
