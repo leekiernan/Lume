@@ -294,4 +294,34 @@ struct SimklClientTests {
         #expect(items.movies.isEmpty)
         #expect(items.shows.isEmpty)
     }
+
+    @Test func `a history write with an empty body succeeds`() async throws {
+        StubURLProtocol.register(
+            host: "api.simkl.com",
+            query: ("client_id", "empty-sync-test"),
+            response: StubURLProtocol.Response(status: 201, body: "")
+        )
+
+        try await makeClient(id: "empty-sync-test").addToHistory(
+            SimklSyncItems.movie(tmdbID: 1, title: nil),
+            accessToken: "t"
+        )
+    }
+
+    @Test func `a rejected token on the library read is not a decoding error`() async {
+        StubURLProtocol.register(
+            host: "api.simkl.com",
+            query: ("client_id", "library-401-test"),
+            response: StubURLProtocol.Response(status: 401, body: #"{"error": "user_token_failed"}"#)
+        )
+
+        do {
+            _ = try await makeClient(id: "library-401-test").watchedItems(accessToken: "t")
+            Issue.record("Expected notAuthenticated")
+        } catch SimklError.notAuthenticated {
+            // Expected.
+        } catch {
+            Issue.record("Unexpected error: \(error)")
+        }
+    }
 }
