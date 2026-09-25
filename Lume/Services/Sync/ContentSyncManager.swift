@@ -21,6 +21,10 @@ actor ContentSyncManager {
     let plexClient: PlexClient
     private var activeSyncPlaylistIDs: Set<UUID> = []
 
+    /// When the most recent Xtream request returned, on a monotonic clock.
+    /// Stamped by `xtreamRequest(_:)`; read by `spaceContentPhaseRequests()`.
+    var lastXtreamRequestFinishedAt: ContinuousClock.Instant?
+
     /// Number of items to process before saving and resetting the context.
     private let batchSize = 2000
 
@@ -163,21 +167,21 @@ actor ContentSyncManager {
     // MARK: - Category Sync
 
     func syncVODCategories(for playlist: Playlist, playlistId: UUID, progress: SyncProgress? = nil) async throws {
-        let categories = try await xtreamClient.getVODCategories(playlist: playlist)
+        let categories = try await xtreamRequest { try await $0.getVODCategories(playlist: playlist) }
         Logger.database.info("Fetched \(categories.count) VOD categories")
         await progress?.update(detail: "\(categories.count) categories")
         try syncCategories(categories, type: .vod, playlistId: playlistId)
     }
 
     func syncSeriesCategories(for playlist: Playlist, playlistId: UUID, progress: SyncProgress? = nil) async throws {
-        let categories = try await xtreamClient.getSeriesCategories(playlist: playlist)
+        let categories = try await xtreamRequest { try await $0.getSeriesCategories(playlist: playlist) }
         Logger.database.info("Fetched \(categories.count) Series categories")
         await progress?.update(detail: "\(categories.count) categories")
         try syncCategories(categories, type: .series, playlistId: playlistId)
     }
 
     func syncLiveCategories(for playlist: Playlist, playlistId: UUID, progress: SyncProgress? = nil) async throws {
-        let categories = try await xtreamClient.getLiveCategories(playlist: playlist)
+        let categories = try await xtreamRequest { try await $0.getLiveCategories(playlist: playlist) }
         Logger.database.info("Fetched \(categories.count) Live categories")
         await progress?.update(detail: "\(categories.count) categories")
         try syncCategories(categories, type: .live, playlistId: playlistId)
@@ -239,7 +243,7 @@ actor ContentSyncManager {
         defer { Perf.end(interval) }
 
         await progress?.start(.movies)
-        var movieDTOs = try await xtreamClient.getVODStreams(playlist: playlist)
+        var movieDTOs = try await xtreamRequest { try await $0.getVODStreams(playlist: playlist) }
         let totalCount = movieDTOs.count
         // swiftformat:disable:next redundantSelf
         Logger.database.info("Fetched \(totalCount) movies, syncing in batches of \(self.batchSize)")
@@ -315,7 +319,7 @@ actor ContentSyncManager {
         defer { Perf.end(interval) }
 
         await progress?.start(.series)
-        var seriesDTOs = try await xtreamClient.getSeries(playlist: playlist)
+        var seriesDTOs = try await xtreamRequest { try await $0.getSeries(playlist: playlist) }
         let totalCount = seriesDTOs.count
         // swiftformat:disable:next redundantSelf
         Logger.database.info("Fetched \(totalCount) series, syncing in batches of \(self.batchSize)")
@@ -417,7 +421,7 @@ actor ContentSyncManager {
     }
 
     private func fetchXtreamEpisodes(seriesId: Int, seriesElementId: String, playlist: Playlist) async throws -> [ParsedEpisode] {
-        let seriesInfo = try await xtreamClient.getSeriesInfo(playlist: playlist, seriesId: seriesId)
+        let seriesInfo = try await xtreamRequest { try await $0.getSeriesInfo(playlist: playlist, seriesId: seriesId) }
         guard let episodesDict = seriesInfo.episodes else { return [] }
 
         var result: [ParsedEpisode] = []
@@ -473,7 +477,7 @@ actor ContentSyncManager {
         defer { Perf.end(interval) }
 
         await progress?.start(.liveStreams)
-        var streamDTOs = try await xtreamClient.getLiveStreams(playlist: playlist)
+        var streamDTOs = try await xtreamRequest { try await $0.getLiveStreams(playlist: playlist) }
         let totalCount = streamDTOs.count
         // swiftformat:disable:next redundantSelf
         Logger.database.info("Fetched \(totalCount) live streams, syncing in batches of \(self.batchSize)")

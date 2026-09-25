@@ -256,7 +256,7 @@ actor ImagePipeline {
     /// retries, plus the URL errors it treats as blips.
     private nonisolated static func isTransientFailure(_ error: Error) -> Bool {
         if let urlError = error as? URLError {
-            return isTransient(urlError)
+            return TransientNetworkError.isTransient(urlError)
         }
         if let pipelineError = error as? ImagePipelineError, case let .httpStatus(code) = pipelineError {
             return code == 429 || (500 ... 599).contains(code)
@@ -311,21 +311,10 @@ actor ImagePipeline {
                     throw ImagePipelineError.httpStatus(http.statusCode)
                 }
                 return data
-            } catch let error as URLError where Self.isTransient(error) && attempt < retries {
+            } catch let error as URLError where TransientNetworkError.isTransient(error) && attempt < retries {
                 try await backoff(attempt)
                 attempt += 1
             }
-        }
-    }
-
-    private nonisolated static func isTransient(_ error: URLError) -> Bool {
-        switch error.code {
-        case .timedOut, .networkConnectionLost, .cannotConnectToHost,
-             .cannotFindHost, .dnsLookupFailed, .notConnectedToInternet,
-             .resourceUnavailable, .badServerResponse:
-            true
-        default:
-            false
         }
     }
 

@@ -5,15 +5,6 @@ import Testing
 /// The per-playlist HLS / MPEG-TS choice: how it maps onto built Xtream URLs
 /// and how it rewrites the direct URLs an m3u playlist carries.
 struct PlaylistStreamFormatTests {
-    private func makeClient() -> XtreamClient {
-        XtreamClient(configuration: XtreamClient.Configuration(
-            serverURL: "http://example.com:8080",
-            username: "testuser",
-            password: "testpass",
-            timeout: 30
-        ))
-    }
-
     private func makePlaylist(format: PlaylistStreamFormat = .automatic) -> Playlist {
         let playlist = Playlist(
             name: "Test",
@@ -60,25 +51,25 @@ struct PlaylistStreamFormatTests {
 
     @Test func `automatic keeps the historical HLS live URL`() {
         let stream = LiveStream(id: "l-1", streamId: 555, name: "Test Channel")
-        let url = makeClient().buildLiveStreamURL(for: stream, playlist: makePlaylist())
+        let url = XtreamClient.buildLiveStreamURL(for: stream, playlist: makePlaylist())
         #expect(url?.absoluteString == "http://example.com:8080/live/testuser/testpass/555.m3u8")
     }
 
     @Test func `MPEGTS playlist builds a ts live URL`() {
         let stream = LiveStream(id: "l-2", streamId: 555, name: "Test Channel")
-        let url = makeClient().buildLiveStreamURL(for: stream, playlist: makePlaylist(format: .mpegTS))
+        let url = XtreamClient.buildLiveStreamURL(for: stream, playlist: makePlaylist(format: .mpegTS))
         #expect(url?.absoluteString == "http://example.com:8080/live/testuser/testpass/555.ts")
     }
 
     @Test func `HLS playlist builds an m3u8 live URL`() {
         let stream = LiveStream(id: "l-3", streamId: 555, name: "Test Channel")
-        let url = makeClient().buildLiveStreamURL(for: stream, playlist: makePlaylist(format: .hls))
+        let url = XtreamClient.buildLiveStreamURL(for: stream, playlist: makePlaylist(format: .hls))
         #expect(url?.absoluteString == "http://example.com:8080/live/testuser/testpass/555.m3u8")
     }
 
     @Test func `explicit format argument overrides the playlist`() {
         let stream = LiveStream(id: "l-4", streamId: 555, name: "Test Channel")
-        let url = makeClient().buildLiveStreamURL(for: stream, playlist: makePlaylist(format: .mpegTS), format: .m3u8)
+        let url = XtreamClient.buildLiveStreamURL(for: stream, playlist: makePlaylist(format: .mpegTS), format: .m3u8)
         #expect(url?.absoluteString == "http://example.com:8080/live/testuser/testpass/555.m3u8")
     }
 
@@ -86,7 +77,7 @@ struct PlaylistStreamFormatTests {
 
     @Test func `automatic catchup defaults to MPEGTS`() throws {
         let stream = LiveStream(id: "l-5", streamId: 777, name: "Catchup Channel")
-        let url = try #require(makeClient().buildCatchupURL(
+        let url = try #require(XtreamClient.buildCatchupURL(
             for: stream,
             playlist: makePlaylist(),
             start: Date(timeIntervalSince1970: 1_700_000_000),
@@ -97,13 +88,13 @@ struct PlaylistStreamFormatTests {
 
     @Test func `catchup follows the playlist container`() throws {
         let stream = LiveStream(id: "l-6", streamId: 777, name: "Catchup Channel")
-        let tsURL = try #require(makeClient().buildCatchupURL(
+        let tsURL = try #require(XtreamClient.buildCatchupURL(
             for: stream,
             playlist: makePlaylist(format: .mpegTS),
             start: Date(timeIntervalSince1970: 1_700_000_000),
             durationMinutes: 90
         ))
-        let hlsURL = try #require(makeClient().buildCatchupURL(
+        let hlsURL = try #require(XtreamClient.buildCatchupURL(
             for: stream,
             playlist: makePlaylist(format: .hls),
             start: Date(timeIntervalSince1970: 1_700_000_000),

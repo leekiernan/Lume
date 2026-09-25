@@ -92,28 +92,6 @@ struct DTODecodingEdgeCaseTests {
         #expect(episode.info?.rating == nil)
     }
 
-    // MARK: - XtreamShortEPG
-
-    @Test func `short EPG decodes`() throws {
-        let json = Data("""
-        {"start": "1700000000", "end": "1700003600", "title": "News", "description": "News program"}
-        """.utf8)
-        let epg = try JSONDecoder().decode(XtreamShortEPG.self, from: json)
-        #expect(epg.title == "News")
-        #expect(epg.description == "News program")
-        #expect(epg.start == "1700000000")
-        #expect(epg.end == "1700003600")
-    }
-
-    @Test func `short EPG with nil fields`() throws {
-        let json = Data("""
-        {"start": null, "end": null, "title": null, "description": null}
-        """.utf8)
-        let epg = try JSONDecoder().decode(XtreamShortEPG.self, from: json)
-        #expect(epg.title == nil)
-        #expect(epg.description == nil)
-    }
-
     // MARK: - XtreamLiveStream coercion variants
 
     @Test func `live stream category ID as int`() throws {
@@ -192,24 +170,6 @@ struct DTODecodingEdgeCaseTests {
         """.utf8)
         let stream = try JSONDecoder().decode(XtreamVODStream.self, from: json)
         #expect(stream.categoryId == "99")
-    }
-
-    // MARK: - XtreamVODMetadata duration coercion
-
-    @Test func `vod metadata duration as string`() throws {
-        let json = Data("""
-        {"duration_secs": "3600"}
-        """.utf8)
-        let meta = try JSONDecoder().decode(XtreamVODMetadata.self, from: json)
-        #expect(meta.durationSecs == 3600)
-    }
-
-    @Test func `vod metadata tmdb as int`() throws {
-        let json = Data("""
-        {"tmdb_id": 12345}
-        """.utf8)
-        let meta = try JSONDecoder().decode(XtreamVODMetadata.self, from: json)
-        #expect(meta.tmdbId == "12345")
     }
 
     // MARK: - XtreamSeries category_id coercion

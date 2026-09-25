@@ -4,8 +4,8 @@
 //
 //  The app-wide coordinator for the Simkl integration. Owns the OAuth token
 //  lifecycle (device-flow connect, refresh, disconnect), exposes connection
-//  state for the Settings UI to observe, and provides fire-and-forget watched
-//  syncing. Mirrors `TraktService` against the Simkl AUTH V2 API.
+//  state for the Settings UI to observe, and queues watched changes in a
+//  durable outbox. Mirrors `TraktService` against the Simkl AUTH V2 API.
 //
 //  A shared singleton because watched-state changes originate from many places
 //  (player completion, detail-screen toggles, model methods) that don't all
@@ -52,9 +52,14 @@ final class SimklService {
     private(set) var mutationSyncError: String?
 
     private var tokens: SimklTokens?
-    /// Matches Trakt's rotating-token protection: a refresh rejected because a
-    /// sibling device refreshed first should wait for CloudKit, not erase the
-    /// shared account from every device.
+    /// The outbox partition for the connected account; see
+    /// `SimklAccountIdentity.scope`.
+    private var mutationAccountScope: String?
+    /// A refresh token Simkl rejected, so it isn't retried on every call.
+    /// Simkl's refresh token doesn't rotate, so a rejection means it was revoked
+    /// or expired; the pair is kept rather than erased, because clearing it
+    /// would sync the disconnect to every device, and a re-authorized pair may
+    /// still arrive through CloudKit.
     private var refreshFailedForToken: String?
     private var pollingTask: Task<Void, Never>?
     private var refreshTask: Task<String?, Never>?
@@ -83,27 +88,40 @@ final class SimklService {
     // MARK: - Lifecycle
 
     /// Restores a previously connected session at launch: loads the stored
-    /// tokens, refreshes them if stale, and fetches the username. Best-effort.
+    /// tokens and the remembered account identity, refreshes the tokens if
+    /// stale, and re-fetches the identity. Best-effort — offline, the
+    /// remembered identity keeps the account connected so watched changes
+    /// still queue.
     func restore() async {
         guard isConfigured else { return }
         guard let stored = SimklTokenStore.load() else {
             tokens = nil
             username = nil
+            mutationAccountScope = nil
+            SimklAccountIdentityStore.clear()
             refreshFailedForToken = nil
             refreshMutationStatus()
             return
         }
         tokens = stored
         username = nil
+        mutationAccountScope = nil
+        if let identity = SimklAccountIdentityStore.load() {
+            username = identity.username
+            mutationAccountScope = identity.scope
+        }
         if refreshFailedForToken != stored.refreshToken {
             refreshFailedForToken = nil
         }
         guard let accessToken = await validAccessToken() else {
-            // A sibling device may be rotating this shared token pair. Keep it
-            // until CloudKit has had a chance to deliver the replacement.
+            // Offline, or the refresh was rejected. Keep the pair: the
+            // remembered identity still queues changes, and a re-authorized
+            // pair may yet arrive through CloudKit.
             return
         }
-        username = try? await client.currentUser(accessToken: accessToken).name
+        if let settings = try? await client.userSettings(accessToken: accessToken) {
+            applyAccountIdentity(settings)
+        }
         refreshMutationStatus()
         retryPendingMutations()
     }
@@ -184,7 +202,9 @@ final class SimklService {
 
     private func finishConnect(with response: SimklTokenResponse) async {
         applyTokens(response.tokens)
-        username = try? await client.currentUser(accessToken: response.accessToken).name
+        if let settings = try? await client.userSettings(accessToken: response.accessToken) {
+            applyAccountIdentity(settings)
+        }
         pendingCode = nil
         isConnecting = false
         connectionError = nil
@@ -223,10 +243,12 @@ final class SimklService {
         if SimklTokenStore.clear() {
             NotificationCenter.default.post(name: .lumeSimklCredentialsDidChange, object: nil)
         }
+        SimklAccountIdentityStore.clear()
         // Parked watched state belongs to the account that was just signed out.
         SimklPendingWatchedStore.clearAll()
         tokens = nil
         username = nil
+        mutationAccountScope = nil
         pendingCode = nil
         isConnecting = false
         lastImport = nil
@@ -239,9 +261,9 @@ final class SimklService {
 
     // MARK: - Durable watched sync
 
-    /// Syncs a movie's watched state to Simkl. Captures the TMDB id and title
-    /// up front so the model never crosses an actor boundary. No-ops when not
-    /// connected or the movie has no TMDB id.
+    /// Queues a movie's watched state for Simkl. Captures the TMDB id up front
+    /// so the model never crosses an actor boundary; Simkl resolves the title
+    /// from it. No-ops when not connected or the movie has no TMDB id.
     func syncWatched(movie: Movie, watched: Bool) {
         guard let account = mutationAccount, let tmdbID = movie.tmdbId else { return }
         mutationOutbox.enqueue(target: .movie(tmdbID: tmdbID), watched: watched, account: account)
@@ -329,8 +351,16 @@ final class SimklService {
     }
 
     private var mutationAccount: String? {
-        guard isConnected, let username else { return nil }
-        return username.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard isConnected, let mutationAccountScope, !mutationAccountScope.isEmpty else { return nil }
+        return mutationAccountScope
+    }
+
+    private func applyAccountIdentity(_ settings: SimklUserSettings) {
+        let identity = SimklAccountIdentity(settings: settings)
+        username = identity.username
+        mutationAccountScope = identity.scope
+        mutationOutbox.adoptMutations(from: identity.legacyScope, into: identity.scope)
+        SimklAccountIdentityStore.save(identity)
     }
 
     private func refreshMutationStatus() {
@@ -408,7 +438,9 @@ final class SimklService {
                 return tokens?.accessToken
             } catch let error as SimklError {
                 switch error {
-                case .server(400), .notAuthenticated:
+                // A rejected refresh token comes back as an OAuth error
+                // envelope at 400; `postOAuth` never throws notAuthenticated.
+                case .server(400):
                     if tokens?.refreshToken == current.refreshToken {
                         refreshFailedForToken = current.refreshToken
                     }

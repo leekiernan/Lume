@@ -151,21 +151,21 @@ enum StalkerError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .invalidURL:
-            "The portal URL is invalid."
+            String(localized: "The portal URL is invalid.")
         case .handshakeFailed:
-            "Couldn't connect to the Stalker portal. Check the portal URL and MAC address."
+            String(localized: "Couldn't connect to the Stalker portal. Check the portal URL and MAC address.")
         case .authenticationFailed:
-            "The portal rejected this MAC address. It may not be authorized, or its subscription has expired."
+            String(localized: "The portal rejected this MAC address. It may not be authorized, or its subscription has expired.")
         case .noStreamURL:
-            "The portal didn't return a playable stream for this item."
+            String(localized: "The portal didn't return a playable stream for this item.")
         case let .networkError(error):
-            "Network error: \(error.localizedDescription)"
+            String(localized: "Network error: \(error.localizedDescription)")
         case let .decodingError(error):
-            "Failed to read the portal response: \(error.localizedDescription)"
+            String(localized: "Failed to read the portal response: \(error.localizedDescription)")
         case .invalidResponse:
-            "Received an invalid response from the portal."
+            String(localized: "Received an invalid response from the portal.")
         case let .serverError(code):
-            "Portal error (HTTP \(code))."
+            String(localized: "Portal error (HTTP \(code)).")
         }
     }
 
@@ -200,8 +200,8 @@ enum StalkerError: LocalizedError {
     /// Whether the failure is likely transient and worth retrying.
     var isRetriable: Bool {
         switch self {
-        case .networkError:
-            true
+        case let .networkError(error):
+            TransientNetworkError.isTransient(error)
         case let .serverError(code):
             code >= 500
         case .invalidURL, .handshakeFailed, .authenticationFailed, .noStreamURL,

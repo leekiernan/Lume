@@ -165,8 +165,9 @@ final class DownloadManager: NSObject {
         guard activeDownloads[id] == nil, !pendingIDs.contains(id) else { return }
         guard movie.downloadStatus != .completed else { return }
 
-        let directURL = movie.directURL.flatMap(URL.init(string:))
-        guard let url = directURL ?? XtreamClient().buildMovieURL(for: movie, playlist: playlist) else { return }
+        guard let url = Self.downloadURL(direct: movie.directURL, playlist: playlist, xtream: {
+            XtreamClient.buildMovieURL(for: movie, playlist: playlist)
+        }) else { return }
 
         let ext = movie.containerExtension ?? "mp4"
         let filename = "\(Self.sanitize(id)).\(ext)"
@@ -180,20 +181,26 @@ final class DownloadManager: NSObject {
         guard activeDownloads[id] == nil, !pendingIDs.contains(id) else { return }
         guard episode.downloadStatus != .completed else { return }
 
-        // m3u and media-server episodes carry their playback URL on the row;
-        // the Xtream/Stalker builders have nothing to build from.
-        let carriesDirectURL = switch playlist.sourceType {
-        case .m3u, .jellyfin, .emby, .plex: true
-        case .xtream, .stalker, .webdav: false
-        }
-        let directURL = carriesDirectURL ? episode.directSource.flatMap(URL.init(string:)) : nil
-        guard let url = directURL ?? XtreamClient().buildEpisodeURL(for: episode, playlist: playlist) else { return }
+        guard let url = Self.downloadURL(direct: episode.directSource, playlist: playlist, xtream: {
+            XtreamClient.buildEpisodeURL(for: episode, playlist: playlist)
+        }) else { return }
 
         let ext = episode.containerExtension
         let filename = "\(Self.sanitize(id)).\(ext)"
         let title = episode.series.map { "\($0.name) S\(episode.seasonNum)E\(episode.episodeNum)" } ?? episode.title
         idToFilename[id] = filename
         enqueue(PendingDownload(id: id, title: title, url: url, filename: filename))
+    }
+
+    /// Where to download an item from, for the sources `supportsDownloads`
+    /// admits: an m3u row carries its URL, an Xtream one is built from the
+    /// account credentials. `nil` for every other source.
+    static func downloadURL(direct: String?, playlist: Playlist, xtream: () -> URL?) -> URL? {
+        switch playlist.sourceType {
+        case .m3u: direct.flatMap(URL.init(string:))
+        case .xtream: xtream()
+        case .stalker, .webdav, .jellyfin, .emby, .plex: nil
+        }
     }
 
     func cancelDownload(id: String) {

@@ -211,8 +211,9 @@ class StalkerClient {
                 }
                 guard error.isRetriable, attempt < Self.maxAttempts else { throw error }
                 let delay = pow(2.0, Double(attempt))
+                let retryLabel = "\(attempt)/\(Self.maxAttempts - 1)"
                 Logger.network.warning(
-                    "Stalker request failed (\(error.localizedDescription)); retry \(attempt)/\(Self.maxAttempts - 1) in \(delay)s"
+                    "Stalker request failed (\(error.logDescription, privacy: .public)); retry \(retryLabel, privacy: .public) in \(delay, privacy: .public)s"
                 )
                 try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
             }

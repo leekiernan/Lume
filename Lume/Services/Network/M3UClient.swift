@@ -54,23 +54,23 @@ nonisolated enum M3UError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .invalidURL:
-            "The playlist URL is invalid."
+            String(localized: "The playlist URL is invalid.")
         case let .networkError(error):
-            "Network error: \(error.localizedDescription)"
+            String(localized: "Network error: \(error.localizedDescription)")
         case let .serverError(code):
-            "Server error (HTTP \(code))."
+            String(localized: "Server error (HTTP \(code)).")
         case .invalidResponse:
-            "Received an invalid response from the server."
+            String(localized: "Received an invalid response from the server.")
         case .notAPlaylist:
-            "The URL does not point to an m3u playlist."
+            String(localized: "The URL does not point to an m3u playlist.")
         case .enigma2Bouquet:
-            """
+            String(localized: """
             This link returns an Enigma2/Gigablue set-top-box bouquet, not an m3u playlist. \
             Change "type=gigablue" (or "dreambox") to "type=m3u_plus" in the URL, or add the \
             provider as an Xtream login instead.
-            """
+            """)
         case .fileNotFound:
-            "The playlist file could not be found."
+            String(localized: "The playlist file could not be found.")
         }
     }
 

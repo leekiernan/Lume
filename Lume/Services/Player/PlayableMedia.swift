@@ -148,7 +148,7 @@ extension PlayableMedia {
         webdavHeaders(for: playlist) ?? jellyfinHeaders(for: playlist) ?? plexHeaders(for: playlist)
     }
 
-    static func from(movie: Movie, playlist: Playlist, client: XtreamClient = XtreamClient()) -> PlayableMedia? {
+    static func from(movie: Movie, playlist: Playlist) -> PlayableMedia? {
         // Prefer local file for offline/downloaded playback
         if let path = movie.localFileURL,
            movie.downloadStatus == .completed,
@@ -166,7 +166,7 @@ extension PlayableMedia {
             )
         }
         guard let url = vodURL(directURL: movie.directURL, playlist: playlist,
-                               build: { client.buildMovieURL(for: movie, playlist: playlist) }) else { return nil }
+                               build: { XtreamClient.buildMovieURL(for: movie, playlist: playlist) }) else { return nil }
         return PlayableMedia(
             id: "movie-\(movie.id)",
             url: url,
@@ -196,7 +196,7 @@ extension PlayableMedia {
         return directURL.flatMap(URL.init(string:)) ?? build()
     }
 
-    static func from(episode: Episode, playlist: Playlist, client: XtreamClient = XtreamClient()) -> PlayableMedia? {
+    static func from(episode: Episode, playlist: Playlist) -> PlayableMedia? {
         // Prefer local file for offline/downloaded playback
         if let path = episode.localFileURL,
            episode.downloadStatus == .completed,
@@ -223,7 +223,7 @@ extension PlayableMedia {
             guard let resolved = episode.directSource.flatMap(URL.init(string:)) else { return nil }
             url = resolved
         case .xtream:
-            guard let built = client.buildEpisodeURL(for: episode, playlist: playlist) else { return nil }
+            guard let built = XtreamClient.buildEpisodeURL(for: episode, playlist: playlist) else { return nil }
             url = built
         }
         let seriesName = episode.series?.name
@@ -247,8 +247,7 @@ extension PlayableMedia {
     static func from(
         stream: LiveStream,
         playlist: Playlist,
-        scope: LiveChannelScope? = nil,
-        client: XtreamClient = XtreamClient()
+        scope: LiveChannelScope? = nil
     ) -> PlayableMedia? {
         let url: URL
         if playlist.sourceType == .stalker {
@@ -262,7 +261,7 @@ extension PlayableMedia {
             // container rewrites it only when the provider used one of the two
             // interchangeable live endpoints. Xtream URLs are built with it.
             let directURL = stream.directURL.flatMap(URL.init(string:)).map(playlist.streamFormat.applied(to:))
-            guard let resolved = directURL ?? client.buildLiveStreamURL(for: stream, playlist: playlist) else { return nil }
+            guard let resolved = directURL ?? XtreamClient.buildLiveStreamURL(for: stream, playlist: playlist) else { return nil }
             url = resolved
         }
         return PlayableMedia(
@@ -298,12 +297,11 @@ extension PlayableMedia {
         playlist: Playlist,
         programTitle: String,
         start: Date,
-        end: Date,
-        client: XtreamClient = XtreamClient()
+        end: Date
     ) -> PlayableMedia? {
         guard stream.supportsCatchup else { return nil }
         let durationMinutes = max(1, Int((end.timeIntervalSince(start) / 60).rounded(.up)))
-        guard let url = client.buildCatchupURL(
+        guard let url = XtreamClient.buildCatchupURL(
             for: stream, playlist: playlist, start: start, durationMinutes: durationMinutes
         ) else { return nil }
         return PlayableMedia(
