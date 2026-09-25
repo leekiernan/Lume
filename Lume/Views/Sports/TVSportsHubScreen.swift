@@ -348,7 +348,6 @@
             SportsSyncService.shared.refreshMissing()
             SportsSyncService.shared.catchUpIfStale()
             SportsSyncService.shared.beginLivePolling()
-            Task { await EPGSyncService.shared.refreshIfMissingSubtitles() }
         }
 
         private var resolveKey: String {
