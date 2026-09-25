@@ -54,7 +54,16 @@ extension ContentSyncManager {
         }
     }
 
-    func performMediaServerSync(playlist: Playlist, playlistId: UUID, flavor: MediaServerFlavor, progress: SyncProgress?) async throws {
+    /// Syncs the movie and TV-show libraries of the kinds in `areas`; a
+    /// switched-off kind is neither fetched nor swept (see
+    /// `ContentSyncManager+AreaGating`).
+    func performMediaServerSync(
+        playlist: Playlist,
+        playlistId: UUID,
+        flavor: MediaServerFlavor,
+        progress: SyncProgress?,
+        areas: Set<AppArea>
+    ) async throws {
         guard let base = URL(string: playlist.serverURL), base.scheme != nil, base.host != nil else {
             throw JellyfinError.invalidURL
         }
@@ -87,27 +96,30 @@ extension ContentSyncManager {
             Logger.database.info("\(flavor.displayName, privacy: .public) sync: no movie or TV-show libraries; catalog untouched")
         }
 
-        try await syncJellyfinCategories(views: movieViews, type: .vod, playlistId: playlistId)
-        try await syncJellyfinCategories(views: showViews, type: .series, playlistId: playlistId)
-
-        await progress?.start(.movies)
-        var seenMovies = Set<String>()
-        for view in movieViews {
-            let viewScope = scope(connection, playlistId: playlistId, view: view, type: .vod)
-            try await syncJellyfinMovies(scope: viewScope, seenIds: &seenMovies, progress: progress)
+        if areas.contains(.movies) {
+            try await syncJellyfinCategories(views: movieViews, type: .vod, playlistId: playlistId)
+            await progress?.start(.movies)
+            var seenMovies = Set<String>()
+            for view in movieViews {
+                let viewScope = scope(connection, playlistId: playlistId, view: view, type: .vod)
+                try await syncJellyfinMovies(scope: viewScope, seenIds: &seenMovies, progress: progress)
+            }
+            pruneJellyfinMovies(playlistId: playlistId, flavor: flavor, seenIds: seenMovies, fetched: !movieViews.isEmpty)
+            await progress?.complete(.movies)
         }
-        pruneJellyfinMovies(playlistId: playlistId, flavor: flavor, seenIds: seenMovies, fetched: !movieViews.isEmpty)
-        await progress?.complete(.movies)
 
-        await progress?.start(.series)
-        var seenSeries = Set<String>()
-        var seenEpisodes = Set<String>()
-        for view in showViews {
-            let viewScope = scope(connection, playlistId: playlistId, view: view, type: .series)
-            try await syncJellyfinShows(scope: viewScope, seenSeries: &seenSeries, seenEpisodes: &seenEpisodes, progress: progress)
+        if areas.contains(.series) {
+            try await syncJellyfinCategories(views: showViews, type: .series, playlistId: playlistId)
+            await progress?.start(.series)
+            var seenSeries = Set<String>()
+            var seenEpisodes = Set<String>()
+            for view in showViews {
+                let viewScope = scope(connection, playlistId: playlistId, view: view, type: .series)
+                try await syncJellyfinShows(scope: viewScope, seenSeries: &seenSeries, seenEpisodes: &seenEpisodes, progress: progress)
+            }
+            pruneJellyfinSeries(playlistId: playlistId, flavor: flavor, seenSeries: seenSeries, seenEpisodes: seenEpisodes, fetched: !showViews.isEmpty)
+            await progress?.complete(.series)
         }
-        pruneJellyfinSeries(playlistId: playlistId, flavor: flavor, seenSeries: seenSeries, seenEpisodes: seenEpisodes, fetched: !showViews.isEmpty)
-        await progress?.complete(.series)
 
         markPlaylistUpdated(playlistId)
     }

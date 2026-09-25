@@ -42,7 +42,16 @@ extension ContentSyncManager {
     /// the portal's search API (`searchStalker`). `full == true` — the
     /// "Download Full Catalog" action — walks the entire VOD/series catalog for
     /// users who want it all local.
-    func performStalkerSync(playlist: Playlist, playlistId: UUID, progress: SyncProgress?, full: Bool = false) async throws {
+    ///
+    /// Only `areas` are synced — categories, the full walk and channels alike
+    /// (see `ContentSyncManager+AreaGating`).
+    func performStalkerSync(
+        playlist: Playlist,
+        playlistId: UUID,
+        progress: SyncProgress?,
+        full: Bool = false,
+        areas: Set<AppArea>
+    ) async throws {
         let client = StalkerClient(configuration: StalkerClient.Configuration(playlist: playlist))
 
         await progress?.start(.authenticating)
@@ -52,34 +61,46 @@ extension ContentSyncManager {
 
         // Fetch the category/genre lists once and reuse them to both persist the
         // categories and walk each one's content.
-        await progress?.start(.movieCategories)
-        let vodCategories = await (try? client.getCategories(type: "vod")) ?? []
-        try syncStalkerCategories(vodCategories, type: .vod, playlistId: playlistId)
-        await progress?.update(detail: "\(vodCategories.count) categories")
-        await progress?.complete(.movieCategories)
+        var vodCategories: [StalkerCategory] = []
+        if areas.contains(.movies) {
+            await progress?.start(.movieCategories)
+            vodCategories = await (try? client.getCategories(type: "vod")) ?? []
+            try syncStalkerCategories(vodCategories, type: .vod, playlistId: playlistId)
+            await progress?.update(detail: "\(vodCategories.count) categories")
+            await progress?.complete(.movieCategories)
+        }
 
-        await progress?.start(.seriesCategories)
-        let seriesCategories = await (try? client.getCategories(type: "series")) ?? []
-        try syncStalkerCategories(seriesCategories, type: .series, playlistId: playlistId)
-        await progress?.update(detail: "\(seriesCategories.count) categories")
-        await progress?.complete(.seriesCategories)
+        var seriesCategories: [StalkerCategory] = []
+        if areas.contains(.series) {
+            await progress?.start(.seriesCategories)
+            seriesCategories = await (try? client.getCategories(type: "series")) ?? []
+            try syncStalkerCategories(seriesCategories, type: .series, playlistId: playlistId)
+            await progress?.update(detail: "\(seriesCategories.count) categories")
+            await progress?.complete(.seriesCategories)
+        }
 
-        await progress?.start(.liveCategories)
-        let genres = await (try? client.getLiveGenres()) ?? []
-        try syncStalkerCategories(genres, type: .live, playlistId: playlistId)
-        await progress?.update(detail: "\(genres.count) categories")
-        await progress?.complete(.liveCategories)
+        if areas.contains(.liveTV) {
+            await progress?.start(.liveCategories)
+            let genres = await (try? client.getLiveGenres()) ?? []
+            try syncStalkerCategories(genres, type: .live, playlistId: playlistId)
+            await progress?.update(detail: "\(genres.count) categories")
+            await progress?.complete(.liveCategories)
+        }
 
         // VOD and series content is loaded per-category on demand (see
         // `importStalkerCategory`), so a default sync fetches no movie/series
         // items — only the "Download Full Catalog" action (`full`) walks them.
-        if full {
+        if full, areas.contains(.movies) {
             try await syncStalkerMovies(client: client, categories: vodCategories, playlistId: playlistId, progress: progress)
             try await Task.sleep(for: .seconds(1))
+        }
+        if full, areas.contains(.series) {
             try await syncStalkerSeries(client: client, categories: seriesCategories, playlistId: playlistId, progress: progress)
             try await Task.sleep(for: .seconds(1))
         }
-        try await syncStalkerChannels(client: client, playlistId: playlistId, progress: progress)
+        if areas.contains(.liveTV) {
+            try await syncStalkerChannels(client: client, playlistId: playlistId, progress: progress)
+        }
 
         markPlaylistUpdated(playlistId)
     }

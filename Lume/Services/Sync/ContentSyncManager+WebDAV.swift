@@ -12,7 +12,7 @@ import OSLog
 import SwiftData
 
 extension ContentSyncManager {
-    func performWebDAVSync(playlist: Playlist, playlistId: UUID, progress: SyncProgress?) async throws {
+    func performWebDAVSync(playlist: Playlist, playlistId: UUID, progress: SyncProgress?, areas: Set<AppArea>) async throws {
         let credentials = Self.credentials(for: playlist)
         guard let root = URL(string: playlist.serverURL), root.scheme != nil, root.host() != nil else {
             throw WebDAVError.invalidURL
@@ -28,14 +28,19 @@ extension ContentSyncManager {
         await progress?.complete(.directoryWalk)
         await progress?.start(.playlistImport)
 
-        if webdavImportIsRedundant(fingerprint: walk.fingerprint, playlistId: playlistId) {
+        // Scoped like the m3u digest: an import run with Movies or Series
+        // switched off must not vouch for the share once it is back on.
+        let fingerprint = walk.fingerprint.isEmpty
+            ? walk.fingerprint
+            : Self.areaScopedDigest(walk.fingerprint, areas: areas, sourceType: .webdav)
+        if webdavImportIsRedundant(fingerprint: fingerprint, playlistId: playlistId) {
             await completeSkippedWebDAVSync(
                 playlistId: playlistId, fileCount: walk.entries.count, progress: progress
             )
             return
         }
 
-        let state = M3UImportState()
+        let state = M3UImportState(areas: areas)
         seedImportState(state, playlistId: playlistId)
 
         let channel = M3UBatchChannel(capacity: WebDAVWalkProducer.channelCapacity)
@@ -58,7 +63,7 @@ extension ContentSyncManager {
         try Task.checkCancellation()
 
         pruneStaleM3URows(playlistId: playlistId, state: state)
-        recordWebDAVFingerprint(walk.fingerprint, playlistId: playlistId, importedCount: state.totalImported)
+        recordWebDAVFingerprint(fingerprint, playlistId: playlistId, importedCount: state.totalImported)
 
         let imported = state.totalImported
         let movies = state.importedMovies

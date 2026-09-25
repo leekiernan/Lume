@@ -129,9 +129,10 @@ actor ContentSyncManager {
     }
 
     /// Runs the pipeline for `playlist`'s source type, returning the content
-    /// areas it actually attempted — see `PlaylistSyncCoverage`. Only Xtream
-    /// distinguishes areas as it goes; every other source is undifferentiated,
-    /// so it reports whatever is enabled as attempted in full.
+    /// areas the run covered — see `PlaylistSyncCoverage`. Every pipeline syncs
+    /// only `syncAreas` (the Library toggles, narrowed by a repair); Xtream
+    /// reports the phases it actually ran, the others the areas they were
+    /// handed, and each adds the areas its source cannot supply at all.
     private func runProviderSync(
         for playlist: Playlist,
         playlistId: UUID,
@@ -139,25 +140,35 @@ actor ContentSyncManager {
         full: Bool,
         repairingAreas: Set<AppArea>?
     ) async throws -> Set<AppArea> {
-        switch playlist.sourceType {
+        let sourceType = playlist.sourceType
+        let areas = Self.syncAreas(
+            enabled: AppAreaSettings.enabledContentAreas(disabledRaw: AppAreaSettings.storedValue),
+            repairing: repairingAreas
+        )
+        var synced = areas
+        switch sourceType {
         case .xtream:
-            return try await performXtreamSync(
-                playlist: playlist, playlistId: playlistId, progress: progress, areas: repairingAreas
+            synced = try await performXtreamSync(
+                playlist: playlist, playlistId: playlistId, progress: progress, areas: areas
             )
         case .m3u:
-            try await performM3USync(playlist: playlist, playlistId: playlistId, progress: progress)
+            try await performM3USync(playlist: playlist, playlistId: playlistId, progress: progress, areas: areas)
         case .stalker:
-            try await performStalkerSync(playlist: playlist, playlistId: playlistId, progress: progress, full: full)
+            try await performStalkerSync(
+                playlist: playlist, playlistId: playlistId, progress: progress, full: full, areas: areas
+            )
         case .webdav:
-            try await performWebDAVSync(playlist: playlist, playlistId: playlistId, progress: progress)
+            try await performWebDAVSync(playlist: playlist, playlistId: playlistId, progress: progress, areas: areas)
         case .jellyfin, .emby:
             // Both speak the same API; the flavour only tags the rows.
-            let flavor = MediaServerFlavor(sourceType: playlist.sourceType) ?? .jellyfin
-            try await performMediaServerSync(playlist: playlist, playlistId: playlistId, flavor: flavor, progress: progress)
+            let flavor = MediaServerFlavor(sourceType: sourceType) ?? .jellyfin
+            try await performMediaServerSync(
+                playlist: playlist, playlistId: playlistId, flavor: flavor, progress: progress, areas: areas
+            )
         case .plex:
-            try await performPlexSync(playlist: playlist, playlistId: playlistId, progress: progress)
+            try await performPlexSync(playlist: playlist, playlistId: playlistId, progress: progress, areas: areas)
         }
-        return AppAreaSettings.enabledContentAreas(disabledRaw: "")
+        return synced.union(Self.unsupportedAreas(for: sourceType))
     }
 
     // MARK: - Category Sync

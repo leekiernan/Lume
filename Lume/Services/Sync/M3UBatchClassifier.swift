@@ -46,6 +46,16 @@ nonisolated struct M3UClassifiedBatch {
     var live: [M3UEntry] = []
     var movies: [M3UEntry] = []
     var episodes: [M3UClassifiedEpisode] = []
+
+    /// The batch without the entries of any area outside `areas` — the Library
+    /// toggle, applied after classification because the file mixes all three.
+    func restricted(to areas: Set<AppArea>) -> M3UClassifiedBatch {
+        var batch = self
+        if !areas.contains(.liveTV) { batch.live = [] }
+        if !areas.contains(.movies) { batch.movies = [] }
+        if !areas.contains(.series) { batch.episodes = [] }
+        return batch
+    }
 }
 
 // MARK: - Classifier
