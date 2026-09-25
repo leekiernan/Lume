@@ -39,6 +39,9 @@ struct SeriesView: View {
     /// thread so the rails don't fault each series' episodes — see
     /// `SeriesResumeLoader`.
     @State private var seriesResume: [String: Double] = [:]
+    /// The active playlist's most recently watched series. Only its stamp is
+    /// read, to key the resume lookup — see `seriesResumeKey`.
+    @Query private var newestWatchedSeries: [Series]
 
     @AppStorage(SortStorageKey.seriesCategories) private var categorySortRaw: String = CategorySortOption.playlist.rawValue
     @AppStorage(SortStorageKey.seriesContent) private var contentSortRaw: String = ContentSortOption.playlist.rawValue
@@ -58,6 +61,12 @@ struct SeriesView: View {
             playlistPrefix: playlistPrefix ?? "",
             excludedCategoryIDs: restriction.excludedCategoryIDs
         ))
+        var newestWatched = HomeQuery.watchedSeries(
+            playlistPrefix: playlistPrefix ?? "",
+            excludedCategoryIDs: restriction.excludedCategoryIDs
+        )
+        newestWatched.fetchLimit = 1
+        _newestWatchedSeries = Query(newestWatched)
     }
 
     var body: some View {
@@ -138,6 +147,22 @@ struct SeriesView: View {
             .task(id: playlistPrefix) {
                 genres = await GenreDerivation.seriesGenres(in: modelContext.container, playlistPrefix: playlistPrefix, restriction: restriction)
             }
+            .task(id: seriesResumeKey) {
+                let container = modelContext.container
+                seriesResume = await Task.detached(priority: .userInitiated) {
+                    SeriesResumeLoader.load(container: container)
+                }.value
+            }
+    }
+
+    /// Identity of the series resume lookup, keyed like Home's: resuming or
+    /// finishing an episode stamps its series' `lastWatchedDate`
+    /// (`WatchProgressWriter`), so the newest stamp moves whenever a resume bar
+    /// would. Keyed on the playlist alone, the bars never refreshed after
+    /// watching something from this tab.
+    private var seriesResumeKey: String {
+        let newest = newestWatchedSeries.first?.lastWatchedDate?.timeIntervalSince1970 ?? 0
+        return "resume-\(newest)-\(playlistPrefix)"
     }
 
     /// The same slideshow Home shows, filtered to this page's medium, above the
@@ -198,12 +223,6 @@ struct SeriesView: View {
         )
 
         BrowseCategoriesButton(isPresented: $showingBrowse)
-            .task(id: playlistPrefix) {
-                let container = modelContext.container
-                seriesResume = await Task.detached(priority: .userInitiated) {
-                    SeriesResumeLoader.load(container: container)
-                }.value
-            }
     }
 
     // MARK: - Navigation
