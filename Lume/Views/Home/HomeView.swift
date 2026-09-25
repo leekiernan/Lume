@@ -400,8 +400,10 @@ struct HomeView: View {
         return "\(playlists.count)-\(selectedPlaylistID)-\(synced)-\(restriction.visibilityToken)"
     }
 
+    /// Same shape as `LibrarySectionsView`'s key — surface, Trakt account,
+    /// catalog — so one watchlist load key reads the same on every surface.
     var watchlistKey: String {
-        "watchlist-\(trakt.username ?? "disconnected")-\(trendingKey)"
+        "watchlist-\(feed.surface.rawValue)-\(trakt.username ?? "disconnected")-\(trendingKey)"
     }
 
     /// Identity of the custom-section load. Shares the trending key's playlist /
