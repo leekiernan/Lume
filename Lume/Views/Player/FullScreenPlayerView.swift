@@ -504,15 +504,11 @@ struct FullScreenPlayerView: View {
     func syncWatchedServices(ref: PlayableMedia.ContentRef) {
         switch ref {
         case let .movie(id):
-            var descriptor = FetchDescriptor<Movie>(predicate: #Predicate { $0.id == id })
-            descriptor.fetchLimit = 1
-            guard let movie = try? modelContext.fetch(descriptor).first else { return }
+            guard let movie = PlayerContentLookup.movie(id, in: modelContext) else { return }
             TraktService.shared.syncWatched(movie: movie, watched: true)
             SimklService.shared.syncWatched(movie: movie, watched: true)
         case let .episode(id):
-            var descriptor = FetchDescriptor<Episode>(predicate: #Predicate { $0.id == id })
-            descriptor.fetchLimit = 1
-            guard let episode = try? modelContext.fetch(descriptor).first else { return }
+            guard let episode = PlayerContentLookup.episode(id, in: modelContext) else { return }
             TraktService.shared.syncWatched(episode: episode, watched: true)
             SimklService.shared.syncWatched(episode: episode, watched: true)
         case .live:

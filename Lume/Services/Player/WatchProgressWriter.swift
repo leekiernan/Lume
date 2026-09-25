@@ -95,9 +95,7 @@ actor WatchProgressWriter {
         completed: Bool,
         ref: PlayableMedia.ContentRef
     ) throws -> Completion? {
-        var descriptor = FetchDescriptor<Movie>(predicate: #Predicate { $0.id == id })
-        descriptor.fetchLimit = 1
-        guard let movie = try context.fetch(descriptor).first else { return nil }
+        guard let movie = PlayerContentLookup.movie(id, in: context) else { return nil }
 
         movie.watchProgress = progress
         movie.lastWatchedDate = Date()
@@ -118,9 +116,7 @@ actor WatchProgressWriter {
         completed: Bool,
         ref: PlayableMedia.ContentRef
     ) throws -> Completion? {
-        var descriptor = FetchDescriptor<Episode>(predicate: #Predicate { $0.id == id })
-        descriptor.fetchLimit = 1
-        guard let episode = try context.fetch(descriptor).first else { return nil }
+        guard let episode = PlayerContentLookup.episode(id, in: context) else { return nil }
 
         episode.watchProgress = progress
         episode.lastWatchedDate = Date()
@@ -139,9 +135,7 @@ actor WatchProgressWriter {
     }
 
     private func touchLive(id: String) throws {
-        var descriptor = FetchDescriptor<LiveStream>(predicate: #Predicate { $0.id == id })
-        descriptor.fetchLimit = 1
-        guard let stream = try context.fetch(descriptor).first else { return }
+        guard let stream = PlayerContentLookup.liveStream(id, in: context) else { return }
         stream.lastWatchedDate = Date()
         try context.save()
     }

@@ -355,9 +355,7 @@ final class NowPlayingService {
         streamID: String, container: ModelContainer
     ) -> (channelName: String, epg: ChannelEPG)? {
         let context = ModelContext(container)
-        var descriptor = FetchDescriptor<LiveStream>(predicate: #Predicate { $0.id == streamID })
-        descriptor.fetchLimit = 1
-        guard let stream = try? context.fetch(descriptor).first else { return nil }
+        guard let stream = PlayerContentLookup.liveStream(streamID, in: context) else { return nil }
         guard let channelId = stream.epgChannelId, !channelId.isEmpty else {
             return (stream.name, ChannelEPG(current: nil, next: nil))
         }
