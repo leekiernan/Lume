@@ -10,44 +10,20 @@ import OSLog
 
 // MARK: - XtreamClient
 
-class XtreamClient {
-    nonisolated struct Configuration {
-        let serverURL: String
-        let username: String
-        let password: String
-        let timeout: TimeInterval
-
-        init(serverURL: String, username: String, password: String, timeout: TimeInterval = 30) {
-            self.serverURL = serverURL
-            self.username = username
-            self.password = password
-            self.timeout = timeout
-        }
-    }
-
-    let configuration: Configuration
+/// `nonisolated` so the bulk catalog decodes stay off the main actor, and
+/// `Sendable` because it holds nothing but its session: every request takes
+/// the playlist it is for. The URL builders are static — building a playback
+/// URL needs no client at all.
+final nonisolated class XtreamClient: Sendable {
     let session: URLSession
 
-    /// When the most recent request released the connection, on a monotonic
-    /// clock. Read by `ContentSyncManager` to space consecutive bulk requests
-    /// apart without re-paying wall clock the sync has already spent elsewhere.
-    /// Stamped on failures too — a 401/403 still occupied the slot.
-    private(set) var lastRequestFinishedAt: ContinuousClock.Instant?
+    /// Every production client shares one session, so the one-connection-per-
+    /// host cap below holds across them — a login check and a running sync
+    /// queue for the same slot instead of racing for it.
+    private static let sharedSession = makeSession()
 
-    nonisolated init(configuration: Configuration, urlSession: URLSession? = nil) {
-        self.configuration = configuration
-        session = urlSession ?? Self.makeSession(timeout: configuration.timeout)
-    }
-
-    /// Convenience initializer for backward compatibility
-    convenience nonisolated init(urlSession: URLSession? = nil) {
-        let config = Configuration(
-            serverURL: "",
-            username: "",
-            password: "",
-            timeout: 30
-        )
-        self.init(configuration: config, urlSession: urlSession)
+    init(urlSession: URLSession? = nil) {
+        session = urlSession ?? Self.sharedSession
     }
 
     /// Builds a dedicated session for Xtream API calls.
@@ -55,12 +31,11 @@ class XtreamClient {
     /// Uses a single connection per host: many Xtream providers cap an account
     /// to one concurrent connection and reject extra requests with 401/403.
     /// Serializing connections (instead of reusing `.shared`'s pool, which the
-    /// server may RST after a heavy transfer) avoids tripping that limit. Also
-    /// applies the configured timeout, which was previously ignored.
-    private nonisolated static func makeSession(timeout: TimeInterval) -> URLSession {
+    /// server may RST after a heavy transfer) avoids tripping that limit.
+    private static func makeSession() -> URLSession {
         let config = URLSessionConfiguration.default
         config.httpMaximumConnectionsPerHost = 1
-        config.timeoutIntervalForRequest = timeout
+        config.timeoutIntervalForRequest = 30
         config.timeoutIntervalForResource = 120
         // Some panels only return JSON to a recognized player UA; the default
         // CFNetwork UA gets an HTML block page that fails to decode.
@@ -74,7 +49,7 @@ class XtreamClient {
     /// account credentials). Exposed so `EPGSourceReconciler` can store it as a
     /// standalone EPG source — the guide is no longer fetched during a playlist
     /// sync.
-    nonisolated static func xmltvURL(for playlist: Playlist) -> URL? {
+    static func xmltvURL(for playlist: Playlist) -> URL? {
         guard !playlist.serverURL.isEmpty else { return nil }
         var components = URLComponents(string: playlist.serverURL)
         guard components != nil else { return nil }
@@ -107,7 +82,7 @@ class XtreamClient {
     /// Signposts wrapping the two halves of a bulk request, so a trace can tell
     /// a slow transfer apart from a slow decode. Only the three catalog
     /// endpoints supply one; every other call leaves the phases unnamed.
-    nonisolated struct RequestPhases {
+    struct RequestPhases {
         let fetch: PerfSignpost
         let decode: PerfSignpost
     }
@@ -125,7 +100,7 @@ class XtreamClient {
     ///   has already proven the credentials, a 401/403 is almost always the
     ///   provider's connection/rate limit rather than bad credentials. Login
     ///   (`getInfo`) leaves it `false` so wrong credentials fail fast.
-    private func request<T: Decodable>(
+    private func request<T: Decodable & Sendable>(
         _ url: URL,
         action: String,
         retryAuthFailure: Bool = true,
@@ -163,17 +138,18 @@ class XtreamClient {
 
     /// A single request attempt. Network-level failures are wrapped into
     /// `XtreamError.networkError` so callers see a consistent error type.
-    private func performRequest<T: Decodable>(_ url: URL, action: String, phases: RequestPhases? = nil) async throws -> T {
-        #if DEBUG
-            // VERIFIED, not defensive: `XtreamClient` declares no isolation, so
-            // `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor` infers `@MainActor` for the
-            // whole type (unlike the sibling `nonisolated class M3UClient`). This
-            // holds even when the caller is `actor ContentSyncManager`, and the body
-            // never leaves that domain, so the bulk transfer's continuation and the
-            // multi-hundred-thousand-element `decoder.decode` below both run on the
-            // main actor. Remove only together with making the type `nonisolated`.
-            MainActor.assertIsolated("XtreamClient.performRequest runs on the main actor")
-        #endif
+    ///
+    /// `@concurrent` is load-bearing: `SWIFT_APPROACHABLE_CONCURRENCY` runs a
+    /// plain `nonisolated async` function on its caller's actor, so without it
+    /// a login from a view would decode on the main actor, and a sync would hold
+    /// `ContentSyncManager`'s executor through a multi-hundred-thousand-element
+    /// `decoder.decode`.
+    @concurrent
+    private func performRequest<T: Decodable & Sendable>(
+        _ url: URL,
+        action: String,
+        phases: RequestPhases? = nil
+    ) async throws -> T {
         let data: Data
         let response: URLResponse
         let fetchInterval = phases.map { Perf.begin($0.fetch) }
@@ -181,11 +157,9 @@ class XtreamClient {
             (data, response) = try await session.data(from: url)
         } catch {
             if let fetchInterval { Perf.end(fetchInterval) }
-            lastRequestFinishedAt = ContinuousClock.now
             throw XtreamError.networkError(error)
         }
         if let fetchInterval { Perf.end(fetchInterval) }
-        lastRequestFinishedAt = ContinuousClock.now
 
         let byteCount = data.count
         Logger.network.info(
@@ -355,13 +329,13 @@ class XtreamClient {
     // MARK: - Stream URL Building
 
     /// Builds a playback URL for a movie
-    func buildMovieURL(for movie: Movie, playlist: Playlist) -> URL? {
+    static func buildMovieURL(for movie: Movie, playlist: Playlist) -> URL? {
         let ext = movie.containerExtension ?? "mp4"
         return URL(string: "\(playlist.serverURL)/movie/\(playlist.username)/\(playlist.password)/\(movie.streamId).\(ext)")
     }
 
     /// Builds a playback URL for an episode
-    func buildEpisodeURL(for episode: Episode, playlist: Playlist) -> URL? {
+    static func buildEpisodeURL(for episode: Episode, playlist: Playlist) -> URL? {
         let ext = episode.containerExtension
         return URL(string: "\(playlist.serverURL)/series/\(playlist.username)/\(playlist.password)/\(episode.episodeId).\(ext)")
     }
@@ -369,12 +343,12 @@ class XtreamClient {
     /// Builds a playback URL for a live stream. `format` overrides the
     /// playlist's own container preference; when omitted the playlist decides,
     /// falling back to HLS.
-    func buildLiveStreamURL(for stream: LiveStream, playlist: Playlist, format: StreamFormat? = nil) -> URL? {
+    static func buildLiveStreamURL(for stream: LiveStream, playlist: Playlist, format: StreamFormat? = nil) -> URL? {
         let ext = Self.resolvedFormat(format, playlist: playlist, fallback: .m3u8).rawValue
         return URL(string: "\(playlist.serverURL)/live/\(playlist.username)/\(playlist.password)/\(stream.streamId).\(ext)")
     }
 
-    private nonisolated static func resolvedFormat(
+    private static func resolvedFormat(
         _ requested: StreamFormat?,
         playlist: Playlist,
         fallback: StreamFormat
@@ -386,7 +360,7 @@ class XtreamClient {
     /// path. The value is wall-clock time in the timezone advertised by the
     /// account. Fall back to the device timezone for older panels that omit it,
     /// preserving Lume's historical behaviour for those providers.
-    private nonisolated static func timeshiftStartString(for start: Date, playlist: Playlist) -> String {
+    private static func timeshiftStartString(for start: Date, playlist: Playlist) -> String {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd:HH-mm"
         formatter.locale = Locale(identifier: "en_US_POSIX")
@@ -401,7 +375,7 @@ class XtreamClient {
     /// where the duration is the programme length in minutes and the start is the
     /// programme's air time. Only meaningful for Xtream streams (m3u channels
     /// carry no credentials).
-    nonisolated func buildCatchupURL(
+    static func buildCatchupURL(
         for stream: LiveStream,
         playlist: Playlist,
         start: Date,
@@ -420,7 +394,7 @@ class XtreamClient {
 
 // MARK: - Supporting Types
 
-enum StreamFormat: String {
+nonisolated enum StreamFormat: String {
     case m3u8
     case tsStream = "ts"
 }
