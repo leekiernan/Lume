@@ -1,64 +1,62 @@
 import SwiftUI
 
-/// A wide episode row: 16:9 still on the left, title / runtime / synopsis on the
-/// right, a resume progress bar and a play affordance.
-struct EpisodeCard: View {
-    let episode: Episode
-    var onPlay: () -> Void
-    var onToggleWatched: () -> Void = {}
-    var onMarkPreviousWatched: () -> Void = {}
-    var onMarkFollowingUnwatched: () -> Void = {}
-    #if !os(tvOS)
+#if !os(tvOS)
+    /// A wide episode row: 16:9 still on the left, title / runtime / synopsis on the
+    /// right, a resume progress bar and a play affordance.
+    struct EpisodeCard: View {
+        let episode: Episode
+        var onPlay: () -> Void
+        var onToggleWatched: () -> Void = {}
+        var onMarkPreviousWatched: () -> Void = {}
+        var onMarkFollowingUnwatched: () -> Void = {}
         var onDownload: (() -> Void)?
         var onDeleteDownload: (() -> Void)?
         var downloadProgress: Double?
-    #endif
 
-    var body: some View {
-        Button(action: onPlay) {
-            HStack(alignment: .top, spacing: 14) {
-                thumbnail
+        var body: some View {
+            Button(action: onPlay) {
+                HStack(alignment: .top, spacing: 14) {
+                    thumbnail
 
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("E\(episode.episodeNum)" + (episode.title.isEmpty ? "" : " · \(episode.title)"))
-                        .font(.subheadline.weight(.semibold))
-                        .lineLimit(2)
-                        .multilineTextAlignment(.leading)
-
-                    if let metaLine {
-                        Text(metaLine)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    if let plot = episode.plot, !plot.isEmpty {
-                        Text(plot)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("E\(episode.episodeNum)" + (episode.title.isEmpty ? "" : " · \(episode.title)"))
+                            .font(.subheadline.weight(.semibold))
                             .lineLimit(2)
+                            .multilineTextAlignment(.leading)
+
+                        if let metaLine {
+                            Text(metaLine)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+
+                        if let plot = episode.plot, !plot.isEmpty {
+                            Text(plot)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(2)
+                        }
+
+                        if let progress = resumeFraction {
+                            ProgressView(value: progress)
+                                .progressViewStyle(.linear)
+                                .tint(.accentColor)
+                                .padding(.top, 2)
+                        }
                     }
 
-                    if let progress = resumeFraction {
-                        ProgressView(value: progress)
-                            .progressViewStyle(.linear)
-                            .tint(.accentColor)
-                            .padding(.top, 2)
-                    }
+                    Spacer(minLength: 0)
                 }
-
-                Spacer(minLength: 0)
+                .contentShape(Rectangle())
             }
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .contextMenu {
-            EpisodeWatchedMenu(
-                episode: episode,
-                onToggleWatched: onToggleWatched,
-                onMarkPreviousWatched: onMarkPreviousWatched,
-                onMarkFollowingUnwatched: onMarkFollowingUnwatched
-            )
-            #if !os(tvOS)
+            .buttonStyle(.plain)
+            .contextMenu {
+                EpisodeWatchedMenu(
+                    episode: episode,
+                    onToggleWatched: onToggleWatched,
+                    onMarkPreviousWatched: onMarkPreviousWatched,
+                    onMarkFollowingUnwatched: onMarkFollowingUnwatched
+                )
                 Divider()
                 if episode.downloadStatus == .completed {
                     Button(role: .destructive) {
@@ -80,31 +78,29 @@ struct EpisodeCard: View {
                         Label("Cancel Download", systemImage: "xmark.circle")
                     }
                 }
-            #endif
-        }
-    }
-
-    private var thumbnail: some View {
-        ZStack(alignment: .topLeading) {
-            CachedAsyncImage(url: URL(string: episode.movieImage ?? ""), maxPixelSize: 142) { phase in
-                switch phase {
-                case let .success(image):
-                    image.resizable().aspectRatio(contentMode: .fill)
-                case .empty where episode.movieImage != nil:
-                    Rectangle().fill(Color.gray.opacity(0.25)).overlay { ProgressView() }
-                default:
-                    Rectangle().fill(Color.gray.opacity(0.25))
-                        .overlay {
-                            Text("E\(episode.episodeNum)")
-                                .font(.headline)
-                                .foregroundStyle(.secondary)
-                        }
-                }
             }
-            .frame(width: 142, height: 80)
-            .clipShape(RoundedRectangle(cornerRadius: 8))
+        }
 
-            #if !os(tvOS)
+        private var thumbnail: some View {
+            ZStack(alignment: .topLeading) {
+                CachedAsyncImage(url: URL(string: episode.movieImage ?? ""), maxPixelSize: 142) { phase in
+                    switch phase {
+                    case let .success(image):
+                        image.resizable().aspectRatio(contentMode: .fill)
+                    case .empty where episode.movieImage != nil:
+                        Rectangle().fill(Color.gray.opacity(0.25)).overlay { ProgressView() }
+                    default:
+                        Rectangle().fill(Color.gray.opacity(0.25))
+                            .overlay {
+                                Text("E\(episode.episodeNum)")
+                                    .font(.headline)
+                                    .foregroundStyle(.secondary)
+                            }
+                    }
+                }
+                .frame(width: 142, height: 80)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+
                 if let progress = downloadProgress {
                     downloadBadge(progress: progress)
                         .padding(5)
@@ -116,19 +112,17 @@ struct EpisodeCard: View {
                         .background(.tint.opacity(0.85), in: Circle())
                         .padding(5)
                 }
-            #endif
 
-            Image(systemName: "play.circle.fill")
-                .font(.title2)
-                .foregroundStyle(.white)
-                .shadow(radius: 4)
-                .opacity(0.9)
-                .frame(width: 142, height: 80)
+                Image(systemName: "play.circle.fill")
+                    .font(.title2)
+                    .foregroundStyle(.white)
+                    .shadow(radius: 4)
+                    .opacity(0.9)
+                    .frame(width: 142, height: 80)
+            }
+            .frame(width: 142, height: 80)
         }
-        .frame(width: 142, height: 80)
-    }
 
-    #if !os(tvOS)
         private func downloadBadge(progress: Double) -> some View {
             ZStack {
                 Circle()
@@ -154,26 +148,24 @@ struct EpisodeCard: View {
             .frame(width: 24, height: 24)
             .background(.black.opacity(0.55), in: Circle())
         }
-    #endif
 
-    /// Air date and runtime joined on a single caption line, omitting whichever is missing.
-    private var metaLine: String? {
-        let parts = [
-            DetailFormat.date(from: episode.airDate),
-            DetailFormat.minutes(episode.durationSecs)
-        ].compactMap(\.self)
-        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+        /// Air date and runtime joined on a single caption line, omitting whichever is missing.
+        private var metaLine: String? {
+            let parts = [
+                DetailFormat.date(from: episode.airDate),
+                DetailFormat.minutes(episode.durationSecs)
+            ].compactMap(\.self)
+            return parts.isEmpty ? nil : parts.joined(separator: " · ")
+        }
+
+        private var resumeFraction: Double? {
+            guard episode.watchProgress > 0,
+                  let duration = episode.durationSecs, duration > 0,
+                  !episode.isWatched else { return nil }
+            return min(episode.watchProgress / Double(duration), 1)
+        }
     }
 
-    private var resumeFraction: Double? {
-        guard episode.watchProgress > 0,
-              let duration = episode.durationSecs, duration > 0,
-              !episode.isWatched else { return nil }
-        return min(episode.watchProgress / Double(duration), 1)
-    }
-}
-
-#if !os(tvOS)
     /// Reads `DownloadManager` state in a leaf view so download-progress ticks
     /// re-render only the episode rows, not the entire detail screen. Reading
     /// `activeDownloads` directly in `SeriesDetailView.episodesSection` made

@@ -130,10 +130,11 @@ struct MainTabView: View {
         router.selectedTab = fallback.tab
     }
 
-    /// Home's local rails are bounded queries, so their playlist scope has to
-    /// be known when the `@Query` wrappers are constructed. Passing the prefix
-    /// from this root keeps the limit behind the SQL selection rather than
-    /// filtering another playlist's capped rows in memory.
+    /// Home's local rails are bounded queries, and the Movies/Series category
+    /// lists are playlist-scoped ones, so the scope has to be known when their
+    /// `@Query` wrappers are constructed. Passing the prefix from this root keeps
+    /// the selection in SQL rather than filtering another playlist's rows in
+    /// memory.
     private var activePlaylistPrefix: String? {
         playlists.active(for: selectedPlaylistID).map { "\($0.id.uuidString)-" }
     }
@@ -282,7 +283,7 @@ struct MainTabView: View {
 
                 if isOn(.movies) {
                     Tab(value: AppTab.movies) {
-                        activeOnly(.movies, selection: selection.wrappedValue) { MoviesView() }
+                        activeOnly(.movies, selection: selection.wrappedValue) { MoviesView(playlistPrefix: activePlaylistPrefix, restriction: contentRestriction) }
                     } label: {
                         Text("Movies")
                     }
@@ -290,7 +291,7 @@ struct MainTabView: View {
 
                 if isOn(.series) {
                     Tab(value: AppTab.series) {
-                        activeOnly(.series, selection: selection.wrappedValue) { SeriesView() }
+                        activeOnly(.series, selection: selection.wrappedValue) { SeriesView(playlistPrefix: activePlaylistPrefix, restriction: contentRestriction) }
                     } label: {
                         Text("Series")
                     }
@@ -370,13 +371,13 @@ struct MainTabView: View {
 
                 if isOn(.movies) {
                     Tab("Movies", systemImage: "film", value: AppTab.movies) {
-                        MoviesView()
+                        MoviesView(playlistPrefix: activePlaylistPrefix, restriction: contentRestriction)
                     }
                 }
 
                 if isOn(.series) {
                     Tab("Series", systemImage: "tv", value: AppTab.series) {
-                        SeriesView()
+                        SeriesView(playlistPrefix: activePlaylistPrefix, restriction: contentRestriction)
                     }
                 }
 
@@ -471,37 +472,6 @@ struct MainTabView: View {
     private func belongsToActivePlaylist(_ id: String) -> Bool {
         guard let activePlaylist = playlists.active(for: selectedPlaylistID) else { return true }
         return id.hasPrefix("\(activePlaylist.id.uuidString)-")
-    }
-}
-
-// MARK: - Downloads sheet presentation
-
-private extension View {
-    /// Presents the downloads list as a sheet, in the same navigation + dismiss
-    /// chrome Settings gives it. The download Live Activity's tap target, so it
-    /// is reachable without disturbing whatever tab the user had open.
-    @ViewBuilder
-    func downloadsSheet(isPresented: Binding<Bool>) -> some View {
-        #if os(tvOS)
-            // tvOS has no downloads feature to show.
-            self
-        #else
-            sheet(isPresented: isPresented) {
-                NavigationStack {
-                    DownloadsView()
-                        .toolbar {
-                            ToolbarItem(placement: .confirmationAction) {
-                                Button("Done") { isPresented.wrappedValue = false }
-                            }
-                        }
-                }
-                #if os(macOS)
-                // A `List` in a frameless macOS sheet collapses to zero
-                // height, leaving the sheet rendering as a bare toolbar.
-                .frame(minWidth: 480, minHeight: 440)
-                #endif
-            }
-        #endif
     }
 }
 

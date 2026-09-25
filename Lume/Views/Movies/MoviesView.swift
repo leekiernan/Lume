@@ -19,8 +19,8 @@ struct MoviesView: View {
     @Environment(DeepLinkRouter.self) private var router: DeepLinkRouter?
     @State private var fallbackPath = NavigationPath()
     @Query private var playlists: [Playlist]
-    @Query(filter: #Predicate<Category> { $0.typeRaw == "vod" && $0.isHidden == false })
-    private var categories: [Category]
+    /// The active playlist's visible categories, scoped in SQL — see `init`.
+    @Query private var categories: [Category]
 
     @AppStorage(PlaylistSelectionStore.key) private var selectedPlaylistID: String = ""
     @State private var showingSync = false
@@ -44,7 +44,23 @@ struct MoviesView: View {
         CategorySortOption(rawValue: categorySortRaw) ?? .playlist
     }
 
+    /// The playlist scope and the viewer's hidden/restricted categories are
+    /// passed in by `MainTabView`, as for `HomeView`: a `@Query` can't read view
+    /// state, but it can be built from init arguments, so the category list is
+    /// selected in SQL instead of fetching every playlist's categories and
+    /// filtering them on every body pass.
+    init(playlistPrefix: String? = nil, restriction: ContentRestriction = ContentRestriction()) {
+        _categories = Query(LibraryCategoryQuery.descriptor(
+            type: .vod,
+            playlistPrefix: playlistPrefix ?? "",
+            excludedCategoryIDs: restriction.excludedCategoryIDs
+        ))
+    }
+
     var body: some View {
+        // Sorted once per pass: the empty check, the sidebar toggle and the
+        // sidebar itself all read it.
+        let sortedCategories = categorySort.sort(categories)
         NavigationStack(path: navigationPath) {
             Group {
                 if playlists.isEmpty {
@@ -170,6 +186,7 @@ struct MoviesView: View {
                 MovieCollectionRow(
                     kind: kind,
                     playlistPrefix: playlistPrefix,
+                    excludedCategoryIDs: restriction.excludedCategoryIDs,
                     animationNamespace: animationNamespace,
                     onLeadingLeft: { showingBrowse = true }
                 )
@@ -215,8 +232,9 @@ struct MoviesView: View {
         playlists.active(for: selectedPlaylistID)
     }
 
-    /// The id prefix every Movie/Category of the active playlist shares. Used to
-    /// scope the cross-category collection rows in-memory.
+    /// The id prefix every Movie/Category of the active playlist shares. Scopes
+    /// the collection rows' queries, the genre list and the "Show All" grids.
+    /// `MainTabView` derives the same prefix for this view's category query.
     private var playlistPrefix: String {
         activePlaylist.map { "\($0.id.uuidString)-" } ?? ""
     }
@@ -250,15 +268,6 @@ struct MoviesView: View {
 
     private func rememberHeroWarmStart(_ backdropURL: URL?) {
         heroWarmStart.remember(backdropURL, hero: heroRef, catalogScope: heroWarmStartScope)
-    }
-
-    /// Categories scoped to the active playlist. The `@Query` fetches every
-    /// playlist's categories (SwiftData can't parameterize a `@Query` on view
-    /// state), so we isolate by the playlist-prefixed category `id` here.
-    private var sortedCategories: [Category] {
-        guard let playlistId = activePlaylist?.id else { return [] }
-        let prefix = "\(playlistId.uuidString)-"
-        return categorySort.sort(categories.filter { $0.id.hasPrefix(prefix) && !restriction.hides(categoryID: $0.id) })
     }
 }
 
