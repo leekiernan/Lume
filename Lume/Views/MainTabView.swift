@@ -141,10 +141,11 @@ struct MainTabView: View {
         router.selectedTab = fallback.tab
     }
 
-    /// Home's local rails are bounded queries, so their playlist scope has to
-    /// be known when the `@Query` wrappers are constructed. Passing the prefix
-    /// from this root keeps the limit behind the SQL selection rather than
-    /// filtering another playlist's capped rows in memory.
+    /// Home's local rails are bounded queries, and the Movies/Series category
+    /// lists are playlist-scoped ones, so the scope has to be known when their
+    /// `@Query` wrappers are constructed. Passing the prefix from this root keeps
+    /// the selection in SQL rather than filtering another playlist's rows in
+    /// memory.
     private var activePlaylistPrefix: String? {
         playlists.active(for: selectedPlaylistID).map { "\($0.id.uuidString)-" }
     }
@@ -281,7 +282,7 @@ struct MainTabView: View {
 
                 if isOn(.movies) {
                     Tab(value: AppTab.movies) {
-                        activeOnly(.movies, selection: selection.wrappedValue) { MoviesView() }
+                        activeOnly(.movies, selection: selection.wrappedValue) { MoviesView(playlistPrefix: activePlaylistPrefix, restriction: contentRestriction) }
                     } label: {
                         Text("Movies")
                     }
@@ -289,7 +290,7 @@ struct MainTabView: View {
 
                 if isOn(.series) {
                     Tab(value: AppTab.series) {
-                        activeOnly(.series, selection: selection.wrappedValue) { SeriesView() }
+                        activeOnly(.series, selection: selection.wrappedValue) { SeriesView(playlistPrefix: activePlaylistPrefix, restriction: contentRestriction) }
                     } label: {
                         Text("Series")
                     }
@@ -369,13 +370,13 @@ struct MainTabView: View {
 
                 if isOn(.movies) {
                     Tab("Movies", systemImage: "film", value: AppTab.movies) {
-                        MoviesView()
+                        MoviesView(playlistPrefix: activePlaylistPrefix, restriction: contentRestriction)
                     }
                 }
 
                 if isOn(.series) {
                     Tab("Series", systemImage: "tv", value: AppTab.series) {
-                        SeriesView()
+                        SeriesView(playlistPrefix: activePlaylistPrefix, restriction: contentRestriction)
                     }
                 }
 
