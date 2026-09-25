@@ -258,8 +258,8 @@
                                 .foregroundStyle(secondaryColor)
                         }
 
-                        if stream.tvArchive > 0 {
-                            Label("Catchup: \(stream.tvArchiveDuration)d", systemImage: "clock.arrow.circlepath")
+                        if stream.supportsCatchup {
+                            Label("Catchup: \(stream.catchupArchiveDays)d", systemImage: "clock.arrow.circlepath")
                                 .font(.system(size: 22))
                                 .foregroundStyle(Color.blue)
                         }

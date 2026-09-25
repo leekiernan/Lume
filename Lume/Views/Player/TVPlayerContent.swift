@@ -134,9 +134,7 @@
         static func guideListings(channelId: String?, archiveDays: Int, in context: ModelContext) -> [EPGListing] {
             guard let channelId, !channelId.isEmpty else { return [] }
             let now = Date()
-            let earliest = archiveDays > 0
-                ? Calendar.current.date(byAdding: .day, value: -archiveDays, to: now) ?? now
-                : now
+            let earliest = archiveDays > 0 ? CatchupWindow.earliestStart(archiveDays: archiveDays, now: now) : now
             let descriptor = FetchDescriptor<EPGListing>(
                 predicate: #Predicate { $0.channelId == channelId && $0.end > earliest },
                 sortBy: [SortDescriptor(\.start)]
