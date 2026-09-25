@@ -65,13 +65,31 @@ extension KSPlayerEngineView {
     /// actually being presented. An advancing playhead therefore means the stream
     /// is playing, while a genuine stall or in-flight reconnect leaves it frozen
     /// (no advance → spinner stays). Cheap no-op once the spinner is already down.
+    ///
+    /// The same signal also proves the stream *started*: half a second of real
+    /// progress on this stream marks the first frame even when its
+    /// `.readyToPlay` was lost. KSPlayer's callbacks are delivered async, so
+    /// across a quick swap (a catch-up seek, especially one made while the
+    /// previous segment was still loading) the new stream's ready callback can
+    /// be consumed before the swap's reset clears it — leaving a playing stream
+    /// marked unstarted, its spinner up and its startup watchdog armed.
     func notePlaybackProgress(_ current: TimeInterval) {
         guard current.isFinite, !isSeeking else { return }
         defer { tick.lastPlayhead = current }
+        if tick.firstPlayhead < 0 || current < tick.firstPlayhead { tick.firstPlayhead = current }
+        if !hasStartedPlayback, current - tick.firstPlayhead >= Self.startProofProgress {
+            markPlaybackStarted(provenByPlayhead: true)
+            setBuffering(false)
+        }
         guard isBuffering, tick.lastPlayhead >= 0, current > tick.lastPlayhead else { return }
         markPlaybackStarted()
         setBuffering(false)
     }
+
+    /// How far the playhead must advance on a stream before that alone counts
+    /// as its first frame — several 0.1 s ticks, so a stale sample or two from
+    /// the stream being replaced can't pass for progress.
+    static let startProofProgress: TimeInterval = 0.5
 
     /// Record that the stream has produced its first frame. Unlocks the controls
     /// for good and disarms the startup watchdog (a dead-stream timeout is moot
@@ -80,9 +98,11 @@ extension KSPlayerEngineView {
     /// Guarded by `hasSeenReadyToPlay` so a stale `.bufferFinished` callback
     /// from the *previous* session (which arrives after `retryPlayback()` resets
     /// `hasStartedPlayback`) cannot prematurely cancel the watchdog before the
-    /// new session's prepare cycle has started.
-    func markPlaybackStarted() {
-        guard !hasStartedPlayback, hasSeenReadyToPlay else { return }
+    /// new session's prepare cycle has started — unless `provenByPlayhead`,
+    /// where the playhead itself has advanced on this stream (see
+    /// `notePlaybackProgress`), which no stale callback can fake.
+    func markPlaybackStarted(provenByPlayhead: Bool = false) {
+        guard !hasStartedPlayback, hasSeenReadyToPlay || provenByPlayhead else { return }
         hasStartedPlayback = true
         isCatchupSegmentLoading = false
         PlaybackQoE.shared.noteFirstFrame()
@@ -121,6 +141,14 @@ extension KSPlayerEngineView {
                 reconnector.reset()
             }
         case .error:
+            // Callbacks are delivered async, so an `.error` can arrive after the
+            // layer has moved on — typically the stream a swap just replaced
+            // reporting its own cancelled connection. Only an error the layer
+            // is still in is this stream's failure.
+            guard coordinator.playerLayer?.state == .error else {
+                Logger.player.info("KSPlayer: ignoring a stale .error — the layer has moved on")
+                return
+            }
             handleErrorState()
         case .playedToTheEnd:
             // A live stream that reaches .playedToTheEnd has had its HLS
