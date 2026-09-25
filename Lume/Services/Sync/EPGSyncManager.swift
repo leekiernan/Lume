@@ -200,7 +200,8 @@ actor EPGSyncManager {
     private func retainedChannelIDs(for sourceID: UUID, limitedTo knownChannelIDs: Set<String>) -> Set<String> {
         let context = ModelContext(modelContainer)
         context.autosaveEnabled = false
-        let descriptor = FetchDescriptor<EPGListing>(predicate: #Predicate { $0.sourceID == sourceID })
+        var descriptor = FetchDescriptor<EPGListing>(predicate: #Predicate { $0.sourceID == sourceID })
+        descriptor.propertiesToFetch = [\.channelId]
         let rows = (try? context.fetch(descriptor)) ?? []
         return Set(rows.map(\.channelId)).intersection(knownChannelIDs)
     }
@@ -228,9 +229,7 @@ actor EPGSyncManager {
                     programmesByKey[key] = programme
                     continue
                 }
-                let candidate = "\(programme.end.timeIntervalSince1970)\u{1F}\(programme.title)\u{1F}\(programme.description)"
-                let existing = "\(current.end.timeIntervalSince1970)\u{1F}\(current.title)\u{1F}\(current.description)"
-                if candidate < existing { programmesByKey[key] = programme }
+                if Self.contentPrecedes(programme, current) { programmesByKey[key] = programme }
             }
         }
         try Task.checkCancellation()
@@ -239,13 +238,28 @@ actor EPGSyncManager {
               parseOutcome.encounteredProgrammeCount == 0 || parseOutcome.programmeCount > 0
         else { throw EPGPublicationError.invalidDocument }
         return StagedSource(
-            programmes: programmesByKey.values.sorted {
-                let left = "\($0.channelId)\u{1F}\($0.start.timeIntervalSince1970)\u{1F}\($0.end.timeIntervalSince1970)\u{1F}\($0.title)\u{1F}\($0.description)"
-                let right = "\($1.channelId)\u{1F}\($1.start.timeIntervalSince1970)\u{1F}\($1.end.timeIntervalSince1970)\u{1F}\($1.title)\u{1F}\($1.description)"
-                return left < right
-            },
+            programmes: programmesByKey.values.sorted(by: Self.stagingPrecedes),
             parsedProgrammeCount: parseOutcome.programmeCount
         )
+    }
+
+    /// The staging order: channel, start, then the dedupe tiebreak. Compares
+    /// field by field and stops at the first difference — the sort runs
+    /// n·log n comparisons over a full guide (~218k rows), and building a
+    /// composite string for both sides of each one dominated staging.
+    private nonisolated static func stagingPrecedes(_ lhs: ParsedProgramme, _ rhs: ParsedProgramme) -> Bool {
+        if lhs.channelId != rhs.channelId { return lhs.channelId < rhs.channelId }
+        if lhs.start != rhs.start { return lhs.start < rhs.start }
+        return contentPrecedes(lhs, rhs)
+    }
+
+    /// Which of two programmes sharing a channel and start wins the dedupe:
+    /// the earlier end, then title, then description — deterministic, so the
+    /// same document always publishes the same snapshot.
+    private nonisolated static func contentPrecedes(_ lhs: ParsedProgramme, _ rhs: ParsedProgramme) -> Bool {
+        if lhs.end != rhs.end { return lhs.end < rhs.end }
+        if lhs.title != rhs.title { return lhs.title < rhs.title }
+        return lhs.description < rhs.description
     }
 
     /// One source gets exactly one durable publication. If validation, a final
