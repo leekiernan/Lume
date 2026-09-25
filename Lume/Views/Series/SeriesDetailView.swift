@@ -115,75 +115,6 @@ struct SeriesDetailView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    // MARK: - Content
-
-    private var detailView: some View {
-        GeometryReader { proxy in
-            ScrollView {
-                VStack(alignment: .leading, spacing: DetailMetrics.sectionSpacing) {
-                    DetailHero(
-                        title: series.name,
-                        backdropURL: TMDBClient.backdropURL(series.backdropPath),
-                        posterFallbackURL: URL(string: series.cover ?? ""),
-                        logoURL: TMDBClient.logoURL(series.logoPath),
-                        tagline: series.tagline,
-                        metadata: metadata,
-                        height: DetailMetrics.heroHeight(for: proxy.size),
-                        fallbackSymbol: "tv"
-                    )
-
-                    actions
-                        .padding(.horizontal, DetailMetrics.contentPadding)
-
-                    if let plot = series.plot, !plot.isEmpty {
-                        ExpandableText(text: plot)
-                            .padding(.horizontal, DetailMetrics.contentPadding)
-                    }
-
-                    if !series.externalRatings.isEmpty {
-                        ExternalRatingsView(ratings: series.externalRatings)
-                            .padding(.horizontal, DetailMetrics.contentPadding)
-                    }
-
-                    episodesSection
-
-                    if !series.orderedCast.isEmpty {
-                        section(title: "Cast") {
-                            CastRow(cast: series.orderedCast)
-                        }
-                    }
-
-                    if !series.trailers.isEmpty {
-                        section(title: "Videos") {
-                            VideoRow(videos: series.trailers) { video in
-                                openVideo(video)
-                            }
-                        }
-                    }
-
-                    information
-                        .padding(.horizontal, DetailMetrics.contentPadding)
-
-                    if !similar.isEmpty {
-                        section(title: "You May Also Like") {
-                            SimilarRow(items: similar, animationNamespace: animationNamespace)
-                        }
-                    }
-
-                    if !otherSources.isEmpty {
-                        section(title: "Other Sources") {
-                            OtherSourcesRow(sources: otherSources, animationNamespace: animationNamespace)
-                        }
-                    }
-                }
-                .frame(width: proxy.size.width, alignment: .leading)
-                .padding(.bottom, 32)
-            }
-            .scrollIndicators(.hidden)
-            .ignoresSafeArea(edges: .top)
-        }
-    }
-
     // MARK: - Sections
 
     private func section(title: LocalizedStringKey, @ViewBuilder content: () -> some View) -> some View {
@@ -200,49 +131,6 @@ struct SeriesDetailView: View {
             isEnabled: nextEpisode != nil && seriesPlaylist != nil,
             action: { if let episode = nextEpisode { playEpisode(episode) } }
         )
-    }
-
-    private var episodesSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                DetailSectionHeader(title: "Episodes")
-                Spacer()
-                if availableSeasons.count > 1 {
-                    seasonMenu
-                }
-            }
-            .padding(.horizontal, DetailMetrics.contentPadding)
-
-            if series.episodes.isEmpty {
-                episodesPlaceholder
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 24)
-            } else {
-                LazyVStack(spacing: 16) {
-                    ForEach(seasonEpisodes) { episode in
-                        #if os(tvOS)
-                            EpisodeCard(
-                                episode: episode,
-                                onPlay: { playEpisode(episode) },
-                                onToggleWatched: { toggleWatched(episode) },
-                                onMarkPreviousWatched: { markPreviousWatched(episode) },
-                                onMarkFollowingUnwatched: { markFollowingUnwatched(episode) }
-                            )
-                        #else
-                            DownloadableEpisodeCard(
-                                episode: episode,
-                                playlist: seriesPlaylist,
-                                onPlay: { playEpisode(episode) },
-                                onToggleWatched: { toggleWatched(episode) },
-                                onMarkPreviousWatched: { markPreviousWatched(episode) },
-                                onMarkFollowingUnwatched: { markFollowingUnwatched(episode) }
-                            )
-                        #endif
-                    }
-                }
-                .padding(.horizontal, DetailMetrics.contentPadding)
-            }
-        }
     }
 
     private var seasonMenu: some View {
@@ -400,15 +288,15 @@ struct SeriesDetailView: View {
         SeriesEpisodeProgress.nextEpisode(in: series.episodes, fallback: seasonEpisodes.first)
     }
 
-    private var backgroundColor: Color {
-        #if os(macOS)
-            Color(nsColor: .windowBackgroundColor)
-        #elseif os(tvOS)
-            Color.black
-        #else
-            Color(uiColor: .systemBackground)
-        #endif
-    }
+    #if !os(tvOS)
+        private var backgroundColor: Color {
+            #if os(macOS)
+                Color(nsColor: .windowBackgroundColor)
+            #else
+                Color(uiColor: .systemBackground)
+            #endif
+        }
+    #endif
 
     private var seriesPlaylist: Playlist? {
         playlists.first { series.id.hasPrefix($0.id.uuidString) } ?? playlists.first
@@ -466,6 +354,114 @@ struct SeriesDetailView: View {
         }
     }
 }
+
+// MARK: - Content
+
+// Only the iOS / macOS body reaches these: on tvOS `body` hands off to
+// `TVSeriesDetailView`, and the episode rows are download-aware.
+#if !os(tvOS)
+    private extension SeriesDetailView {
+        var detailView: some View {
+            GeometryReader { proxy in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: DetailMetrics.sectionSpacing) {
+                        DetailHero(
+                            title: series.name,
+                            backdropURL: TMDBClient.backdropURL(series.backdropPath),
+                            posterFallbackURL: URL(string: series.cover ?? ""),
+                            logoURL: TMDBClient.logoURL(series.logoPath),
+                            tagline: series.tagline,
+                            metadata: metadata,
+                            height: DetailMetrics.heroHeight(for: proxy.size),
+                            fallbackSymbol: "tv"
+                        )
+
+                        actions
+                            .padding(.horizontal, DetailMetrics.contentPadding)
+
+                        if let plot = series.plot, !plot.isEmpty {
+                            ExpandableText(text: plot)
+                                .padding(.horizontal, DetailMetrics.contentPadding)
+                        }
+
+                        if !series.externalRatings.isEmpty {
+                            ExternalRatingsView(ratings: series.externalRatings)
+                                .padding(.horizontal, DetailMetrics.contentPadding)
+                        }
+
+                        episodesSection
+
+                        if !series.orderedCast.isEmpty {
+                            section(title: "Cast") {
+                                CastRow(cast: series.orderedCast)
+                            }
+                        }
+
+                        if !series.trailers.isEmpty {
+                            section(title: "Videos") {
+                                VideoRow(videos: series.trailers) { video in
+                                    openVideo(video)
+                                }
+                            }
+                        }
+
+                        information
+                            .padding(.horizontal, DetailMetrics.contentPadding)
+
+                        if !similar.isEmpty {
+                            section(title: "You May Also Like") {
+                                SimilarRow(items: similar, animationNamespace: animationNamespace)
+                            }
+                        }
+
+                        if !otherSources.isEmpty {
+                            section(title: "Other Sources") {
+                                OtherSourcesRow(sources: otherSources, animationNamespace: animationNamespace)
+                            }
+                        }
+                    }
+                    .frame(width: proxy.size.width, alignment: .leading)
+                    .padding(.bottom, 32)
+                }
+                .scrollIndicators(.hidden)
+                .ignoresSafeArea(edges: .top)
+            }
+        }
+
+        var episodesSection: some View {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    DetailSectionHeader(title: "Episodes")
+                    Spacer()
+                    if availableSeasons.count > 1 {
+                        seasonMenu
+                    }
+                }
+                .padding(.horizontal, DetailMetrics.contentPadding)
+
+                if series.episodes.isEmpty {
+                    episodesPlaceholder
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 24)
+                } else {
+                    LazyVStack(spacing: 16) {
+                        ForEach(seasonEpisodes) { episode in
+                            DownloadableEpisodeCard(
+                                episode: episode,
+                                playlist: seriesPlaylist,
+                                onPlay: { playEpisode(episode) },
+                                onToggleWatched: { toggleWatched(episode) },
+                                onMarkPreviousWatched: { markPreviousWatched(episode) },
+                                onMarkFollowingUnwatched: { markFollowingUnwatched(episode) }
+                            )
+                        }
+                    }
+                    .padding(.horizontal, DetailMetrics.contentPadding)
+                }
+            }
+        }
+    }
+#endif
 
 // MARK: - Related titles
 

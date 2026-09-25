@@ -70,22 +70,20 @@ struct MovieDetailView: View {
                 .navigationBarBackButtonHidden(true)
                 .toolbarBackground(.hidden, for: .navigationBar)
             #endif
-            #if !os(tvOS)
-            .toolbar { toolbarContent }
-            #endif
-            .task(id: movie.id) {
-                await enrichIfNeeded()
-                await enrichMovieRatingsIfNeeded(movie, context: modelContext)
-                resolveSimilar()
-                await resolveCollection()
-                resolveOtherSources()
-                withAnimation(.easeInOut(duration: 0.3)) {
-                    isLoadingTMDB = false
+                .toolbar { toolbarContent }
+                .task(id: movie.id) {
+                    await enrichIfNeeded()
+                    await enrichMovieRatingsIfNeeded(movie, context: modelContext)
+                    resolveSimilar()
+                    await resolveCollection()
+                    resolveOtherSources()
+                    withAnimation(.easeInOut(duration: 0.3)) {
+                        isLoadingTMDB = false
+                    }
                 }
-            }
-            .onChange(of: movie.similarTMDBIds) { resolveSimilar() }
-            .onChange(of: movie.collectionId) { Task { await resolveCollection() } }
-            .onChange(of: refreshToken) { resolveSimilar() }
+                .onChange(of: movie.similarTMDBIds) { resolveSimilar() }
+                .onChange(of: movie.collectionId) { Task { await resolveCollection() } }
+                .onChange(of: refreshToken) { resolveSimilar() }
             #if os(iOS)
                 .fullScreenCover(item: $playingMedia) { media in
                     FullScreenPlayerView(media: media)
@@ -260,15 +258,15 @@ struct MovieDetailView: View {
         )
     }
 
-    private var backgroundColor: Color {
-        #if os(macOS)
-            Color(nsColor: .windowBackgroundColor)
-        #elseif os(tvOS)
-            Color.black
-        #else
-            Color(uiColor: .systemBackground)
-        #endif
-    }
+    #if !os(tvOS)
+        private var backgroundColor: Color {
+            #if os(macOS)
+                Color(nsColor: .windowBackgroundColor)
+            #else
+                Color(uiColor: .systemBackground)
+            #endif
+        }
+    #endif
 
     /// The playlist this movie actually belongs to (ids are `"<playlistUUID>-…"`),
     /// so playback uses the correct credentials. Falls back to the first.
