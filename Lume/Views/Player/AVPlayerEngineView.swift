@@ -63,6 +63,8 @@ struct AVPlayerEngineView: View {
     /// host and handed to `NowPlayingService` with this engine's transport.
     /// `nil` on tvOS, where the Siri Remote already owns stream changes.
     var onRemoteAdvance: ((PlayerMediaSwapper.Step) -> Bool)?
+    /// Takes every seek and skip on a catch-up programme — see `CatchupSeekRouter`.
+    var onCatchupSeek: ((CatchupSeek) -> Void)?
 
     @StateObject private var coordinator = AVPlayerCoordinator()
     @State private var isControlsVisible = true
@@ -168,12 +170,12 @@ struct AVPlayerEngineView: View {
         }
         .preferredColorScheme(.dark)
         .onAppear {
+            let catchup = coordinator.catchup
             coordinator.onTime = { current in
-                if !isSeeking, current.isFinite { clock.current = current }
+                if !isSeeking { catchup.report(position: current, to: clock) }
             }
-            coordinator.onDuration = { total in
-                if total.isFinite, total > 0 { clock.duration = total }
-            }
+            coordinator.onDuration = { catchup.report(duration: $0, to: clock) }
+            catchup.onSeek = onCatchupSeek
             coordinator.onPlaybackFailure = { reportFailure() }
             coordinator.startupTimeout = usesQuickStartupTimeout ? fallbackStartupTimeout : startupTimeout
             coordinator.configure(media: media)

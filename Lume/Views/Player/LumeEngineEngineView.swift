@@ -66,6 +66,8 @@ struct LumeEngineEngineView: View {
     /// host and handed to `NowPlayingService` with this engine's transport.
     /// `nil` on tvOS, where the Siri Remote already owns stream changes.
     var onRemoteAdvance: ((PlayerMediaSwapper.Step) -> Bool)?
+    /// Takes every seek and skip on a catch-up programme — see `CatchupSeekRouter`.
+    var onCatchupSeek: ((CatchupSeek) -> Void)?
 
     @StateObject private var coordinator = LumeEngineCoordinator()
     /// Drives bounded backoff reconnects when the stream drops mid-playback.
@@ -88,6 +90,10 @@ struct LumeEngineEngineView: View {
     @State private var isPanelOpen = false
     /// Bumped to ask the overlay to close its open panel (Menu/back press).
     @State private var panelCloseToken = 0
+    /// Keeps the controls up while a catch-up seek loads its new segment, so
+    /// the viewer can keep seeking instead of waiting out the load behind a
+    /// spinner. Cleared by the first frame or a failure.
+    @State private var isCatchupSegmentLoading = false
     #if os(tvOS)
         /// The full channel browser (categories + channels) raised by a left
         /// press while watching live TV with the controls hidden.
@@ -138,7 +144,7 @@ struct LumeEngineEngineView: View {
             // Hold the controls back until the stream starts, so the loading
             // indicator stands in for a player that would otherwise look paused
             // behind its Play button.
-            if isControlsVisible, coordinator.hasStartedPlayback, !loadFailed {
+            if isControlsVisible, coordinator.hasStartedPlayback || isCatchupSegmentLoading, !loadFailed {
                 controlsOverlay
                     .transition(.opacity.animation(.easeInOut(duration: 0.2)))
             }
@@ -166,7 +172,7 @@ struct LumeEngineEngineView: View {
             #endif
 
             if coordinator.isBuffering, !loadFailed {
-                PlayerLoadingIndicator(title: coordinator.hasStartedPlayback ? nil : media.title)
+                PlayerLoadingIndicator(title: coordinator.hasStartedPlayback || isCatchupSegmentLoading ? nil : media.title)
                     .transition(.opacity)
             }
 
@@ -186,7 +192,7 @@ struct LumeEngineEngineView: View {
         .onAppear {
             wireCoordinator()
             coordinator.startupTimeout = usesQuickStartupTimeout ? 15 : 40
-            clock.reset()
+            clock.reset(for: media)
             coordinator.configure(media: media)
             NowPlayingService.shared.attachTransport(.init(
                 isPlaying: { [weak coordinator] in coordinator?.isPlaying ?? false },
@@ -217,7 +223,10 @@ struct LumeEngineEngineView: View {
         .onChange(of: coordinator.hasStartedPlayback) { _, started in
             // Once the first frame lands the controls become eligible; start the
             // auto-hide countdown so they don't linger.
-            if started { resetHideTimer() }
+            if started {
+                isCatchupSegmentLoading = false
+                resetHideTimer()
+            }
         }
         .onChange(of: scenePhase) { _, phase in
             // The Home button backgrounds the app without calling onDisappear,
@@ -225,7 +234,7 @@ struct LumeEngineEngineView: View {
             // not while Picture in Picture is carrying the video.
             if phase != .active { coordinator.pauseForBackground() }
         }
-        .onChange(of: media) { _, newMedia in
+        .onChange(of: media) { oldMedia, newMedia in
             // The host swapped the stream (e.g. a new episode). Reset local
             // scrubbing state and hand the new media to the engine.
             isSeeking = false
@@ -233,7 +242,11 @@ struct LumeEngineEngineView: View {
             isPanelOpen = false
             loadFailed = false
             reconnector.reset()
-            clock.reset()
+            // A catch-up seek within one programme: the host already placed
+            // the clock on the new segment, and a reset would zero it.
+            let isCatchupSeek = newMedia.catchup?.isSameProgramme(as: oldMedia.catchup) == true
+            isCatchupSegmentLoading = isCatchupSeek && (coordinator.hasStartedPlayback || isCatchupSegmentLoading)
+            if isCatchupSeek { clock.rebase(onto: newMedia) } else { clock.reset(for: newMedia) }
             coordinator.configure(media: newMedia)
             resetHideTimer()
         }
@@ -282,10 +295,12 @@ struct LumeEngineEngineView: View {
     // MARK: - Coordinator wiring
 
     private func wireCoordinator() {
+        let catchup = coordinator.catchup
         coordinator.onTime = { current, duration in
-            if !isSeeking, current.isFinite { clock.current = current }
-            if duration.isFinite, duration > 0 { clock.duration = duration }
+            if !isSeeking { catchup.report(position: current, to: clock) }
+            catchup.report(duration: duration, to: clock)
         }
+        catchup.onSeek = onCatchupSeek
         coordinator.onPlaybackFailure = {
             Logger.player.error("LumeEngine startup failure → \(reportsStartupFailure && !coordinator.hasStartedPlayback ? "falling back to next engine" : "failure overlay", privacy: .public)")
             reportFailure()
@@ -294,6 +309,7 @@ struct LumeEngineEngineView: View {
             // Mid-stream drop: bounded exponential backoff, then give up loudly.
             if reconnector.hasGivenUp {
                 Logger.player.error("LumeEngine stall retries exhausted → failure overlay")
+                isCatchupSegmentLoading = false
                 withAnimation(.easeInOut(duration: 0.25)) { loadFailed = true }
             } else {
                 Logger.player.warning("LumeEngine stalled → scheduling engine reload")
@@ -518,6 +534,7 @@ struct LumeEngineEngineView: View {
     /// switches engines); otherwise raise the failure overlay.
     private func reportFailure() {
         guard !loadFailed else { return }
+        isCatchupSegmentLoading = false
         if reportsStartupFailure, !coordinator.hasStartedPlayback {
             onPlaybackFailed?()
             return

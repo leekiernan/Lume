@@ -84,6 +84,7 @@ extension KSPlayerEngineView {
     func markPlaybackStarted() {
         guard !hasStartedPlayback, hasSeenReadyToPlay else { return }
         hasStartedPlayback = true
+        isCatchupSegmentLoading = false
         PlaybackQoE.shared.noteFirstFrame()
         cancelStartupWatchdog()
     }
@@ -231,31 +232,6 @@ extension KSPlayerEngineView {
         retryPlayback()
     }
 
-    // MARK: - Stream swaps
-
-    /// Back to a fresh session's baseline for a newly swapped-in stream: both
-    /// bodies run this, so a swap re-arms the startup watchdog and raises the
-    /// spinner until the new stream's first frame on every platform (iOS and
-    /// macOS used to keep the previous stream's state, with no watchdog and
-    /// no spinner while the new one loaded).
-    func resetForNewStream() {
-        isSeeking = false
-        seekPosition = 0
-        hasStartedPlayback = false
-        hasSeenReadyToPlay = false
-        isBuffering = true
-        loadFailed = false
-        tick.reset()
-        cancelStallWatchdog()
-        reconnector.reset()
-        #if os(tvOS)
-            isPanelOpen = false
-            engine.reset()
-        #endif
-        startStartupWatchdog()
-        resetHideTimer()
-    }
-
     // MARK: - Dead-stream handling
 
     /// Arm the startup watchdog. Started on open and on each stream swap; the
@@ -294,6 +270,7 @@ extension KSPlayerEngineView {
         guard !loadFailed else { return }
         cancelStartupWatchdog()
         reconnector.cancel()
+        isCatchupSegmentLoading = false
         if !hasStartedPlayback {
             PlaybackQoE.shared.noteStartupFailure()
         }
@@ -330,8 +307,11 @@ extension KSPlayerEngineView {
         startStartupWatchdog()
 
         guard let layer = coordinator.playerLayer else { return }
-        if !media.isLive, clock.current > 1 {
-            layer.options.startPlayTime = clock.current
+        // Resume inside this stream, so a catch-up segment's own playhead
+        // rather than programme time.
+        let resumeAt = catchupRouter.enginePosition(forClock: clock.current)
+        if !media.isLive, resumeAt > 1 {
+            layer.options.startPlayTime = resumeAt
         }
         Logger.player.log("retry: rebuilding KSPlayer stream from failure overlay")
         rebuildStream(on: layer)
@@ -372,8 +352,9 @@ extension KSPlayerEngineView {
         // prematurely clear the spinner or reset the reconnect budget.
         hasSeenReadyToPlay = false
         tick.lastPlayhead = -1
-        if !media.isLive, clock.current > 1 {
-            layer.options.startPlayTime = clock.current
+        let resumeAt = catchupRouter.enginePosition(forClock: clock.current)
+        if !media.isLive, resumeAt > 1 {
+            layer.options.startPlayTime = resumeAt
         }
         Logger.player.log("reconnect: reloading KSPlayer stream")
         if media.isLive {

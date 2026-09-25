@@ -23,7 +23,10 @@ extension KSPlayerEngineView {
             isPlaying: { [weak coordinator] in coordinator?.playerLayer?.state.isPlaying ?? false },
             play: { [weak coordinator] in coordinator?.playerLayer?.play() },
             pause: { [weak coordinator] in coordinator?.playerLayer?.pause() },
-            seek: { [weak coordinator] in coordinator?.seek(time: $0) },
+            seek: { [weak coordinator, catchupRouter] time in
+                if catchupRouter.route(.to(time)) { return }
+                coordinator?.seek(time: time)
+            },
             advance: onRemoteAdvance
         ), owner: coordinator)
     }
