@@ -174,6 +174,7 @@ struct SeriesView: View {
                 SeriesCollectionRow(
                     kind: kind,
                     playlistPrefix: playlistPrefix,
+                    excludedCategoryIDs: restriction.excludedCategoryIDs,
                     animationNamespace: animationNamespace,
                     onLeadingLeft: { showingBrowse = true }
                 )

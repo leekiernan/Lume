@@ -32,12 +32,15 @@ struct BrowseQueryShapeTests {
     /// A preview row renders 20 items. It must never fetch the whole table to
     /// find them: this was the rail that went from 0.85 ms to 59 ms once a user
     /// had a few thousand watched titles, re-running on every catalog write.
+    /// The hidden-category filter is in the query, so one row over the preview
+    /// is all `hasMore` needs.
     @Test func `every preview row is bounded`() {
         for kind in [LibraryCollection.Kind.recentlyWatched, .favorites, .recentlyAdded] {
-            #expect(MovieCollectionQuery.rowDescriptor(for: kind, playlistPrefix: prefix).fetchLimit == collectionRowFetchLimit)
-            #expect(SeriesCollectionQuery.rowDescriptor(for: kind, playlistPrefix: prefix).fetchLimit == collectionRowFetchLimit)
+            let movies = MovieCollectionQuery.rowDescriptor(for: kind, playlistPrefix: prefix, excludedCategoryIDs: [])
+            let series = SeriesCollectionQuery.rowDescriptor(for: kind, playlistPrefix: prefix, excludedCategoryIDs: [])
+            #expect(movies.fetchLimit == collectionPreviewLimit + 1)
+            #expect(series.fetchLimit == collectionPreviewLimit + 1)
         }
-        #expect(collectionRowFetchLimit > collectionPreviewLimit, "the cap has to leave room for `hasMore`")
     }
 
     // MARK: - Selection precedes bounded fetches
@@ -206,7 +209,9 @@ struct BrowseQueryShapeTests {
         try context.save()
 
         for kind in [LibraryCollection.Kind.favorites, .recentlyWatched, .recentlyAdded] {
-            let rows = try context.fetch(MovieCollectionQuery.rowDescriptor(for: kind, playlistPrefix: mine))
+            let rows = try context.fetch(MovieCollectionQuery.rowDescriptor(
+                for: kind, playlistPrefix: mine, excludedCategoryIDs: []
+            ))
             #expect(rows.count == 3, "\(kind) leaked rows from another playlist")
             #expect(rows.allSatisfy { $0.id.hasPrefix(mine) })
         }

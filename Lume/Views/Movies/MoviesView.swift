@@ -170,6 +170,7 @@ struct MoviesView: View {
                 MovieCollectionRow(
                     kind: kind,
                     playlistPrefix: playlistPrefix,
+                    excludedCategoryIDs: restriction.excludedCategoryIDs,
                     animationNamespace: animationNamespace,
                     onLeadingLeft: { showingBrowse = true }
                 )
