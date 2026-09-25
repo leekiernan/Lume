@@ -10,6 +10,15 @@
 
 import SwiftUI
 
+extension SettingsView {
+    /// Whether the build has credentials for at least one integration — the
+    /// Integrations section (iOS / macOS) and sidebar category (tvOS) are
+    /// hidden otherwise.
+    var hasAnyIntegration: Bool {
+        trakt.isConfigured || simkl.isConfigured || openSubtitles.isConfigured
+    }
+}
+
 #if !os(tvOS)
 
     extension SettingsView {
@@ -65,8 +74,24 @@ import SwiftUI
             } header: {
                 Text("Integrations")
             } footer: {
-                Text("Sync watched movies and episodes, show your Trakt watchlist on Home, and download subtitles for anything that ships without them.")
+                Text(integrationsFooter)
             }
+        }
+
+        /// One sentence per configured integration, so the footer never
+        /// promises a service this build hides.
+        private var integrationsFooter: String {
+            var sentences: [String] = []
+            if trakt.isConfigured || simkl.isConfigured {
+                sentences.append(String(localized: "Sync watched movies and episodes."))
+            }
+            if trakt.isConfigured {
+                sentences.append(String(localized: "Show your Trakt watchlist on Home."))
+            }
+            if openSubtitles.isConfigured {
+                sentences.append(String(localized: "Download subtitles for anything that ships without them."))
+            }
+            return sentences.joined(separator: " ")
         }
     }
 
