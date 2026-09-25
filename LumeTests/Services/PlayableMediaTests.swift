@@ -233,7 +233,7 @@ struct PlayableMediaTests {
     }
 
     /// The guide's value snapshot must agree with the model-level check.
-    @Test func `guide row snapshot agrees with catchup availability`() {
+    @Test @MainActor func `guide row snapshot agrees with catchup availability`() {
         let stream = LiveStream(id: "l-13", streamId: 310, name: "Archive", tvArchive: 1, tvArchiveDuration: 3)
         let now = Date(timeIntervalSince1970: 1_700_000_000)
         let timeline = EPGTimeline.live(now: now, pointsPerMinute: 4)
