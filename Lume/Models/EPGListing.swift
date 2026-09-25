@@ -41,8 +41,9 @@ final class EPGListing {
     /// migration; deliberately kept out of the guide loaders' `propertiesToFetch`
     /// so the hot now/next and guide-window fetches don't pay for it.
     var subtitle: String?
-    /// XMLTV `<category>` values joined with ", " — the signal the Sports Hub
-    /// uses to spot sports broadcasts.
+    /// XMLTV `<category>` values joined with ", ". Captured at ingest but not
+    /// currently read: the Sports Hub matches on title, sub-title and
+    /// description, not on categories.
     var category: String?
 
     init(

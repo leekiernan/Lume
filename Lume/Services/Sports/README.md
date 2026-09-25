@@ -114,8 +114,11 @@ passes, each cheaper than the last only once the earlier ones have narrowed it:
    froze the guide. It is the one guide fetch that reads `listingDescription`:
    a conference programme ("Sonntags-Konferenz, 6. Spieltag") names its games
    only in the body, so the first 400 characters are searched too.
-3. **Matching.** The pure `SportsMatcher` token logic in Swift, plus the viewer's
-   remembered picks and a channel-name fallback.
+3. **Matching.** In Swift, on `SportsMatcher`'s token primitives, plus the
+   viewer's remembered picks and a channel-name fallback. A word → channel index
+   built once per resolve means each fixture only scores the channels sharing a
+   word with it (and the ones picked for its competition) — identical results
+   to scanning every channel, at a fraction of the string work.
 
 ### Ranking
 
@@ -134,6 +137,12 @@ match `score`, then on proximity to kickoff:
 A team is "present" when any distinctive token from `SportsMatcher.tokens(for:)`
 (aliases from the bundled `SportsTeamAliases.json`) appears as a whole word in a
 `SportsMatcher.normalize`d haystack.
+
+A competitor-less event (an F1 session, a UFC card) has no teams, so it is
+matched on its event name instead: every token of its `name` or `shortName`
+(names of at least two tokens only) must appear across a programme's title and
+sub-title, or in the channel's own name. A remembered pick for the competition
+is honoured whether or not anything else matched.
 
 ### The `isConfident` rule
 

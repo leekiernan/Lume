@@ -295,7 +295,6 @@ struct LeagueDetailView: View {
         resolved = await SportsChannelResolver.resolve(
             container: modelContext.container,
             fixtures: fixtures,
-            now: Date(),
             restriction: restriction
         )
     }
