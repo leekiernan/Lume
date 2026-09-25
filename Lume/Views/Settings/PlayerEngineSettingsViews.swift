@@ -156,7 +156,7 @@ import SwiftUI
                     ForEach(KSMaxBufferPreset.values, id: \.self) { Text(KSMaxBufferPreset.label($0)).tag($0) }
                 }
             } footer: {
-                Text("FFmpeg honours every option below for all streams. ")
+                Text("FFmpeg honours these options for all streams. ")
                     + Text("AVPlayer is more efficient but ignores most of them — including buffering — for formats it plays natively, such as HLS. Applied the next time playback starts.")
             }
 
