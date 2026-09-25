@@ -3,10 +3,11 @@
 //  Lume
 //
 //  Engine-agnostic surface the tvOS player overlay (`TVPlayerControlsOverlay`)
-//  drives. Both the VLCKit and KSPlayer coordinators conform, so the rich
-//  Apple-TV-style overlay — transport, scrubber, episodes / info panels,
-//  audio / subtitle menus — is shared verbatim between the two engines and
-//  can't drift apart.
+//  drives. All four engines conform — the VLCKit, AVPlayer and LumeEngine
+//  coordinators directly, KSPlayer through the `KSTVPlaybackEngine` adapter —
+//  so the rich Apple-TV-style overlay — transport, scrubber, episodes / info
+//  panels, audio / subtitle menus — is shared verbatim between them and can't
+//  drift apart.
 //
 
 #if os(tvOS)
@@ -17,8 +18,7 @@
 
     /// The playback surface the tvOS overlay reads and commands. Marked
     /// `@MainActor` because the overlay (a SwiftUI `View`) only ever touches it
-    /// from the main actor — this lets a main-actor adapter (KSPlayer) and a
-    /// nonisolated coordinator (VLCKit) both satisfy it.
+    /// from the main actor.
     ///
     /// Refines `ExternalSubtitleLoading` so the overlay's subtitle menu can
     /// offer the OpenSubtitles search against any engine that can side-load a
