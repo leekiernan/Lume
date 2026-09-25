@@ -75,6 +75,8 @@ struct SettingsView: View {
     #if !os(tvOS)
         @AppStorage(DownloadManager.maxConcurrentKey) private var maxConcurrent = 1
         @AppStorage(DownloadManager.autoDeleteKey) private var autoDeleteAfterWatching = false
+        /// The playlists a swipe-to-delete staged, awaiting confirmation.
+        @State private var playlistsPendingDeletion: [Playlist] = []
     #endif
 
     #if os(tvOS)
@@ -197,6 +199,9 @@ struct SettingsView: View {
                 .paywall(isPresented: $showPaywall, highlight: paywallHighlight)
                 .sheet(isPresented: $showingAddPlaylist) {
                     LoginView(isModal: true)
+                }
+                .playlistDeletionConfirmation(isPresented: confirmingPlaylistDeletion) {
+                    confirmPlaylistDeletion()
                 }
             }
             #if os(macOS)
@@ -375,24 +380,25 @@ struct SettingsView: View {
             }
         }
 
+        /// Swipe-to-delete only stages the rows; the deletion runs once the
+        /// shared confirmation is accepted, as it does from the detail pane.
         private func deletePlaylists(offsets: IndexSet) {
-            // Route through the sync engine so the deletion also clears the
-            // CloudKit mirror and shadow baseline — deleting on the view
-            // context alone leaves a surviving mirror that resurrects the last
-            // playlist (#136). Previews have no coordinator; local-only
-            // deletion is fine there.
-            if let cloudSync {
-                let ids = offsets.map { playlists[$0].id }
-                Task {
-                    for id in ids {
-                        await cloudSync.deletePlaylist(id: id)
-                    }
-                }
-            } else {
-                withAnimation {
-                    for index in offsets {
-                        PlaylistDeletion.delete(playlists[index], in: modelContext)
-                    }
+            playlistsPendingDeletion = offsets.map { playlists[$0] }
+        }
+
+        private var confirmingPlaylistDeletion: Binding<Bool> {
+            Binding(
+                get: { !playlistsPendingDeletion.isEmpty },
+                set: { if !$0 { playlistsPendingDeletion = [] } }
+            )
+        }
+
+        private func confirmPlaylistDeletion() {
+            let pending = playlistsPendingDeletion
+            playlistsPendingDeletion = []
+            withAnimation {
+                for playlist in pending {
+                    PlaylistDeletion.deleteFromUI(playlist, cloudSync: cloudSync, in: modelContext)
                 }
             }
         }
