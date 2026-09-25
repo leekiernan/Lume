@@ -167,7 +167,8 @@
                     .buttonStyle(TVSettingsRowButtonStyle())
                     .disabled(trakt.isSyncingMutations)
 
-                    Text(trakt.mutationSyncError ?? "\(trakt.pendingMutationCount) Trakt change(s) waiting to sync.")
+                    (trakt.mutationSyncError.map { Text($0) }
+                        ?? Text("\(trakt.pendingMutationCount) Trakt changes waiting to sync."))
                         .font(.system(size: 22))
                         .foregroundStyle(trakt.mutationSyncError != nil ? .red : .secondary)
                         .padding(.horizontal, TVSettingsMetrics.rowHPadding)
