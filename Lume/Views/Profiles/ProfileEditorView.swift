@@ -21,7 +21,7 @@ struct ProfileEditorView: View {
     @State private var color: ProfileColor
     @State private var isChild: Bool
     @State private var pinHash: String
-    @State private var pinFlow: ProfilePINFlow?
+    @State private var pinFlow: PINFlow?
     @State private var confirmingDeletion = false
 
     init(profile: UserProfile? = nil) {
@@ -177,12 +177,15 @@ struct ProfileEditorView: View {
     }
 
     @ViewBuilder
-    private func profilePINFlowView(_ flow: ProfilePINFlow) -> some View {
+    private func profilePINFlowView(_ flow: PINFlow) -> some View {
+        // Verifies against this profile's synced hash, not the global
+        // parental-control keychain item.
         NavigationStack {
-            ProfilePINFlowView(
+            PINFlowView(
                 flow: flow,
-                existingHash: pinHash,
-                onUpdate: { pinHash = $0 },
+                verify: { ParentalControlsStore.verify(pin: $0, against: pinHash) },
+                save: { pinHash = ParentalControlsStore.hash($0) },
+                clear: { pinHash = "" },
                 onFinish: { pinFlow = nil }
             )
             .platformNavigationTitle("Profile PIN")
