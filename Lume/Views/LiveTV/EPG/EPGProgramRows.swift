@@ -15,7 +15,8 @@ import SwiftUI
 /// block crossings, not per scrolled frame.
 ///
 /// `Equatable` (wrapped in `.equatable()` by the grid) so parent updates skip
-/// this subtree unless the data or the virtual focus changed; Observation
+/// this subtree unless the data, the minute clock or the virtual focus
+/// changed; Observation
 /// still re-runs the body directly on row-window block crossings.
 struct EPGRows: View, Equatable {
     let rows: [EPGChannelRow]
@@ -32,6 +33,7 @@ struct EPGRows: View, Equatable {
     static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.dataVersion == rhs.dataVersion
             && lhs.rows.count == rhs.rows.count
+            && lhs.now == rhs.now
             && lhs.virtualFocus == rhs.virtualFocus
             && lhs.timeline == rhs.timeline
     }
@@ -86,11 +88,11 @@ struct EPGRows: View, Equatable {
         }
         .frame(width: timeline.totalWidth, height: contentHeight, alignment: .topLeading)
         .overlay(alignment: .topLeading) {
-            TimelineView(.everyMinute) { context in
-                EPGNowIndicator(height: contentHeight)
-                    .offset(x: timeline.x(for: context.date) - 4.5)
-                    .allowsHitTesting(false)
-            }
+            // Driven by the scroller's minute clock, so the line moves in step
+            // with the Now pill and the live highlight.
+            EPGNowIndicator(height: contentHeight)
+                .offset(x: timeline.x(for: now) - 4.5)
+                .allowsHitTesting(false)
         }
     }
 }
@@ -121,6 +123,7 @@ struct EPGProgramStrip: View, Equatable {
         lhs.row.id == rhs.row.id
             && lhs.row.cells.count == rhs.row.cells.count
             && lhs.focusedCellID == rhs.focusedCellID
+            && lhs.now == rhs.now
             && lhs.timeline == rhs.timeline
     }
 

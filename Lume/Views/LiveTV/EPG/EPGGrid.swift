@@ -35,6 +35,7 @@ struct EPGGrid: View, Equatable {
     static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.dataVersion == rhs.dataVersion
             && lhs.rows.count == rhs.rows.count
+            && lhs.now == rhs.now
             && lhs.nowTarget == rhs.nowTarget
             && lhs.scrollRequest == rhs.scrollRequest
             && lhs.virtualFocus == rhs.virtualFocus

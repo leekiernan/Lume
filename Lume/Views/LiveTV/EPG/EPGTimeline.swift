@@ -78,6 +78,24 @@ nonisolated struct EPGTimeline: Equatable {
     }
 }
 
+// MARK: - Clock
+
+/// The guide's minute-granular clock. The grid's `Equatable` gates compare
+/// "now", so it must change at most once a minute — often enough to move the
+/// live highlight and the replay decisions along, rarely enough that parent
+/// updates don't rebuild the grid.
+nonisolated enum EPGClock {
+    /// `date` floored to the start of its minute.
+    static func minute(of date: Date = Date()) -> Date {
+        Date(timeIntervalSinceReferenceDate: (date.timeIntervalSinceReferenceDate / 60).rounded(.down) * 60)
+    }
+
+    /// The start of the minute after the one `date` falls in.
+    static func nextMinute(after date: Date) -> Date {
+        minute(of: date).addingTimeInterval(60)
+    }
+}
+
 // MARK: - Sticky text
 
 /// How far a programme block's text has to shift to stay inside the viewport.
