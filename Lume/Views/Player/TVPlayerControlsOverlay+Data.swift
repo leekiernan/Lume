@@ -19,7 +19,7 @@
             if case .episode = media.contentRef { true } else { false }
         }
 
-        func resolveContent() {
+        func resolveContent() async {
             // A stream swap invalidates any in-flight scrub.
             isScrubbing = false
             scrubResetTask?.cancel()
@@ -47,12 +47,17 @@
             case .live:
                 guard let stream = TVPlayerContent.liveStream(for: media.contentRef, in: modelContext) else { return }
                 liveStream = stream
-                let listings = TVPlayerContent.epgListings(channelId: stream.epgChannelId, in: modelContext)
-                let now = Date()
-                epgNow = listings.first { $0.start <= now && now < $0.end }
-                epgNext = listings.first { $0.start > now }
-                recentChannels = LiveChannelHistory.recentChannels(current: stream, in: modelContext, restriction: restriction)
-                recentNowTitles = TVPlayerContent.nowProgrammeTitles(for: recentChannels, in: modelContext)
+                let channels = LiveChannelHistory.recentChannels(current: stream, in: modelContext, restriction: restriction)
+                recentChannels = channels
+                // The guide reads run off the main actor while the stream
+                // starts; `.task(id:)` cancels this pass if the stream swaps.
+                let container = modelContext.container
+                let pair = await TVPlayerContent.nowNext(channelId: stream.epgChannelId, container: container)
+                let nowTitles = await TVPlayerContent.nowProgrammeTitles(for: channels, container: container)
+                guard !Task.isCancelled else { return }
+                epgNow = pair.now
+                epgNext = pair.next
+                recentNowTitles = nowTitles
             }
         }
 
@@ -266,7 +271,7 @@
         }
 
         var infoSynopsis: String? {
-            if media.isLive { return epgNow?.listingDescription }
+            if media.isLive { return epgNow?.detail }
             if isSeries { return episode?.plot }
             return movie?.plot
         }

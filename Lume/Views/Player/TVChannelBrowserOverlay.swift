@@ -399,13 +399,29 @@
             selectedSectionID = initialID
             if let initialID, let section = rail.first(where: { $0.id == initialID }) {
                 channels = fetchChannels(scope: section.scope)
-                nowTitles = TVPlayerContent.nowProgrammeTitles(for: channels, in: modelContext)
+                loadNowTitles(for: channels)
             }
 
             // Fill the guide column with the playing channel up front, so the
             // third column isn't blank before focus first settles on a channel.
             if let currentChannelID, channels.contains(where: { $0.id == currentChannelID }) {
-                loadGuide(channelID: currentChannelID)
+                guideLoadTask = Task { @MainActor in
+                    await loadGuide(channelID: currentChannelID)
+                }
+            }
+        }
+
+        /// Fills the channel column's "on now" lines off the main actor. Guarded
+        /// on the column still holding the same channels, so a slow result for a
+        /// category the viewer already swept past doesn't land on the next one.
+        private func loadNowTitles(for loaded: [LiveStream]) {
+            nowTitles = [:]
+            let container = modelContext.container
+            let ids = loaded.map(\.id)
+            Task { @MainActor in
+                let titles = await TVPlayerContent.nowProgrammeTitles(for: loaded, container: container)
+                guard channels.map(\.id) == ids else { return }
+                nowTitles = titles
             }
         }
 
@@ -436,9 +452,10 @@
                       let section = sections.first(where: { $0.id == sectionID }) else { return }
                 selectedSectionID = sectionID
                 channels = fetchChannels(scope: section.scope)
-                nowTitles = TVPlayerContent.nowProgrammeTitles(for: channels, in: modelContext)
+                loadNowTitles(for: channels)
                 // The previous channel's guide no longer belongs to this column;
                 // clear it until focus lands on a channel in the new category.
+                guideLoadTask?.cancel()
                 guideChannelID = nil
                 guideEntries = []
             }
@@ -453,23 +470,28 @@
             guideLoadTask = Task { @MainActor in
                 try? await Task.sleep(nanoseconds: 150_000_000)
                 guard !Task.isCancelled else { return }
-                loadGuide(channelID: channelID)
+                await loadGuide(channelID: channelID)
             }
         }
 
-        /// Fetch the focused channel's guide. Catch-up channels reach back over
-        /// their archive window so aired programmes are replayable; others show
-        /// only what's on now and next.
-        private func loadGuide(channelID: String) {
-            guideChannelID = channelID
+        /// Fetch the focused channel's guide, off the main actor. Catch-up
+        /// channels reach back over their archive window so aired programmes
+        /// are replayable; others start at what's on now.
+        private func loadGuide(channelID: String) async {
             guard let stream = channels.first(where: { $0.id == channelID }) else {
+                guideChannelID = channelID
                 guideEntries = []
                 return
             }
             let archiveDays = stream.supportsCatchup ? stream.catchupArchiveDays : 0
-            let listings = TVPlayerContent.guideListings(
-                channelId: stream.epgChannelId, archiveDays: archiveDays, in: modelContext
+            let listings = await TVPlayerContent.guideListings(
+                channelId: stream.epgChannelId, archiveDays: archiveDays, container: modelContext.container
             )
+            // Focus moved on while the fetch ran: the next load owns the column.
+            guard !Task.isCancelled else { return }
+            // The channel and its entries swap together, so the column never
+            // pairs one channel's programmes with another's catch-up rules.
+            guideChannelID = channelID
             guideEntries = listings.map {
                 GuideEntry(id: $0.id, title: $0.title, start: $0.start, end: $0.end)
             }
