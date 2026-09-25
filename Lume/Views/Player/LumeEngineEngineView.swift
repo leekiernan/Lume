@@ -222,8 +222,9 @@ struct LumeEngineEngineView: View {
         }
         .onChange(of: scenePhase) { _, phase in
             // The Home button backgrounds the app without calling onDisappear,
-            // so pause here to stop audio when the player loses focus.
-            if phase != .active, coordinator.isPlaying { coordinator.togglePlay() }
+            // so pause here to stop audio when the player loses focus — but
+            // not while Picture in Picture is carrying the video.
+            if phase != .active { coordinator.pauseForBackground() }
         }
         .onChange(of: media) { _, newMedia in
             // The host swapped the stream (e.g. a new episode). Reset local
