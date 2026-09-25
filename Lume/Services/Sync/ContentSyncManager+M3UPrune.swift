@@ -25,26 +25,39 @@ extension ContentSyncManager {
     /// Each set is dropped as soon as its own sweep returns: they are only ever
     /// read once, and holding all five to the end of the last sweep is the peak
     /// this import is measured at.
+    ///
+    /// An area switched off for this import imported nothing, so its seen-set
+    /// is empty by construction and its sweeps are not run at all: its stored
+    /// rows stay, as the Library toggle promises.
     func pruneStaleM3URows(playlistId: UUID, state: M3UImportState) {
         let imported = state.totalImported
-        Perf.measure(.m3uPruneLive) {
-            pruneLiveStreams(playlistId: playlistId, seenHashes: state.seenLiveIds, importedCount: imported)
+        let areas = state.areas
+        if areas.contains(.liveTV) {
+            Perf.measure(.m3uPruneLive) {
+                pruneLiveStreams(playlistId: playlistId, seenHashes: state.seenLiveIds, importedCount: imported)
+            }
         }
         state.seenLiveIds = []
-        Perf.measure(.m3uPruneMovies) {
-            pruneMovies(playlistId: playlistId, seenHashes: state.seenMovieIds, importedCount: imported)
+        if areas.contains(.movies) {
+            Perf.measure(.m3uPruneMovies) {
+                pruneMovies(playlistId: playlistId, seenHashes: state.seenMovieIds, importedCount: imported)
+            }
         }
         state.seenMovieIds = []
-        Perf.measure(.m3uPruneEpisodes) {
-            pruneEpisodes(playlistId: playlistId, seenHashes: state.seenEpisodeIds, importedCount: imported)
+        if areas.contains(.series) {
+            Perf.measure(.m3uPruneEpisodes) {
+                pruneEpisodes(playlistId: playlistId, seenHashes: state.seenEpisodeIds, importedCount: imported)
+            }
         }
         state.seenEpisodeIds = []
-        Perf.measure(.m3uPruneSeries) {
-            pruneSeries(playlistId: playlistId, seenHashes: state.seenSeriesIds, importedCount: imported)
+        if areas.contains(.series) {
+            Perf.measure(.m3uPruneSeries) {
+                pruneSeries(playlistId: playlistId, seenHashes: state.seenSeriesIds, importedCount: imported)
+            }
         }
         state.seenSeriesIds = []
         Perf.measure(.m3uPruneCategories) {
-            for type in CategoryType.allCases {
+            for type in CategoryType.allCases where areas.contains(where: { $0.categoryType == type }) {
                 let typePrefix = "\(type.rawValue)|"
                 let seenApiIds = Set(
                     state.seenCategoryKeys

@@ -2,53 +2,17 @@
 //  LocalStoreWriteCoordinator.swift
 //  Lume
 //
-//  One gate in front of every write to the local store. Guide publication,
-//  catalog publication, area repair, the local apply phase of cloud reconcile
-//  and store maintenance all reach the same SwiftData container from different
-//  actors; without a shared gate they interleave and a reader can observe half
-//  of two snapshots at once.
+//  Serialises the EPG guide's writes to the local store: each source's
+//  snapshot publication and the legacy-snapshot retirement run under an
+//  exclusive lease, one at a time, so a reader never observes half of two
+//  guide snapshots at once. Only `EPGSyncManager` takes leases today; catalog
+//  syncs, area repair and the cloud reconcile write without it.
 //
 //  This is a queue with an admission rule, not a framework. It grants leases;
 //  it never touches the store itself. Callers keep owning their own work and
 //  their own fence revalidation immediately before `save()`.
 //
-//  ┌─ Lease modes ──────────────────────────────────────────────────────────┐
-//  │                                                                        │
-//  │   .shared     staging inserts — additive rows no reader can see yet.   │
-//  │               Several may hold at once, so a full-guide staging pass   │
-//  │               does not block a catalog sync for minutes.               │
-//  │                                                                        │
-//  │   .exclusive  publication, prune, area repair, cloud local-apply,      │
-//  │               runtime store maintenance. Held alone.                   │
-//  │                                                                        │
-//  │        shared ──┐                                                      │
-//  │        shared ──┼──► overlap freely                                    │
-//  │        shared ──┘                                                      │
-//  │        exclusive ─► alone; waits for activeShared == 0                 │
-//  │                                                                        │
-//  │   Writers-preferred: a *queued* exclusive blocks new shared grants,    │
-//  │   so staging can never starve a publish.                               │
-//  └────────────────────────────────────────────────────────────────────────┘
-//
-//  ┌─ Priority bands and the bypass rule ───────────────────────────────────┐
-//  │                                                                        │
-//  │   userInitiated  (2) ──┐                                               │
-//  │   foregroundRepair (1) ├─► normally: head of the highest non-empty     │
-//  │   background     (0) ──┘   band runs next, FIFO within a band.         │
-//  │                                                                        │
-//  │   Fairness override: if any queued entry has bypassCount >= 1, the     │
-//  │   *oldest* such entry runs next, whatever its band. An entry is        │
-//  │   charged a bypass only when it was grantable right then and a         │
-//  │   later-arriving entry was chosen over it — a priority pass-over,      │
-//  │   never a mode conflict. That makes the bound literal rather than      │
-//  │   statistical: bypassCount never reaches 2, so nothing waits behind    │
-//  │   more than one later job, with no wall-clock timer anywhere.          │
-//  │                                                                        │
-//  │     queue: [BG-a]                       → BG-a runs                    │
-//  │     UI-1, UI-2 arrive, BG-b queued      → UI-1 runs, BG-b.bypass = 1   │
-//  │     UI-3 arrives                        → BG-b runs (bypass >= 1 wins) │
-//  │     then                                → UI-2, UI-3 in FIFO           │
-//  └────────────────────────────────────────────────────────────────────────┘
+//  Admission: one lease at a time, FIFO in arrival order.
 //
 //  Coalescing: an arriving request whose `coalescingKey` matches one already
 //  queued or running joins that one's result instead of running twice.
@@ -114,26 +78,19 @@ private nonisolated enum LeaseContext {
 actor LocalStoreWriteCoordinator {
     static let shared = LocalStoreWriteCoordinator()
 
+    /// Every lease is exclusive. A shared (staging) mode and priority bands
+    /// were designed for callers that never adopted the coordinator; the
+    /// single-case enums keep the request shape the EPG call sites use.
     nonisolated enum Mode {
-        case shared
         case exclusive
     }
 
-    nonisolated enum Priority: Int, Comparable {
-        case background = 0
-        case foregroundRepair = 1
-        case userInitiated = 2
-
-        static func < (lhs: Self, rhs: Self) -> Bool {
-            lhs.rawValue < rhs.rawValue
-        }
+    nonisolated enum Priority {
+        case background
     }
 
     nonisolated enum Scope: Hashable {
         case epgPublish(UUID)
-        case catalogPublish(UUID)
-        case areaRepair(UUID)
-        case cloudApply
         case maintenance
     }
 
@@ -162,7 +119,6 @@ actor LocalStoreWriteCoordinator {
         let id: UInt64
         let request: Request
         let cancellation: CancellationFlag
-        var bypassCount = 0
         var admission: CheckedContinuation<Void, Error>?
     }
 
@@ -186,8 +142,7 @@ actor LocalStoreWriteCoordinator {
         }
     }
 
-    /// Append-ordered, so array order is arrival order and `id` increases with
-    /// index. Both the FIFO tiebreak and "oldest bypassed" rely on that.
+    /// Append-ordered, so array order is arrival order — the admission order.
     private var queue: [Entry] = []
     /// The followers waiting on one leader's result, keyed by coalescing key.
     /// Present for the whole life of the leader's request, so an arrival can
@@ -198,8 +153,7 @@ actor LocalStoreWriteCoordinator {
     }
 
     private var coalescers: [String: [Follower]] = [:]
-    private var activeShared = 0
-    private var activeExclusive = false
+    private var isLeased = false
     private var nextID: UInt64 = 0
     private var nextFollowerID: UInt64 = 0
     private let currentFence: @Sendable () -> Fence
@@ -254,17 +208,17 @@ actor LocalStoreWriteCoordinator {
         if Task.isCancelled {
             let error = CancellationError()
             finishCoalescing(request.coalescingKey, with: .failure(error))
-            release(request.mode)
+            release()
             throw error
         }
 
         do {
             let value = try await LeaseContext.$isHeld.withValue(true) { try await body() }
-            release(request.mode)
+            release()
             finishCoalescing(request.coalescingKey, with: .success(value))
             return value
         } catch {
-            release(request.mode)
+            release()
             finishCoalescing(request.coalescingKey, with: .failure(error))
             throw error
         }
@@ -325,11 +279,8 @@ actor LocalStoreWriteCoordinator {
         }
     }
 
-    private func release(_ mode: Mode) {
-        switch mode {
-        case .shared: activeShared = max(0, activeShared - 1)
-        case .exclusive: activeExclusive = false
-        }
+    private func release() {
+        isLeased = false
         pump()
     }
 
@@ -368,7 +319,7 @@ actor LocalStoreWriteCoordinator {
     }
 
     /// Drops a still-queued entry — the task awaiting it was cancelled — and
-    /// re-pumps, because removing a queued exclusive can unblock shared grants.
+    /// re-pumps so the entry behind it is admitted if the lease is free.
     private func abandonQueued(_ id: UInt64, error: Error) {
         guard let index = queue.firstIndex(where: { $0.id == id }) else { return }
         settle(queue.remove(at: index), error: error)
@@ -380,67 +331,25 @@ actor LocalStoreWriteCoordinator {
         entry.admission?.resume(throwing: error)
     }
 
-    /// Bypassed entries first, oldest first; then the remaining entries by
-    /// band, FIFO within a band. `sorted` is not guaranteed stable, so arrival
-    /// order is an explicit tiebreak rather than an assumption.
-    private func selectionOrder() -> [Int] {
-        let bypassed = queue.indices.filter { queue[$0].bypassCount >= 1 }
-        let rest = queue.indices.filter { queue[$0].bypassCount == 0 }.sorted { lhs, rhs in
-            let left = queue[lhs].request.priority
-            let right = queue[rhs].request.priority
-            return left == right ? lhs < rhs : left > right
-        }
-        return bypassed + rest
-    }
-
-    private func canGrant(_ mode: Mode) -> Bool {
-        guard !activeExclusive else { return false }
-        switch mode {
-        case .exclusive: return activeShared == 0
-        case .shared: return !queue.contains { $0.request.mode == .exclusive }
-        }
-    }
-
     private func admitNext() -> Bool {
-        guard let chosen = selectionOrder().first(where: { canGrant(queue[$0].request.mode) }) else {
-            return false
-        }
-        let entry = queue[chosen]
+        guard !isLeased, !queue.isEmpty else { return false }
+        let entry = queue[0]
 
         // The cancellation handler sets this flag synchronously, but its actor
         // cleanup arrives asynchronously. Do not grant a lease in that gap.
         guard !entry.cancellation.isCancelled else {
-            queue.remove(at: chosen)
+            queue.removeFirst()
             settle(entry, error: CancellationError())
             return true
         }
 
-        // Charge a bypass to everything that arrived earlier, is still queued,
-        // and could have been granted in this same pass. An entry blocked by a
-        // mode conflict was not passed over for priority, so it is not charged
-        // — that is what keeps the bound at one rather than letting a shared
-        // entry accumulate bypasses behind a queued exclusive it must yield to.
-        for index in queue.indices where queue[index].id < entry.id && canGrant(queue[index].request.mode) {
-            queue[index].bypassCount += 1
-            highWaterBypassCount = max(highWaterBypassCount, queue[index].bypassCount)
-        }
-
-        queue.remove(at: chosen)
-        switch entry.request.mode {
-        case .shared: activeShared += 1
-        case .exclusive: activeExclusive = true
-        }
+        queue.removeFirst()
+        isLeased = true
         entry.admission?.resume()
         return true
     }
 
     // MARK: - Introspection
-
-    /// The largest `bypassCount` any entry has reached. Gate G5's bound is
-    /// exactly `highWaterBypassCount <= 1`, which is why it is a stored high
-    /// water mark rather than something a test has to sample at the right
-    /// moment.
-    private(set) var highWaterBypassCount = 0
 
     /// Entries waiting for admission, leaders only — coalesced followers are
     /// not queued.

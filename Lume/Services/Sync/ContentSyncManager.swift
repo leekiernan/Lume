@@ -133,9 +133,10 @@ actor ContentSyncManager {
     }
 
     /// Runs the pipeline for `playlist`'s source type, returning the content
-    /// areas it actually attempted — see `PlaylistSyncCoverage`. Only Xtream
-    /// distinguishes areas as it goes; every other source is undifferentiated,
-    /// so it reports whatever is enabled as attempted in full.
+    /// areas the run covered — see `PlaylistSyncCoverage`. Every pipeline syncs
+    /// only `syncAreas` (the Library toggles, narrowed by a repair); Xtream
+    /// reports the phases it actually ran, the others the areas they were
+    /// handed, and each adds the areas its source cannot supply at all.
     private func runProviderSync(
         for playlist: Playlist,
         playlistId: UUID,
@@ -143,25 +144,35 @@ actor ContentSyncManager {
         full: Bool,
         repairingAreas: Set<AppArea>?
     ) async throws -> Set<AppArea> {
-        switch playlist.sourceType {
+        let sourceType = playlist.sourceType
+        let areas = Self.syncAreas(
+            enabled: AppAreaSettings.enabledContentAreas(disabledRaw: AppAreaSettings.storedValue),
+            repairing: repairingAreas
+        )
+        var synced = areas
+        switch sourceType {
         case .xtream:
-            return try await performXtreamSync(
-                playlist: playlist, playlistId: playlistId, progress: progress, areas: repairingAreas
+            synced = try await performXtreamSync(
+                playlist: playlist, playlistId: playlistId, progress: progress, areas: areas
             )
         case .m3u:
-            try await performM3USync(playlist: playlist, playlistId: playlistId, progress: progress)
+            try await performM3USync(playlist: playlist, playlistId: playlistId, progress: progress, areas: areas)
         case .stalker:
-            try await performStalkerSync(playlist: playlist, playlistId: playlistId, progress: progress, full: full)
+            try await performStalkerSync(
+                playlist: playlist, playlistId: playlistId, progress: progress, full: full, areas: areas
+            )
         case .webdav:
-            try await performWebDAVSync(playlist: playlist, playlistId: playlistId, progress: progress)
+            try await performWebDAVSync(playlist: playlist, playlistId: playlistId, progress: progress, areas: areas)
         case .jellyfin, .emby:
             // Both speak the same API; the flavour only tags the rows.
-            let flavor = MediaServerFlavor(sourceType: playlist.sourceType) ?? .jellyfin
-            try await performMediaServerSync(playlist: playlist, playlistId: playlistId, flavor: flavor, progress: progress)
+            let flavor = MediaServerFlavor(sourceType: sourceType) ?? .jellyfin
+            try await performMediaServerSync(
+                playlist: playlist, playlistId: playlistId, flavor: flavor, progress: progress, areas: areas
+            )
         case .plex:
-            try await performPlexSync(playlist: playlist, playlistId: playlistId, progress: progress)
+            try await performPlexSync(playlist: playlist, playlistId: playlistId, progress: progress, areas: areas)
         }
-        return AppAreaSettings.enabledContentAreas(disabledRaw: "")
+        return synced.union(Self.unsupportedAreas(for: sourceType))
     }
 
     // MARK: - Category Sync
@@ -202,10 +213,12 @@ actor ContentSyncManager {
 
         for (index, categoryDTO) in dtos.enumerated() {
             if let existingCat = categoryLookup[categoryDTO.categoryId] {
-                existingCat.name = categoryDTO.categoryName
-                existingCat.parentId = categoryDTO.parentId ?? 0
-                existingCat.sortOrder = index
-                existingCat.lastRefreshed = Date()
+                // Guarded like the content rows: an unchanged category list
+                // then leaves the context clean and skips the save.
+                if existingCat.name != categoryDTO.categoryName { existingCat.name = categoryDTO.categoryName }
+                let parentId = categoryDTO.parentId ?? 0
+                if existingCat.parentId != parentId { existingCat.parentId = parentId }
+                if existingCat.sortOrder != index { existingCat.sortOrder = index }
             } else {
                 let category = Category(
                     apiId: categoryDTO.categoryId,
@@ -215,20 +228,21 @@ actor ContentSyncManager {
                     playlist: playlist
                 )
                 category.sortOrder = index
-                category.lastRefreshed = Date()
                 context.insert(category)
             }
         }
 
-        try context.save()
-
-        // Remove categories of this type the provider has dropped. Gated on a
-        // non-empty fetch: an empty category list is the transient-failure
-        // signature, and sweeping then would drop every category for the type.
-        if !dtos.isEmpty {
-            let seenApiIds = Set(dtos.map(\.categoryId))
-            pruneStaleCategories(playlistId: playlistId, type: type, seenApiIds: seenApiIds)
+        if context.hasChanges {
+            try context.save()
         }
+
+        // Remove categories of this type the provider has dropped. The guarded
+        // entry skips an empty list (the transient-failure signature) and holds
+        // back a list too short to cover the stored categories, exactly as the
+        // content sweeps do.
+        pruneCategories(
+            playlistId: playlistId, type: type, seenApiIds: Set(dtos.map(\.categoryId)), importedCount: dtos.count
+        )
     }
 
     // MARK: - Content Sync (Batched)

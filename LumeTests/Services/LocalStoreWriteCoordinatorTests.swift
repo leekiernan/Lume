@@ -63,14 +63,12 @@ nonisolated struct LocalStoreWriteCoordinatorTests {
 
     private func request(
         _ key: String,
-        mode: LocalStoreWriteCoordinator.Mode = .exclusive,
-        priority: LocalStoreWriteCoordinator.Priority = .userInitiated,
         fence: Fence = LocalStoreWriteCoordinatorTests.fence
     ) -> LocalStoreWriteCoordinator.Request {
         LocalStoreWriteCoordinator.Request(
             scope: .maintenance,
-            mode: mode,
-            priority: priority,
+            mode: .exclusive,
+            priority: .background,
             coalescingKey: key,
             fence: fence
         )
@@ -247,123 +245,31 @@ nonisolated struct LocalStoreWriteCoordinatorTests {
         #expect(await executions.entries.isEmpty)
     }
 
-    // MARK: - T-W8 (gate G5)
+    // MARK: - Admission order
 
-    /// The bound the plan claims — "cannot be bypassed by more than one later
-    /// equal- or lower-priority job" — stated as the coordinator's own counter,
-    /// under a queue that is never empty while the background entry waits.
+    /// One lease at a time, granted in arrival order.
     @Test
-    func `no queued entry is bypassed twice under saturating user-initiated load (T-W8, gate G5)`() async throws {
+    func `queued requests run one at a time in arrival order`() async throws {
         let coordinator = LocalStoreWriteCoordinator(currentFence: { Self.fence })
         let order = Recorder()
         let held = await holdLease(on: coordinator)
 
-        // Background work queues first, so FIFO alone would run it next.
-        let backgroundRequest = request("bg", priority: .background)
-        let background = Task.detached {
-            try await coordinator.withLease(backgroundRequest) {
-                await order.record("bg")
-            }
-        }
-        #expect(await settle(until: { await coordinator.queueDepth == 1 }))
-
-        // A user-initiated burst arrives behind it and outranks it. The first
-        // of them holds the lease open so later arrivals land mid-drain.
-        let firstUserJob = Gate()
-        let firstUserJobStarted = Gate()
-        let firstUserRequest = request("ui-1")
-        let ui1 = Task.detached {
-            try await coordinator.withLease(firstUserRequest) {
-                await firstUserJobStarted.open()
-                await firstUserJob.wait()
-                await order.record("ui-1")
-            }
-        }
-        #expect(await settle(until: { await coordinator.queueDepth == 2 }))
-
-        var burst: [Task<Void, Error>] = []
-        for index in 2 ... 3 {
-            let queued = request("ui-\(index)")
-            let label = "ui-\(index)"
-            burst.append(Task.detached {
-                try await coordinator.withLease(queued) { await order.record(label) }
-            })
-            #expect(await settle(until: { await coordinator.queueDepth == index + 1 }))
-        }
-
-        await held.release.open()
-        try await held.finished.value
-
-        // ui-1 wins the first pass and charges the background entry its one
-        // permitted bypass.
-        await firstUserJobStarted.wait()
-        #expect(await coordinator.highWaterBypassCount == 1)
-
-        // More user-initiated work arrives while the background entry waits —
-        // the walkthrough's "UI-3 arrives". It must not push it back again.
-        for index in 4 ... 5 {
-            let queued = request("ui-\(index)")
-            let label = "ui-\(index)"
-            burst.append(Task.detached {
-                try await coordinator.withLease(queued) { await order.record(label) }
+        var queued: [Task<Void, Error>] = []
+        for index in 1 ... 3 {
+            let next = request("job-\(index)")
+            let label = "job-\(index)"
+            queued.append(Task.detached {
+                try await coordinator.withLease(next) { await order.record(label) }
             })
             #expect(await settle(until: { await coordinator.queueDepth == index }))
         }
 
-        await firstUserJob.open()
-        try await ui1.value
-        for task in burst {
+        await held.release.open()
+        try await held.finished.value
+        for task in queued {
             try await task.value
         }
-        try await background.value
 
-        #expect(await coordinator.highWaterBypassCount == 1)
-        #expect(await order.entries == ["ui-1", "bg", "ui-2", "ui-3", "ui-4", "ui-5"])
-    }
-
-    // MARK: - Exclusion
-
-    /// The shape the bypass bound rests on: a queued exclusive stops new shared
-    /// grants, so a background staging pass cannot hold a publish off forever.
-    @Test
-    func `a queued exclusive request blocks new shared grants`() async throws {
-        let coordinator = LocalStoreWriteCoordinator(currentFence: { Self.fence })
-        let order = Recorder()
-        let firstShared = Gate()
-        let firstSharedStarted = Gate()
-
-        let stagingA = request("staging-a", mode: .shared, priority: .background)
-        let staging = Task.detached {
-            try await coordinator.withLease(stagingA) {
-                await firstSharedStarted.open()
-                await firstShared.wait()
-                await order.record("staging-a")
-            }
-        }
-        await firstSharedStarted.wait()
-
-        let publishRequest = request("publish", mode: .exclusive)
-        let publish = Task.detached {
-            try await coordinator.withLease(publishRequest) { await order.record("publish") }
-        }
-        #expect(await settle(until: { await coordinator.queueDepth == 1 }))
-
-        let stagingB = request("staging-b", mode: .shared, priority: .background)
-        let latecomer = Task.detached {
-            try await coordinator.withLease(stagingB) { await order.record("staging-b") }
-        }
-        #expect(await settle(until: { await coordinator.queueDepth == 2 }))
-
-        await firstShared.open()
-        try await staging.value
-        try await publish.value
-        try await latecomer.value
-
-        // The late shared request queued behind the waiting exclusive instead
-        // of joining the in-flight shared grant and deferring the publish.
-        #expect(await order.entries == ["staging-a", "publish", "staging-b"])
-        // Yielding to a waiting exclusive is a mode conflict, not a priority
-        // pass-over, so it is not charged as a bypass.
-        #expect(await coordinator.highWaterBypassCount == 0)
+        #expect(await order.entries == ["job-1", "job-2", "job-3"])
     }
 }

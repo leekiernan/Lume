@@ -89,24 +89,55 @@ enum StorageManager {
                 let movies = try context.fetch(FetchDescriptor<Movie>(
                     predicate: #Predicate { $0.tmdbEnrichedAt != nil || $0.ratingsEnrichedAt != nil }
                 ))
-                for (index, movie) in movies.enumerated() {
-                    clearEnrichment(of: movie, in: context)
-                    if (index + 1).isMultiple(of: clearBatchSize) { try context.save() }
-                }
-                try context.save()
+                try mutateInBatches(movies, in: context) { clearEnrichment(of: $0, in: context) }
 
                 let series = try context.fetch(FetchDescriptor<Series>(
                     predicate: #Predicate { $0.tmdbEnrichedAt != nil || $0.ratingsEnrichedAt != nil }
                 ))
-                for (index, show) in series.enumerated() {
-                    clearEnrichment(of: show, in: context)
-                    if (index + 1).isMultiple(of: clearBatchSize) { try context.save() }
-                }
-                try context.save()
+                try mutateInBatches(series, in: context) { clearEnrichment(of: $0, in: context) }
             } catch {
                 logger.error("Failed to clear metadata enrichment: \(error.localizedDescription)")
             }
         }.value
+    }
+
+    /// Clears only `tmdbEnrichedAt` on every TMDB-enriched movie and series so
+    /// they re-enrich lazily; the cached artwork and text stay on screen until
+    /// that re-fetch replaces them. `TMDBLanguageWatcher` calls this at launch
+    /// when the preferred language changed. Same private background context
+    /// and batched saves as `clearMetadataEnrichment`, for the same reason: on
+    /// the main context this hydrated every enriched title during launch.
+    static func invalidateTMDBEnrichment(container: ModelContainer) async {
+        await Task.detached(priority: .utility) {
+            let context = ModelContext(container)
+            context.autosaveEnabled = false
+            do {
+                // Filter in SQLite so only already-enriched rows are hydrated.
+                let movies = try context.fetch(FetchDescriptor<Movie>(
+                    predicate: #Predicate { $0.tmdbEnrichedAt != nil }
+                ))
+                try mutateInBatches(movies, in: context) { $0.tmdbEnrichedAt = nil }
+
+                let series = try context.fetch(FetchDescriptor<Series>(
+                    predicate: #Predicate { $0.tmdbEnrichedAt != nil }
+                ))
+                try mutateInBatches(series, in: context) { $0.tmdbEnrichedAt = nil }
+            } catch {
+                logger.error("Failed to invalidate TMDB enrichment: \(error.localizedDescription)")
+            }
+        }.value
+    }
+
+    /// Applies `mutate` to each row, saving every `clearBatchSize` rows and
+    /// once at the end, so a clear never builds one giant transaction.
+    private nonisolated static func mutateInBatches<Row>(
+        _ rows: [Row], in context: ModelContext, _ mutate: (Row) -> Void
+    ) throws {
+        for (index, row) in rows.enumerated() {
+            mutate(row)
+            if (index + 1).isMultiple(of: clearBatchSize) { try context.save() }
+        }
+        try context.save()
     }
 
     private nonisolated static func clearEnrichment(of movie: Movie, in context: ModelContext) {
@@ -171,24 +202,20 @@ enum StorageManager {
                 let movies = try context.fetch(FetchDescriptor<Movie>(
                     predicate: #Predicate { $0.watchProgress != 0 || $0.isWatched || $0.lastWatchedDate != nil }
                 ))
-                for (index, movie) in movies.enumerated() {
+                try mutateInBatches(movies, in: context) { movie in
                     movie.watchProgress = 0
                     movie.isWatched = false
                     movie.lastWatchedDate = nil
-                    if (index + 1).isMultiple(of: clearBatchSize) { try context.save() }
                 }
-                try context.save()
 
                 let episodes = try context.fetch(FetchDescriptor<Episode>(
                     predicate: #Predicate { $0.watchProgress != 0 || $0.isWatched || $0.lastWatchedDate != nil }
                 ))
-                for (index, episode) in episodes.enumerated() {
+                try mutateInBatches(episodes, in: context) { episode in
                     episode.watchProgress = 0
                     episode.isWatched = false
                     episode.lastWatchedDate = nil
-                    if (index + 1).isMultiple(of: clearBatchSize) { try context.save() }
                 }
-                try context.save()
 
                 let series = try context.fetch(FetchDescriptor<Series>(
                     predicate: #Predicate { $0.lastWatchedDate != nil }
@@ -218,9 +245,9 @@ enum StorageManager {
     /// updates as soon as they land. A live channel's `lastWatchedDate` is
     /// deliberately device-local — it's never projected to the CloudKit mirror
     /// (see `liveEntries()`) — so this is a purely local reset, matching the
-    /// per-channel "remove from recently watched". Scoped in-memory by the
-    /// playlist id prefix — the same approach the virtual collections use, since
-    /// SwiftData can't parameterise a predicate on it.
+    /// per-channel "remove from recently watched". Scoped by the playlist id
+    /// prefix in the predicate itself: `starts(with:)` compiles to a range seek
+    /// on the unique `id` index, so no other playlist's channels are hydrated.
     static func clearRecentlyWatchedChannels(playlistPrefix: String, container: ModelContainer) async {
         await Task.detached(priority: .userInitiated) {
             let context = ModelContext(container)

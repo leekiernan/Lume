@@ -16,6 +16,11 @@ import Foundation
 import OSLog
 import SwiftData
 
+/// One portal VOD/series item and the category the walk that produced it
+/// names — `nil` when the portal gave none (a search hit, or an item of the
+/// "All" walk without its own `category_id`).
+typealias StalkerCatalogEntry = (item: StalkerVODItem, categoryId: String?)
+
 extension ContentSyncManager {
     /// A positive `Int` stream id for a Stalker element. Stalker ids are numeric
     /// strings (`"123"`); fall back to a stable hash for the rare non-numeric id
@@ -37,7 +42,16 @@ extension ContentSyncManager {
     /// the portal's search API (`searchStalker`). `full == true` — the
     /// "Download Full Catalog" action — walks the entire VOD/series catalog for
     /// users who want it all local.
-    func performStalkerSync(playlist: Playlist, playlistId: UUID, progress: SyncProgress?, full: Bool = false) async throws {
+    ///
+    /// Only `areas` are synced — categories, the full walk and channels alike
+    /// (see `ContentSyncManager+AreaGating`).
+    func performStalkerSync(
+        playlist: Playlist,
+        playlistId: UUID,
+        progress: SyncProgress?,
+        full: Bool = false,
+        areas: Set<AppArea>
+    ) async throws {
         let client = StalkerClient(configuration: StalkerClient.Configuration(playlist: playlist))
 
         await progress?.start(.authenticating)
@@ -47,36 +61,48 @@ extension ContentSyncManager {
 
         // Fetch the category/genre lists once and reuse them to both persist the
         // categories and walk each one's content.
-        await progress?.start(.movieCategories)
-        let vodCategories = await (try? client.getCategories(type: "vod")) ?? []
-        try syncStalkerCategories(vodCategories, type: .vod, playlistId: playlistId)
-        await progress?.update(detail: "\(vodCategories.count) categories")
-        await progress?.complete(.movieCategories)
+        var vodCategories: [StalkerCategory] = []
+        if areas.contains(.movies) {
+            await progress?.start(.movieCategories)
+            vodCategories = await (try? client.getCategories(type: "vod")) ?? []
+            try syncStalkerCategories(vodCategories, type: .vod, playlistId: playlistId)
+            await progress?.update(detail: "\(vodCategories.count) categories")
+            await progress?.complete(.movieCategories)
+        }
 
-        await progress?.start(.seriesCategories)
-        let seriesCategories = await (try? client.getCategories(type: "series")) ?? []
-        try syncStalkerCategories(seriesCategories, type: .series, playlistId: playlistId)
-        await progress?.update(detail: "\(seriesCategories.count) categories")
-        await progress?.complete(.seriesCategories)
+        var seriesCategories: [StalkerCategory] = []
+        if areas.contains(.series) {
+            await progress?.start(.seriesCategories)
+            seriesCategories = await (try? client.getCategories(type: "series")) ?? []
+            try syncStalkerCategories(seriesCategories, type: .series, playlistId: playlistId)
+            await progress?.update(detail: "\(seriesCategories.count) categories")
+            await progress?.complete(.seriesCategories)
+        }
 
-        await progress?.start(.liveCategories)
-        let genres = await (try? client.getLiveGenres()) ?? []
-        try syncStalkerCategories(genres, type: .live, playlistId: playlistId)
-        await progress?.update(detail: "\(genres.count) categories")
-        await progress?.complete(.liveCategories)
+        if areas.contains(.liveTV) {
+            await progress?.start(.liveCategories)
+            let genres = await (try? client.getLiveGenres()) ?? []
+            try syncStalkerCategories(genres, type: .live, playlistId: playlistId)
+            await progress?.update(detail: "\(genres.count) categories")
+            await progress?.complete(.liveCategories)
+        }
 
         // VOD and series content is loaded per-category on demand (see
         // `importStalkerCategory`), so a default sync fetches no movie/series
         // items — only the "Download Full Catalog" action (`full`) walks them.
-        if full {
+        if full, areas.contains(.movies) {
             try await syncStalkerMovies(client: client, categories: vodCategories, playlistId: playlistId, progress: progress)
             try await Task.sleep(for: .seconds(1))
+        }
+        if full, areas.contains(.series) {
             try await syncStalkerSeries(client: client, categories: seriesCategories, playlistId: playlistId, progress: progress)
             try await Task.sleep(for: .seconds(1))
         }
-        try await syncStalkerChannels(client: client, playlistId: playlistId, progress: progress)
+        if areas.contains(.liveTV) {
+            try await syncStalkerChannels(client: client, playlistId: playlistId, progress: progress)
+        }
 
-        markStalkerPlaylistUpdated(playlistId)
+        markPlaylistUpdated(playlistId)
     }
 
     // MARK: - Categories
@@ -92,21 +118,21 @@ extension ContentSyncManager {
 
         for (index, cat) in cats.enumerated() where !cat.id.isEmpty {
             if let existing = lookup[cat.id] {
-                existing.name = cat.title
-                existing.sortOrder = index
-                existing.lastRefreshed = Date()
+                if existing.name != cat.title { existing.name = cat.title }
+                if existing.sortOrder != index { existing.sortOrder = index }
             } else {
                 let category = Category(apiId: cat.id, name: cat.title, parentId: 0, type: type, playlist: playlist)
                 category.sortOrder = index
-                category.lastRefreshed = Date()
                 context.insert(category)
             }
         }
-        try context.save()
-
-        if !cats.isEmpty {
-            pruneStaleCategories(playlistId: playlistId, type: type, seenApiIds: Set(cats.map(\.id)))
+        if context.hasChanges {
+            try context.save()
         }
+
+        // A failed list request arrives here as `[]` (see `performStalkerSync`),
+        // which the guarded entry never sweeps on.
+        pruneCategories(playlistId: playlistId, type: type, seenApiIds: Set(cats.map(\.id)), importedCount: cats.count)
     }
 
     // MARK: - Catalog walk (vod / series)
@@ -130,12 +156,12 @@ extension ContentSyncManager {
         type: String,
         categories: [StalkerCategory],
         progress: SyncProgress?,
-        upsert: ([(item: StalkerVODItem, categoryId: String)], inout Set<String>) -> Int
+        upsert: ([StalkerCatalogEntry], inout Set<String>) throws -> Int
     ) async throws -> (imported: Int, seenIds: Set<String>, complete: Bool) {
         var seenIds = Set<String>()
         var imported = 0
         let batchSize = 2000
-        var pending: [(item: StalkerVODItem, categoryId: String)] = []
+        var pending: [StalkerCatalogEntry] = []
         var walkedFullCatalog = true
 
         if categories.contains(where: { $0.id == "*" }) {
@@ -147,7 +173,9 @@ extension ContentSyncManager {
                 )
             })
             walkedFullCatalog = walk?.complete ?? false
-            pending = (walk?.items ?? []).map { (item: $0, categoryId: $0.categoryId ?? "*") }
+            // An item that names no category of its own keeps whatever it is
+            // already filed under; only a new row falls back to "All".
+            pending = (walk?.items ?? []).map { (item: $0, categoryId: $0.categoryId) }
         } else {
             for category in categories where !category.id.isEmpty {
                 try Task.checkCancellation()
@@ -156,12 +184,12 @@ extension ContentSyncManager {
                 let items = walk?.items ?? []
                 guard !items.isEmpty else { continue }
 
-                pending.append(contentsOf: items.map { (item: $0, categoryId: category.id) })
+                pending.append(contentsOf: items.map { (item: $0, categoryId: Optional(category.id)) })
                 while pending.count >= batchSize {
                     let batch = Array(pending.prefix(batchSize))
                     pending.removeFirst(batchSize)
-                    autoreleasepool {
-                        imported += upsert(batch, &seenIds)
+                    try autoreleasepool {
+                        imported += try upsert(batch, &seenIds)
                     }
                 }
                 await progress?.update(detail: "\(imported + pending.count) items")
@@ -171,8 +199,8 @@ extension ContentSyncManager {
             try Task.checkCancellation()
             let batch = Array(pending.prefix(batchSize))
             pending.removeFirst(batch.count)
-            autoreleasepool {
-                imported += upsert(batch, &seenIds)
+            try autoreleasepool {
+                imported += try upsert(batch, &seenIds)
             }
         }
         return (imported, seenIds, walkedFullCatalog)
@@ -191,7 +219,7 @@ extension ContentSyncManager {
         let result = try await syncStalkerCatalog(
             client: client, type: "vod", categories: categories, progress: progress
         ) { batch, seenIds in
-            upsertStalkerMovies(
+            try upsertStalkerMovies(
                 batch, playlistPrefix: playlistPrefix,
                 playlistId: playlistId, seenIds: &seenIds
             )
@@ -199,9 +227,11 @@ extension ContentSyncManager {
 
         // Prune only after the walk reached the catalog's end; a truncated
         // walk (mid-walk page failure) has a partial `seenIds`, and pruning
-        // against it would delete titles still on the portal.
-        if result.complete, !result.seenIds.isEmpty {
-            pruneStaleMovies(playlistId: playlistId, seenIds: result.seenIds)
+        // against it would delete titles still on the portal. A complete walk
+        // still goes through the coverage gate: the portal pages are lenient
+        // JSON, and a walk whose items mostly failed to decode "completes" too.
+        if result.complete {
+            pruneMovies(playlistId: playlistId, seenIds: result.seenIds, fetchedCount: result.seenIds.count)
         }
         // A completed full walk pulled every category's content, so none needs
         // an on-demand fetch when opened.
@@ -213,15 +243,26 @@ extension ContentSyncManager {
         await progress?.complete(.movies)
     }
 
-    /// Upserts one batch of VOD items (each carrying its category) on a fresh
-    /// context and returns how many were imported.
+    /// The category a portal item without one of its own is filed under when
+    /// it is first inserted: the portal's "All" pseudo-category.
+    private static let stalkerFallbackCategory = "*"
+
+    /// Upserts one batch of VOD items (each carrying its category, when the
+    /// portal named one) on a fresh context and returns how many were
+    /// imported.
+    ///
+    /// Every write is inequality guarded, as in `applyMovieFields`: SwiftData
+    /// dirties a row on assignment, so re-walking an unchanged portal would
+    /// otherwise rewrite every row. A save failure is thrown rather than
+    /// swallowed — reporting the batch as imported would let the sync finish
+    /// "successfully" over rows that never reached the store.
     /// Not `private`: reused by the on-demand/search extension.
     func upsertStalkerMovies(
-        _ items: [(item: StalkerVODItem, categoryId: String)],
+        _ items: [StalkerCatalogEntry],
         playlistPrefix: String,
         playlistId: UUID,
         seenIds: inout Set<String>
-    ) -> Int {
+    ) throws -> Int {
         let context = ModelContext(modelContainer)
         context.autosaveEnabled = false
         let ids = items.compactMap { entry -> String? in
@@ -250,18 +291,47 @@ extension ContentSyncManager {
                 movie = Movie(id: movieId, streamId: streamId, name: "")
                 context.insert(movie)
             }
-            movie.name = item.name ?? ""
-            movie.streamIcon = item.screenshot
-            movie.plot = item.description
-            movie.releaseDate = item.year
-            movie.rating = Double(item.rating ?? "") ?? movie.rating
-            movie.added = item.added ?? movie.added
-            movie.categoryId = playlistPrefix + categoryId
-            movie.directURL = cmd
+            Self.applyStalkerFields(from: item, categoryId: categoryId, cmd: cmd, to: movie, playlistPrefix: playlistPrefix)
             imported += 1
         }
-        try? context.save()
+        if context.hasChanges {
+            try context.save()
+        }
         return imported
+    }
+
+    /// Copies the portal-owned fields onto a movie, one inequality guard per
+    /// field (see `applyMovieFields` for why).
+    private static func applyStalkerFields(
+        from item: StalkerVODItem, categoryId: String?, cmd: String, to movie: Movie, playlistPrefix: String
+    ) {
+        let name = item.name ?? ""
+        if movie.name != name { movie.name = name }
+        if movie.streamIcon != item.screenshot { movie.streamIcon = item.screenshot }
+        if movie.plot != item.description { movie.plot = item.description }
+        if movie.releaseDate != item.year { movie.releaseDate = item.year }
+        if let rating = Double(item.rating ?? ""), movie.rating != rating { movie.rating = rating }
+        if let added = item.added, movie.added != added { movie.added = added }
+        if let fileAs = stalkerCategoryId(categoryId, current: movie.categoryId, playlistPrefix: playlistPrefix) {
+            movie.categoryId = fileAs
+        }
+        if movie.directURL != cmd { movie.directURL = cmd }
+    }
+
+    /// The category id to write, or `nil` to leave the row where it is. A
+    /// portal-supplied category always wins; without one, only a row filed
+    /// nowhere yet is placed under "All" — a search hit or an "All" walk must
+    /// not pull an already-filed title out of its real category.
+    nonisolated static func stalkerCategoryId(_ supplied: String?, current: String?, playlistPrefix: String) -> String? {
+        let target: String
+        if let supplied {
+            target = playlistPrefix + supplied
+        } else if current == nil {
+            target = playlistPrefix + stalkerFallbackCategory
+        } else {
+            return nil
+        }
+        return target == current ? nil : target
     }
 
     // MARK: - Series
@@ -277,16 +347,16 @@ extension ContentSyncManager {
         let result = try await syncStalkerCatalog(
             client: client, type: "series", categories: categories, progress: progress
         ) { batch, seenIds in
-            upsertStalkerSeries(
+            try upsertStalkerSeries(
                 batch, playlistPrefix: playlistPrefix,
                 playlistId: playlistId, seenIds: &seenIds
             )
         }
 
-        // Prune only after the walk reached the catalog's end — see
-        // `syncStalkerMovies`.
-        if result.complete, !result.seenIds.isEmpty {
-            pruneStaleSeries(playlistId: playlistId, seenIds: result.seenIds)
+        // Prune only after the walk reached the catalog's end, and through the
+        // coverage gate — see `syncStalkerMovies`.
+        if result.complete {
+            pruneSeries(playlistId: playlistId, seenIds: result.seenIds, fetchedCount: result.seenIds.count)
         }
         if result.complete {
             markAllStalkerCategoriesImported(type: .series, playlistId: playlistId)
@@ -296,15 +366,17 @@ extension ContentSyncManager {
         await progress?.complete(.series)
     }
 
-    /// Upserts one batch of series items (each carrying its category) on a
-    /// fresh context and returns how many were imported.
+    /// Upserts one batch of series items (each carrying its category, when the
+    /// portal named one) on a fresh context and returns how many were
+    /// imported. Dirty-checked and throwing for the reasons given on
+    /// `upsertStalkerMovies`.
     /// Not `private`: reused by the on-demand/search extension.
     func upsertStalkerSeries(
-        _ items: [(item: StalkerVODItem, categoryId: String)],
+        _ items: [StalkerCatalogEntry],
         playlistPrefix: String,
         playlistId: UUID,
         seenIds: inout Set<String>
-    ) -> Int {
+    ) throws -> Int {
         let context = ModelContext(modelContainer)
         context.autosaveEnabled = false
         let ids = items.compactMap { entry -> String? in
@@ -333,18 +405,31 @@ extension ContentSyncManager {
                 series = Series(id: id, seriesId: seriesId, name: "")
                 context.insert(series)
             }
-            series.name = item.name ?? ""
-            series.cover = item.screenshot
-            series.plot = item.description
-            series.releaseDate = item.year
-            // The Recently Added series rail orders by `lastModified`; the
-            // portal's `added` timestamp is the closest equivalent.
-            series.lastModified = item.added ?? series.lastModified
-            series.categoryId = playlistPrefix + categoryId
+            Self.applyStalkerFields(from: item, categoryId: categoryId, to: series, playlistPrefix: playlistPrefix)
             imported += 1
         }
-        try? context.save()
+        if context.hasChanges {
+            try context.save()
+        }
         return imported
+    }
+
+    /// Copies the portal-owned fields onto a series, one inequality guard per
+    /// field.
+    private static func applyStalkerFields(
+        from item: StalkerVODItem, categoryId: String?, to series: Series, playlistPrefix: String
+    ) {
+        let name = item.name ?? ""
+        if series.name != name { series.name = name }
+        if series.cover != item.screenshot { series.cover = item.screenshot }
+        if series.plot != item.description { series.plot = item.description }
+        if series.releaseDate != item.year { series.releaseDate = item.year }
+        // The Recently Added series rail orders by `lastModified`; the
+        // portal's `added` timestamp is the closest equivalent.
+        if let added = item.added, series.lastModified != added { series.lastModified = added }
+        if let fileAs = stalkerCategoryId(categoryId, current: series.categoryId, playlistPrefix: playlistPrefix) {
+            series.categoryId = fileAs
+        }
     }
 
     /// Fetches a Stalker series' episodes on demand (the series detail screen
@@ -411,8 +496,8 @@ extension ContentSyncManager {
         for batchStart in stride(from: 0, to: totalCount, by: batchSize) {
             try Task.checkCancellation()
             let batchEnd = min(batchStart + batchSize, totalCount)
-            autoreleasepool {
-                upsertStalkerChannels(
+            try autoreleasepool {
+                try upsertStalkerChannels(
                     Array(channels[batchStart ..< batchEnd]),
                     playlistPrefix: playlistPrefix, playlistId: playlistId, seenIds: &seenIds
                 )
@@ -423,20 +508,19 @@ extension ContentSyncManager {
             )
         }
 
-        if !seenIds.isEmpty {
-            pruneStaleLiveStreams(playlistId: playlistId, seenIds: seenIds)
-        }
+        pruneLiveStreams(playlistId: playlistId, seenIds: seenIds, fetchedCount: seenIds.count)
         Logger.database.info("Stalker: synced \(totalCount) live channels")
         await progress?.complete(.liveStreams)
     }
 
-    /// Upserts one batch of channels on a fresh context.
+    /// Upserts one batch of channels on a fresh context. Dirty-checked and
+    /// throwing for the reasons given on `upsertStalkerMovies`.
     private func upsertStalkerChannels(
         _ channels: [StalkerChannel],
         playlistPrefix: String,
         playlistId: UUID,
         seenIds: inout Set<String>
-    ) {
+    ) throws {
         let context = ModelContext(modelContainer)
         context.autosaveEnabled = false
         let ids = channels.compactMap { channel -> String? in
@@ -464,39 +548,37 @@ extension ContentSyncManager {
                 stream = LiveStream(id: id, streamId: streamId, name: "")
                 context.insert(stream)
             }
-            stream.name = channel.name ?? ""
-            stream.streamIcon = channel.logo
-            stream.epgChannelId = channel.xmltvId
-            stream.directURL = cmd
-            stream.num = channel.number ?? 0
-            if let genreId = channel.genreId {
-                stream.categoryId = playlistPrefix + genreId
-            }
+            Self.applyStalkerFields(from: channel, cmd: cmd, to: stream, playlistPrefix: playlistPrefix)
         }
-        try? context.save()
+        if context.hasChanges {
+            try context.save()
+        }
+    }
+
+    /// Copies the portal-owned fields onto a channel, one inequality guard per
+    /// field.
+    private static func applyStalkerFields(
+        from channel: StalkerChannel, cmd: String, to stream: LiveStream, playlistPrefix: String
+    ) {
+        let name = channel.name ?? ""
+        if stream.name != name { stream.name = name }
+        if stream.streamIcon != channel.logo { stream.streamIcon = channel.logo }
+        if stream.epgChannelId != channel.xmltvId { stream.epgChannelId = channel.xmltvId }
+        if stream.directURL != cmd { stream.directURL = cmd }
+        let num = channel.number ?? 0
+        if stream.num != num { stream.num = num }
+        if let genreId = channel.genreId, stream.categoryId != playlistPrefix + genreId {
+            stream.categoryId = playlistPrefix + genreId
+        }
     }
 
     // MARK: - Playlist bookkeeping
 
     private func updateStalkerPlaylistInfo(_ playlistId: UUID, profile: StalkerProfile) {
-        let context = ModelContext(modelContainer)
-        context.autosaveEnabled = false
-        guard let playlist = try? context.fetch(
-            FetchDescriptor<Playlist>(predicate: #Predicate { $0.id == playlistId })
-        ).first else { return }
-        playlist.userStatus = profile.status
-        playlist.expDate = profile.expDate
-        playlist.lastUpdated = Date()
-        try? context.save()
-    }
-
-    private func markStalkerPlaylistUpdated(_ playlistId: UUID) {
-        let context = ModelContext(modelContainer)
-        context.autosaveEnabled = false
-        guard let playlist = try? context.fetch(
-            FetchDescriptor<Playlist>(predicate: #Predicate { $0.id == playlistId })
-        ).first else { return }
-        playlist.lastUpdated = Date()
-        try? context.save()
+        updatePlaylist(playlistId) { playlist in
+            playlist.userStatus = profile.status
+            playlist.expDate = profile.expDate
+            playlist.lastUpdated = Date()
+        }
     }
 }

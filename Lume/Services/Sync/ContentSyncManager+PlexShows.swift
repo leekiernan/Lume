@@ -20,7 +20,7 @@ extension ContentSyncManager {
         var showsByRatingKey: [String: PlexMetadata] = [:]
         var seen = seenSeries
         _ = try await pageThroughPlexItems(type: PlexClient.showType, scope: scope, progress: nil, unit: "series") { items in
-            seen.formUnion(upsertPlexSeries(items, scope: scope))
+            try seen.formUnion(upsertPlexSeries(items, scope: scope))
             for item in items {
                 showsByRatingKey[item.ratingKey] = item
             }
@@ -34,7 +34,7 @@ extension ContentSyncManager {
         let episodeCount = try await pageThroughPlexItems(
             type: PlexClient.episodeType, scope: scope, progress: progress, unit: "episode(s)"
         ) { items in
-            let (series, episodes) = upsertPlexEpisodes(items, showShells: shells, scope: scope)
+            let (series, episodes) = try upsertPlexEpisodes(items, showShells: shells, scope: scope)
             seen.formUnion(series)
             seenEp.formUnion(episodes)
         }
@@ -43,7 +43,7 @@ extension ContentSyncManager {
         Logger.database.info("Plex shows synced for section \(scope.section.title, privacy: .public): \(episodeCount, privacy: .public) episode(s)")
     }
 
-    private func upsertPlexSeries(_ items: [PlexMetadata], scope: PlexSectionScope) -> Set<String> {
+    private func upsertPlexSeries(_ items: [PlexMetadata], scope: PlexSectionScope) throws -> Set<String> {
         let context = ModelContext(modelContainer)
         context.autosaveEnabled = false
         let ids = items.map { scope.idPrefix + $0.ratingKey }
@@ -61,7 +61,7 @@ extension ContentSyncManager {
             applyPlexSeriesFields(item, to: series, scope: scope)
         }
         if context.hasChanges {
-            try? context.save()
+            try context.save()
         }
         return Set(ids)
     }
@@ -100,7 +100,7 @@ extension ContentSyncManager {
         }
     }
 
-    private func upsertPlexEpisodes(_ items: [PlexMetadata], showShells: [String: PlexMetadata], scope: PlexSectionScope) -> (series: Set<String>, episodes: Set<String>) {
+    private func upsertPlexEpisodes(_ items: [PlexMetadata], showShells: [String: PlexMetadata], scope: PlexSectionScope) throws -> (series: Set<String>, episodes: Set<String>) {
         let context = ModelContext(modelContainer)
         context.autosaveEnabled = false
 
@@ -123,7 +123,7 @@ extension ContentSyncManager {
             applyPlexEpisodeFields(item, to: episode, series: series, scope: scope)
         }
         if context.hasChanges {
-            try? context.save()
+            try context.save()
         }
         return (seenSeries, Set(episodeIds))
     }
@@ -236,28 +236,13 @@ extension ContentSyncManager {
         }
     }
 
+    /// Removes shows, and episodes of surviving shows, the server no longer
+    /// lists — see `pruneJellyfinSeries`, which this mirrors on the `-plex-`
+    /// id prefix.
     func prunePlexSeries(playlistId: UUID, seenSeries: Set<String>, seenEpisodes: Set<String>, fetched: Bool) {
         guard fetched else { return }
-        let context = ModelContext(modelContainer)
-        context.autosaveEnabled = false
-        let prefix = playlistId.uuidString
-        let rows = (try? context.fetch(FetchDescriptor<Series>(
-            predicate: #Predicate { $0.id.starts(with: prefix) }
-        ))) ?? []
-        for series in rows where series.id.contains("-plex-") {
-            if seenSeries.contains(series.id) {
-                // The shell survives, but dropped episodes don't: delete them
-                // explicitly (no cascade from a surviving parent).
-                for episode in series.episodes where !seenEpisodes.contains(episode.id) {
-                    context.delete(episode)
-                }
-            } else {
-                // Episodes and cast cascade from the deleted series.
-                context.delete(series)
-            }
-        }
-        if context.hasChanges {
-            try? context.save()
-        }
+        let idPrefix = Self.plexIdPrefix(playlistId)
+        pruneSeries(playlistId: playlistId, idPrefix: idPrefix, seenIds: seenSeries)
+        pruneEpisodes(playlistId: playlistId, idPrefix: idPrefix, seenIds: seenEpisodes)
     }
 }

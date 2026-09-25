@@ -343,9 +343,25 @@ struct JellyfinClientTests {
     }
 
     @Test func `the jellyfin id hash is stable and positive`() {
-        let first = ContentSyncManager.mediaServerHash("814993f8d3f97a7b8a40e2ca4dbd3187")
-        #expect(first == ContentSyncManager.mediaServerHash("814993f8d3f97a7b8a40e2ca4dbd3187"))
+        let first = M3UIdentity.numericId(for: "814993f8d3f97a7b8a40e2ca4dbd3187")
+        #expect(first == M3UIdentity.numericId(for: "814993f8d3f97a7b8a40e2ca4dbd3187"))
         #expect(first > 0)
-        #expect(ContentSyncManager.mediaServerHash("other-id") != first)
+        #expect(M3UIdentity.numericId(for: "other-id") != first)
+    }
+
+    /// Jellyfin/Emby/Plex rows used to hash through their own FNV-1a copy,
+    /// `mediaServerHash`. These are that function's outputs; stored
+    /// `streamId`/`seriesId` values and the `name-<hash>` shell row ids
+    /// depend on them, so the shared `numericId` must reproduce each one.
+    @Test(arguments: [
+        ("", 5_472_609_002_491_880_229),
+        ("a", 3_414_815_163_700_866_188),
+        ("814993f8d3f97a7b8a40e2ca4dbd3187", 4_560_179_677_329_358_265),
+        ("Amélie", 8_094_510_459_627_556_803),
+        ("東京物語", 2_646_356_479_556_640_882),
+        ("🎬 Film", 2_868_600_202_107_241_272)
+    ])
+    func `the media-server id hash matches the retired mediaServerHash`(input: String, expected: Int) {
+        #expect(M3UIdentity.numericId(for: input) == expected)
     }
 }

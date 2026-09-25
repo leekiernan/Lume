@@ -207,8 +207,9 @@ nonisolated enum M3UIdentity {
 extension ContentSyncManager {
     private static let uncategorizedGroup = "Uncategorized"
 
-    /// The m3u pipeline: download → classify/import → EPG.
-    func performM3USync(playlist: Playlist, playlistId: UUID, progress: SyncProgress?) async throws {
+    /// The m3u pipeline: download → classify/import → EPG. Imports and sweeps
+    /// only `areas` (see `ContentSyncManager+AreaGating`).
+    func performM3USync(playlist: Playlist, playlistId: UUID, progress: SyncProgress?, areas: Set<AppArea>) async throws {
         let serverURL = playlist.serverURL
         let storedEPGURL = playlist.epgURL
         let client = M3UClient()
@@ -227,7 +228,8 @@ extension ContentSyncManager {
         defer { if isRemote { try? FileManager.default.removeItem(at: fileURL) } }
         await progress?.complete(.playlistDownload)
 
-        if m3uImportIsRedundant(digest: download.digest, playlistId: playlistId) {
+        let digest = download.digest.map { Self.areaScopedDigest($0, areas: areas, sourceType: .m3u) }
+        if m3uImportIsRedundant(digest: digest, playlistId: playlistId) {
             await completeSkippedM3USync(
                 playlistId: playlistId, fileURL: fileURL, storedEPGURL: storedEPGURL, progress: progress
             )
@@ -241,10 +243,10 @@ extension ContentSyncManager {
         // `Perf.measure` again, for the same reason: a cancelled import throws,
         // and that is now a routine path rather than an edge case.
         let summary = try await Perf.measure(.m3uImport) {
-            try await importM3UFile(fileURL, playlistId: playlistId, progress: progress)
+            try await importM3UFile(fileURL, playlistId: playlistId, areas: areas, progress: progress)
         }
         let imported = summary.liveCount + summary.movieCount + summary.episodeCount
-        recordM3UDigest(download.digest, playlistId: playlistId, importedCount: imported)
+        recordM3UDigest(digest, playlistId: playlistId, importedCount: imported)
         Logger.database.info(
             "m3u import finished: \(summary.liveCount) live, \(summary.movieCount) movies, \(summary.episodeCount) episodes"
         )
@@ -265,7 +267,10 @@ extension ContentSyncManager {
 
     /// Writes one already-classified batch. Classification happens off this
     /// actor, in `M3UBatchClassifier`, so everything here is store work.
+    /// Entries of an area switched off for this run are dropped first, before
+    /// they can create categories or rows.
     func importBatch(_ batch: M3UClassifiedBatch, playlistId: UUID, state: M3UImportState) throws {
+        let batch = batch.restricted(to: state.areas)
         let context = ModelContext(modelContainer)
         context.autosaveEnabled = false
 
@@ -324,7 +329,6 @@ extension ContentSyncManager {
             category.sortOrder = order
             order += 1
             state.categoryOrder[type.rawValue] = order
-            category.lastRefreshed = Date()
             context.insert(category)
         }
     }
@@ -495,12 +499,6 @@ extension ContentSyncManager {
     }
 
     func markPlaylistUpdated(_ playlistId: UUID) {
-        let context = ModelContext(modelContainer)
-        context.autosaveEnabled = false
-        guard let playlist = try? context.fetch(
-            FetchDescriptor<Playlist>(predicate: #Predicate { $0.id == playlistId })
-        ).first else { return }
-        playlist.lastUpdated = Date()
-        try? context.save()
+        updatePlaylist(playlistId) { $0.lastUpdated = Date() }
     }
 }
