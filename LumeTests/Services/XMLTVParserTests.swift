@@ -109,7 +109,7 @@ struct XMLTVParserTests {
     </tv>
     """
 
-    private func parseAll(_ content: String, preferredLanguage: String?) throws -> [ParsedProgramme] {
+    private func parse(_ content: String, preferredLanguage: String?) throws -> [ParsedProgramme] {
         let url = try writeTempGuide(content)
         defer { try? FileManager.default.removeItem(at: url) }
         var programmes: [ParsedProgramme] = []
@@ -120,21 +120,21 @@ struct XMLTVParserTests {
     }
 
     @Test func `repeated elements are not concatenated`() throws {
-        let programme = try #require(try parseAll(Self.bilingualGuide, preferredLanguage: nil).first)
+        let programme = try #require(try parse(Self.bilingualGuide, preferredLanguage: nil).first)
         #expect(programme.title == "Tagesschau")
         #expect(programme.subtitle == "Nachrichten")
         #expect(programme.description == "Die Nachrichten.")
     }
 
     @Test func `repeated elements prefer the preferred language`() throws {
-        let programme = try #require(try parseAll(Self.bilingualGuide, preferredLanguage: "en-GB").first)
+        let programme = try #require(try parse(Self.bilingualGuide, preferredLanguage: "en-GB").first)
         #expect(programme.title == "News")
         #expect(programme.subtitle == "Headlines")
         #expect(programme.description == "The news.")
     }
 
     @Test func `an unmatched preferred language keeps the first value`() throws {
-        let programme = try #require(try parseAll(Self.bilingualGuide, preferredLanguage: "fr").first)
+        let programme = try #require(try parse(Self.bilingualGuide, preferredLanguage: "fr").first)
         #expect(programme.title == "Tagesschau")
     }
 
@@ -148,7 +148,7 @@ struct XMLTVParserTests {
           </programme>
         </tv>
         """
-        let programme = try #require(try parseAll(guide, preferredLanguage: "de").first)
+        let programme = try #require(try parse(guide, preferredLanguage: "de").first)
         #expect(programme.title == "News")
     }
 
