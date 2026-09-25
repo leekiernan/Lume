@@ -106,6 +106,11 @@ final class PlaybackTickScratch {
     /// Last playhead position seen in `onPlay`, used to detect that frames are
     /// actually advancing. `-1` until the first sample. See `notePlaybackProgress`.
     var lastPlayhead: TimeInterval = -1
+    /// The earliest playhead seen on the current stream, the baseline for
+    /// `notePlaybackProgress`'s proof that frames are flowing. `-1` until the
+    /// first sample; moves back if a later sample is lower, since a stale
+    /// report from the stream being replaced can land first.
+    var firstPlayhead: TimeInterval = -1
     /// When a runaway live A/V clock split was first observed, `nil` while in
     /// sync (see `noteClockDrift` — frozen image with healthy audio after an
     /// HLS timestamp discontinuity).
@@ -117,6 +122,7 @@ final class PlaybackTickScratch {
     /// Back to the fresh-session baseline, for stream swaps.
     func reset() {
         lastPlayhead = -1
+        firstPlayhead = -1
         driftSince = nil
         lastDriftRecovery = -.infinity
     }
