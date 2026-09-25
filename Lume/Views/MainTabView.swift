@@ -9,25 +9,25 @@ import SwiftData
 import SwiftUI
 
 struct MainTabView: View {
-    @Environment(\.modelContext) private var modelContext
+    @Environment(\.modelContext) var modelContext
     @Environment(\.scenePhase) private var scenePhase
     // Optional so previews (which don't inject it) don't crash.
     @Environment(PlaylistSwitchModel.self) private var playlistSwitch: PlaylistSwitchModel?
     @Environment(ProfileManager.self) private var profileManager: ProfileManager?
-    @Query private var playlists: [Playlist]
+    @Query var playlists: [Playlist]
     /// Categories marked restricted, and categories hidden in Content
     /// Management. Fetched once here so a single source feeds the restriction
     /// context every content surface reads from the environment.
     @Query(filter: #Predicate<Category> { $0.isRestricted }) private var restrictedCategories: [Category]
     @Query(filter: #Predicate<Category> { $0.isHidden }) private var hiddenCategories: [Category]
 
-    @AppStorage(SyncFrequency.storageKey) private var syncFrequencyRaw: String = SyncFrequency.defaultValue.rawValue
+    @AppStorage(SyncFrequency.storageKey) var syncFrequencyRaw: String = SyncFrequency.defaultValue.rawValue
     /// Areas switched off in Settings › Library. A disabled area has no tab —
     /// and `ContentSyncManager` skips its content entirely. See `AppAreaSettings`.
-    @AppStorage(AppAreaSettings.disabledAreasKey) private var disabledAreasRaw: String = ""
+    @AppStorage(AppAreaSettings.disabledAreasKey) var disabledAreasRaw: String = ""
     /// Changes when the viewer switches profile — see `activeProfileToken`.
-    @AppStorage(ActiveProfileStore.key) private var activeProfileToken: String = ""
-    @AppStorage(PlaylistSelectionStore.key) private var selectedPlaylistID: String = ""
+    @AppStorage(ActiveProfileStore.key) var activeProfileToken: String = ""
+    @AppStorage(PlaylistSelectionStore.key) var selectedPlaylistID: String = ""
     /// Whether the Sports tab appears in the tab bar (Settings toggle). When off,
     /// the hub is still reachable from the Home rail header.
     @AppStorage(SportsSyncService.tabEnabledKey) private var sportsTabEnabled = SportsSyncService.tabEnabledDefault
@@ -54,38 +54,27 @@ struct MainTabView: View {
         @Environment(\.openWindow) private var openWindow
     #endif
 
+    /// Not `private`: the auto-sync state below is driven by the
+    /// MainTabView+AutoSync extension (separate file).
+    ///
     /// Playlists waiting to be auto-synced, and the one currently shown in the
     /// blocking progress cover. Auto-sync is presented (not silent) so the user
     /// sees progress and waits for it to finish — most importantly right after
     /// adding a playlist, when the app would otherwise look empty and broken.
-    @State private var syncQueue: [PlaylistSyncRequest] = []
-    @State private var activeSyncRequest: PlaylistSyncRequest?
+    @State var syncQueue: [PlaylistSyncRequest] = []
+    @State var activeSyncRequest: PlaylistSyncRequest?
 
     /// Playlists we've already auto-synced (or attempted) this session, so the
     /// launch / switch / foreground triggers don't re-present the cover for one
     /// that's already been handled.
-    @State private var autoSyncAttempted: Set<UUID> = []
+    @State var autoSyncAttempted: Set<UUID> = []
 
     /// Memo behind `contentRestriction` — see `ContentRestrictionMemo`.
     @State private var restrictionMemo = ContentRestrictionMemo()
 
-    private var syncFrequency: SyncFrequency {
-        SyncFrequency.resolve(syncFrequencyRaw)
-    }
-
-    /// Re-evaluate auto-sync when the profile or its enabled areas change, even
-    /// though neither operation changes the shared playlist rows themselves.
-    private var autoSyncTrigger: AutoSyncTrigger {
-        AutoSyncTrigger(
-            playlistCount: playlists.count,
-            activeProfileToken: activeProfileToken,
-            disabledAreasRaw: disabledAreasRaw
-        )
-    }
-
     /// UI tests seed a fake playlist; auto-sync would present a blocking cover
     /// that can never succeed against the stub server, so skip it there.
-    private var isUITesting: Bool {
+    var isUITesting: Bool {
         CommandLine.arguments.contains("-ui-testing")
     }
 
@@ -199,13 +188,16 @@ struct MainTabView: View {
         #endif
             .task(id: autoSyncTrigger) {
                 // On launch, playlist insertion, profile switch, or area toggle,
-                // sync anything due and repair catalog phases the active profile
-                // enables but the most recent successful sync skipped.
+                // sync the active playlist if it is due (plus any playlist that
+                // was just added), and repair catalog phases the active profile
+                // enables but that playlist's most recent successful sync skipped.
                 enqueueDueSyncs(playlists)
             }
             .onChange(of: selectedPlaylistID) {
                 // On playlist switch, sync the newly selected one if it's due —
                 // unless the switch asked to land in the cached catalog instead.
+                // This is also where a playlist deferred at launch for not being
+                // on screen gets its turn.
                 guard playlistSwitch?.consumeDeferredDueSync() != true else { return }
                 if let playlist = playlists.active(for: selectedPlaylistID) {
                     enqueueDueSyncs([playlist])
@@ -221,6 +213,15 @@ struct MainTabView: View {
                 SportsSyncService.shared.isForeground = phase == .active
             }
             .syncCover(item: $activeSyncRequest, onDismiss: promoteNextIfIdle)
+            .onChange(of: isAutoSyncBusy, initial: true) { _, busy in
+                EPGSyncService.shared.setAutoSyncQueued(busy)
+            }
+            .onDisappear {
+                // The queue goes with this view (deleting the last playlist
+                // swaps the root back to onboarding); don't leave the guide
+                // waiting on it.
+                EPGSyncService.shared.setAutoSyncQueued(false)
+            }
             .downloadsSheet(isPresented: $showsDownloads)
             .switchProgressOverlay(playlist: playlistSwitch, profile: profileManager)
             // The one fire point for the rating sheet. Here rather than at the
@@ -471,75 +472,6 @@ struct MainTabView: View {
         guard let activePlaylist = playlists.active(for: selectedPlaylistID) else { return true }
         return id.hasPrefix("\(activePlaylist.id.uuidString)-")
     }
-
-    // MARK: - Automatic sync
-
-    /// Enqueues every due playlist for a blocking, progress-visible sync and
-    /// presents the first one. Covers the never-synced first launch (where
-    /// `lastSyncDate == nil` makes a playlist due) as well as periodic refreshes.
-    private func enqueueDueSyncs(_ candidates: [Playlist]) {
-        guard !isUITesting else { return }
-
-        for playlist in candidates where !isQueued(playlist) {
-            guard let request = syncRequest(for: playlist) else { continue }
-            autoSyncAttempted.insert(playlist.id)
-            syncQueue.append(request)
-        }
-        promoteNextIfIdle()
-    }
-
-    private func isQueued(_ playlist: Playlist) -> Bool {
-        activeSyncRequest?.id == playlist.id || syncQueue.contains { $0.id == playlist.id }
-    }
-
-    private func syncRequest(for playlist: Playlist) -> PlaylistSyncRequest? {
-        PlaylistSyncCoverage.bootstrapFromCatalogIfNeeded(
-            playlistID: playlist.id,
-            context: modelContext
-        )
-        let missingAreas = PlaylistSyncCoverage.missingEnabledAreas(
-            playlistID: playlist.id,
-            disabledAreasRaw: disabledAreasRaw
-        )
-        let isRegularlyDue = AutoSync.shouldSync(
-            syncEnabled: playlist.syncEnabled,
-            status: playlist.syncStatus,
-            lastSyncDate: playlist.lastSyncDate,
-            frequency: syncFrequency,
-            alreadyStarted: autoSyncAttempted.contains(playlist.id)
-        )
-        let needsCoverage = !missingAreas.isEmpty && playlist.syncEnabled && playlist.syncStatus != .syncing
-        guard isRegularlyDue || needsCoverage else { return nil }
-
-        // A due playlist gets its ordinary refresh. Only the otherwise-current
-        // Xtream playlist uses the narrow repair path; m3u and Stalker do not
-        // expose independent per-area bulk imports.
-        let repairingAreas = !isRegularlyDue && playlist.sourceType == .xtream ? missingAreas : nil
-        return PlaylistSyncRequest(playlist: playlist, repairingAreas: repairingAreas)
-    }
-
-    /// Presents the next queued playlist's sync cover when none is showing. The
-    /// `SyncProgressView` auto-starts the sync and dismisses itself on success;
-    /// the cover's `onDismiss` calls back here to advance the queue.
-    private func promoteNextIfIdle() {
-        guard activeSyncRequest == nil, !syncQueue.isEmpty else { return }
-        activeSyncRequest = syncQueue.removeFirst()
-    }
-}
-
-private struct PlaylistSyncRequest: Identifiable {
-    let playlist: Playlist
-    let repairingAreas: Set<AppArea>?
-
-    var id: UUID {
-        playlist.id
-    }
-}
-
-private struct AutoSyncTrigger: Hashable {
-    let playlistCount: Int
-    let activeProfileToken: String
-    let disabledAreasRaw: String
 }
 
 // MARK: - Downloads sheet presentation

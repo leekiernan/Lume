@@ -151,6 +151,7 @@ import SwiftUI
     struct TVSportsSettingsPane: View {
         @AppStorage(SportsSyncService.enabledKey) private var enabled = SportsSyncService.enabledDefault
         @AppStorage(SportsSyncService.tabEnabledKey) private var tabEnabled = SportsSyncService.tabEnabledDefault
+        @AppStorage(SportsSyncService.hideScoresKey) private var hideScores = false
         @AppStorage(SportsSyncService.syncFrequencyKey)
         private var freqRaw = SportsSyncService.defaultFrequency.rawValue
         @State private var sync = SportsSyncService.shared
@@ -187,6 +188,7 @@ import SwiftUI
                         .buttonStyle(TVSettingsRowButtonStyle())
 
                         TVOptionToggleRow(title: "Show Sports Tab", isOn: $tabEnabled)
+                        TVOptionToggleRow(title: "Hide Scores", isOn: $hideScores)
                     }
                 }
 
