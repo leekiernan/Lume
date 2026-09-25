@@ -324,7 +324,6 @@ extension ContentSyncManager {
             category.sortOrder = order
             order += 1
             state.categoryOrder[type.rawValue] = order
-            category.lastRefreshed = Date()
             context.insert(category)
         }
     }

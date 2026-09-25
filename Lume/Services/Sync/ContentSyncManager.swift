@@ -198,10 +198,12 @@ actor ContentSyncManager {
 
         for (index, categoryDTO) in dtos.enumerated() {
             if let existingCat = categoryLookup[categoryDTO.categoryId] {
-                existingCat.name = categoryDTO.categoryName
-                existingCat.parentId = categoryDTO.parentId ?? 0
-                existingCat.sortOrder = index
-                existingCat.lastRefreshed = Date()
+                // Guarded like the content rows: an unchanged category list
+                // then leaves the context clean and skips the save.
+                if existingCat.name != categoryDTO.categoryName { existingCat.name = categoryDTO.categoryName }
+                let parentId = categoryDTO.parentId ?? 0
+                if existingCat.parentId != parentId { existingCat.parentId = parentId }
+                if existingCat.sortOrder != index { existingCat.sortOrder = index }
             } else {
                 let category = Category(
                     apiId: categoryDTO.categoryId,
@@ -211,12 +213,13 @@ actor ContentSyncManager {
                     playlist: playlist
                 )
                 category.sortOrder = index
-                category.lastRefreshed = Date()
                 context.insert(category)
             }
         }
 
-        try context.save()
+        if context.hasChanges {
+            try context.save()
+        }
 
         // Remove categories of this type the provider has dropped. Gated on a
         // non-empty fetch: an empty category list is the transient-failure

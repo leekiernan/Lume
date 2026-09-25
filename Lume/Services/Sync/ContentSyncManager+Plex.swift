@@ -209,11 +209,9 @@ extension ContentSyncManager {
                 if existing.sortOrder != index {
                     existing.sortOrder = index
                 }
-                existing.lastRefreshed = Date()
             } else {
                 let category = Category(apiId: section.key, name: section.title, parentId: 0, type: type, playlist: playlist)
                 category.sortOrder = index
-                category.lastRefreshed = Date()
                 context.insert(category)
             }
         }
