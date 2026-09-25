@@ -279,7 +279,7 @@ struct SettingsView: View {
                 if playlists.isEmpty {
                     EmptyView()
                 } else if premium.isPremium {
-                    Text("\(playlists.count) playlist\(playlists.count == 1 ? "" : "s")")
+                    Text("\(playlists.count) playlists")
                 } else {
                     Text("Free includes one playlist. Upgrade to Lume Pro to add more.")
                 }
