@@ -171,7 +171,7 @@ struct SettingsView: View {
                     // NavigationLink inside `playlistsSection` in this fork,
                     // not their own top-level section.
                     CloudSyncSection()
-                    if trakt.isConfigured || simkl.isConfigured {
+                    if hasAnyIntegration {
                         integrationsSection
                     }
                     playbackSection
@@ -495,7 +495,7 @@ struct SettingsView: View {
         /// credentials for at least one of them.
         private var availableCategories: [SettingsCategory] {
             SettingsCategory.allCases.filter {
-                $0 != .integrations || trakt.isConfigured || simkl.isConfigured || openSubtitles.isConfigured
+                $0 != .integrations || hasAnyIntegration
             }
         }
 
