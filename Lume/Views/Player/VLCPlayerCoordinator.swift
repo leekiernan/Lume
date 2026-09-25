@@ -33,6 +33,9 @@ final class VLCPlayerCoordinator: NSObject, ObservableObject {
     /// to decide whether a failure is an initial-load failure (eligible for
     /// engine fallback) or a mid-stream drop.
     @Published private(set) var hasStartedPlayback = false
+    /// True from a (re)load until the stream plays, so the host can show a
+    /// loading indicator (parity with the other engines).
+    @Published private(set) var isBuffering = true
 
     /// Invoked when the stream can't be started: a hard `.error` before the
     /// first frame, or no frame at all within `startupTimeout`. The engine view
@@ -65,6 +68,9 @@ final class VLCPlayerCoordinator: NSObject, ObservableObject {
 
     var onTime: ((TimeInterval) -> Void)?
     var onDuration: ((TimeInterval) -> Void)?
+
+    /// Catch-up seeks and programme-clock mapping — see `CatchupSeekRouter`.
+    let catchup = CatchupSeekRouter()
 
     let mediaPlayer = VLCMediaPlayer()
 
@@ -162,8 +168,10 @@ final class VLCPlayerCoordinator: NSObject, ObservableObject {
         languageOptions = PlayerLanguageOptions.load()
         mediaURL = media.url
         httpHeaders = media.httpHeaders
+        catchup.load(media)
         retry.reset()
         hasStartedPlayback = false
+        setBuffering(true)
         didReportFailure = false
         PlaybackQoE.shared.beginStartup(engine: .vlcKit, isLive: media.isLive)
         startStartupWatchdog()
@@ -203,9 +211,11 @@ final class VLCPlayerCoordinator: NSObject, ObservableObject {
         if media.url != mediaURL { hasManualTrackSelection = false }
         mediaURL = media.url
         httpHeaders = media.httpHeaders
+        catchup.load(media)
         lastKnownTime = 0
         retry.reset()
         hasStartedPlayback = false
+        setBuffering(true)
         didReportFailure = false
         PlaybackQoE.shared.beginStartup(engine: .vlcKit, isLive: media.isLive)
         startStartupWatchdog()
@@ -232,6 +242,7 @@ final class VLCPlayerCoordinator: NSObject, ObservableObject {
             isReloading = false
             if state == .playing {
                 retry.reset()
+                setBuffering(false)
                 hasStartedPlayback = true
                 PlaybackQoE.shared.noteFirstFrame()
                 cancelStartupWatchdog()
@@ -295,6 +306,7 @@ final class VLCPlayerCoordinator: NSObject, ObservableObject {
     func retryAfterFailure() {
         guard let mediaURL else { return }
         hasStartedPlayback = false
+        setBuffering(true)
         didReportFailure = false
         retry.reset()
         startStartupWatchdog()
@@ -312,6 +324,7 @@ final class VLCPlayerCoordinator: NSObject, ObservableObject {
         guard let mediaURL else { return }
         Logger.player.log("reconnect: reloading stream")
         isReloading = true
+        setBuffering(true)
 
         if !isLive, lastKnownTime > 1 {
             startTime = lastKnownTime
@@ -409,6 +422,7 @@ final class VLCPlayerCoordinator: NSObject, ObservableObject {
     }
 
     func skip(by seconds: Double) {
+        if catchup.route(.by(seconds)) { return }
         if seconds < 0 {
             mediaPlayer.jumpBackward(-seconds)
         } else {
@@ -418,8 +432,14 @@ final class VLCPlayerCoordinator: NSObject, ObservableObject {
 
     /// Seek to an absolute time (in seconds).
     func seek(to seconds: TimeInterval) {
+        if catchup.route(.to(seconds)) { return }
         let millis = Int32((seconds * 1000).rounded())
         mediaPlayer.time = VLCTime(int: millis)
+    }
+
+    /// Publishes only on a change: the time callback calls this every tick.
+    private func setBuffering(_ buffering: Bool) {
+        if isBuffering != buffering { isBuffering = buffering }
     }
 
     // MARK: - Picture in Picture
@@ -487,6 +507,8 @@ extension VLCPlayerCoordinator: VLCMediaPlayerDelegate {
             let seconds = (mediaPlayer.time.value?.doubleValue ?? 0) / 1000
             guard isResumeSettled(currentSeconds: seconds) else { return }
             lastKnownTime = seconds
+            // Time advancing is frames flowing, `.playing` transition or not.
+            if hasStartedPlayback { setBuffering(false) }
             onTime?(seconds)
             // Track characteristics are read on every state change; only chase
             // them from the high-frequency time callback until they first land,
@@ -552,6 +574,10 @@ extension VLCPlayerCoordinator: VLCDrawable, VLCPictureInPictureDrawable, VLCPic
     }
 
     func seek(by offset: Int64, completion: @escaping () -> Void) {
+        if catchup.route(.by(Double(offset) / 1000)) {
+            completion()
+            return
+        }
         mediaPlayer.jump(withOffset: Int32(offset), completion: completion)
     }
 

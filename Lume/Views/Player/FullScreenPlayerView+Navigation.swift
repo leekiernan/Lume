@@ -54,6 +54,13 @@ extension FullScreenPlayerView {
     /// (a use-after-free in KSPlayer's decode threads).
     func switchMedia(to newMedia: PlayableMedia) {
         guard newMedia.id != activeMedia.id else { return }
+        cancelPendingCatchupSeek()
+        // Another segment of the catch-up programme on screen is a seek, not a
+        // new title — see `moveToCatchupSegment`.
+        if newMedia.catchup?.isSameProgramme(as: activeMedia.catchup) == true {
+            moveToCatchupSegment(newMedia)
+            return
+        }
         // Settle Trakt against the outgoing identity while its clock is intact.
         stopTraktScrobble()
         // Flush the outgoing stream's progress before the clock resets — capture
@@ -62,7 +69,8 @@ extension FullScreenPlayerView {
         // The completion claim covers exactly that one flush. Left standing, a
         // step back onto the same episode would never record progress again.
         completedRef = nil
-        clock.reset()
+        // Zero — or, for a catch-up programme, where its opening segment sits.
+        clock.reset(for: newMedia)
         // Restart the fallback chain from the primary engine for the new stream.
         engineAttempt = 0
         activeMedia = newMedia

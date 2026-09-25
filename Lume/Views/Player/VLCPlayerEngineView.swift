@@ -69,6 +69,8 @@ struct VLCPlayerEngineView: View {
     /// host and handed to `NowPlayingService` with this engine's transport.
     /// `nil` on tvOS, where the Siri Remote already owns stream changes.
     var onRemoteAdvance: ((PlayerMediaSwapper.Step) -> Bool)?
+    /// Takes every seek and skip on a catch-up programme — see `CatchupSeekRouter`.
+    var onCatchupSeek: ((CatchupSeek) -> Void)?
 
     @StateObject private var coordinator = VLCPlayerCoordinator()
     @State private var isControlsVisible = true
@@ -169,6 +171,11 @@ struct VLCPlayerEngineView: View {
                 }
             #endif
 
+            if coordinator.isBuffering, !loadFailed {
+                PlayerLoadingIndicator(title: coordinator.hasStartedPlayback ? nil : media.title)
+                    .transition(.opacity)
+            }
+
             if loadFailed {
                 PlayerErrorIndicator(
                     title: media.title,
@@ -183,12 +190,12 @@ struct VLCPlayerEngineView: View {
         }
         .preferredColorScheme(.dark)
         .onAppear {
+            let catchup = coordinator.catchup
             coordinator.onTime = { current in
-                if !isSeeking, current.isFinite { clock.current = current }
+                if !isSeeking { catchup.report(position: current, to: clock) }
             }
-            coordinator.onDuration = { total in
-                if total.isFinite, total > 0 { clock.duration = total }
-            }
+            coordinator.onDuration = { catchup.report(duration: $0, to: clock) }
+            catchup.onSeek = onCatchupSeek
             coordinator.onPlaybackFailure = { reportFailure() }
             coordinator.startupTimeout = usesQuickStartupTimeout ? fallbackStartupTimeout : startupTimeout
             coordinator.configure(media: media)
@@ -266,8 +273,8 @@ struct VLCPlayerEngineView: View {
                     }
                 }
             }
-            .onKeyPress(.leftArrow) { coordinator.skip(by: -15); resetHideTimer(); return .handled }
-            .onKeyPress(.rightArrow) { coordinator.skip(by: 15); resetHideTimer(); return .handled }
+            .onKeyPress(.leftArrow) { coordinator.skip(by: -media.skipInterval(default: 15)); resetHideTimer(); return .handled }
+            .onKeyPress(.rightArrow) { coordinator.skip(by: media.skipInterval(default: 15)); resetHideTimer(); return .handled }
             .liveChannelKeyNavigation(
                 neighbours: itemNeighbours, swapper: mediaSwapper,
                 onSelect: { onSelectMedia?($0) }, onResetHideTimer: resetHideTimer

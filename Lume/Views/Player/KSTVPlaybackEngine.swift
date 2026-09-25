@@ -25,11 +25,15 @@
         /// — keeping a default `init()` lets the host declare it as a plain
         /// `@StateObject` without an initializer-ordering dance.
         private weak var coordinator: KSVideoPlayer.Coordinator?
+        /// The host view's catch-up router, so the overlay's seeks on a
+        /// catch-up programme reach the host like every other KSPlayer seek.
+        private weak var catchupRouter: CatchupSeekRouter?
 
         init() {}
 
-        func attach(coordinator: KSVideoPlayer.Coordinator) {
+        func attach(coordinator: KSVideoPlayer.Coordinator, catchupRouter: CatchupSeekRouter) {
             self.coordinator = coordinator
+            self.catchupRouter = catchupRouter
         }
 
         // MARK: - Host-driven updates
@@ -72,10 +76,12 @@
         }
 
         func skip(by seconds: Double) {
+            if catchupRouter?.route(.by(seconds)) == true { return }
             coordinator?.skip(interval: Int(seconds))
         }
 
         func seek(to seconds: TimeInterval) {
+            if catchupRouter?.route(.to(seconds)) == true { return }
             coordinator?.seek(time: seconds)
         }
 
