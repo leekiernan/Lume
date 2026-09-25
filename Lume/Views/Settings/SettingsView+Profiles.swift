@@ -69,7 +69,7 @@ import SwiftUI
         @State private var creatingProfile = false
         @State private var editingProfile: UserProfile?
         @State private var pendingSwitch: UserProfile?
-        @State private var pinFlow: ParentalPINFlow?
+        @State private var pinFlow: PINFlow?
         /// Multiple profiles are a Premium feature; free users keep one profile.
         @State private var premium = PremiumManager.shared
         @State private var showPaywall = false

@@ -11,42 +11,21 @@
 
 import SwiftUI
 
-/// Which PIN operation a flow performs. Identifiable so it can drive a sheet.
-enum ParentalPINFlow: String, Identifiable {
-    case set, change, remove
-
-    var id: String {
-        rawValue
-    }
-}
-
-/// Runs a single PIN operation to completion, then calls `onFinish` (which the
-/// presenter uses to dismiss). Reads `ParentalControls` from the environment.
+/// `PINFlowView` over the parental-control PIN (the keychain item behind
+/// `ParentalControls`), which it reads from the environment.
 struct ParentalPINFlowView: View {
-    let flow: ParentalPINFlow
+    let flow: PINFlow
     let onFinish: () -> Void
 
     @Environment(ParentalControls.self) private var parental: ParentalControls?
 
     var body: some View {
-        switch flow {
-        case .set:
-            PINCreateView(
-                onComplete: { parental?.setPIN($0); onFinish() },
-                onCancel: onFinish
-            )
-        case .change:
-            ChangePINFlow(
-                onComplete: { parental?.setPIN($0); onFinish() },
-                onCancel: onFinish
-            )
-        case .remove:
-            PINUnlockView(
-                title: "Turn Off PIN",
-                subtitle: "Enter your current PIN to turn it off.",
-                onUnlock: { parental?.disablePIN(); onFinish() },
-                onCancel: onFinish
-            )
-        }
+        PINFlowView(
+            flow: flow,
+            verify: { parental?.verify($0) == true },
+            save: { parental?.setPIN($0) },
+            clear: { parental?.disablePIN() },
+            onFinish: onFinish
+        )
     }
 }

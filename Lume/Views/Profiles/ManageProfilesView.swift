@@ -21,7 +21,7 @@ struct ManageProfilesView: View {
     /// A profile awaiting PIN entry before the switch goes through.
     @State private var pendingSwitch: UserProfile?
     /// The PIN operation being run (set / change / turn off).
-    @State private var pinFlow: ParentalPINFlow?
+    @State private var pinFlow: PINFlow?
 
     @AppStorage(ProfileSettings.askOnStartupKey) private var askOnStartup = ProfileSettings.askOnStartupDefault
 

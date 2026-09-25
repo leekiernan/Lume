@@ -146,12 +146,7 @@ struct PlaylistDetailView: View {
                         }
                     }
                 }
-                .alert("Delete Playlist", isPresented: $showDeleteConfirmation) {
-                    Button("Cancel", role: .cancel) {}
-                    Button("Delete", role: .destructive) { deletePlaylist() }
-                } message: {
-                    Text("All synced content for this playlist will also be removed.")
-                }
+                .playlistDeletionConfirmation(isPresented: $showDeleteConfirmation) { deletePlaylist() }
                 .sheet(isPresented: $showSync) {
                     SyncProgressView(playlist: playlist)
                 }
@@ -416,16 +411,7 @@ extension PlaylistDetailView {
     }
 
     func deletePlaylist() {
-        // Route through the sync engine so the deletion also clears the
-        // CloudKit mirror and shadow baseline — deleting on the view context
-        // alone leaves a surviving mirror that resurrects the last playlist
-        // (#136). Previews have no coordinator; local-only deletion is fine.
-        if let cloudSync {
-            let id = playlist.id
-            Task { await cloudSync.deletePlaylist(id: id) }
-        } else {
-            PlaylistDeletion.delete(playlist, in: modelContext)
-        }
+        PlaylistDeletion.deleteFromUI(playlist, cloudSync: cloudSync, in: modelContext)
         #if os(tvOS)
             onClose?()
         #else
@@ -449,6 +435,24 @@ extension PlaylistDetailView {
         guard let timestamp = TimeInterval(raw) else { return false }
         let date = Date(timeIntervalSince1970: timestamp)
         return date < Date()
+    }
+}
+
+extension View {
+    /// The confirmation every Settings playlist deletion goes through — the
+    /// detail pane's Delete button (both platforms) and the playlist list's
+    /// swipe-to-delete — since it also removes the playlist's synced content
+    /// and its iCloud copy.
+    func playlistDeletionConfirmation(
+        isPresented: Binding<Bool>,
+        onDelete: @escaping () -> Void
+    ) -> some View {
+        alert("Delete Playlist", isPresented: isPresented) {
+            Button("Cancel", role: .cancel) {}
+            Button("Delete", role: .destructive, action: onDelete)
+        } message: {
+            Text("All synced content for this playlist will also be removed.")
+        }
     }
 }
 

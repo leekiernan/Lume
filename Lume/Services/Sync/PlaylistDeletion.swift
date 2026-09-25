@@ -40,6 +40,26 @@ nonisolated enum PlaylistDeletion {
         Logger.sync.info("Deleted playlist \(playlistID.uuidString) and its orphaned catalog content")
     }
 
+    /// The Settings entry point for a user-initiated deletion (the detail pane's
+    /// Delete button and the playlist list's swipe-to-delete). Routes through
+    /// the sync engine so the deletion also clears the CloudKit mirror and
+    /// shadow baseline — deleting on the view context alone leaves a surviving
+    /// mirror that resurrects the last playlist (#136). Previews have no
+    /// coordinator; local-only deletion is fine there.
+    @MainActor
+    static func deleteFromUI(
+        _ playlist: Playlist,
+        cloudSync: CloudSyncCoordinator?,
+        in context: ModelContext
+    ) {
+        if let cloudSync {
+            let id = playlist.id
+            Task { await cloudSync.deletePlaylist(id: id) }
+        } else {
+            delete(playlist, in: context)
+        }
+    }
+
     /// The bulk half of a playlist deletion: every catalog item the playlist
     /// brought in, matched by its playlist-scoped id prefix, plus the
     /// device-local sync bookkeeping keyed by its UUID. Split from

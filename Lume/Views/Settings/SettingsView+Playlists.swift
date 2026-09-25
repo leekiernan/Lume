@@ -15,30 +15,6 @@ import SwiftUI
 #if os(tvOS)
 
     extension SettingsView {
-        /// The guide's sources, drilled into from the Playlists pane. Unlike a
-        /// sidebar category there is no highlighted row to step back to, and the
-        /// EPG pane's own focus sections keep a left press from reaching the
-        /// sidebar — so it carries an explicit way out, with Menu doing the same.
-        var tvEPGSourcesDetail: some View {
-            VStack(alignment: .leading, spacing: 28) {
-                Button {
-                    showingEPGSources = false
-                } label: {
-                    HStack(spacing: 16) {
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 22, weight: .medium))
-                        Text("Playlists")
-                        Spacer(minLength: 0)
-                    }
-                }
-                .buttonStyle(TVSettingsRowButtonStyle())
-                .accessibilityLabel("Back to Playlists")
-
-                EPGSettingsView()
-            }
-            .onExitCommand { showingEPGSources = false }
-        }
-
         var tvPlaylistsDetail: some View {
             VStack(alignment: .leading, spacing: 36) {
                 tvPlaylistsList

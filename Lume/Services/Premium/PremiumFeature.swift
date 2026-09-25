@@ -25,6 +25,21 @@ enum PremiumFeature: String, CaseIterable, Identifiable {
         rawValue
     }
 
+    /// The features this platform actually offers — what the paywall and the
+    /// tvOS Premium pane list. Offline downloads don't exist on tvOS
+    /// (`DownloadManager` is iOS / macOS only), so Apple TV doesn't advertise them.
+    static var availableOnThisPlatform: [PremiumFeature] {
+        allCases.filter(\.isAvailableOnThisPlatform)
+    }
+
+    var isAvailableOnThisPlatform: Bool {
+        #if os(tvOS)
+            self != .downloads
+        #else
+            true
+        #endif
+    }
+
     var title: LocalizedStringResource {
         switch self {
         case .multiplePlaylists: "Unlimited Playlists"

@@ -37,32 +37,44 @@ nonisolated enum ProfileScopedPreferences {
         return "profile.\(id.uuidString).\(base)"
     }
 
-    /// Every layout key that is scoped, listed once so the migration can move
-    /// all of them and none is forgotten when a new surface is added.
-    static var scopedBaseKeys: [String] {
-        var keys = [
-            AppAreaSettings.baseDisabledAreasKey,
-            RecommendationSettings.baseEnabledKey,
-            SportsSyncService.baseEnabledKey,
-            SportsSyncService.baseTabEnabledKey,
-            SportsSyncService.baseSyncFrequencyKey
+    /// How a scoped key's value is stored: a string, or a boolean with the
+    /// value it reads as before anything is written.
+    enum Kind: Equatable {
+        case string
+        case bool(default: Bool)
+    }
+
+    /// Every layout key that is scoped, with how it is stored — listed once so
+    /// the migration can move all of them, none is forgotten when a new surface
+    /// is added, and a boolean key can't lose its default.
+    static var scopedKeys: [(base: String, kind: Kind)] {
+        var keys: [(base: String, kind: Kind)] = [
+            (AppAreaSettings.baseDisabledAreasKey, .string),
+            (RecommendationSettings.baseEnabledKey, .bool(default: RecommendationSettings.enabledDefault)),
+            (SportsSyncService.baseEnabledKey, .bool(default: SportsSyncService.enabledDefault)),
+            (SportsSyncService.baseTabEnabledKey, .bool(default: SportsSyncService.tabEnabledDefault)),
+            (SportsSyncService.baseSyncFrequencyKey, .string)
         ]
         for surface in SectionSurface.allCases {
-            keys.append(HomeLayoutSettings.baseSectionOrderKey(surface))
-            keys.append(HomeLayoutSettings.baseDisabledSectionsKey(surface))
-            keys.append(HomeLayoutSettings.baseHeroSectionKey(surface))
-            keys.append(HomeLayoutSettings.baseHeroSeededKey(surface))
-            keys.append(CustomHomeSections.baseStorageKey(surface))
+            keys.append((HomeLayoutSettings.baseSectionOrderKey(surface), .string))
+            keys.append((HomeLayoutSettings.baseDisabledSectionsKey(surface), .string))
+            keys.append((HomeLayoutSettings.baseHeroSectionKey(surface), .string))
+            keys.append((HomeLayoutSettings.baseHeroSeededKey(surface), .string))
+            keys.append((CustomHomeSections.baseStorageKey(surface), .string))
         }
         return keys
     }
 
-    private static var booleanBaseKeys: Set<String> {
-        [
-            RecommendationSettings.baseEnabledKey,
-            SportsSyncService.baseEnabledKey,
-            SportsSyncService.baseTabEnabledKey
-        ]
+    /// The base names of `scopedKeys`, in order.
+    static var scopedBaseKeys: [String] {
+        scopedKeys.map(\.base)
+    }
+
+    /// The scoped keys stored as booleans.
+    static var booleanBaseKeys: Set<String> {
+        Set(scopedKeys.compactMap { entry in
+            if case .bool = entry.kind { entry.base } else { nil }
+        })
     }
 
     /// Captures every syncable value, including defaults. Explicit empty/false
@@ -74,30 +86,18 @@ nonisolated enum ProfileScopedPreferences {
     ) -> ProfilePreferencesSnapshot {
         var strings: [String: String] = [:]
         var booleans: [String: Bool] = [:]
-        for base in scopedBaseKeys {
+        for (base, kind) in scopedKeys {
             let scoped = key(base, profileID: profileID)
-            if booleanBaseKeys.contains(base) {
+            switch kind {
+            case let .bool(defaultValue):
                 booleans[base] = defaults.object(forKey: scoped) == nil
-                    ? defaultBooleanValue(for: base)
+                    ? defaultValue
                     : defaults.bool(forKey: scoped)
-            } else {
+            case .string:
                 strings[base] = defaults.string(forKey: scoped) ?? ""
             }
         }
         return ProfilePreferencesSnapshot(strings: strings, booleans: booleans)
-    }
-
-    private static func defaultBooleanValue(for base: String) -> Bool {
-        switch base {
-        case RecommendationSettings.baseEnabledKey:
-            RecommendationSettings.enabledDefault
-        case SportsSyncService.baseEnabledKey:
-            SportsSyncService.enabledDefault
-        case SportsSyncService.baseTabEnabledKey:
-            SportsSyncService.tabEnabledDefault
-        default:
-            false
-        }
     }
 
     /// Whether this install has any pre-snapshot values worth seeding into
@@ -141,7 +141,8 @@ nonisolated enum ProfileScopedPreferences {
         defaults: UserDefaults = .standard
     ) {
         let supported = Set(scopedBaseKeys)
-        for (base, value) in snapshot.strings where supported.contains(base) && !booleanBaseKeys.contains(base) {
+        let booleanKeys = booleanBaseKeys
+        for (base, value) in snapshot.strings where supported.contains(base) && !booleanKeys.contains(base) {
             if base == AppAreaSettings.baseDisabledAreasKey {
                 // The cloud snapshot deliberately excludes the device-local
                 // generation. Applying its area value must still invalidate
@@ -151,7 +152,7 @@ nonisolated enum ProfileScopedPreferences {
                 defaults.set(value, forKey: key(base, profileID: profileID))
             }
         }
-        for (base, value) in snapshot.booleans where supported.contains(base) && booleanBaseKeys.contains(base) {
+        for (base, value) in snapshot.booleans where supported.contains(base) && booleanKeys.contains(base) {
             defaults.set(value, forKey: key(base, profileID: profileID))
         }
     }

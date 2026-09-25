@@ -36,17 +36,46 @@ struct PaywallView: View {
     private static let privacyURL = URL(string: "https://github.com/bilipp/Lume/blob/main/PRIVACY.md")!
 
     var body: some View {
-        #if os(tvOS)
-            tvBody
-        #else
-            standardBody
-        #endif
+        Group {
+            #if os(tvOS)
+                tvBody
+            #else
+                standardBody
+            #endif
+        }
+        // Products load once at launch; if that attempt failed (offline, App
+        // Store unreachable) there is nothing to buy, so try again here.
+        .task {
+            if premium.products.isEmpty {
+                await premium.loadProducts()
+            }
+        }
+    }
+
+    /// Stand-in for the plan buttons while there are no products: a spinner
+    /// while they load, or the failure with a way to try again.
+    @ViewBuilder
+    private var productsPlaceholder: some View {
+        if premium.productsLoadFailed, !premium.isLoadingProducts {
+            VStack(spacing: 12) {
+                Text("Couldn't load Lume Pro plans. Check your connection and try again.")
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                Button("Retry") {
+                    Task { await premium.loadProducts() }
+                }
+            }
+        } else {
+            ProgressView()
+        }
     }
 
     /// The features shown as benefits — the highlighted one first, if any.
+    /// Only what this platform offers.
     private var orderedFeatures: [PremiumFeature] {
-        guard let highlight else { return PremiumFeature.allCases }
-        return [highlight] + PremiumFeature.allCases.filter { $0 != highlight }
+        let features = PremiumFeature.availableOnThisPlatform
+        guard let highlight, highlight.isAvailableOnThisPlatform else { return features }
+        return [highlight] + features.filter { $0 != highlight }
     }
 
     // MARK: - iOS / macOS
@@ -145,7 +174,9 @@ struct PaywallView: View {
         @ViewBuilder
         private var planButtons: some View {
             if premium.products.isEmpty {
-                ProgressView().padding(.vertical, 12)
+                productsPlaceholder
+                    .font(.callout)
+                    .padding(.vertical, 12)
             } else {
                 VStack(spacing: 12) {
                     ForEach(premium.products, id: \.id) { product in
@@ -216,7 +247,8 @@ struct PaywallView: View {
 
                     VStack(spacing: 20) {
                         if premium.products.isEmpty {
-                            ProgressView()
+                            productsPlaceholder
+                                .font(.system(size: 22))
                         } else {
                             ForEach(premium.products, id: \.id) { product in
                                 Button {
