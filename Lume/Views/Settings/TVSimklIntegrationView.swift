@@ -32,6 +32,12 @@
                 }
             }
             .paywall(isPresented: $showPaywall, highlight: .simkl)
+            .onDisappear {
+                // Stop polling if the user leaves the pane mid-connect.
+                if !simkl.isConnected {
+                    simkl.cancelConnect()
+                }
+            }
         }
 
         private var connect: some View {

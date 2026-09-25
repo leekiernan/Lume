@@ -2,10 +2,11 @@
 //  TraktIntegrationView.swift
 //  Lume
 //
-//  The iOS/macOS Trakt integration screen (the tvOS surface lives inline in
-//  SettingsView's Integrations pane). Drives the OAuth device flow: shows the
-//  activation code with a one-tap link to open trakt.tv/activate, polls in the
-//  background, and surfaces the connected account with a disconnect action.
+//  The iOS/macOS Trakt integration screen (the tvOS surface is
+//  `TVTraktIntegrationView`, shown in SettingsView's Integrations pane). Drives
+//  the OAuth device flow: shows the activation code with a one-tap link to open
+//  trakt.tv/activate, polls in the background, and surfaces the connected
+//  account with a disconnect action.
 //
 
 #if !os(tvOS)
