@@ -289,17 +289,15 @@ extension ContentSyncManager {
         let context = ModelContext(modelContainer)
         context.autosaveEnabled = false
 
-        // Match buildExistingCategoryLookup: fetch by indexed typeRaw, then
-        // filter to this playlist by the id prefix in memory.
+        // Match buildExistingCategoryLookup: the "<playlist>-<type>-" prefix
+        // scopes to this playlist and type in one index seek.
         let prefix = "\(playlistId.uuidString)-\(type.rawValue)-"
         let typeRaw = type.rawValue
         let descriptor = FetchDescriptor<Category>(
-            predicate: #Predicate { $0.typeRaw == typeRaw }
+            predicate: #Predicate { $0.id.starts(with: prefix) }
         )
         var removed = 0
-        for category in (try? context.fetch(descriptor)) ?? []
-            where category.id.hasPrefix(prefix) && !seenApiIds.contains(category.apiId)
-        {
+        for category in (try? context.fetch(descriptor)) ?? [] where !seenApiIds.contains(category.apiId) {
             context.delete(category)
             removed += 1
         }

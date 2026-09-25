@@ -78,13 +78,12 @@ extension ContentSyncManager {
     func markAllStalkerCategoriesImported(type: CategoryType, playlistId: UUID) {
         let context = ModelContext(modelContainer)
         context.autosaveEnabled = false
-        let typeRaw = type.rawValue
-        let prefix = playlistId.uuidString
+        let prefix = "\(playlistId.uuidString)-\(type.rawValue)-"
         let cats = (try? context.fetch(
-            FetchDescriptor<Category>(predicate: #Predicate { $0.typeRaw == typeRaw })
+            FetchDescriptor<Category>(predicate: #Predicate { $0.id.starts(with: prefix) })
         )) ?? []
         let now = Date()
-        for category in cats where category.id.hasPrefix(prefix) {
+        for category in cats {
             category.contentImportedAt = now
         }
         try? context.save()
