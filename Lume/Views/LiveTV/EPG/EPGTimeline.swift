@@ -151,17 +151,17 @@ struct EPGChannelRow: Identifiable {
     let stream: LiveStream
     let name: String
     let logoURL: URL?
-    /// Whether the channel can serve catch-up at all (advertised archive,
-    /// Xtream stream) — mirrors the `PlayableMedia.catchup` guards.
+    /// Whether the channel can serve catch-up at all — a snapshot of
+    /// `LiveStream.supportsCatchup`.
     let catchupCapable: Bool
     /// How many days the archive reaches back (≥ 1 when `catchupCapable`).
     let archiveDays: Int
     let cells: [EPGProgramCell]
 
-    /// Snapshot equivalent of `PlayableMedia.isCatchupAvailable` for the
-    /// scroll path: whether a programme starting at `start` is replayable.
+    /// Snapshot equivalent of `LiveStream.isCatchupAvailable` for the scroll
+    /// path: whether a programme starting at `start` is replayable.
     func isReplayable(start: Date, now: Date) -> Bool {
-        catchupCapable && start >= now.addingTimeInterval(-TimeInterval(archiveDays) * 86400)
+        catchupCapable && CatchupWindow.contains(start: start, archiveDays: archiveDays, now: now)
     }
 }
 
@@ -186,8 +186,8 @@ enum EPGGridBuilder {
                 stream: stream,
                 name: stream.name,
                 logoURL: URL(string: stream.streamIcon ?? ""),
-                catchupCapable: stream.tvArchive > 0 && stream.directURL == nil,
-                archiveDays: max(1, stream.tvArchiveDuration),
+                catchupCapable: stream.supportsCatchup,
+                archiveDays: stream.catchupArchiveDays,
                 cells: cells
             )
         }
