@@ -323,19 +323,7 @@ struct KSPlayerEngineView: View {
             .onChange(of: media) { _, _ in
                 // The host swapped the stream (KSPlayer reloads its URL
                 // automatically). Reset local scrubbing / panel state.
-                isSeeking = false
-                seekPosition = 0
-                isPanelOpen = false
-                hasStartedPlayback = false
-                hasSeenReadyToPlay = false
-                isBuffering = true
-                loadFailed = false
-                tick.reset()
-                cancelStallWatchdog()
-                reconnector.reset()
-                engine.reset()
-                startStartupWatchdog()
-                resetHideTimer()
+                resetForNewStream()
             }
             .onChange(of: isControlsVisible) { _, visible in
                 // Hand focus to the tap-catcher once the controls vanish so the
@@ -500,6 +488,9 @@ struct KSPlayerEngineView: View {
                 coordinator.resetPlayer()
             }
             .onChange(of: media.id) { _, _ in
+                // Same reset as tvOS: re-arms the startup watchdog and raises
+                // the spinner until the new stream's first frame.
+                resetForNewStream()
                 resetVideoInfo()
                 // An in-player swap reuses the KSPlayerLayer but re-prepares it;
                 // re-arm the observation so the task can never be left awaiting a
