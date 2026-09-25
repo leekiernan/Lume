@@ -25,7 +25,7 @@ extension ContentSyncManager {
         areas: Set<AppArea>?
     ) async throws -> Set<AppArea> {
         await progress?.start(.authenticating)
-        let authResponse = try await xtreamClient.getInfo(playlist: playlist)
+        let authResponse = try await xtreamRequest { try await $0.getInfo(playlist: playlist) }
         updatePlaylistInfo(playlistId, with: authResponse)
         await progress?.complete(.authenticating)
 

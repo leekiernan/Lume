@@ -80,12 +80,11 @@ enum PlayerItemNavigation {
         for media: PlayableMedia,
         sort: ContentSortOption,
         restriction: ContentRestriction,
-        in context: ModelContext,
-        client: XtreamClient = XtreamClient()
+        in context: ModelContext
     ) -> Neighbours {
         switch axis(for: media) {
         case .episode:
-            episodeNeighbours(for: media.contentRef, in: context, client: client)
+            episodeNeighbours(for: media.contentRef, in: context)
         case .channel:
             channelNeighbours(for: media, sort: sort, restriction: restriction, in: context)
         case nil:
@@ -127,8 +126,7 @@ enum PlayerItemNavigation {
     /// it needs this axis and no other.
     static func episodeNeighbours(
         for ref: PlayableMedia.ContentRef,
-        in context: ModelContext,
-        client: XtreamClient = XtreamClient()
+        in context: ModelContext
     ) -> Neighbours {
         guard case let .episode(id) = ref else { return .none }
 
@@ -140,8 +138,8 @@ enum PlayerItemNavigation {
 
         return Neighbours(
             axis: .episode,
-            previous: NextEpisodeResolver.previousMedia(before: ref, in: context, client: client),
-            next: NextEpisodeResolver.nextMedia(after: ref, in: context, client: client)
+            previous: NextEpisodeResolver.previousMedia(before: ref, in: context),
+            next: NextEpisodeResolver.nextMedia(after: ref, in: context)
         )
     }
 

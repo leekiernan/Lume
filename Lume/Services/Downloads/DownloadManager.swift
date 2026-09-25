@@ -166,7 +166,7 @@ final class DownloadManager: NSObject {
         guard movie.downloadStatus != .completed else { return }
 
         let directURL = movie.directURL.flatMap(URL.init(string:))
-        guard let url = directURL ?? XtreamClient().buildMovieURL(for: movie, playlist: playlist) else { return }
+        guard let url = directURL ?? XtreamClient.buildMovieURL(for: movie, playlist: playlist) else { return }
 
         let ext = movie.containerExtension ?? "mp4"
         let filename = "\(Self.sanitize(id)).\(ext)"
@@ -187,7 +187,7 @@ final class DownloadManager: NSObject {
         case .xtream, .stalker, .webdav: false
         }
         let directURL = carriesDirectURL ? episode.directSource.flatMap(URL.init(string:)) : nil
-        guard let url = directURL ?? XtreamClient().buildEpisodeURL(for: episode, playlist: playlist) else { return }
+        guard let url = directURL ?? XtreamClient.buildEpisodeURL(for: episode, playlist: playlist) else { return }
 
         let ext = episode.containerExtension
         let filename = "\(Self.sanitize(id)).\(ext)"
