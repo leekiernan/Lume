@@ -318,58 +318,6 @@
         }
       }
     },
-    "%@ Collection" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ Filmreihe"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Colección de %@"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Collection %@"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Collezione %@"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@コレクション"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ 컬렉션"
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Coleção %@"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@系列"
-          }
-        }
-      }
-    },
     "%@ fps" : {
       "comment" : "A video frame-rate readout in the player caption. The argument is the frame rate, e.g. 24 or 23.98.",
       "localizations" : {
@@ -1506,61 +1454,150 @@
         }
       }
     },
-    "%lld playlist%@" : {
-      "extractionState" : "stale",
+    "%lld playlists" : {
       "localizations" : {
         "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$lld Playlist%2$@"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld Playlist"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld Playlists"
+                }
+              }
+            }
           }
         },
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$lld playlist%2$@"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld playlist"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld playlists"
+                }
+              }
+            }
           }
         },
         "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$lld lista%2$@ de reproducción"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld lista de reproducción"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld listas de reproducción"
+                }
+              }
+            }
           }
         },
         "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$lld playlist%2$@"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld playlist"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld playlists"
+                }
+              }
+            }
           }
         },
         "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$lld playlist%2$@"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld playlist"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld playlist"
+                }
+              }
+            }
           }
         },
         "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$lld個のプレイリスト%2$@"
+          "variations" : {
+            "plural" : {
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld個のプレイリスト"
+                }
+              }
+            }
           }
         },
         "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "재생목록 %1$lld개%2$@"
+          "variations" : {
+            "plural" : {
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "재생목록 %lld개"
+                }
+              }
+            }
           }
         },
         "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$lld playlist%2$@"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld playlist"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld playlists"
+                }
+              }
+            }
           }
         },
         "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$lld个播放列表%2$@"
+          "variations" : {
+            "plural" : {
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld个播放列表"
+                }
+              }
+            }
           }
         }
       }
@@ -1679,51 +1716,147 @@
     "%lld Seasons" : {
       "localizations" : {
         "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld Staffeln"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld Staffel"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld Staffeln"
+                }
+              }
+            }
+          }
+        },
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld Season"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld Seasons"
+                }
+              }
+            }
           }
         },
         "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld temporadas"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld temporada"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld temporadas"
+                }
+              }
+            }
           }
         },
         "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld saisons"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld saison"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld saisons"
+                }
+              }
+            }
           }
         },
         "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld stagioni"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld stagione"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld stagioni"
+                }
+              }
+            }
           }
         },
         "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lldシーズン"
+          "variations" : {
+            "plural" : {
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lldシーズン"
+                }
+              }
+            }
           }
         },
         "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld개 시즌"
+          "variations" : {
+            "plural" : {
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld개 시즌"
+                }
+              }
+            }
           }
         },
         "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld temporadas"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld temporada"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld temporadas"
+                }
+              }
+            }
           }
         },
         "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld季"
+          "variations" : {
+            "plural" : {
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld季"
+                }
+              }
+            }
           }
         }
       }
@@ -1788,7 +1921,152 @@
       }
     },
     "%lld shows will be marked the first time you open them." : {
-
+      "localizations" : {
+        "de" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld Serie wird markiert, sobald du sie zum ersten Mal öffnest."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld Serien werden markiert, sobald du sie zum ersten Mal öffnest."
+                }
+              }
+            }
+          }
+        },
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld show will be marked the first time you open it."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld shows will be marked the first time you open them."
+                }
+              }
+            }
+          }
+        },
+        "es" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld serie se marcará la primera vez que la abras."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld series se marcarán la primera vez que las abras."
+                }
+              }
+            }
+          }
+        },
+        "fr" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld série sera marquée la première fois que vous l'ouvrirez."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld séries seront marquées la première fois que vous les ouvrirez."
+                }
+              }
+            }
+          }
+        },
+        "it" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld serie verrà contrassegnata la prima volta che la apri."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld serie verranno contrassegnate la prima volta che le apri."
+                }
+              }
+            }
+          }
+        },
+        "ja" : {
+          "variations" : {
+            "plural" : {
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld件の番組は、初めて開いたときにマークされます。"
+                }
+              }
+            }
+          }
+        },
+        "ko" : {
+          "variations" : {
+            "plural" : {
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "프로그램 %lld개는 처음 열 때 표시됩니다."
+                }
+              }
+            }
+          }
+        },
+        "pt" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld série será marcada na primeira vez que você abri-la."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld séries serão marcadas na primeira vez que você abri-las."
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans" : {
+          "variations" : {
+            "plural" : {
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld部剧集将在您首次打开时标记。"
+                }
+              }
+            }
+          }
+        }
+      }
     },
     "%lld subtitle downloads left today." : {
       "localizations" : {
@@ -1838,6 +2116,154 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "今天还剩 %lld 次字幕下载。"
+          }
+        }
+      }
+    },
+    "%lld Trakt changes waiting to sync." : {
+      "localizations" : {
+        "de" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld Trakt-Änderung wartet auf die Synchronisierung."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld Trakt-Änderungen warten auf die Synchronisierung."
+                }
+              }
+            }
+          }
+        },
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld Trakt change waiting to sync."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld Trakt changes waiting to sync."
+                }
+              }
+            }
+          }
+        },
+        "es" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld cambio de Trakt pendiente de sincronizar."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld cambios de Trakt pendientes de sincronizar."
+                }
+              }
+            }
+          }
+        },
+        "fr" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld modification Trakt en attente de synchronisation."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld modifications Trakt en attente de synchronisation."
+                }
+              }
+            }
+          }
+        },
+        "it" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld modifica di Trakt in attesa di sincronizzazione."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld modifiche di Trakt in attesa di sincronizzazione."
+                }
+              }
+            }
+          }
+        },
+        "ja" : {
+          "variations" : {
+            "plural" : {
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "同期待ちのTraktの変更が%lld件あります。"
+                }
+              }
+            }
+          }
+        },
+        "ko" : {
+          "variations" : {
+            "plural" : {
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "동기화 대기 중인 Trakt 변경 사항 %lld개."
+                }
+              }
+            }
+          }
+        },
+        "pt" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld alteração do Trakt aguardando sincronização."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld alterações do Trakt aguardando sincronização."
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans" : {
+          "variations" : {
+            "plural" : {
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld项 Trakt 更改等待同步。"
+                }
+              }
+            }
           }
         }
       }
@@ -5865,7 +6291,56 @@
       }
     },
     "Authentication failed. The provider rejected the request (this can also happen when the account's connection limit is reached)." : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Anmeldung fehlgeschlagen. Der Anbieter hat die Anfrage abgelehnt (das kann auch passieren, wenn das Verbindungslimit des Kontos erreicht ist)."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Error de autenticación. El proveedor rechazó la solicitud (también puede ocurrir cuando se alcanza el límite de conexiones de la cuenta)."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Échec de l'authentification. Le fournisseur a refusé la requête (cela peut aussi arriver lorsque la limite de connexions du compte est atteinte)."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Autenticazione non riuscita. Il provider ha rifiutato la richiesta (può succedere anche quando è stato raggiunto il limite di connessioni dell'account)."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "認証に失敗しました。プロバイダがリクエストを拒否しました（アカウントの接続数の上限に達した場合にも起こります）。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "인증에 실패했습니다. 제공자가 요청을 거부했습니다(계정의 연결 한도에 도달한 경우에도 발생할 수 있습니다)."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Falha na autenticação. O provedor recusou a solicitação (isso também pode acontecer quando o limite de conexões da conta é atingido)."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "身份验证失败。提供商拒绝了该请求（账户达到连接数上限时也可能出现这种情况）。"
+          }
+        }
+      }
     },
     "Auto Deinterlace" : {
       "comment" : "A toggle to enable automatic deinterlacing",
@@ -10647,7 +11122,56 @@
       }
     },
     "Couldn't connect to the Stalker portal. Check the portal URL and MAC address." : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keine Verbindung zum Stalker-Portal möglich. Prüfe die Portal-URL und die MAC-Adresse."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo conectar con el portal Stalker. Comprueba la URL del portal y la dirección MAC."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossible de se connecter au portail Stalker. Vérifiez l'URL du portail et l'adresse MAC."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossibile connettersi al portale Stalker. Controlla l'URL del portale e l'indirizzo MAC."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stalkerポータルに接続できませんでした。ポータルのURLとMACアドレスを確認してください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stalker 포털에 연결할 수 없습니다. 포털 URL과 MAC 주소를 확인하세요."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Não foi possível conectar ao portal Stalker. Verifique o URL do portal e o endereço MAC."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法连接到 Stalker 门户。请检查门户 URL 和 MAC 地址。"
+          }
+        }
+      }
     },
     "Couldn't import from Simkl. Please try again." : {
       "localizations" : {
@@ -10754,7 +11278,56 @@
       }
     },
     "Couldn't load Lume Pro plans. Check your connection and try again." : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Lume-Pro-Tarife konnten nicht geladen werden. Prüfe deine Verbindung und versuche es erneut."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudieron cargar los planes de Lume Pro. Comprueba tu conexión y vuelve a intentarlo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossible de charger les formules Lume Pro. Vérifiez votre connexion et réessayez."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossibile caricare i piani di Lume Pro. Controlla la connessione e riprova."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lume Proのプランを読み込めませんでした。接続を確認してもう一度お試しください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lume Pro 요금제를 불러올 수 없습니다. 연결 상태를 확인하고 다시 시도하세요."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Não foi possível carregar os planos do Lume Pro. Verifique sua conexão e tente novamente."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法加载 Lume Pro 方案。请检查网络连接后重试。"
+          }
+        }
+      }
     },
     "Couldn't Prepare Logs" : {
       "localizations" : {
@@ -13164,6 +13737,58 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "下载电影和剧集以便离线播放。自动删除会在您观看完毕后移除文件。"
+          }
+        }
+      }
+    },
+    "Download subtitles for anything that ships without them." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lade Untertitel für alles herunter, was ohne sie ausgeliefert wird."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Descarga subtítulos para todo lo que no los incluya."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Téléchargez des sous-titres pour tout ce qui n'en propose pas."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scarica i sottotitoli per tutto ciò che ne è sprovvisto."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "字幕のないコンテンツには字幕をダウンロードできます。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "자막이 없는 콘텐츠의 자막을 다운로드하세요."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Baixe legendas para o que não vier com elas."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "为没有字幕的内容下载字幕。"
           }
         }
       }
@@ -17379,10 +18004,108 @@
       }
     },
     "Failed to read the portal response: %@" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Portalantwort konnte nicht gelesen werden: %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo leer la respuesta del portal: %@"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossible de lire la réponse du portail : %@"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossibile leggere la risposta del portale: %@"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ポータルの応答を読み取れませんでした: %@"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "포털 응답을 읽을 수 없습니다: %@"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Não foi possível ler a resposta do portal: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法读取门户响应：%@"
+          }
+        }
+      }
     },
     "Failed to read the server response: %@" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Serverantwort konnte nicht gelesen werden: %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo leer la respuesta del servidor: %@"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossible de lire la réponse du serveur : %@"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossibile leggere la risposta del server: %@"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "サーバーの応答を読み取れませんでした: %@"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "서버 응답을 읽을 수 없습니다: %@"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Não foi possível ler a resposta do servidor: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法读取服务器响应：%@"
+          }
+        }
+      }
     },
     "Fast Open" : {
       "comment" : "A toggle to enable fast opening of streams",
@@ -17647,55 +18370,54 @@
         }
       }
     },
-    "FFmpeg honours every option below for all streams. " : {
-      "extractionState" : "stale",
+    "FFmpeg honours these options for all streams. " : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "FFmpeg berücksichtigt alle Optionen unten für sämtliche Streams. "
+            "value" : "FFmpeg berücksichtigt diese Optionen für sämtliche Streams. "
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "FFmpeg respeta todas las opciones de abajo para todos los streams. "
+            "value" : "FFmpeg respeta estas opciones para todos los streams. "
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "FFmpeg respecte chacune des options ci-dessous pour tous les flux. "
+            "value" : "FFmpeg respecte ces options pour tous les flux. "
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "FFmpeg rispetta tutte le opzioni seguenti per tutti gli stream. "
+            "value" : "FFmpeg rispetta queste opzioni per tutti gli stream. "
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "FFmpegはすべてのストリームに対して以下のすべてのオプションを適用します。"
+            "value" : "FFmpegはすべてのストリームに対してこれらのオプションを適用します。"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "FFmpeg는 모든 스트림에 대해 아래의 모든 옵션을 적용합니다. "
+            "value" : "FFmpeg는 모든 스트림에 대해 이 옵션을 적용합니다. "
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "O FFmpeg respeita todas as opções abaixo para todos os streams. "
+            "value" : "O FFmpeg respeita estas opções para todos os streams. "
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "FFmpeg对所有流都遵循以下每个选项。"
+            "value" : "FFmpeg对所有流都遵循这些选项。"
           }
         }
       }
@@ -22519,65 +23241,402 @@
         }
       }
     },
-    "Imported %lld movie%@ and %lld episode%@." : {
-      "extractionState" : "stale",
+    "Imported %lld movies and %lld episodes." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%1$lld Filme und %3$lld Episoden importiert."
+            "value" : "%#@movies@ und %#@episodes@ importiert."
+          },
+          "substitutions" : {
+            "episodes" : {
+              "argNum" : 2,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg Episode"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg Episoden"
+                    }
+                  }
+                }
+              }
+            },
+            "movies" : {
+              "argNum" : 1,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg Film"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg Filme"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Imported %#@movies@ and %#@episodes@."
+          },
+          "substitutions" : {
+            "episodes" : {
+              "argNum" : 2,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg episode"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg episodes"
+                    }
+                  }
+                }
+              }
+            },
+            "movies" : {
+              "argNum" : 1,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg movie"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg movies"
+                    }
+                  }
+                }
+              }
+            }
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Se han importado %lld película%@ y %lld episodio%@."
+            "value" : "Se han importado %#@movies@ y %#@episodes@."
+          },
+          "substitutions" : {
+            "episodes" : {
+              "argNum" : 2,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg episodio"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg episodios"
+                    }
+                  }
+                }
+              }
+            },
+            "movies" : {
+              "argNum" : 1,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg película"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg películas"
+                    }
+                  }
+                }
+              }
+            }
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%1$lld film%2$@ et %3$lld épisode%4$@ importés."
+            "value" : "%#@movies@ et %#@episodes@ importés."
+          },
+          "substitutions" : {
+            "episodes" : {
+              "argNum" : 2,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg épisode"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg épisodes"
+                    }
+                  }
+                }
+              }
+            },
+            "movies" : {
+              "argNum" : 1,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg film"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg films"
+                    }
+                  }
+                }
+              }
+            }
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Importati %lld film%@ e %lld episodi%@."
+            "value" : "Importati %#@movies@ e %#@episodes@."
+          },
+          "substitutions" : {
+            "episodes" : {
+              "argNum" : 2,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg episodio"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg episodi"
+                    }
+                  }
+                }
+              }
+            },
+            "movies" : {
+              "argNum" : 1,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg film"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg film"
+                    }
+                  }
+                }
+              }
+            }
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%1$lld本の映画%2$@と%3$lld本のエピソード%4$@をインポートしました。"
+            "value" : "%#@movies@と%#@episodes@をインポートしました。"
+          },
+          "substitutions" : {
+            "episodes" : {
+              "argNum" : 2,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg本のエピソード"
+                    }
+                  }
+                }
+              }
+            },
+            "movies" : {
+              "argNum" : 1,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg本の映画"
+                    }
+                  }
+                }
+              }
+            }
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "영화 %1$lld개%2$@와 에피소드 %3$lld개%4$@를 가져왔습니다."
+            "value" : "영화 %#@movies@와 에피소드 %#@episodes@를 가져왔습니다."
+          },
+          "substitutions" : {
+            "episodes" : {
+              "argNum" : 2,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg개"
+                    }
+                  }
+                }
+              }
+            },
+            "movies" : {
+              "argNum" : 1,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg개"
+                    }
+                  }
+                }
+              }
+            }
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%1$lld filme%2$@ e %3$lld episódio%4$@ importados."
+            "value" : "%#@movies@ e %#@episodes@ importados."
+          },
+          "substitutions" : {
+            "episodes" : {
+              "argNum" : 2,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg episódio"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg episódios"
+                    }
+                  }
+                }
+              }
+            },
+            "movies" : {
+              "argNum" : 1,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg filme"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg filmes"
+                    }
+                  }
+                }
+              }
+            }
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "已导入%lld部电影%@和%lld集剧集%@。"
-          }
-        }
-      }
-    },
-    "Imported %lld movies and %lld episodes." : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Imported %1$lld movies and %2$lld episodes."
+            "value" : "已导入%#@movies@和%#@episodes@。"
+          },
+          "substitutions" : {
+            "episodes" : {
+              "argNum" : 2,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg集剧集"
+                    }
+                  }
+                }
+              }
+            },
+            "movies" : {
+              "argNum" : 1,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg部电影"
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       }
@@ -31317,58 +32376,6 @@
         }
       }
     },
-    "No movies in this category" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Keine Filme in dieser Kategorie"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No hay películas en esta categoría"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Aucun film dans cette catégorie"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Nessun film in questa categoria"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "このカテゴリには映画がありません"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "이 카테고리에 영화가 없습니다"
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Nenhum filme nesta categoria"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "此类别中无电影"
-          }
-        }
-      }
-    },
     "No movies in this genre" : {
       "localizations" : {
         "de" : {
@@ -31837,58 +32844,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "无剧集"
-          }
-        }
-      }
-    },
-    "No series in this category" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Keine Serien in dieser Kategorie"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No hay series en esta categoría"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Aucune série dans cette catégorie"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Nessuna serie in questa categoria"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "このカテゴリにはシリーズがありません"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "이 카테고리에 시리즈가 없습니다"
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Nenhuma série nesta categoria"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "此类别中无剧集"
           }
         }
       }
@@ -33566,7 +34521,56 @@
       }
     },
     "OpenSubtitles is busy right now. Wait a moment and try again." : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenSubtitles ist gerade ausgelastet. Warte einen Moment und versuche es erneut."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenSubtitles está ocupado ahora mismo. Espera un momento y vuelve a intentarlo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenSubtitles est occupé pour le moment. Patientez un instant et réessayez."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenSubtitles è occupato in questo momento. Attendi un attimo e riprova."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenSubtitlesは現在混み合っています。少し待ってからもう一度お試しください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "지금 OpenSubtitles가 혼잡합니다. 잠시 후 다시 시도하세요."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O OpenSubtitles está ocupado agora. Aguarde um momento e tente novamente."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenSubtitles 当前繁忙。请稍候再试。"
+          }
+        }
+      }
     },
     "OpenSubtitles sent an unexpected response." : {
       "localizations" : {
@@ -36712,7 +37716,56 @@
       }
     },
     "Portal error (HTTP %lld)." : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Portalfehler (HTTP %lld)."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Error del portal (HTTP %lld)."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Erreur du portail (HTTP %lld)."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Errore del portale (HTTP %lld)."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ポータルエラー（HTTP %lld）。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "포털 오류(HTTP %lld)."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Erro do portal (HTTP %lld)."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "门户错误（HTTP %lld）。"
+          }
+        }
+      }
     },
     "Portal URL" : {
       "comment" : "A field that shows the URL of a playlist or a streaming server.",
@@ -38761,10 +39814,108 @@
       }
     },
     "Received an invalid response from the portal." : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ungültige Antwort vom Portal erhalten."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se recibió una respuesta no válida del portal."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Réponse non valide reçue du portail."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ricevuta una risposta non valida dal portale."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ポータルから無効な応答を受信しました。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "포털에서 잘못된 응답을 받았습니다."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Resposta inválida recebida do portal."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "收到了来自门户的无效响应。"
+          }
+        }
+      }
     },
     "Received an invalid response from the server." : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ungültige Antwort vom Server erhalten."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se recibió una respuesta no válida del servidor."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Réponse non valide reçue du serveur."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ricevuta una risposta non valida dal server."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "サーバーから無効な応答を受信しました。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "서버에서 잘못된 응답을 받았습니다."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Resposta inválida recebida do servidor."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "收到了来自服务器的无效响应。"
+          }
+        }
+      }
     },
     "Recent" : {
       "localizations" : {
@@ -45569,6 +46720,58 @@
         }
       }
     },
+    "Show your Trakt watchlist on Home." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zeige deine Trakt-Watchlist auf dem Startbildschirm."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Muestra tu lista de seguimiento de Trakt en Inicio."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Affichez votre liste de suivi Trakt sur l'écran d'accueil."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mostra la tua watchlist di Trakt nella Home."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Traktのウォッチリストをホームに表示します。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "홈에 Trakt 시청 목록을 표시하세요."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mostre sua lista do Trakt na Tela Inicial."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在主页上显示您的 Trakt 待看列表。"
+          }
+        }
+      }
+    },
     "Shows the playlist and what's on now." : {
       "comment" : "Description of the Simple stream-information detail level.",
       "localizations" : {
@@ -47239,6 +48442,58 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "体育中心"
+          }
+        }
+      }
+    },
+    "Sports uses your Live TV channels to open games. Turning it off stops Sports refreshes for this profile." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sport nutzt deine Live-TV-Sender, um Spiele zu öffnen. Wenn du es ausschaltest, werden für dieses Profil keine Sportdaten mehr aktualisiert."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deportes usa tus canales de TV en directo para abrir los partidos. Si lo desactivas, dejarán de actualizarse los datos deportivos de este perfil."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sports utilise vos chaînes TV en direct pour ouvrir les matchs. Le désactiver arrête les actualisations Sports pour ce profil."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sport usa i tuoi canali TV in diretta per aprire le partite. Disattivandolo, gli aggiornamenti di Sport per questo profilo si interrompono."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "スポーツはライブTVのチャンネルを使って試合を開きます。オフにすると、このプロフィールではスポーツの更新が停止します。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "스포츠는 라이브 TV 채널을 사용해 경기를 엽니다. 끄면 이 프로필의 스포츠 새로 고침이 중지됩니다."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esportes usa seus canais de TV ao vivo para abrir os jogos. Desativar interrompe as atualizações de Esportes neste perfil."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "体育使用您的直播电视频道打开比赛。关闭后，将停止为此配置文件刷新体育数据。"
           }
         }
       }
@@ -50140,55 +51395,54 @@
         }
       }
     },
-    "Sync watched movies and episodes, show your Trakt watchlist on Home, and download subtitles for anything that ships without them." : {
-      "extractionState" : "stale",
+    "Sync watched movies and episodes." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Synchronisiere gesehene Filme und Episoden, zeige deine Trakt-Watchlist auf dem Startbildschirm und lade Untertitel für alles herunter, was ohne sie ausgeliefert wird."
+            "value" : "Synchronisiere gesehene Filme und Episoden."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Sincroniza las películas y los episodios vistos, muestra tu lista de seguimiento de Trakt en Inicio y descarga subtítulos para todo lo que no los incluya."
+            "value" : "Sincroniza las películas y los episodios vistos."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Synchronisez les films et épisodes vus, affichez votre liste de suivi Trakt sur l’écran d’accueil et téléchargez des sous-titres pour tout ce qui n’en propose pas."
+            "value" : "Synchronisez les films et épisodes vus."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Sincronizza i film e gli episodi visti, mostra la tua watchlist di Trakt nella Home e scarica i sottotitoli per tutto ciò che ne è sprovvisto."
+            "value" : "Sincronizza i film e gli episodi visti."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "視聴済みの映画やエピソードを同期し、Traktのウォッチリストをホームに表示し、字幕のないコンテンツには字幕をダウンロードできます。"
+            "value" : "視聴済みの映画やエピソードを同期します。"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "시청한 영화와 에피소드를 동기화하고, 홈에 Trakt 시청 목록을 표시하며, 자막이 없는 콘텐츠의 자막을 다운로드하세요."
+            "value" : "시청한 영화와 에피소드를 동기화하세요."
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Sincronize filmes e episódios assistidos, mostre sua lista do Trakt na Tela Inicial e baixe legendas para o que não vier com elas."
+            "value" : "Sincronize filmes e episódios assistidos."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "同步已观看的电影和剧集，在主页上显示您的 Trakt 待看列表，并为没有字幕的内容下载字幕。"
+            "value" : "同步已观看的电影和剧集。"
           }
         }
       }
@@ -52026,10 +53280,108 @@
       }
     },
     "The playlist file could not be found." : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Playlist-Datei wurde nicht gefunden."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se encontró el archivo de la lista de reproducción."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le fichier de la playlist est introuvable."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossibile trovare il file della playlist."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "プレイリストファイルが見つかりませんでした。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "재생목록 파일을 찾을 수 없습니다."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O arquivo da playlist não foi encontrado."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "找不到播放列表文件。"
+          }
+        }
+      }
     },
     "The playlist URL is invalid." : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Playlist-URL ist ungültig."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La URL de la lista de reproducción no es válida."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L'URL de la playlist n'est pas valide."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L'URL della playlist non è valido."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "プレイリストのURLが無効です。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "재생목록 URL이 올바르지 않습니다."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O URL da playlist é inválido."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "播放列表 URL 无效。"
+          }
+        }
+      }
     },
     "The Plex server rejected this token." : {
       "comment" : "Error message when a Plex token is refused.",
@@ -52085,13 +53437,160 @@
       }
     },
     "The portal didn't return a playable stream for this item." : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Das Portal hat für diesen Titel keinen abspielbaren Stream geliefert."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El portal no devolvió un stream reproducible para este elemento."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le portail n'a renvoyé aucun flux lisible pour cet élément."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Il portale non ha restituito uno stream riproducibile per questo elemento."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ポータルからこの項目の再生可能なストリームが返されませんでした。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "포털에서 이 항목의 재생 가능한 스트림을 반환하지 않았습니다."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O portal não retornou um stream reproduzível para este item."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "门户未返回此项目的可播放流。"
+          }
+        }
+      }
     },
     "The portal rejected this MAC address. It may not be authorized, or its subscription has expired." : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Das Portal hat diese MAC-Adresse abgelehnt. Sie ist möglicherweise nicht freigeschaltet oder ihr Abo ist abgelaufen."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El portal rechazó esta dirección MAC. Puede que no esté autorizada o que su suscripción haya caducado."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le portail a refusé cette adresse MAC. Elle n'est peut-être pas autorisée, ou son abonnement a expiré."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Il portale ha rifiutato questo indirizzo MAC. Potrebbe non essere autorizzato o il suo abbonamento potrebbe essere scaduto."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ポータルがこのMACアドレスを拒否しました。認証されていないか、サブスクリプションの期限が切れている可能性があります。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "포털에서 이 MAC 주소를 거부했습니다. 승인되지 않았거나 구독이 만료되었을 수 있습니다."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O portal recusou este endereço MAC. Ele pode não estar autorizado ou a assinatura pode ter expirado."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "门户拒绝了此 MAC 地址。它可能未获授权，或订阅已过期。"
+          }
+        }
+      }
     },
     "The portal URL is invalid." : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Portal-URL ist ungültig."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La URL del portal no es válida."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L'URL du portail n'est pas valide."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L'URL del portale non è valido."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ポータルのURLが無効です。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "포털 URL이 올바르지 않습니다."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O URL do portal é inválido."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "门户 URL 无效。"
+          }
+        }
+      }
     },
     "The same item changed on another device. Sync merges it on the next pass." : {
       "localizations" : {
@@ -52567,7 +54066,56 @@
       }
     },
     "The URL does not point to an m3u playlist." : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die URL verweist nicht auf eine m3u-Playlist."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La URL no apunta a una lista de reproducción m3u."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L'URL ne pointe pas vers une playlist m3u."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L'URL non punta a una playlist m3u."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "このURLはm3uプレイリストを指していません。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이 URL은 m3u 재생목록을 가리키지 않습니다."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O URL não aponta para uma playlist m3u."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "该 URL 并未指向 m3u 播放列表。"
+          }
+        }
+      }
     },
     "Third-down efficiency" : {
       "localizations" : {
@@ -53090,7 +54638,56 @@
       }
     },
     "This link returns an Enigma2/Gigablue set-top-box bouquet, not an m3u playlist. Change \"type=gigablue\" (or \"dreambox\") to \"type=m3u_plus\" in the URL, or add the provider as an Xtream login instead." : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dieser Link liefert ein Enigma2/Gigablue-Receiver-Bouquet, keine m3u-Playlist. Ändere „type=gigablue“ (oder „dreambox“) in der URL zu „type=m3u_plus“ oder füge den Anbieter stattdessen als Xtream-Login hinzu."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Este enlace devuelve un bouquet de receptor Enigma2/Gigablue, no una lista m3u. Cambia \"type=gigablue\" (o \"dreambox\") por \"type=m3u_plus\" en la URL, o añade el proveedor como inicio de sesión Xtream."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ce lien renvoie un bouquet de décodeur Enigma2/Gigablue, pas une playlist m3u. Remplacez « type=gigablue » (ou « dreambox ») par « type=m3u_plus » dans l'URL, ou ajoutez plutôt le fournisseur en tant que connexion Xtream."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Questo link restituisce un bouquet per decoder Enigma2/Gigablue, non una playlist m3u. Cambia \"type=gigablue\" (o \"dreambox\") in \"type=m3u_plus\" nell'URL, oppure aggiungi il provider come accesso Xtream."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "このリンクはm3uプレイリストではなく、Enigma2/Gigablueセットトップボックス用のブーケを返します。URLの「type=gigablue」（または「dreambox」）を「type=m3u_plus」に変更するか、プロバイダをXtreamログインとして追加してください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이 링크는 m3u 재생목록이 아니라 Enigma2/Gigablue 셋톱박스용 부케를 반환합니다. URL의 \"type=gigablue\"(또는 \"dreambox\")를 \"type=m3u_plus\"로 바꾸거나, 제공자를 Xtream 로그인으로 추가하세요."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Este link retorna um bouquet de receptor Enigma2/Gigablue, não uma playlist m3u. Troque \"type=gigablue\" (ou \"dreambox\") por \"type=m3u_plus\" no URL ou adicione o provedor como login Xtream."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此链接返回的是 Enigma2/Gigablue 机顶盒频道包，而不是 m3u 播放列表。请将 URL 中的“type=gigablue”（或“dreambox”）改为“type=m3u_plus”，或改为以 Xtream 登录方式添加该提供商。"
+          }
+        }
+      }
     },
     "This may take a few minutes…" : {
       "localizations" : {

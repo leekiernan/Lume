@@ -179,7 +179,7 @@
                             Text(error)
                                 .foregroundStyle(.red)
                         } else {
-                            Text("\(trakt.pendingMutationCount) Trakt change(s) waiting to sync.")
+                            Text("\(trakt.pendingMutationCount) Trakt changes waiting to sync.")
                                 .foregroundStyle(.secondary)
                         }
                     }
