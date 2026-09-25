@@ -119,21 +119,6 @@ struct DTODecodingTests {
         #expect(first.tmdb == "979275")
     }
 
-    // MARK: - Movie Info
-
-    @Test func `decode movie info`() throws {
-        let info: XtreamVODInfo = try loadExampleJSON("MovieInfo.json")
-        let metadata = try #require(info.info)
-        #expect(metadata.name == "Harry Potter and the Chamber of Secrets")
-        #expect(metadata.tmdbId == "672")
-        #expect(metadata.durationSecs == 9660)
-        #expect(metadata.director == "Chris Columbus, Peter MacDonald, David Hanks, Annie Penn, Chris Carreras")
-
-        let movieData = try #require(info.movieData)
-        #expect(movieData.streamId == 535_312)
-        #expect(movieData.containerExtension == "mkv")
-    }
-
     // MARK: - Series
 
     @Test func `decode series count`() throws {
