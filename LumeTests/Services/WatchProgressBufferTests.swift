@@ -2,32 +2,35 @@ import Foundation
 @testable import Lume
 import Testing
 
+/// `.globalState`: the buffer is one process-wide set of `UserDefaults.standard`
+/// keys, and `drain()` empties all of it — so the tests exclude each other as
+/// well as anything else that records or drains.
+@Suite(.globalState)
 struct WatchProgressBufferTests {
     init() {
-        let defaults = UserDefaults.standard
-        for key in defaults.dictionaryRepresentation().keys where key.hasPrefix("watchProgress.") {
-            defaults.removeObject(forKey: key)
-        }
+        // Drain rather than delete the keys: it also resets the paused-playback
+        // dedup cache and waits out any write still queued.
+        _ = WatchProgressBuffer.drain()
     }
 
     // MARK: - record
 
-    @Test func `record stashes progress for movie`() {
+    @Test func `record stashes progress for movie`() throws {
         let ref = PlayableMedia.ContentRef.movie("m-1")
         WatchProgressBuffer.record(ref: ref, progress: 30, duration: 120)
         let entries = WatchProgressBuffer.drain()
-        #expect(entries.count == 1)
+        try #require(entries.count == 1)
         #expect(entries[0].kind == .movie)
         #expect(entries[0].id == "m-1")
         #expect(entries[0].progress == 30)
         #expect(entries[0].duration == 120)
     }
 
-    @Test func `record stashes progress for episode`() {
+    @Test func `record stashes progress for episode`() throws {
         let ref = PlayableMedia.ContentRef.episode("e-1")
         WatchProgressBuffer.record(ref: ref, progress: 60, duration: 1800)
         let entries = WatchProgressBuffer.drain()
-        #expect(entries.count == 1)
+        try #require(entries.count == 1)
         #expect(entries[0].kind == .episode)
         #expect(entries[0].id == "e-1")
     }
@@ -54,12 +57,12 @@ struct WatchProgressBufferTests {
         #expect(entries.count == 1)
     }
 
-    @Test func `record updates when progress changes`() {
+    @Test func `record updates when progress changes`() throws {
         let ref = PlayableMedia.ContentRef.movie("m-4")
         WatchProgressBuffer.record(ref: ref, progress: 10, duration: 100)
         WatchProgressBuffer.record(ref: ref, progress: 25, duration: 100)
         let entries = WatchProgressBuffer.drain()
-        #expect(entries.count == 1)
+        try #require(entries.count == 1)
         #expect(entries[0].progress == 25)
     }
 
