@@ -49,6 +49,56 @@ struct PlaylistSyncCoverageTests {
         #expect(PlaylistSyncCoverage.areas(playlistID: playlistID, defaults: defaults) == [.movies, .series, .liveTV])
     }
 
+    @Test func `manual skipped area does not trigger automatic repair`() throws {
+        let suiteName = "PlaylistSyncCoverageTests.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let playlistID = UUID()
+
+        PlaylistSyncCoverage.record([.movies, .series], playlistID: playlistID, defaults: defaults)
+        PlaylistSyncCoverage.deferAutomaticRepair([.liveTV], playlistID: playlistID, defaults: defaults)
+
+        #expect(PlaylistSyncCoverage.missingEnabledAreas(
+            playlistID: playlistID,
+            disabledAreasRaw: "",
+            defaults: defaults
+        ) == [.liveTV])
+        #expect(PlaylistSyncCoverage.missingAreasForAutomaticRepair(
+            playlistID: playlistID,
+            disabledAreasRaw: "",
+            defaults: defaults
+        ).isEmpty)
+    }
+
+    @Test func `first profile switch still repairs an area that was never manually skipped`() throws {
+        let suiteName = "PlaylistSyncCoverageTests.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let playlistID = UUID()
+
+        // First launch synced Movies and Series under the default profile. No
+        // manual refresh has opted out of Live TV yet.
+        PlaylistSyncCoverage.record([.movies, .series], playlistID: playlistID, defaults: defaults)
+
+        #expect(PlaylistSyncCoverage.missingAreasForAutomaticRepair(
+            playlistID: playlistID,
+            disabledAreasRaw: "",
+            defaults: defaults
+        ) == [.liveTV])
+    }
+
+    @Test func `refreshing an area clears its manual deferral`() throws {
+        let suiteName = "PlaylistSyncCoverageTests.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let playlistID = UUID()
+
+        PlaylistSyncCoverage.deferAutomaticRepair([.liveTV], playlistID: playlistID, defaults: defaults)
+        PlaylistSyncCoverage.recordMerging([.liveTV], playlistID: playlistID, defaults: defaults)
+
+        #expect(PlaylistSyncCoverage.deferredAreas(playlistID: playlistID, defaults: defaults).isEmpty)
+    }
+
     @Test func `upgrade bootstrap recognises catalog kinds already on disk`() throws {
         let suiteName = "PlaylistSyncCoverageTests.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suiteName))

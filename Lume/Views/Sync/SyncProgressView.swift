@@ -2,13 +2,7 @@
 //  SyncProgressView.swift
 //  Lume
 //
-//  Step-by-step progress UI for ContentSyncManager. Drives the sync, observes
-//  SyncProgress, and renders each step's status, detail, and per-step progress.
-//
-//  Two presentations share this view: the blocking auto-sync cover (autoStart)
-//  and the manual "Sync Now" flow. iOS/macOS use a NavigationStack sheet; tvOS
-//  uses a dedicated full-screen layout (`tvBody`) that matches the flat dark
-//  settings surfaces — a plain sheet renders as a clipped centered card there.
+//  Shared progress UI for automatic and manual ContentSyncManager runs.
 //
 
 import SwiftData
@@ -17,10 +11,7 @@ import SwiftUI
 struct SyncProgressView: View {
     let playlist: Playlist
 
-    /// When true the sync begins on appear and the sheet dismisses itself once
-    /// it finishes successfully — used for the blocking auto-sync cover. When
-    /// false (the manual "Sync Now" flow) it waits for the user to tap Start and
-    /// shows a Done button when finished.
+    /// Auto-sync begins on appearance; manual sync waits for Start.
     let autoStart: Bool
 
     /// Only Stalker honours this full-catalog option; other source types ignore it.
@@ -138,6 +129,12 @@ struct SyncProgressView: View {
                 succeeded = true
                 refreshedLiveTV = plan.refreshesGuide
                 await MainActor.run {
+                    if !autoStart {
+                        PlaylistSyncCoverage.deferAutomaticRepair(
+                            plan.skippedForProfile,
+                            playlistID: playlist.id
+                        )
+                    }
                     // Newly synced titles need indexing; the launch-time pass
                     // may already be finished, so kick a fresh one — but hold it
                     // off a few seconds so loading the embedding model and the

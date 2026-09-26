@@ -59,7 +59,7 @@ extension MainTabView {
             playlistID: playlist.id,
             context: modelContext
         )
-        let missingAreas = PlaylistSyncCoverage.missingEnabledAreas(
+        let missingAreas = PlaylistSyncCoverage.missingAreasForAutomaticRepair(
             playlistID: playlist.id,
             disabledAreasRaw: disabledAreasRaw
         )

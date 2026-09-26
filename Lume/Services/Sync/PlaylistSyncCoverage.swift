@@ -17,8 +17,20 @@ nonisolated enum PlaylistSyncCoverage {
         "sync.areaCoverage.\(playlistID.uuidString)"
     }
 
+    /// Areas a viewer explicitly chose not to refresh in the manual flow. They
+    /// remain genuinely absent from coverage, but must not be silently turned
+    /// into a blocking profile-switch repair later.
+    static func deferredKey(playlistID: UUID) -> String {
+        "sync.areaCoverage.deferred.\(playlistID.uuidString)"
+    }
+
     static func areas(playlistID: UUID, defaults: UserDefaults = .standard) -> Set<AppArea> {
         let rawValues = defaults.stringArray(forKey: key(playlistID: playlistID)) ?? []
+        return Set(rawValues.compactMap(AppArea.init(rawValue:)))
+    }
+
+    static func deferredAreas(playlistID: UUID, defaults: UserDefaults = .standard) -> Set<AppArea> {
+        let rawValues = defaults.stringArray(forKey: deferredKey(playlistID: playlistID)) ?? []
         return Set(rawValues.compactMap(AppArea.init(rawValue:)))
     }
 
@@ -31,6 +43,7 @@ nonisolated enum PlaylistSyncCoverage {
         defaults: UserDefaults = .standard
     ) {
         defaults.set(areas.map(\.rawValue).sorted(), forKey: key(playlistID: playlistID))
+        clearDeferred(areas, playlistID: playlistID, defaults: defaults)
     }
 
     static func recordMerging(
@@ -38,11 +51,27 @@ nonisolated enum PlaylistSyncCoverage {
         playlistID: UUID,
         defaults: UserDefaults = .standard
     ) {
-        record(self.areas(playlistID: playlistID, defaults: defaults).union(areas), playlistID: playlistID, defaults: defaults)
+        let merged = self.areas(playlistID: playlistID, defaults: defaults).union(areas)
+        defaults.set(merged.map(\.rawValue).sorted(), forKey: key(playlistID: playlistID))
+        clearDeferred(areas, playlistID: playlistID, defaults: defaults)
+    }
+
+    /// Records visible "Skipped for this profile" work from a successful
+    /// manual refresh. The next profile may still offer that work through the
+    /// manual Sync action, but automatic repair leaves the user's choice alone.
+    static func deferAutomaticRepair(
+        _ areas: Set<AppArea>,
+        playlistID: UUID,
+        defaults: UserDefaults = .standard
+    ) {
+        guard !areas.isEmpty else { return }
+        let deferred = deferredAreas(playlistID: playlistID, defaults: defaults).union(areas)
+        defaults.set(deferred.map(\.rawValue).sorted(), forKey: deferredKey(playlistID: playlistID))
     }
 
     static func remove(playlistID: UUID, defaults: UserDefaults = .standard) {
         defaults.removeObject(forKey: key(playlistID: playlistID))
+        defaults.removeObject(forKey: deferredKey(playlistID: playlistID))
     }
 
     /// Whether an enabled content area was omitted from the playlist's latest
@@ -54,6 +83,35 @@ nonisolated enum PlaylistSyncCoverage {
     ) -> Set<AppArea> {
         let required = AppAreaSettings.enabledContentAreas(disabledRaw: disabledAreasRaw)
         return required.subtracting(areas(playlistID: playlistID, defaults: defaults))
+    }
+
+    /// Missing areas still eligible for automatic repair. A manual sync can
+    /// deliberately skip an area for the active profile; preserve that choice
+    /// until the viewer explicitly syncs under a profile that uses it.
+    static func missingAreasForAutomaticRepair(
+        playlistID: UUID,
+        disabledAreasRaw: String,
+        defaults: UserDefaults = .standard
+    ) -> Set<AppArea> {
+        missingEnabledAreas(
+            playlistID: playlistID,
+            disabledAreasRaw: disabledAreasRaw,
+            defaults: defaults
+        )
+        .subtracting(deferredAreas(playlistID: playlistID, defaults: defaults))
+    }
+
+    private static func clearDeferred(
+        _ refreshedAreas: Set<AppArea>,
+        playlistID: UUID,
+        defaults: UserDefaults
+    ) {
+        let remaining = deferredAreas(playlistID: playlistID, defaults: defaults).subtracting(refreshedAreas)
+        if remaining.isEmpty {
+            defaults.removeObject(forKey: deferredKey(playlistID: playlistID))
+        } else {
+            defaults.set(remaining.map(\.rawValue).sorted(), forKey: deferredKey(playlistID: playlistID))
+        }
     }
 
     /// Seeds installs upgrading from before coverage bookkeeping existed. Any
