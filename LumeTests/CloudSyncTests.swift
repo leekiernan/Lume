@@ -180,6 +180,7 @@ struct CloudSyncConflictPolicyTests {
 // MARK: - Engine integration (in-memory, no CloudKit)
 
 @MainActor
+@Suite(.globalState)
 struct CloudSyncEngineTests {
     private func freshShadow() -> CloudSyncShadow {
         let suite = UserDefaults(suiteName: "cloudsync.test.\(UUID().uuidString)")!

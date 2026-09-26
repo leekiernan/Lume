@@ -77,7 +77,7 @@ struct TraktTokensTests {
 
 /// Serialized because every test touches the single shared keychain item
 /// (service + account are constant), so concurrent runs would race.
-@Suite(.serialized)
+@Suite(.serialized, .globalState)
 struct TraktTokenStoreTests {
     init() {
         // Start every test from a known-empty keychain slot.

@@ -4,7 +4,7 @@ import Testing
 
 /// Serialized: the preference tests read and write shared `UserDefaults`
 /// keys, which parallel execution interleaves.
-@Suite(.serialized)
+@Suite(.serialized, .globalState)
 struct ExternalPlayerTests {
     @Test func `player all cases`() {
         #expect(ExternalPlayer.allCases.count == 3)

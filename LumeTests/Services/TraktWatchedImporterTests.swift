@@ -4,7 +4,7 @@ import SwiftData
 import Testing
 
 @MainActor
-@Suite(.serialized)
+@Suite(.serialized, .globalState)
 struct TraktWatchedImporterTests {
     init() {
         // The parked-progress store is a file plus an in-memory cache; every test

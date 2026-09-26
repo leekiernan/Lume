@@ -59,7 +59,7 @@ struct DebugLogExporterTests {
 }
 
 /// Serialized: these mutate the shared `UserDefaults` diagnostics keys.
-@Suite(.serialized)
+@Suite(.serialized, .globalState)
 struct DebugLogSettingsTests {
     private func withCleanState(_ body: () -> Void) {
         let defaults = UserDefaults.standard

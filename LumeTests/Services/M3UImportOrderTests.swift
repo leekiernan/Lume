@@ -15,6 +15,7 @@ import Foundation
 import SwiftData
 import Testing
 
+@Suite(.globalState)
 struct M3UImportOrderTests {
     /// The m3u digest is device-local `UserDefaults` state that outlives a
     /// test, so each case starts from a clean slate.
