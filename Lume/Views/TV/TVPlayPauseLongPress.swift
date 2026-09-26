@@ -2,32 +2,42 @@
 //  TVPlayPauseLongPress.swift
 //  Lume
 //
-//  Observes a long Play/Pause press without replacing SwiftUI's short-press
-//  command. The root uses the latter for quick profile switching; a long press
-//  opens the confirmed profile refresh flow instead.
+//  Resolves Play/Pause consistently: a short press switches profile, while a
+//  long press opens the confirmed profile refresh flow.
 //
 
 #if os(tvOS)
     import SwiftUI
     import UIKit
 
-    struct TVPlayPauseLongPress: UIViewRepresentable {
-        let action: @MainActor () -> Void
+    struct TVPlayPauseGesture: UIViewRepresentable {
+        let onShortPress: @MainActor () -> Void
+        let onLongPress: @MainActor () -> Void
 
         func makeUIView(context _: Context) -> ProbeView {
             let view = ProbeView()
-            view.action = action
+            view.onShortPress = onShortPress
+            view.onLongPress = onLongPress
             return view
         }
 
         func updateUIView(_ view: ProbeView, context _: Context) {
-            view.action = action
+            view.onShortPress = onShortPress
+            view.onLongPress = onLongPress
         }
 
         final class ProbeView: UIView {
-            var action: (@MainActor () -> Void)?
+            var onShortPress: (@MainActor () -> Void)?
+            var onLongPress: (@MainActor () -> Void)?
             private weak var observedWindow: UIWindow?
-            private lazy var recognizer: UILongPressGestureRecognizer = {
+            private lazy var shortPressRecognizer: UITapGestureRecognizer = {
+                let recognizer = UITapGestureRecognizer(target: self, action: #selector(handleShortPress))
+                recognizer.allowedPressTypes = [NSNumber(value: UIPress.PressType.playPause.rawValue)]
+                recognizer.cancelsTouchesInView = false
+                return recognizer
+            }()
+
+            private lazy var longPressRecognizer: UILongPressGestureRecognizer = {
                 let recognizer = UILongPressGestureRecognizer(target: self, action: #selector(handleLongPress(_:)))
                 recognizer.allowedPressTypes = [NSNumber(value: UIPress.PressType.playPause.rawValue)]
                 recognizer.minimumPressDuration = 0.55
@@ -38,18 +48,26 @@
             override func didMoveToWindow() {
                 super.didMoveToWindow()
                 guard observedWindow !== window else { return }
-                observedWindow?.removeGestureRecognizer(recognizer)
+                observedWindow?.removeGestureRecognizer(shortPressRecognizer)
+                observedWindow?.removeGestureRecognizer(longPressRecognizer)
                 observedWindow = window
-                window?.addGestureRecognizer(recognizer)
+                shortPressRecognizer.require(toFail: longPressRecognizer)
+                window?.addGestureRecognizer(shortPressRecognizer)
+                window?.addGestureRecognizer(longPressRecognizer)
             }
 
             deinit {
-                observedWindow?.removeGestureRecognizer(recognizer)
+                observedWindow?.removeGestureRecognizer(shortPressRecognizer)
+                observedWindow?.removeGestureRecognizer(longPressRecognizer)
+            }
+
+            @objc private func handleShortPress() {
+                Task { @MainActor [onShortPress] in onShortPress?() }
             }
 
             @objc private func handleLongPress(_ recognizer: UILongPressGestureRecognizer) {
                 guard recognizer.state == .began else { return }
-                Task { @MainActor [action] in action?() }
+                Task { @MainActor [onLongPress] in onLongPress?() }
             }
         }
     }

@@ -108,6 +108,9 @@
         }
       }
     },
+    ", " : {
+
+    },
     "·" : {
       "localizations" : {
         "de" : {
@@ -33266,6 +33269,9 @@
         }
       }
     },
+    "Not needed for this repair" : {
+
+    },
     "Not Now" : {
       "localizations" : {
         "de" : {
@@ -33317,6 +33323,9 @@
           }
         }
       }
+    },
+    "Not provided by this source" : {
+
     },
     "Not started" : {
       "localizations" : {
@@ -47924,6 +47933,9 @@
         }
       }
     },
+    "Skipped for this profile" : {
+
+    },
     "Smart Playback" : {
       "localizations" : {
         "de" : {
@@ -60290,6 +60302,9 @@
           }
         }
       }
+    },
+    "Will refresh" : {
+
     },
     "Wins %lld" : {
       "comment" : "VoiceOver standings cell: wins.",

@@ -174,20 +174,11 @@ struct MainTabView: View {
             .onChange(of: sportsTabEnabled) { _, _ in repairSelectionIfNeeded() }
         #if os(tvOS)
             .disabled(blockingOverlayOwnsScreen || router.isQuickSwitchPresented)
-            // Attached OUTSIDE `.disabled` so the same button closes the modal it
-            // opened, and above the tabs but below every player: the engines are
-            // presented as `fullScreenCover`s from inside a tab, so their own
-            // `onPlayPauseCommand` sits above this one in the focused chain and is
-            // never shadowed. The guard covers the plain overlays instead, which
-            // tvOS focus reaches straight through.
-            .onPlayPauseCommand {
-                guard playPauseTogglesQuickSwitch else { return }
-                router.isQuickSwitchPresented.toggle()
-            }
             .background(
-                TVPlayPauseLongPress {
-                    presentManualProfileRefresh()
-                }
+                TVPlayPauseGesture(
+                    onShortPress: toggleQuickSwitch,
+                    onLongPress: presentManualProfileRefresh
+                )
             )
             .fullScreenCover(item: $manualSyncRequest) { request in
                 SyncProgressView(playlist: request.playlist, repairingAreas: request.repairingAreas)
@@ -368,6 +359,16 @@ struct MainTabView: View {
             }
             guard !blockingOverlayOwnsScreen else { return false }
             return !playlists.isEmpty || profileManager?.isReady == true
+        }
+
+        private func toggleQuickSwitch() {
+            // The recogniser observes the window so that it can distinguish
+            // press duration. Players still own their Play/Pause command, and
+            // this guard keeps the browse shortcut out of their way.
+            guard NowPlayingService.shared.currentMedia == nil,
+                  playPauseTogglesQuickSwitch
+            else { return }
+            router.isQuickSwitchPresented.toggle()
         }
 
         /// A long Play/Pause press refreshes only the catalog currently useful
