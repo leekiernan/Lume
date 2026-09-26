@@ -30,17 +30,27 @@ struct ProfileMenu: View {
                     Button {
                         attemptSwitch(to: profile, using: profileManager)
                     } label: {
-                        Label {
-                            HStack(spacing: 8) {
+                        #if os(macOS)
+                            // AppKit's native Menu drops Label icons. Keep the
+                            // current profile's checkmark in the text itself.
+                            if isActive {
+                                Text(verbatim: "✓ \(profile.name) — ") + Text("Active")
+                            } else {
                                 Text(profile.name)
-                                if isActive {
-                                    Text("Active")
-                                        .foregroundStyle(.secondary)
-                                }
                             }
-                        } icon: {
-                            Image(systemName: isActive ? "checkmark" : profile.symbolName)
-                        }
+                        #else
+                            Label {
+                                HStack(spacing: 8) {
+                                    Text(profile.name)
+                                    if isActive {
+                                        Text("Active")
+                                            .foregroundStyle(.secondary)
+                                    }
+                                }
+                            } icon: {
+                                Image(systemName: isActive ? "checkmark" : profile.symbolName)
+                            }
+                        #endif
                     }
                 }
 
