@@ -177,6 +177,11 @@ struct LiveTVView: View {
             // navigation bar when the channel list is overscrolled.
             .navigationBarTitleDisplayMode(.inline)
         #endif
+            // Match Movies and Series modifier order. On macOS all three use
+            // the navigation toolbar placement; changing this order lets the
+            // native toolbar reverse the profile and browse controls as the
+            // visible tab set changes.
+            .profileMenuToolbar()
             .libraryToolbar(config: LibraryToolbarConfiguration(
                 playlists: playlists,
                 selectedPlaylistID: $selectedPlaylistID,
@@ -212,7 +217,6 @@ struct LiveTVView: View {
         }
         #endif
         .paywall(isPresented: $showingPaywall, highlight: .multiView)
-        .profileMenuToolbar()
     }
 
     private func contentState(sections: [LiveTVSection]?) -> some View {

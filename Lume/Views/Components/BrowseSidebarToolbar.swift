@@ -11,6 +11,29 @@
 
 import SwiftUI
 
+/// One placement contract for every browse panel. Keeping this outside the
+/// individual Movies/Series/Live TV implementations prevents profile-specific
+/// navigation layouts from drifting their glass surfaces into the title bar.
+enum BrowseSidebarMetrics {
+    static var margin: CGFloat {
+        #if os(tvOS)
+            30
+        #else
+            12
+        #endif
+    }
+
+    static var topMargin: CGFloat {
+        #if os(macOS)
+            // Clear the traffic lights and the toolbar title on both compact
+            // Live TV-only and full library tab layouts.
+            64
+        #else
+            margin
+        #endif
+    }
+}
+
 extension View {
     /// The toolbar entry point. A no-op on tvOS, which reveals the panel by
     /// focus instead of by a button.

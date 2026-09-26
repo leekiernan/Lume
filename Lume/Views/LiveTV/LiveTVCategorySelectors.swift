@@ -32,21 +32,13 @@ struct LiveTVBrowseSidebar: View {
     }
 
     private var margin: CGFloat {
-        #if os(tvOS)
-            30
-        #else
-            12
-        #endif
+        BrowseSidebarMetrics.margin
     }
 
     /// Keep the Live TV panel aligned with the Movies/Series sidebar while
     /// clearing macOS's title-bar traffic lights.
     private var topMargin: CGFloat {
-        #if os(macOS)
-            36
-        #else
-            margin
-        #endif
+        BrowseSidebarMetrics.topMargin
     }
 
     private var panelWidth: CGFloat {

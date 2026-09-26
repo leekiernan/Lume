@@ -45,21 +45,13 @@ struct LibraryBrowseSidebar: View {
     /// area (`ignoresSafeArea` below) so it hugs the display the way the Apple
     /// TV browse panel does, rather than floating inside the title-safe box.
     private var margin: CGFloat {
-        #if os(tvOS)
-            30
-        #else
-            12
-        #endif
+        BrowseSidebarMetrics.margin
     }
 
     /// On macOS, keep the panel clear of the title-bar traffic lights rather
     /// than having the glass surface appear behind window controls.
     private var topMargin: CGFloat {
-        #if os(macOS)
-            36
-        #else
-            margin
-        #endif
+        BrowseSidebarMetrics.topMargin
     }
 
     /// tvOS body text runs large by default; the panel is a dense list, so it
