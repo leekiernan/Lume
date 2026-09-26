@@ -4,7 +4,7 @@ import Testing
 
 /// These touch `UserDefaults.standard` through `ActiveProfileStore`, so they run
 /// serialized and restore whatever the host had set.
-@Suite(.serialized)
+@Suite(.serialized, .globalState)
 struct ProfileScopedPreferencesTests {
     private static let profileA = UUID(uuidString: "00000000-0000-0000-0000-00000000A001")!
     private static let profileB = UUID(uuidString: "00000000-0000-0000-0000-00000000B002")!
