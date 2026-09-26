@@ -52,6 +52,17 @@ struct LibraryBrowseSidebar: View {
         #endif
     }
 
+    /// On macOS the toolbar's browse button is vertically centered in the
+    /// title bar. Give the panel a little more deliberate clearance beneath it
+    /// instead of making its edge appear accidentally offset from the button.
+    private var topMargin: CGFloat {
+        #if os(macOS)
+            20
+        #else
+            margin
+        #endif
+    }
+
     /// tvOS body text runs large by default; the panel is a dense list, so it
     /// steps down a little. Other platforms keep their system sizes.
     private var rowFont: Font {
@@ -184,7 +195,8 @@ struct LibraryBrowseSidebar: View {
         // rounded corners as they passed the top and bottom edges.
         .clipShape(panelShape)
         .padding(.leading, margin)
-        .padding(.vertical, margin)
+        .padding(.top, topMargin)
+        .padding(.bottom, margin)
         #if os(tvOS)
             // One focus region, so the remote doesn't wander back out mid-list.
             .focusSection()

@@ -39,6 +39,16 @@ struct LiveTVBrowseSidebar: View {
         #endif
     }
 
+    /// Keep the Live TV panel aligned with the Movies/Series sidebar. macOS
+    /// needs a little more intentional clearance below its title-bar button.
+    private var topMargin: CGFloat {
+        #if os(macOS)
+            20
+        #else
+            margin
+        #endif
+    }
+
     private var panelWidth: CGFloat {
         #if os(tvOS)
             460
@@ -159,7 +169,8 @@ struct LiveTVBrowseSidebar: View {
         .glassEffectCompat(.regular, in: panelShape)
         .clipShape(panelShape)
         .padding(.leading, margin)
-        .padding(.vertical, margin)
+        .padding(.top, topMargin)
+        .padding(.bottom, margin)
         #if os(tvOS)
             .focusSection()
             // States the landing target; `browseSidebarFocus` then asserts it

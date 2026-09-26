@@ -146,73 +146,96 @@ struct LiveTVView: View {
 
     var body: some View {
         NavigationStack {
-            Group {
-                if playlists.isEmpty {
-                    ContentUnavailableView(
-                        "No Playlists",
-                        systemImage: "antenna.radiowaves.left.and.right",
-                        description: Text("Add a playlist in Settings to start watching live TV")
-                    )
-                } else if categories.isEmpty || sourceHasNoLiveChannels {
-                    VStack(spacing: 20) {
-                        LiveTVEmptyState(sourceType: activePlaylist?.knownSourceType)
-                    }
-                } else {
-                    // The rail resolves in a child view: gating the two virtual
-                    // sections is a pair of playlist-scoped `LIMIT 1` probes, and
-                    // a `@Query` carries that scope only when its descriptor is
-                    // built in an `init` the active playlist reaches.
-                    LiveTVSections(
-                        playlistPrefix: playlistPrefix,
-                        restriction: restriction,
-                        categorySections: categorySections
-                    ) { sections in
-                        layout(for: sections)
-                            .task(id: playlistPrefix) { seedSelection(from: sections) }
-                            .overlay(alignment: .leading) {
-                                LiveTVBrowseSidebar(
-                                    isPresented: $showingBrowse,
-                                    sections: sections,
-                                    selectedSection: displayedSection(in: sections),
-                                    onSelect: selectSection,
-                                    onReturnToContent: browseReturnHandler
-                                )
-                            }
-                    }
+            if shouldResolveSections {
+                // The rail resolves in a child view: gating the two virtual
+                // sections is a pair of playlist-scoped `LIMIT 1` probes, and
+                // a `@Query` carries that scope only when its descriptor is
+                // built in an `init` the active playlist reaches.
+                LiveTVSections(
+                    playlistPrefix: playlistPrefix,
+                    restriction: restriction,
+                    categorySections: categorySections
+                ) { sections in
+                    rootContent(sections: sections)
                 }
+            } else {
+                rootContent(sections: nil)
             }
-            .platformNavigationTitle("Live TV")
-            #if os(iOS)
-                // Keep the compact content controls visually attached to the
-                // navigation bar when the channel list is overscrolled.
-                .navigationBarTitleDisplayMode(.inline)
-            #endif
-                .libraryToolbar(config: LibraryToolbarConfiguration(
-                    playlists: playlists,
-                    selectedPlaylistID: $selectedPlaylistID,
-                    categorySortRaw: $categorySortRaw,
-                    contentSortRaw: $contentSortRaw,
-                    showingSync: $showingSync,
-                    showingSettings: $showingSettings,
-                    activePlaylist: activePlaylist
-                ))
-                .browseSidebarToolbar(
-                    isPresented: $showingBrowse,
-                    isEnabled: !playlists.isEmpty && !categories.isEmpty
-                )
-            #if os(iOS) || os(tvOS)
-                .fullScreenCover(item: $playingMedia) { media in
-                    FullScreenPlayerView(media: media)
-                }
-            #endif
-            #if os(iOS)
-                .fullScreenCover(item: $multiViewLaunch) { launch in
-                    MultiViewScreen(seed: launch.seed)
-            }
-            #endif
-            .paywall(isPresented: $showingPaywall, highlight: .multiView)
-            .profileMenuToolbar()
         }
+    }
+
+    /// Attaches the browse panel to the same navigation-content root as Movies
+    /// and Series. Attaching it to `layout(for:)` starts it below Live TV's own
+    /// list/guide controls instead of allowing its safe-area escape to cover the
+    /// toolbar consistently.
+    @ViewBuilder
+    private func rootContent(sections: [LiveTVSection]?) -> some View {
+        contentState(sections: sections)
+            .platformNavigationTitle("Live TV")
+        #if os(iOS)
+            // Keep the compact content controls visually attached to the
+            // navigation bar when the channel list is overscrolled.
+            .navigationBarTitleDisplayMode(.inline)
+        #endif
+            .libraryToolbar(config: LibraryToolbarConfiguration(
+                playlists: playlists,
+                selectedPlaylistID: $selectedPlaylistID,
+                categorySortRaw: $categorySortRaw,
+                contentSortRaw: $contentSortRaw,
+                showingSync: $showingSync,
+                showingSettings: $showingSettings,
+                activePlaylist: activePlaylist
+            ))
+            .browseSidebarToolbar(
+                isPresented: $showingBrowse,
+                isEnabled: !playlists.isEmpty && !categories.isEmpty
+            )
+            .overlay(alignment: .leading) {
+                if let sections {
+                    LiveTVBrowseSidebar(
+                        isPresented: $showingBrowse,
+                        sections: sections,
+                        selectedSection: displayedSection(in: sections),
+                        onSelect: selectSection,
+                        onReturnToContent: browseReturnHandler
+                    )
+                }
+            }
+        #if os(iOS) || os(tvOS)
+            .fullScreenCover(item: $playingMedia) { media in
+                FullScreenPlayerView(media: media)
+            }
+        #endif
+        #if os(iOS)
+            .fullScreenCover(item: $multiViewLaunch) { launch in
+                MultiViewScreen(seed: launch.seed)
+        }
+        #endif
+        .paywall(isPresented: $showingPaywall, highlight: .multiView)
+        .profileMenuToolbar()
+    }
+
+    private func contentState(sections: [LiveTVSection]?) -> some View {
+        Group {
+            if playlists.isEmpty {
+                ContentUnavailableView(
+                    "No Playlists",
+                    systemImage: "antenna.radiowaves.left.and.right",
+                    description: Text("Add a playlist in Settings to start watching live TV")
+                )
+            } else if categories.isEmpty || sourceHasNoLiveChannels {
+                VStack(spacing: 20) {
+                    LiveTVEmptyState(sourceType: activePlaylist?.knownSourceType)
+                }
+            } else if let sections {
+                layout(for: sections)
+                    .task(id: playlistPrefix) { seedSelection(from: sections) }
+            }
+        }
+    }
+
+    private var shouldResolveSections: Bool {
+        !playlists.isEmpty && !categories.isEmpty && !sourceHasNoLiveChannels
     }
 
     // MARK: - Platform-specific layouts
