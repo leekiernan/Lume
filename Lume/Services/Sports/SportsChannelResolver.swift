@@ -352,9 +352,14 @@ nonisolated enum SportsChannelResolver {
         index: CandidateIndex
     ) -> [ResolvedChannel] {
         // A race session has no two teams; it matches on series and session.
-        if !fixture.hasTeams, !SportsRaceMatcher.seriesPhrases(leagueId: fixture.leagueId).isEmpty {
+        // When nothing carries the series, a channel named for the event itself
+        // ("PPV 1 | Italian Grand Prix") is still offered — but only by name:
+        // the event-name guide match can't tell qualifying from the race, which
+        // the race matcher exists to keep apart.
+        let isRace = !fixture.hasTeams && !SportsRaceMatcher.seriesPhrases(leagueId: fixture.leagueId).isEmpty
+        if isRace {
             let race = resolveRace(fixture: fixture, channels: channels, guide: guide, pickIndex: index.pickIndex)
-            return ranked(race, kickoff: fixture.startDate)
+            if !race.isEmpty { return ranked(race, kickoff: fixture.startDate) }
         }
         // With nothing to match by (a half-known pairing, a nameless event) the
         // fixture still offers the channels pinned for its competition.
@@ -373,7 +378,9 @@ nonisolated enum SportsChannelResolver {
             ? index.candidates(seedTokens: target?.seedTokens ?? [], competitionKey: context.competitionKey)
             : Array(channels.indices)
         for offset in candidates {
-            if let match = matchChannel(channels[offset], context: context, guide: guide, pickIndex: index.pickIndex) {
+            if let match = matchChannel(channels[offset], context: context, guide: guide, pickIndex: index.pickIndex),
+               !isRace || match.source == .channelName
+            {
                 resolved.append(match)
             }
         }

@@ -14,11 +14,15 @@ struct AppearanceSettingsTests {
         #expect(AppAppearance.resolve("sepia") == .system)
     }
 
-    @Test func `interface style mapping`() {
-        #expect(AppAppearance.system.interfaceStyle == .unspecified)
-        #expect(AppAppearance.dark.interfaceStyle == .dark)
-        #expect(AppAppearance.light.interfaceStyle == .light)
-    }
+    #if canImport(UIKit) && !os(tvOS)
+        /// `interfaceStyle` is the UIKit window override, so it only exists where
+        /// the property does.
+        @Test func `interface style mapping`() {
+            #expect(AppAppearance.system.interfaceStyle == .unspecified)
+            #expect(AppAppearance.dark.interfaceStyle == .dark)
+            #expect(AppAppearance.light.interfaceStyle == .light)
+        }
+    #endif
 
     @Test func `default is system`() {
         #expect(AppAppearance.defaultValue == .system)
