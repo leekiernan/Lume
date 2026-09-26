@@ -21,7 +21,8 @@ private nonisolated enum InjectedProfileSaveError: Error {
 /// Serialized: the reconcile-scoping test reads the active profile from
 /// `ActiveProfileStore` (UserDefaults.standard), shared process-wide state.
 @MainActor
-@Suite(.serialized)
+@Suite(.serialized, .globalState)
+// swiftlint:disable:next type_body_length - pre-existing on main; one engine fixture shared by every case
 struct ProfileEngineTests {
     private func freshShadow() -> CloudSyncShadow {
         let suite = UserDefaults(suiteName: "profiles.test.\(UUID().uuidString)")!

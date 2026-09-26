@@ -133,6 +133,7 @@ private func plexPage(_ items: [String], total: Int) -> PlexServerStubProtocol.R
 
 // MARK: - Tests
 
+@Suite(.readsGlobalState)
 struct PlexSyncTests {
     private func uniqueHost() -> String {
         "plex-\(UUID().uuidString.prefix(8).lowercased()).test"

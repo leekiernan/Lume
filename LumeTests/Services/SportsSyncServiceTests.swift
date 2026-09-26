@@ -217,6 +217,7 @@ struct SportsSyncLeagueIDTests {
 // MARK: - Refresh / merge
 
 @MainActor
+@Suite(.readsGlobalState)
 struct SportsSyncRefreshTests {
     private func tempStore() -> SportsStore {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
@@ -373,6 +374,7 @@ struct SportsSyncOverdueTests {
 // MARK: - Catch-up refresh
 
 @MainActor
+@Suite(.readsGlobalState)
 struct SportsSyncCatchUpTests {
     private func tempStore() -> SportsStore {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
@@ -452,6 +454,7 @@ struct SportsSyncCatchUpTests {
 /// eligible, or one offline launch leaves the rail blank until the viewer finds
 /// Settings › Sports › Refresh Now.
 @MainActor
+@Suite(.readsGlobalState)
 struct SportsFillMissingTests {
     private let leagueId = "espn:soccer/ger.1"
 
@@ -496,9 +499,15 @@ struct SportsFillMissingTests {
         ))
 
         await sync.fillMissing()
+        // One month request per month fetched — and inside a month's last week
+        // `monthsToFetch` adds the next month too, so the first pass alone is
+        // one *or two* requests depending on today's date.
+        let firstPass = counter.count
+        #expect(firstPass > 0)
+
         await sync.fillMissing()
 
-        #expect(counter.count == 1)
+        #expect(counter.count == firstPass, "The second pass must not fetch the league again")
     }
 
     @Test func `a fill the provider never answered is retried`() async {

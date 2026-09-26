@@ -25,7 +25,11 @@ private final nonisolated class TraktScrobbleStubProtocol: URLProtocol {
     }
 
     override func startLoading() {
-        Self.lock.withLock { Self.requests.append(request) }
+        // Capture the body now: by the time a test reads the recorded request,
+        // its body stream (see `URLRequest.bodyData`) may already be spent.
+        var recorded = request
+        recorded.httpBody = request.bodyData
+        Self.lock.withLock { Self.requests.append(recorded) }
         guard let url = request.url,
               let response = HTTPURLResponse(url: url, statusCode: 201, httpVersion: nil, headerFields: nil)
         else { return }

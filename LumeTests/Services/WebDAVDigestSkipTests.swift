@@ -130,6 +130,7 @@ private func collection(
 
 // MARK: - Tests
 
+@Suite(.globalState)
 struct WebDAVDigestSkipTests {
     /// Swift Testing runs this before every test in the suite. The listing
     /// fingerprint is device-local `UserDefaults` state that outlives a test, so

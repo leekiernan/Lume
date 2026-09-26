@@ -72,7 +72,7 @@ struct ParentalMergePolicyTests {
 // MARK: - Engine integration (in-memory, no CloudKit)
 
 @MainActor
-@Suite(.serialized)
+@Suite(.serialized, .globalState)
 struct CloudSyncParentalEngineTests {
     /// Runs before every test in the suite (Swift Testing instantiates the suite
     /// per test): start from a keychain with no PIN, so the shared

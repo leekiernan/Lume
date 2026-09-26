@@ -8,7 +8,7 @@ private nonisolated enum InjectedProfileEngineSaveError: Error {
 }
 
 @MainActor
-@Suite(.serialized)
+@Suite(.serialized, .globalState)
 struct ProfilePersistenceSafetyTests {
     @Test func `failed profile switch keeps the old projection pointer and shadow`() async throws {
         let container = try makeProfileTestContainer()
