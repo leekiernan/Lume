@@ -36,6 +36,9 @@ final class AVPlayerCoordinator: NSObject, ObservableObject {
     /// tell an initial-load failure (eligible for engine fallback) apart from a
     /// mid-stream drop.
     @Published private(set) var hasStartedPlayback = false
+    /// Decides when the current stream started: `timeControlStatus` reaching
+    /// `.playing`, or the playhead advancing. See `PlaybackStartTracker`.
+    private var startTracker = PlaybackStartTracker()
 
     /// Invoked when the stream can't be started: the item reports `.failed`, or
     /// no frame plays within `startupTimeout`. The engine view either falls back
@@ -214,6 +217,7 @@ final class AVPlayerCoordinator: NSObject, ObservableObject {
         textTrackOptions = []
         isBuffering = true
         hasStartedPlayback = false
+        startTracker.beginStream()
         didReportFailure = false
         PlaybackQoE.shared.beginStartup(engine: .avPlayer, isLive: media.isLive)
         startStartupWatchdog()
@@ -237,6 +241,16 @@ final class AVPlayerCoordinator: NSObject, ObservableObject {
     }
 
     // MARK: - Failure handling
+
+    /// The stream's first frame — `proof` is non-`nil` exactly once per stream
+    /// (see `PlaybackStartTracker`). Disarms the startup watchdog.
+    private func markPlaybackStarted(_ proof: PlaybackStartTracker.Proof?) {
+        guard let proof else { return }
+        if proof == .playhead { Logger.player.info("AVPlayer: first frame proven by playhead progress") }
+        hasStartedPlayback = true
+        PlaybackQoE.shared.noteFirstFrame()
+        cancelStartupWatchdog()
+    }
 
     /// Arm the startup watchdog. Cancelled once playback actually starts.
     private func startStartupWatchdog() {
@@ -319,6 +333,8 @@ final class AVPlayerCoordinator: NSObject, ObservableObject {
     /// Seek to an absolute time (in seconds).
     func seek(to seconds: TimeInterval) {
         if catchup.route(.to(seconds)) { return }
+        // A jump, not playback: start detection re-bases after it.
+        startTracker.discardSamples()
         let time = CMTime(seconds: seconds, preferredTimescale: 600)
         player.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero)
     }
@@ -437,7 +453,10 @@ final class AVPlayerCoordinator: NSObject, ObservableObject {
             guard let self else { return }
             let secs = time.seconds
             guard secs.isFinite else { return }
-            MainActor.assumeIsolated { self.onTime?(secs) }
+            MainActor.assumeIsolated {
+                self.onTime?(secs)
+                self.markPlaybackStarted(self.startTracker.notePlayhead(secs))
+            }
         }
 
         durationObservation = item.observe(\.duration, options: [.new, .initial]) { [weak self] item, _ in
@@ -473,9 +492,7 @@ final class AVPlayerCoordinator: NSObject, ObservableObject {
                     PlaybackQoE.shared.noteStallEnded()
                 }
                 if player.timeControlStatus == .playing {
-                    hasStartedPlayback = true
-                    PlaybackQoE.shared.noteFirstFrame()
-                    cancelStartupWatchdog()
+                    markPlaybackStarted(startTracker.noteEngineStarted())
                 }
             }
         }
@@ -506,6 +523,8 @@ final class AVPlayerCoordinator: NSObject, ObservableObject {
     private func seekToResumeIfNeeded() {
         guard needsResume, !didSeekResume, let item, item.status == .readyToPlay else { return }
         didSeekResume = true
+        // A jump, not playback: start detection re-bases after it.
+        startTracker.discardSamples()
         let target = CMTime(seconds: startTime, preferredTimescale: 600)
         player.seek(to: target, toleranceBefore: .zero, toleranceAfter: .zero)
     }
