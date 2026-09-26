@@ -98,6 +98,7 @@ struct SportsHubView: View {
                 }
             #endif
         }
+        .profileMenuToolbar()
         .onAppear(perform: onAppear)
         .onDisappear { SportsSyncService.shared.endLivePolling() }
     }

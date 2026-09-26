@@ -211,6 +211,7 @@ struct LiveTVView: View {
             }
             #endif
             .paywall(isPresented: $showingPaywall, highlight: .multiView)
+            .profileMenuToolbar()
         }
     }
 
