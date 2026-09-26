@@ -116,6 +116,15 @@ struct MainTabView: View {
         sportsEnabled && sportsTabEnabled && SportsSyncService.isEnabled
     }
 
+    #if os(macOS)
+        /// AppKit can retain a removed conditional tab's title for the final
+        /// role-based Search tab. Include the complete visible layout so its
+        /// native tab host is recreated once profile preferences have bound.
+        private var tabLayoutIdentity: String {
+            "\(activeProfileToken)|\(disabledAreasRaw)|\(showsSportsTab)"
+        }
+    #endif
+
     /// Move off a tab the user has just switched off, so the selection can
     /// never point at a tab that is no longer in the bar.
     private func repairSelectionIfNeeded() {
@@ -142,9 +151,13 @@ struct MainTabView: View {
     var body: some View {
         @Bindable var router = router
         return tabView(selection: $router.selectedTab)
-            // Profile-scoped preferences bind when tab contents are rebuilt; the
-            // router remains outside this identity, so navigation paths survive.
+        // Profile-scoped preferences bind when tab contents are rebuilt; the
+        // router remains outside this identity, so navigation paths survive.
+        #if os(macOS)
+            .id(tabLayoutIdentity)
+        #else
             .id(activeProfileToken)
+        #endif
             .onChange(of: disabledAreasRaw) { _, _ in
                 repairSelectionIfNeeded()
                 SportsSyncService.shared.availabilityDidChange()
