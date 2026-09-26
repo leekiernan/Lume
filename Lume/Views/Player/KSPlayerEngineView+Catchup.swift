@@ -48,9 +48,9 @@ extension KSPlayerEngineView {
         isSeeking = false
         seekPosition = 0
         hasStartedPlayback = false
-        hasSeenReadyToPlay = false
         isBuffering = true
         loadFailed = false
+        // Also restarts `tick.start`, the new stream's start detection.
         tick.reset()
         cancelStallWatchdog()
         reconnector.reset()

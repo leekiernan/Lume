@@ -88,8 +88,11 @@ struct KSPlayerEngineView: View {
     /// True while the engine is preparing or (re)buffering, so the spinner shows
     /// both on first open and on a mid-stream stall.
     @State var isBuffering = true
-    /// Per-tick bookkeeping for the 10 Hz `onPlay` callback (progress detection
-    /// and the clock-drift watchdog). A reference type held in `@State` on
+    /// Per-tick bookkeeping for the 10 Hz `onPlay` callback (progress detection,
+    /// start detection and the clock-drift watchdog). `tick.start` also holds
+    /// the `.readyToPlay` gate that keeps a stale `.bufferFinished` from the
+    /// previous session (arriving after `retryPlayback()` resets it) from
+    /// cancelling the startup watchdog before the new session is ready. A reference type held in `@State` on
     /// purpose: mutating its properties — unlike writing `@State` scalars —
     /// does not invalidate this view. Keeping `lastPlayhead` as `@State`
     /// re-rendered the whole engine view (and with it the controls overlay and
@@ -100,13 +103,6 @@ struct KSPlayerEngineView: View {
     /// Swaps the endless spinner for the `PlayerErrorIndicator` (Try Again / Back)
     /// so a stream that never starts no longer locks the player.
     @State var loadFailed = false
-    /// Gate that ensures `markPlaybackStarted()` and the `.bufferFinished` path in
-    /// `updateLoadingState` only fire after the current session has emitted its own
-    /// `.readyToPlay`. A stale `.bufferFinished` from the previous session
-    /// (arriving in the window after `retryPlayback()` resets `hasStartedPlayback`)
-    /// would otherwise prematurely cancel the startup watchdog and clear the
-    /// spinner before the new session is ready.
-    @State var hasSeenReadyToPlay = false
     /// Fires `failPlayback()` if the stream hasn't produced a frame within
     /// `startupTimeout`. Covers a stream that hangs in `.preparing`/`.buffering`
     /// forever without ever emitting `.error` (so the reconnector never engages).
