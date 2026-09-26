@@ -3,7 +3,20 @@ import Foundation
 import SwiftData
 import Testing
 
+@Suite(.readsGlobalState)
 struct EPGSyncManagerTests {
+    /// Each test gets its own write coordinator. The shared one coalesces
+    /// legacy-snapshot retirement under one fixed key — right for the app's
+    /// single store, but it let one test's retirement stand in for another's
+    /// on a different container whenever two ran at once.
+    ///
+    /// The suite still reads global state: publication revalidates
+    /// `Fence.live`, the active profile and area set, which other suites
+    /// switch — hence `.readsGlobalState`.
+    private func makeManager(_ container: ModelContainer) -> EPGSyncManager {
+        EPGSyncManager(modelContainer: container, writeCoordinator: LocalStoreWriteCoordinator())
+    }
+
     private func writeTempXMLTV(_ content: String) throws -> URL {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("EPGSyncManagerTests-\(UUID().uuidString).xml")
@@ -93,7 +106,7 @@ struct EPGSyncManagerTests {
         ))
         try setupContext.save()
 
-        #expect(await EPGSyncManager(modelContainer: container).syncAllSources())
+        #expect(await makeManager(container).syncAllSources())
 
         let context = ModelContext(container)
         #expect(try context.fetch(FetchDescriptor<EPGListing>()).isEmpty)
@@ -119,7 +132,7 @@ struct EPGSyncManagerTests {
         )
         try context.save()
 
-        let didSync = await EPGSyncManager(modelContainer: container).syncAllSources()
+        let didSync = await makeManager(container).syncAllSources()
         #expect(!didSync)
 
         let refreshed = ModelContext(container)
@@ -164,7 +177,7 @@ struct EPGSyncManagerTests {
         )
         try context.save()
 
-        let didSync = await EPGSyncManager(modelContainer: container).syncAllSources()
+        let didSync = await makeManager(container).syncAllSources()
         #expect(!didSync)
 
         let refreshed = ModelContext(container)
@@ -204,7 +217,7 @@ struct EPGSyncManagerTests {
         )
         try context.save()
 
-        #expect(await EPGSyncManager(modelContainer: container).syncAllSources())
+        #expect(await makeManager(container).syncAllSources())
 
         let refreshed = ModelContext(container)
         let listings = try refreshed.fetch(FetchDescriptor<EPGListing>())
@@ -233,7 +246,7 @@ struct EPGSyncManagerTests {
         _ = insertSource(named: "Guide", url: guideURL.absoluteString, in: context)
         try context.save()
 
-        #expect(await EPGSyncManager(modelContainer: container).syncAllSources())
+        #expect(await makeManager(container).syncAllSources())
 
         let listings = try ModelContext(container).fetch(FetchDescriptor<EPGListing>())
         #expect(listings.count == 1)
@@ -263,7 +276,7 @@ struct EPGSyncManagerTests {
         let sourceID = source.id
         try setupContext.save()
 
-        let manager = EPGSyncManager(modelContainer: container)
+        let manager = makeManager(container)
         #expect(await manager.syncAllSources())
         let originalRows = try ModelContext(container).fetch(FetchDescriptor<EPGListing>())
         let retained = try #require(originalRows.first(where: { $0.title == "Original bulletin" }))
@@ -320,7 +333,7 @@ struct EPGSyncManagerTests {
         )
         try context.save()
 
-        let didSync = await EPGSyncManager(modelContainer: container).syncAllSources()
+        let didSync = await makeManager(container).syncAllSources()
         #expect(!didSync)
 
         let refreshed = ModelContext(container)
@@ -345,7 +358,7 @@ struct EPGSyncManagerTests {
         insertListing(id: "old-news", channelID: "news.1", title: "Previous news", sourceID: source.id, in: context)
         try context.save()
 
-        let didSync = await EPGSyncManager(modelContainer: container).syncAllSources()
+        let didSync = await makeManager(container).syncAllSources()
         #expect(!didSync)
 
         let refreshed = ModelContext(container)
