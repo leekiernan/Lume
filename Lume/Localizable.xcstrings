@@ -26413,6 +26413,58 @@
         }
       }
     },
+    "Live TV catch-up uses a maximum buffer of %lld seconds to keep the connection stable." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Catch-up im Live-TV nutzt einen maximalen Puffer von %lld Sekunden, damit die Verbindung stabil bleibt."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La TV en directo en diferido usa un búfer máximo de %lld segundos para mantener estable la conexión."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le replay de la TV en direct utilise une mémoire tampon maximale de %lld secondes pour garder une connexion stable."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Il catch-up della TV in diretta usa un buffer massimo di %lld secondi per mantenere stabile la connessione."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ライブTVの見逃し再生では、接続を安定させるため最大バッファを%lld秒に制限します。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "라이브 TV 다시보기는 연결을 안정적으로 유지하기 위해 최대 버퍼를 %lld초로 제한합니다."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O catch-up da TV ao vivo usa um buffer máximo de %lld segundos para manter a conexão estável."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "直播电视回看使用最长 %lld 秒的缓冲，以保持连接稳定。"
+          }
+        }
+      }
+    },
     "Live TV categories" : {
       "localizations" : {
         "de" : {
