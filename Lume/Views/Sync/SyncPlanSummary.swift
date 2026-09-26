@@ -48,10 +48,11 @@ struct SyncPlanSummary: View {
     }
 
     private func areaNames(_ areas: Set<AppArea>) -> Text {
-        AppArea.allCases
+        let titles = AppArea.allCases
             .filter(areas.contains)
             .map { Text($0.syncPlanTitle) }
-            .reduce(Text("")) { $0 + Text(", ") + $1 }
+        guard let first = titles.first else { return Text("") }
+        return titles.dropFirst().reduce(first) { $0 + Text(", ") + $1 }
     }
 }
 
