@@ -217,6 +217,7 @@ struct SportsSyncLeagueIDTests {
 // MARK: - Refresh / merge
 
 @MainActor
+@Suite(.readsGlobalState)
 struct SportsSyncRefreshTests {
     private func tempStore() -> SportsStore {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
@@ -373,6 +374,7 @@ struct SportsSyncOverdueTests {
 // MARK: - Catch-up refresh
 
 @MainActor
+@Suite(.readsGlobalState)
 struct SportsSyncCatchUpTests {
     private func tempStore() -> SportsStore {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
@@ -452,6 +454,7 @@ struct SportsSyncCatchUpTests {
 /// eligible, or one offline launch leaves the rail blank until the viewer finds
 /// Settings › Sports › Refresh Now.
 @MainActor
+@Suite(.readsGlobalState)
 struct SportsFillMissingTests {
     private let leagueId = "espn:soccer/ger.1"
 

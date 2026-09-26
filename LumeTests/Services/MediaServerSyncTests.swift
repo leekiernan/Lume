@@ -129,6 +129,7 @@ private func jellyfinPage(_ items: [String], total: Int) -> JellyfinServerStubPr
 
 // MARK: - Tests
 
+@Suite(.readsGlobalState)
 struct MediaServerSyncTests {
     private func uniqueHost() -> String {
         "jellyfin-\(UUID().uuidString.prefix(8).lowercased()).test"
