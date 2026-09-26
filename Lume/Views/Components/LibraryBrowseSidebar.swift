@@ -52,12 +52,11 @@ struct LibraryBrowseSidebar: View {
         #endif
     }
 
-    /// On macOS the toolbar's browse button is vertically centered in the
-    /// title bar. Give the panel a little more deliberate clearance beneath it
-    /// instead of making its edge appear accidentally offset from the button.
+    /// On macOS, keep the panel clear of the title-bar traffic lights rather
+    /// than having the glass surface appear behind window controls.
     private var topMargin: CGFloat {
         #if os(macOS)
-            20
+            36
         #else
             margin
         #endif
@@ -214,17 +213,6 @@ struct LibraryBrowseSidebar: View {
                 .font(headerFont)
 
             Spacer(minLength: 0)
-
-            #if !os(tvOS)
-                Button {
-                    isPresented = false
-                } label: {
-                    Image(systemName: "xmark")
-                        .font(.footnote.weight(.semibold))
-                }
-                .buttonStyle(.borderless)
-                .accessibilityLabel("Close")
-            #endif
         }
         .padding(.horizontal, contentPadding)
         .padding(.top, contentPadding)

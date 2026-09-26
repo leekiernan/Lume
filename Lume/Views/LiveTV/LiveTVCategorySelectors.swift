@@ -39,11 +39,11 @@ struct LiveTVBrowseSidebar: View {
         #endif
     }
 
-    /// Keep the Live TV panel aligned with the Movies/Series sidebar. macOS
-    /// needs a little more intentional clearance below its title-bar button.
+    /// Keep the Live TV panel aligned with the Movies/Series sidebar while
+    /// clearing macOS's title-bar traffic lights.
     private var topMargin: CGFloat {
         #if os(macOS)
-            20
+            36
         #else
             margin
         #endif
@@ -185,17 +185,6 @@ struct LiveTVBrowseSidebar: View {
                 .font(headerFont)
 
             Spacer(minLength: 0)
-
-            #if !os(tvOS)
-                Button {
-                    isPresented = false
-                } label: {
-                    Image(systemName: "xmark")
-                        .font(.footnote.weight(.semibold))
-                }
-                .buttonStyle(.borderless)
-                .accessibilityLabel("Close")
-            #endif
         }
         .padding(.horizontal, contentPadding)
         .padding(.top, contentPadding)
