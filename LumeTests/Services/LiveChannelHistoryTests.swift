@@ -55,7 +55,10 @@ struct LiveChannelHistoryTests {
     }
 
     /// A throwaway defaults suite so the recall keys never touch real settings
-    /// and parallel tests don't collide.
+    /// and parallel tests don't collide. Every call also passes `profileID`
+    /// explicitly: its default is `ActiveProfileStore.current`, process-global
+    /// state other suites switch mid-test, which would split one test's
+    /// record and recall across two profiles' keys.
     private func makeDefaults() throws -> UserDefaults {
         let suite = "LiveChannelHistoryTests-\(UUID().uuidString)"
         return try #require(UserDefaults(suiteName: suite))
@@ -79,10 +82,10 @@ struct LiveChannelHistoryTests {
         let alpha = try media(forStreamId: 100, playlist: playlist, in: context)
         let delta = try media(forStreamId: 102, playlist: playlist, in: context)
 
-        LiveChannelHistory.record(alpha, defaults: defaults)
-        LiveChannelHistory.record(delta, defaults: defaults)
+        LiveChannelHistory.record(alpha, profileID: nil, defaults: defaults)
+        LiveChannelHistory.record(delta, profileID: nil, defaults: defaults)
 
-        let recalled = LiveChannelHistory.recallMedia(in: context, restriction: unrestricted, defaults: defaults)
+        let recalled = LiveChannelHistory.recallMedia(in: context, restriction: unrestricted, profileID: nil, defaults: defaults)
         #expect(recalled?.contentRef == alpha.contentRef)
     }
 
@@ -91,9 +94,9 @@ struct LiveChannelHistoryTests {
         let defaults = try makeDefaults()
         let alpha = try media(forStreamId: 100, playlist: playlist, in: context)
 
-        LiveChannelHistory.record(alpha, defaults: defaults)
+        LiveChannelHistory.record(alpha, profileID: nil, defaults: defaults)
 
-        #expect(LiveChannelHistory.recallMedia(in: context, restriction: unrestricted, defaults: defaults) == nil)
+        #expect(LiveChannelHistory.recallMedia(in: context, restriction: unrestricted, profileID: nil, defaults: defaults) == nil)
     }
 
     @Test func `recall toggles between the two most recent channels`() throws {
@@ -102,15 +105,15 @@ struct LiveChannelHistoryTests {
         let alpha = try media(forStreamId: 100, playlist: playlist, in: context)
         let bravo = try media(forStreamId: 101, playlist: playlist, in: context)
 
-        LiveChannelHistory.record(alpha, defaults: defaults)
-        LiveChannelHistory.record(bravo, defaults: defaults)
+        LiveChannelHistory.record(alpha, profileID: nil, defaults: defaults)
+        LiveChannelHistory.record(bravo, profileID: nil, defaults: defaults)
         // On Bravo, recall points at Alpha.
-        #expect(LiveChannelHistory.recallMedia(in: context, restriction: unrestricted, defaults: defaults)?.contentRef == alpha.contentRef)
+        #expect(LiveChannelHistory.recallMedia(in: context, restriction: unrestricted, profileID: nil, defaults: defaults)?.contentRef == alpha.contentRef)
 
         // Acting on the recall (switching to Alpha) records it, so recall now
         // points back at Bravo — the classic last-button toggle.
-        LiveChannelHistory.record(alpha, defaults: defaults)
-        #expect(LiveChannelHistory.recallMedia(in: context, restriction: unrestricted, defaults: defaults)?.contentRef == bravo.contentRef)
+        LiveChannelHistory.record(alpha, profileID: nil, defaults: defaults)
+        #expect(LiveChannelHistory.recallMedia(in: context, restriction: unrestricted, profileID: nil, defaults: defaults)?.contentRef == bravo.contentRef)
     }
 
     @Test func `reselecting the current channel leaves recall untouched`() throws {
@@ -119,12 +122,12 @@ struct LiveChannelHistoryTests {
         let alpha = try media(forStreamId: 100, playlist: playlist, in: context)
         let bravo = try media(forStreamId: 101, playlist: playlist, in: context)
 
-        LiveChannelHistory.record(alpha, defaults: defaults)
-        LiveChannelHistory.record(bravo, defaults: defaults)
+        LiveChannelHistory.record(alpha, profileID: nil, defaults: defaults)
+        LiveChannelHistory.record(bravo, profileID: nil, defaults: defaults)
         // Re-recording the current channel must not push Bravo into "previous".
-        LiveChannelHistory.record(bravo, defaults: defaults)
+        LiveChannelHistory.record(bravo, profileID: nil, defaults: defaults)
 
-        #expect(LiveChannelHistory.recallMedia(in: context, restriction: unrestricted, defaults: defaults)?.contentRef == alpha.contentRef)
+        #expect(LiveChannelHistory.recallMedia(in: context, restriction: unrestricted, profileID: nil, defaults: defaults)?.contentRef == alpha.contentRef)
     }
 
     @Test func `non-live media does not clobber the recall pair`() throws {
@@ -137,12 +140,12 @@ struct LiveChannelHistoryTests {
             playlist: playlist
         ))
 
-        LiveChannelHistory.record(alpha, defaults: defaults)
-        LiveChannelHistory.record(bravo, defaults: defaults)
+        LiveChannelHistory.record(alpha, profileID: nil, defaults: defaults)
+        LiveChannelHistory.record(bravo, profileID: nil, defaults: defaults)
         // A VOD detour between channels must leave the live recall intact.
-        LiveChannelHistory.record(movie, defaults: defaults)
+        LiveChannelHistory.record(movie, profileID: nil, defaults: defaults)
 
-        #expect(LiveChannelHistory.recallMedia(in: context, restriction: unrestricted, defaults: defaults)?.contentRef == alpha.contentRef)
+        #expect(LiveChannelHistory.recallMedia(in: context, restriction: unrestricted, profileID: nil, defaults: defaults)?.contentRef == alpha.contentRef)
     }
 
     @Test func `recall skips a channel hidden since it was watched`() throws {
@@ -151,13 +154,13 @@ struct LiveChannelHistoryTests {
         let alpha = try media(forStreamId: 100, playlist: playlist, in: context)
         let bravo = try media(forStreamId: 101, playlist: playlist, in: context)
 
-        LiveChannelHistory.record(alpha, defaults: defaults)
-        LiveChannelHistory.record(bravo, defaults: defaults)
+        LiveChannelHistory.record(alpha, profileID: nil, defaults: defaults)
+        LiveChannelHistory.record(bravo, profileID: nil, defaults: defaults)
         try hide(streamId: 100, playlist: playlist, in: context)
 
         // The recall pair predates the hiding, so recall is the last surface
         // that would still tune to a channel no list will show.
-        #expect(LiveChannelHistory.recallMedia(in: context, restriction: unrestricted, defaults: defaults) == nil)
+        #expect(LiveChannelHistory.recallMedia(in: context, restriction: unrestricted, profileID: nil, defaults: defaults) == nil)
     }
 
     @Test func `a child profile cannot recall into a locked category`() throws {
@@ -166,14 +169,14 @@ struct LiveChannelHistoryTests {
         let alpha = try media(forStreamId: 100, playlist: playlist, in: context)
         let bravo = try media(forStreamId: 101, playlist: playlist, in: context)
 
-        LiveChannelHistory.record(alpha, defaults: defaults)
-        LiveChannelHistory.record(bravo, defaults: defaults)
+        LiveChannelHistory.record(alpha, profileID: nil, defaults: defaults)
+        LiveChannelHistory.record(bravo, profileID: nil, defaults: defaults)
 
         let restricted = ContentRestriction(isActive: true, restrictedCategoryIDs: ["cat-a"])
-        #expect(LiveChannelHistory.recallMedia(in: context, restriction: restricted, defaults: defaults) == nil)
+        #expect(LiveChannelHistory.recallMedia(in: context, restriction: restricted, profileID: nil, defaults: defaults) == nil)
         // isActive false — a lock applies only while a child profile is active.
         let parent = ContentRestriction(isActive: false, restrictedCategoryIDs: ["cat-a"])
-        #expect(LiveChannelHistory.recallMedia(in: context, restriction: parent, defaults: defaults)?
+        #expect(LiveChannelHistory.recallMedia(in: context, restriction: parent, profileID: nil, defaults: defaults)?
             .contentRef == alpha.contentRef)
     }
 
@@ -200,11 +203,11 @@ struct LiveChannelHistoryTests {
         let bravo = try media(forStreamId: 101, playlist: playlist, in: context)
         let charlie = try media(forStreamId: 102, playlist: playlist, in: context)
 
-        LiveChannelHistory.record(alpha, defaults: defaults)
-        LiveChannelHistory.record(bravo, defaults: defaults)
-        LiveChannelHistory.record(charlie, defaults: defaults)
+        LiveChannelHistory.record(alpha, profileID: nil, defaults: defaults)
+        LiveChannelHistory.record(bravo, profileID: nil, defaults: defaults)
+        LiveChannelHistory.record(charlie, profileID: nil, defaults: defaults)
 
-        #expect(LiveChannelHistory.recentChannelIds(defaults: defaults) == [
+        #expect(LiveChannelHistory.recentChannelIds(profileID: nil, defaults: defaults) == [
             channelId(forStreamId: 102, playlist: playlist),
             channelId(forStreamId: 101, playlist: playlist),
             channelId(forStreamId: 100, playlist: playlist)
@@ -217,11 +220,11 @@ struct LiveChannelHistoryTests {
         let alpha = try media(forStreamId: 100, playlist: playlist, in: context)
         let bravo = try media(forStreamId: 101, playlist: playlist, in: context)
 
-        LiveChannelHistory.record(alpha, defaults: defaults)
-        LiveChannelHistory.record(bravo, defaults: defaults)
-        LiveChannelHistory.record(alpha, defaults: defaults)
+        LiveChannelHistory.record(alpha, profileID: nil, defaults: defaults)
+        LiveChannelHistory.record(bravo, profileID: nil, defaults: defaults)
+        LiveChannelHistory.record(alpha, profileID: nil, defaults: defaults)
 
-        #expect(LiveChannelHistory.recentChannelIds(defaults: defaults) == [
+        #expect(LiveChannelHistory.recentChannelIds(profileID: nil, defaults: defaults) == [
             channelId(forStreamId: 100, playlist: playlist),
             channelId(forStreamId: 101, playlist: playlist)
         ])
@@ -235,9 +238,9 @@ struct LiveChannelHistoryTests {
             playlist: playlist
         ))
 
-        LiveChannelHistory.record(movie, defaults: defaults)
+        LiveChannelHistory.record(movie, profileID: nil, defaults: defaults)
 
-        #expect(LiveChannelHistory.recentChannelIds(defaults: defaults).isEmpty)
+        #expect(LiveChannelHistory.recentChannelIds(profileID: nil, defaults: defaults).isEmpty)
     }
 
     // MARK: - Profile scoping
