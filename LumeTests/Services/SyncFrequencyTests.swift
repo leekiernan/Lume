@@ -371,7 +371,9 @@ struct SyncFrequencyTests {
         gate.contentSyncStarted()
         gate.contentSyncFinished(succeeded: true, refreshedLiveTV: false)
 
-        #expect(!gate.takeOwedRefresh())
+        // Bound first: `#expect(!…)` can't expand a mutating call.
+        let owesRefresh = gate.takeOwedRefresh()
+        #expect(!owesRefresh)
     }
 
     @Test func `an aborted or failed sync owes nothing of its own`() {
