@@ -371,7 +371,8 @@ struct SyncFrequencyTests {
         gate.contentSyncStarted()
         gate.contentSyncFinished(succeeded: true, refreshedLiveTV: false)
 
-        #expect(!gate.takeOwedRefresh())
+        let owesRefresh = gate.takeOwedRefresh()
+        #expect(!owesRefresh)
     }
 
     @Test func `an aborted or failed sync owes nothing of its own`() {
