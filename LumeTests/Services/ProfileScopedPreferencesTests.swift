@@ -50,6 +50,7 @@ struct ProfileScopedPreferencesTests {
                 RecommendationSettings.enabledKey,
                 SportsSyncService.enabledKey,
                 SportsSyncService.tabEnabledKey,
+                SportsSyncService.hideScoresKey,
                 SportsSyncService.syncFrequencyKey
             ]
             for surface in SectionSurface.allCases {
