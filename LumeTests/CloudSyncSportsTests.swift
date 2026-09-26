@@ -14,6 +14,7 @@ import SwiftData
 import Testing
 
 @MainActor
+@Suite(.globalState)
 struct CloudSyncSportsTests {
     private func freshShadow() -> CloudSyncShadow {
         let suite = UserDefaults(suiteName: "cloudsync.sports.test.\(UUID().uuidString)")!

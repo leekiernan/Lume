@@ -15,6 +15,7 @@ import SwiftData
 import Testing
 
 @MainActor
+@Suite(.globalState)
 struct CloudSyncDeletionTests {
     private func freshShadow() -> CloudSyncShadow {
         let suite = UserDefaults(suiteName: "cloudsync.deletion.test.\(UUID().uuidString)")!

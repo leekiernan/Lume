@@ -133,6 +133,7 @@ private func collection(_ selfHref: String, _ children: [StubChild]) -> WebDAVTr
 
 // MARK: - Tests
 
+@Suite(.globalState)
 struct WebDAVSyncTests {
     /// The listing fingerprint is device-local `UserDefaults` state that
     /// outlives a test, so every case starts without one — otherwise a suite

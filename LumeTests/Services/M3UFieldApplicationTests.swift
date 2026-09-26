@@ -58,6 +58,7 @@ enum M3UFieldFixtures {
 
 // MARK: - Live streams
 
+@Suite(.globalState)
 struct M3ULiveStreamFieldTests {
     /// Swift Testing runs this before every test in the suite. The m3u digest is
     /// device-local `UserDefaults` state that outlives a test, so each case
@@ -281,6 +282,7 @@ struct M3ULiveStreamFieldTests {
 
 // MARK: - Movies
 
+@Suite(.globalState)
 struct M3UMovieFieldTests {
     /// Swift Testing runs this before every test in the suite. The m3u digest is
     /// device-local `UserDefaults` state that outlives a test, so each case
