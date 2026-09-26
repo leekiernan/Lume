@@ -27,18 +27,24 @@ struct ProfileMenu: View {
             Menu {
                 ForEach(profiles) { profile in
                     let isActive = profile.id == profileManager.activeProfileID
-                    Button {
-                        attemptSwitch(to: profile, using: profileManager)
-                    } label: {
-                        #if os(macOS)
-                            // AppKit's native Menu drops Label icons. Keep the
-                            // current profile's checkmark in the text itself.
-                            if isActive {
-                                Text(verbatim: "✓ \(profile.name) — ") + Text("Active")
-                            } else {
-                                Text(profile.name)
+                    #if os(macOS)
+                        // A Toggle inside an AppKit menu maps its binding to the
+                        // native checked menu-item state. The active row refuses
+                        // to turn off; activating another row follows the same
+                        // PIN-aware switch path as every other surface.
+                        Toggle(isOn: Binding(
+                            get: { isActive },
+                            set: { shouldActivate in
+                                guard shouldActivate else { return }
+                                attemptSwitch(to: profile, using: profileManager)
                             }
-                        #else
+                        )) {
+                            Label(profile.name, systemImage: profile.symbolName)
+                        }
+                    #else
+                        Button {
+                            attemptSwitch(to: profile, using: profileManager)
+                        } label: {
                             Label {
                                 HStack(spacing: 8) {
                                     Text(profile.name)
@@ -50,8 +56,8 @@ struct ProfileMenu: View {
                             } icon: {
                                 Image(systemName: isActive ? "checkmark" : profile.symbolName)
                             }
-                        #endif
-                    }
+                        }
+                    #endif
                 }
 
                 Divider()
