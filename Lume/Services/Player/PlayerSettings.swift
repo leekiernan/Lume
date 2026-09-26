@@ -402,6 +402,14 @@ enum PlayerSettings {
         static let vodBufferDefault = 8
         /// Maximum buffer, in seconds.
         static let maxBufferDefault = 30
+        /// Ceiling on the maximum buffer for catch-up (timeshift) streams, in
+        /// seconds. KSPlayer reads ahead in bursts: it stops once the buffer
+        /// passes the maximum and resumes only below half of it, so a large
+        /// maximum means long idle gaps between fast reads. Catch-up archive
+        /// servers can drop the connection across that pattern, and FFmpeg's
+        /// byte-range resume then lands at the start of the archive's current
+        /// chunk (a minute), replaying it. A small cap keeps reads steady.
+        nonisolated static let catchupMaxBuffer = 10
 
         /// Every persisted KSPlayer option key. Used to wipe the stored values
         /// so each `@AppStorage` binding reverts to its default.

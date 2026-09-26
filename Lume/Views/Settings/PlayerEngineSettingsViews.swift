@@ -156,8 +156,11 @@ import SwiftUI
                     ForEach(KSMaxBufferPreset.values, id: \.self) { Text(KSMaxBufferPreset.label($0)).tag($0) }
                 }
             } footer: {
-                Text("FFmpeg honours these options for all streams. ")
-                    + Text("AVPlayer is more efficient but ignores most of them — including buffering — for formats it plays natively, such as HLS. Applied the next time playback starts.")
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("FFmpeg honours these options for all streams. ")
+                        + Text("AVPlayer is more efficient but ignores most of them — including buffering — for formats it plays natively, such as HLS. Applied the next time playback starts.")
+                    Text("Live TV catch-up uses a maximum buffer of \(PlayerSettings.KSPlayer.catchupMaxBuffer) seconds to keep the connection stable.")
+                }
             }
 
             Section {
@@ -367,6 +370,11 @@ import SwiftUI
                     TVOptionCycleRow(title: "Maximum Buffer", valueLabel: KSMaxBufferPreset.label(maxBuffer)) {
                         maxBuffer = PlayerOptionCycle.next(maxBuffer, in: KSMaxBufferPreset.values)
                     }
+                    Text("Live TV catch-up uses a maximum buffer of \(PlayerSettings.KSPlayer.catchupMaxBuffer) seconds to keep the connection stable.")
+                        .font(.system(size: 20))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, TVSettingsMetrics.rowHPadding)
+                        .padding(.top, 6)
                 }
 
                 TVOptionResetRow(title: "Restore Defaults") { showResetConfirmation = true }
