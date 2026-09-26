@@ -223,6 +223,12 @@ struct LumeApp: App {
                     // write, and idempotent per process on the callee's side.
                     AppStoreReviewPrompt.shared.noteAppLaunched()
 
+                    // A playback Live Activity outlives the process when the app is
+                    // killed mid-session; nothing else would ever end it.
+                    #if os(iOS)
+                        PlaybackActivityController.shared.endOrphanedActivities()
+                    #endif
+
                     // Give DownloadManager access to the model container so it
                     // can persist download state from its delegate callbacks.
                     #if !os(tvOS)
