@@ -26,13 +26,21 @@ struct ProfileMenu: View {
             let active = profiles.first { $0.id == profileManager.activeProfileID }
             Menu {
                 ForEach(profiles) { profile in
+                    let isActive = profile.id == profileManager.activeProfileID
                     Button {
                         attemptSwitch(to: profile, using: profileManager)
                     } label: {
-                        Label(
-                            profile.name,
-                            systemImage: profile.id == profileManager.activeProfileID ? "checkmark" : profile.symbolName
-                        )
+                        Label {
+                            HStack(spacing: 8) {
+                                Text(profile.name)
+                                if isActive {
+                                    Text("Active")
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                        } icon: {
+                            Image(systemName: isActive ? "checkmark" : profile.symbolName)
+                        }
                     }
                 }
 

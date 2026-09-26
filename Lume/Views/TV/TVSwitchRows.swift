@@ -61,6 +61,7 @@
                             .accessibilityHidden(true)
                     }
                     if isActive {
+                        TVSwitchRowActiveLabel()
                         TVSwitchRowCheckmark()
                     }
                 }
@@ -103,6 +104,19 @@
             Image(systemName: "checkmark")
                 .font(.system(size: 22, weight: .semibold))
                 .foregroundStyle(isFocused ? .black : .white)
+                .accessibilityHidden(true)
+        }
+    }
+
+    /// A written state makes the active profile unmistakable in the quick
+    /// switcher; the checkmark remains as the compact familiar indicator.
+    private struct TVSwitchRowActiveLabel: View {
+        @Environment(\.isFocused) private var isFocused
+
+        var body: some View {
+            Text("Active")
+                .font(.system(size: TVSettingsMetrics.secondaryFontSize, weight: .semibold))
+                .foregroundStyle(isFocused ? .black : .secondary)
                 .accessibilityHidden(true)
         }
     }

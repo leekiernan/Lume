@@ -183,10 +183,19 @@
             playlists: [QuickSwitchRow<Playlist>],
             profiles: [QuickSwitchRow<UserProfile>]
         ) -> FocusTarget? {
-            if let first = playlists.first {
+            // A single playlist offers no meaningful switch target. Start in
+            // Profiles instead, on the active row where the viewer can either
+            // confirm their current profile or move directly to another one.
+            if playlists.count > 1, let first = playlists.first {
                 return .playlist(first.id)
             }
-            return profiles.first.map { .profile($0.id) }
+            if let current = profiles.first(where: \.isCurrent) {
+                return .profile(current.id)
+            }
+            if let first = profiles.first {
+                return .profile(first.id)
+            }
+            return playlists.first.map { .playlist($0.id) }
         }
 
         /// Asserts the initial focus once the tree has mounted: the engine picks
