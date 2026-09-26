@@ -59,15 +59,20 @@ extension FullScreenPlayerView {
     /// - No Trakt stop and no progress flush: a catch-up stream is a live ref,
     ///   which never scrobbles and only stamps last-watched, which opening the
     ///   programme already did.
-    /// - The engine stays put. `engineAttempt` resets on a new title so it gets
-    ///   the primary engine's first try; here the viewer is mid-programme on
-    ///   whichever engine proved it can play this archive. Resetting would
-    ///   send every seek back through an engine that already failed on it —
-    ///   one startup timeout per seek. A segment the current engine can't
-    ///   open still falls back to the next engine, or ends in the error overlay.
+    /// - Like any new stream, the segment starts on the user's primary engine
+    ///   (`engineAttempt = 0`). A fallback answers one stream failing to start,
+    ///   not the programme: carrying it over would pin every later seek to the
+    ///   fallback engine for good. The cost is one more startup timeout per seek
+    ///   when the primary genuinely can't play this archive — the segment still
+    ///   falls back to the next engine, or ends in the error overlay.
+    ///   Already on the primary, the engine view stays mounted and swaps the
+    ///   stream in place; after a fallback, the reset changes `engineIdentity`
+    ///   (and the engine kind) in the same update as `activeMedia`, so the
+    ///   primary engine is built once, directly on the new segment.
     /// - The Now Playing session carries on; only its resume snapshot moves.
     func moveToCatchupSegment(_ segment: PlayableMedia) {
         clock.rebase(onto: segment)
+        engineAttempt = 0
         activeMedia = segment
         NowPlayingService.shared.continueSession(with: segment)
     }
@@ -98,9 +103,12 @@ extension FullScreenPlayerView {
         }
         guard segment.id != activeMedia.id else {
             // Back to the start of the segment already playing: the URL is the
-            // same, so there is no swap to make — rebuild the engine on it.
+            // same, so there is no swap to make — rebuild the engine on it,
+            // on the primary engine like any other rebuild (one identity
+            // change even when both values move).
             clock.releaseHold()
             clock.rebase(onto: segment)
+            engineAttempt = 0
             catchupRestartCount += 1
             return
         }
