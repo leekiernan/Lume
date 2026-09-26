@@ -431,6 +431,7 @@ final class PlaybackSessionHealthTests {
 /// the first was judged against the wrong snapshot and the second inherited a
 /// verdict it had not earned.
 @MainActor
+@Suite(.globalState)
 final class PlaybackHealthTrackerTests {
     /// QoE is a shared singleton, so every test leaves its suspension flag the
     /// way it found it — restored inside the test body, never in `deinit`,

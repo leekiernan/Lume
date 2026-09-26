@@ -421,7 +421,7 @@ struct SyncFrequencyTests {
 
 /// Serialized: both tests mutate the same `UserDefaults.standard` key, so
 /// running them in parallel races the shared value.
-@Suite(.serialized)
+@Suite(.serialized, .globalState)
 struct EPGSyncScheduleTests {
     @Test func `epg sync schedule stores and retrieves date`() {
         let date = Date(timeIntervalSince1970: 1_700_000_000)

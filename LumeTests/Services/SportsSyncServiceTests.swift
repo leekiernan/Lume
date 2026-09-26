@@ -496,9 +496,15 @@ struct SportsFillMissingTests {
         ))
 
         await sync.fillMissing()
+        // One month request per month fetched — and inside a month's last week
+        // `monthsToFetch` adds the next month too, so the first pass alone is
+        // one *or two* requests depending on today's date.
+        let firstPass = counter.count
+        #expect(firstPass > 0)
+
         await sync.fillMissing()
 
-        #expect(counter.count == 1)
+        #expect(counter.count == firstPass, "The second pass must not fetch the league again")
     }
 
     @Test func `a fill the provider never answered is retried`() async {

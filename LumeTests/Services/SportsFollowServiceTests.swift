@@ -14,6 +14,7 @@ import SwiftData
 import Testing
 
 @MainActor
+@Suite(.globalState)
 struct SportsFollowServiceTests {
     /// A private defaults suite keeps the pre-follow stamps (and any other flag)
     /// out of the shared host defaults, so bootstrap is controllable per test.

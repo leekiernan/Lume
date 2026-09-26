@@ -27,6 +27,7 @@ extension M3UFieldFixtures {
 
 // MARK: - Series
 
+@Suite(.globalState)
 struct M3USeriesFieldTests {
     /// Swift Testing runs this before every test in the suite. The m3u digest is
     /// device-local `UserDefaults` state that outlives a test, so each case
@@ -234,6 +235,7 @@ struct M3USeriesFieldTests {
 
 // MARK: - Episodes
 
+@Suite(.globalState)
 struct M3UEpisodeFieldTests {
     /// Swift Testing runs this before every test in the suite. The m3u digest is
     /// device-local `UserDefaults` state that outlives a test, so each case

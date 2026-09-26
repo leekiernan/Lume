@@ -11,6 +11,7 @@ import Foundation
 import SwiftData
 import Testing
 
+@Suite(.globalState)
 struct M3USyncTests {
     /// Swift Testing runs this before every test in the suite. The m3u digest is
     /// device-local `UserDefaults` state that outlives a test, so each case
