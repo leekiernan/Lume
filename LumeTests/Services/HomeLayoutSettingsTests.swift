@@ -431,10 +431,16 @@ struct HomeLayoutSettingsTests {
         #expect(result.count == HomeSection.cases(for: .movies).count)
     }
 
+    // These pin the *base* key names. The live accessors prefix them with the
+    // active profile, which is process-global `UserDefaults.standard` state
+    // (and persists in the test host between runs), so asserting on those
+    // would test whichever profile happened to be active. Scoping itself is
+    // covered by `ProfileScopedPreferencesTests`.
+
     @Test func `each surface stores its layout under its own keys`() {
-        let orderKeys = SectionSurface.allCases.map(HomeLayoutSettings.sectionOrderKey)
-        let hiddenKeys = SectionSurface.allCases.map(HomeLayoutSettings.disabledSectionsKey)
-        let customKeys = SectionSurface.allCases.map(CustomHomeSections.storageKey)
+        let orderKeys = SectionSurface.allCases.map(HomeLayoutSettings.baseSectionOrderKey)
+        let hiddenKeys = SectionSurface.allCases.map(HomeLayoutSettings.baseDisabledSectionsKey)
+        let customKeys = SectionSurface.allCases.map(CustomHomeSections.baseStorageKey)
         let all = orderKeys + hiddenKeys + customKeys
         #expect(Set(all).count == all.count)
     }
@@ -442,9 +448,9 @@ struct HomeLayoutSettingsTests {
     /// Home shipped before the other surfaces existed, so its keys must not move
     /// — a rename would silently reset everyone's Home layout.
     @Test func `home keeps the keys it shipped with`() {
-        #expect(HomeLayoutSettings.sectionOrderKey(.home) == "home.sectionOrder.v1")
-        #expect(HomeLayoutSettings.disabledSectionsKey(.home) == "home.disabledSections.v1")
-        #expect(CustomHomeSections.storageKey(.home) == "home.customSections.v1")
+        #expect(HomeLayoutSettings.baseSectionOrderKey(.home) == "home.sectionOrder.v1")
+        #expect(HomeLayoutSettings.baseDisabledSectionsKey(.home) == "home.disabledSections.v1")
+        #expect(CustomHomeSections.baseStorageKey(.home) == "home.customSections.v1")
     }
 
     /// What makes a movie list on the Series page resolve to nothing.

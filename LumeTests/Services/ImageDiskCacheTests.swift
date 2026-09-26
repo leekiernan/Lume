@@ -86,11 +86,13 @@ struct ImageDiskCacheTests {
             .appendingPathComponent("ImageDiskCacheLaunchTests-\(UUID().uuidString)", isDirectory: true)
         defer { try? FileManager.default.removeItem(at: directory) }
 
+        let delay = Duration.seconds(1)
+        let launched = ContinuousClock.now
         let cache = ImageDiskCache(
             directory: directory,
             byteLimit: 1024,
             maxAge: 60,
-            initialMaintenanceDelay: .milliseconds(250),
+            initialMaintenanceDelay: delay,
             now: clock.now
         )
         cache.store(Data(repeating: 0xA4, count: 32), for: "expired-after-launch")
@@ -100,9 +102,21 @@ struct ImageDiskCacheTests {
         // maintenance must give foreground poster delivery a head start.
         try await Task.sleep(for: .milliseconds(100))
         let cachedFile = cache.fileURL(for: "expired-after-launch")
-        #expect(FileManager.default.fileExists(atPath: cachedFile.path))
+        let survivedLaunch = FileManager.default.fileExists(atPath: cachedFile.path)
+        let checkedAfter = ContinuousClock.now - launched
+        // In a loaded parallel run this task can wake seconds late — after the
+        // sweep was *meant* to run — and then the check proves nothing. It is
+        // only judged when it really happened inside the delay.
+        if checkedAfter < delay {
+            #expect(survivedLaunch, "Swept \(checkedAfter) after launch, before the \(delay) delay")
+        }
 
-        try await Task.sleep(for: .milliseconds(300))
+        // The sweep runs at `.background` priority, so poll for it rather than
+        // betting on one fixed sleep.
+        let deadline = ContinuousClock.now + .seconds(10)
+        while FileManager.default.fileExists(atPath: cachedFile.path), ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(50))
+        }
         #expect(!FileManager.default.fileExists(atPath: cachedFile.path))
     }
 }

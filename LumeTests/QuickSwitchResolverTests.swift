@@ -18,7 +18,7 @@ import Testing
 /// `PlaylistSelectionStore.key` / `ActiveProfileStore.current` in
 /// `UserDefaults.standard`, shared process-wide state.
 @MainActor
-@Suite(.serialized)
+@Suite(.serialized, .globalState)
 struct QuickSwitchResolverTests {
     /// Added in the order given, a second apart — the fallback orders by
     /// `addedAt`, and back-to-back `Date()`s could tie.

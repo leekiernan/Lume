@@ -13,6 +13,7 @@ import SwiftData
 import Testing
 
 @MainActor
+@Suite(.globalState)
 struct PlaylistDeletionTests {
     private func makeContainer() throws -> ModelContainer {
         let schema = Schema([

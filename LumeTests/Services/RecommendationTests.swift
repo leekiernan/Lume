@@ -47,7 +47,7 @@ struct RecommendationScoringTests {
 }
 
 @MainActor
-@Suite(.serialized)
+@Suite(.serialized, .globalState)
 struct RecommendationEngineTests {
     private func makeMovie(
         _ container: ModelContainer,
