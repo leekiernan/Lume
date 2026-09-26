@@ -9,6 +9,14 @@ import Foundation
 import OSLog
 import SwiftData
 
+private struct ProviderSyncRequest {
+    let playlistID: UUID
+    let progress: SyncProgress?
+    let full: Bool
+    let repairingAreas: Set<AppArea>?
+    let syncAreas: Set<AppArea>?
+}
+
 // MARK: - ContentSyncManager
 
 actor ContentSyncManager {
@@ -51,7 +59,8 @@ actor ContentSyncManager {
         _ playlist: Playlist,
         progress: SyncProgress? = nil,
         full: Bool = false,
-        repairingAreas: Set<AppArea>? = nil
+        repairingAreas: Set<AppArea>? = nil,
+        syncAreas: Set<AppArea>? = nil
     ) async throws {
         let playlistId = playlist.id
 
@@ -66,7 +75,13 @@ actor ContentSyncManager {
             // Run directly in the caller's task — no wrapping unstructured Task —
             // so cancelling the caller (e.g. the user aborting from the progress
             // sheet) propagates here and tears the sync down.
-            try await performSync(playlistId: playlistId, progress: progress, full: full, repairingAreas: repairingAreas)
+            try await performSync(
+                playlistId: playlistId,
+                progress: progress,
+                full: full,
+                repairingAreas: repairingAreas,
+                syncAreas: syncAreas
+            )
         } catch {
             // An aborted sync isn't a failure: restore the playlist to idle so it
             // can be retried cleanly, rather than wedging it in the error state.
@@ -89,7 +104,8 @@ actor ContentSyncManager {
         playlistId: UUID,
         progress: SyncProgress?,
         full: Bool,
-        repairingAreas: Set<AppArea>?
+        repairingAreas: Set<AppArea>?,
+        syncAreas: Set<AppArea>?
     ) async throws {
         // Whole-sync interval: the umbrella every phase below nests under, so a
         // trace (or `XCTOSSignpostMetric`) shows both the total and the split.
@@ -108,9 +124,14 @@ actor ContentSyncManager {
         playlist.syncStatus = .syncing
         try statusContext.save()
 
-        let syncedAreas = try await runProviderSync(
-            for: playlist, playlistId: playlistId, progress: progress, full: full, repairingAreas: repairingAreas
+        let request = ProviderSyncRequest(
+            playlistID: playlistId,
+            progress: progress,
+            full: full,
+            repairingAreas: repairingAreas,
+            syncAreas: syncAreas
         )
+        let syncedAreas = try await runProviderSync(for: playlist, request: request)
 
         // Every source writes the same unread history rows (see the method).
         purgeCatalogHistory()
@@ -139,38 +160,40 @@ actor ContentSyncManager {
     /// handed, and each adds the areas its source cannot supply at all.
     private func runProviderSync(
         for playlist: Playlist,
-        playlistId: UUID,
-        progress: SyncProgress?,
-        full: Bool,
-        repairingAreas: Set<AppArea>?
+        request: ProviderSyncRequest
     ) async throws -> Set<AppArea> {
         let sourceType = playlist.sourceType
-        let areas = Self.syncAreas(
+        let requestedAreas = request.syncAreas ?? Self.syncAreas(
             enabled: AppAreaSettings.enabledContentAreas(disabledRaw: AppAreaSettings.storedValue),
-            repairing: repairingAreas
+            repairing: request.repairingAreas
         )
+        let areas = requestedAreas.subtracting(Self.unsupportedAreas(for: sourceType))
+        guard !areas.isEmpty else {
+            Logger.database.info("Skipping playlist sync: active profile has no supported catalog areas")
+            return Self.unsupportedAreas(for: sourceType)
+        }
         var synced = areas
         switch sourceType {
         case .xtream:
             synced = try await performXtreamSync(
-                playlist: playlist, playlistId: playlistId, progress: progress, areas: areas
+                playlist: playlist, playlistId: request.playlistID, progress: request.progress, areas: areas
             )
         case .m3u:
-            try await performM3USync(playlist: playlist, playlistId: playlistId, progress: progress, areas: areas)
+            try await performM3USync(playlist: playlist, playlistId: request.playlistID, progress: request.progress, areas: areas)
         case .stalker:
             try await performStalkerSync(
-                playlist: playlist, playlistId: playlistId, progress: progress, full: full, areas: areas
+                playlist: playlist, playlistId: request.playlistID, progress: request.progress, full: request.full, areas: areas
             )
         case .webdav:
-            try await performWebDAVSync(playlist: playlist, playlistId: playlistId, progress: progress, areas: areas)
+            try await performWebDAVSync(playlist: playlist, playlistId: request.playlistID, progress: request.progress, areas: areas)
         case .jellyfin, .emby:
             // Both speak the same API; the flavour only tags the rows.
             let flavor = MediaServerFlavor(sourceType: sourceType) ?? .jellyfin
             try await performMediaServerSync(
-                playlist: playlist, playlistId: playlistId, flavor: flavor, progress: progress, areas: areas
+                playlist: playlist, playlistId: request.playlistID, flavor: flavor, progress: request.progress, areas: areas
             )
         case .plex:
-            try await performPlexSync(playlist: playlist, playlistId: playlistId, progress: progress, areas: areas)
+            try await performPlexSync(playlist: playlist, playlistId: request.playlistID, progress: request.progress, areas: areas)
         }
         return synced.union(Self.unsupportedAreas(for: sourceType))
     }

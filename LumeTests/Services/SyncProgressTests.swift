@@ -131,4 +131,40 @@ struct SyncProgressTests {
     @Test func `regular Xtream sync retains every phase`() {
         #expect(SyncStep.steps(for: .xtream) == SyncStep.xtreamSteps)
     }
+
+    @Test func `profile plan exposes skipped areas and only runs enabled work`() {
+        let plan = PlaylistSyncPlan(
+            sourceType: .xtream,
+            enabledAreas: [.movies, .series]
+        )
+
+        #expect(plan.syncAreas == [.movies, .series])
+        #expect(plan.skippedForProfile == [.liveTV])
+        #expect(!plan.refreshesGuide)
+        #expect(plan.steps == [
+            .authenticating,
+            .movieCategories,
+            .seriesCategories,
+            .movies,
+            .series
+        ])
+    }
+
+    @Test func `live-only plan refreshes the guide and skips VOD work`() {
+        let plan = PlaylistSyncPlan(sourceType: .xtream, enabledAreas: [.liveTV])
+
+        #expect(plan.syncAreas == [.liveTV])
+        #expect(plan.skippedForProfile == [.movies, .series])
+        #expect(plan.refreshesGuide)
+        #expect(plan.steps == [.authenticating, .liveCategories, .liveStreams])
+    }
+
+    @Test func `unsupported source does no catalog work for live-only profile`() {
+        let plan = PlaylistSyncPlan(sourceType: .jellyfin, enabledAreas: [.liveTV])
+
+        #expect(plan.syncAreas.isEmpty)
+        #expect(plan.skippedForProfile == [.movies, .series])
+        #expect(plan.unsupportedBySource == [.liveTV])
+        #expect(plan.steps.isEmpty)
+    }
 }

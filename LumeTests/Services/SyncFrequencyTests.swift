@@ -347,7 +347,7 @@ struct SyncFrequencyTests {
         let allowed1 = gate.request()
         #expect(!allowed1)
 
-        gate.contentSyncFinished(succeeded: false)
+        gate.contentSyncFinished(succeeded: false, refreshedLiveTV: false)
         let owedRuns2 = gate.takeOwedRefresh()
         #expect(owedRuns2)
     }
@@ -357,7 +357,7 @@ struct SyncFrequencyTests {
         var gate = EPGRefreshGate()
         gate.isAutoSyncQueued = true
         gate.contentSyncStarted()
-        gate.contentSyncFinished(succeeded: true)
+        gate.contentSyncFinished(succeeded: true, refreshedLiveTV: true)
         let owedRuns1 = gate.takeOwedRefresh()
         #expect(!owedRuns1)
 
@@ -366,10 +366,18 @@ struct SyncFrequencyTests {
         #expect(owedRuns2)
     }
 
+    @Test func `a successful VOD-only sync does not owe a guide refresh`() {
+        var gate = EPGRefreshGate()
+        gate.contentSyncStarted()
+        gate.contentSyncFinished(succeeded: true, refreshedLiveTV: false)
+
+        #expect(!gate.takeOwedRefresh())
+    }
+
     @Test func `an aborted or failed sync owes nothing of its own`() {
         var gate = EPGRefreshGate()
         gate.contentSyncStarted()
-        gate.contentSyncFinished(succeeded: false)
+        gate.contentSyncFinished(succeeded: false, refreshedLiveTV: false)
         let owedRuns1 = gate.takeOwedRefresh()
         #expect(!owedRuns1)
     }
@@ -392,7 +400,7 @@ struct SyncFrequencyTests {
         let owedRuns2 = gate.takeOwedRefresh()
         #expect(!owedRuns2)
 
-        gate.contentSyncFinished(succeeded: false)
+        gate.contentSyncFinished(succeeded: false, refreshedLiveTV: false)
         let owedRuns3 = gate.takeOwedRefresh()
         #expect(owedRuns3)
     }
@@ -401,11 +409,11 @@ struct SyncFrequencyTests {
         var gate = EPGRefreshGate()
         gate.contentSyncStarted()
         gate.contentSyncStarted()
-        gate.contentSyncFinished(succeeded: true)
+        gate.contentSyncFinished(succeeded: true, refreshedLiveTV: true)
         let owedRuns1 = gate.takeOwedRefresh()
         #expect(!owedRuns1)
 
-        gate.contentSyncFinished(succeeded: true)
+        gate.contentSyncFinished(succeeded: true, refreshedLiveTV: true)
         let owedRuns2 = gate.takeOwedRefresh()
         #expect(owedRuns2)
     }

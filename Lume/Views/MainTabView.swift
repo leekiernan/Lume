@@ -63,6 +63,9 @@ struct MainTabView: View {
     /// adding a playlist, when the app would otherwise look empty and broken.
     @State var syncQueue: [PlaylistSyncRequest] = []
     @State var activeSyncRequest: PlaylistSyncRequest?
+    /// A viewer-requested refresh. Kept separate from the automatic queue so a
+    /// confirmed TV remote action never advances or dismisses auto-sync work.
+    @State private var manualSyncRequest: PlaylistSyncRequest?
 
     /// Playlists we've already auto-synced (or attempted) this session, so the
     /// launch / switch / foreground triggers don't re-present the cover for one
@@ -87,6 +90,7 @@ struct MainTabView: View {
     /// toolbar rather than a tab, and so invisible to this root.
     private var hasBlockingPresentation: Bool {
         activeSyncRequest != nil
+            || manualSyncRequest != nil
             || showsDownloads
             || playlistSwitch?.isSwitching == true
             || profileManager?.isSwitching == true
@@ -179,6 +183,14 @@ struct MainTabView: View {
             .onPlayPauseCommand {
                 guard playPauseTogglesQuickSwitch else { return }
                 router.isQuickSwitchPresented.toggle()
+            }
+            .background(
+                TVPlayPauseLongPress {
+                    presentManualProfileRefresh()
+                }
+            )
+            .fullScreenCover(item: $manualSyncRequest) { request in
+                SyncProgressView(playlist: request.playlist, repairingAreas: request.repairingAreas)
             }
         #endif
             .environment(router)
@@ -342,6 +354,7 @@ struct MainTabView: View {
         private var blockingOverlayOwnsScreen: Bool {
             router.isMultiViewPresented
                 || activeSyncRequest != nil
+                || manualSyncRequest != nil
                 || profileManager?.isSwitching == true
         }
 
@@ -355,6 +368,19 @@ struct MainTabView: View {
             }
             guard !blockingOverlayOwnsScreen else { return false }
             return !playlists.isEmpty || profileManager?.isReady == true
+        }
+
+        /// A long Play/Pause press refreshes only the catalog currently useful
+        /// to this profile. `SyncProgressView` shows that scope and waits for a
+        /// second explicit Start press before making any network request.
+        private func presentManualProfileRefresh() {
+            guard !blockingOverlayOwnsScreen,
+                  !router.isQuickSwitchPresented,
+                  NowPlayingService.shared.currentMedia == nil,
+                  let playlist = playlists.active(for: selectedPlaylistID),
+                  playlist.syncStatus != .syncing
+            else { return }
+            manualSyncRequest = PlaylistSyncRequest(playlist: playlist, repairingAreas: nil)
         }
 
         /// tvOS `TabView` keeps every *visited* tab's view hierarchy alive, and

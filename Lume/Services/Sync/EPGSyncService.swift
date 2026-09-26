@@ -57,11 +57,12 @@ struct EPGRefreshGate {
     }
 
     /// Every start is paired with one finish, whether the sync succeeded,
-    /// failed or was aborted. Only success owes a refresh of its own; a failed
-    /// or aborted one still releases anything held back while it ran.
-    mutating func contentSyncFinished(succeeded: Bool) {
+    /// failed or was aborted. A successful refresh only owes guide work when it
+    /// actually imported Live TV; a movie-only profile must not fetch an XMLTV
+    /// guide it cannot display.
+    mutating func contentSyncFinished(succeeded: Bool, refreshedLiveTV: Bool) {
         runningContentSyncs = max(0, runningContentSyncs - 1)
-        if succeeded { isRefreshOwed = true }
+        if succeeded, refreshedLiveTV { isRefreshOwed = true }
     }
 
     /// Whether an owed refresh may start now. Clears the debt when it does.
@@ -127,8 +128,8 @@ final class EPGSyncService {
 
     /// The content sync reported by `contentSyncDidStart` ended, however it
     /// ended.
-    func contentSyncDidFinish(succeeded: Bool) {
-        gate.contentSyncFinished(succeeded: succeeded)
+    func contentSyncDidFinish(succeeded: Bool, refreshedLiveTV: Bool = true) {
+        gate.contentSyncFinished(succeeded: succeeded, refreshedLiveTV: refreshedLiveTV)
         runOwedRefresh()
     }
 

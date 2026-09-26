@@ -62,20 +62,33 @@ enum SyncStep: Int, CaseIterable, Identifiable {
         full: Bool = false,
         areas: Set<AppArea>? = nil
     ) -> [SyncStep] {
+        let allAreas = Set(AppArea.allCases.filter { $0.categoryType != nil })
+        let selectedAreas = areas ?? allAreas
+        let orderedAreas = [AppArea.movies, .series, .liveTV].filter(selectedAreas.contains)
         switch sourceType {
         case .xtream:
-            guard let areas else { return xtreamSteps }
-            let orderedAreas = [AppArea.movies, .series, .liveTV].filter(areas.contains)
             return [.authenticating]
                 + orderedAreas.compactMap(\.categorySyncStep)
                 + orderedAreas.compactMap(\.contentSyncStep)
-        case .m3u: return m3uSteps
+        case .m3u:
+            return selectedAreas.isEmpty ? [] : m3uSteps
         // Stalker maps onto the same catalog kinds as Xtream, but its default
         // sync skips the movie/series content walk (loaded on demand); only a
         // full-catalog download walks everything.
-        case .stalker: return full ? xtreamSteps : stalkerDynamicSteps
-        case .webdav: return webdavSteps
-        case .jellyfin, .emby, .plex: return mediaServerSteps
+        case .stalker:
+            guard !selectedAreas.isEmpty else { return [] }
+            let categorySteps = orderedAreas.compactMap(\.categorySyncStep)
+            let contentSteps: [SyncStep] = if full {
+                orderedAreas.compactMap(\.contentSyncStep)
+            } else {
+                selectedAreas.contains(.liveTV) ? [.liveStreams] : []
+            }
+            return [.authenticating] + categorySteps + contentSteps
+        case .webdav:
+            return selectedAreas.isEmpty ? [] : webdavSteps
+        case .jellyfin, .emby, .plex:
+            let mediaAreas = orderedAreas.filter { $0 == .movies || $0 == .series }
+            return mediaAreas.isEmpty ? [] : [.authenticating] + mediaAreas.compactMap(\.contentSyncStep)
         }
     }
 

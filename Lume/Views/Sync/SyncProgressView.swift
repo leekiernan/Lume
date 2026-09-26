@@ -23,15 +23,16 @@ struct SyncProgressView: View {
     /// shows a Done button when finished.
     let autoStart: Bool
 
-    /// Pulls the entire VOD/series catalog rather than the default recent
-    /// slice. Only meaningful for Stalker portals (the "Download full catalog"
-    /// action); other source types always sync fully and ignore it.
+    /// Only Stalker honours this full-catalog option; other source types ignore it.
     let full: Bool
 
-    /// Non-nil only for automatic repair after a profile enables catalog phases
-    /// omitted by the last sync. Keeps a missing Live TV import from walking a
-    /// six-figure movie catalog again.
+    /// Non-nil only for automatic repair after a profile enables missing phases.
     let repairingAreas: Set<AppArea>?
+
+    /// Captured once when this presentation is created. The actual sync receives
+    /// this same snapshot, so changing profile preferences elsewhere cannot make
+    /// the progress list disagree with the work already confirmed here.
+    let plan: PlaylistSyncPlan
 
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
@@ -51,8 +52,13 @@ struct SyncProgressView: View {
         self.autoStart = autoStart
         self.full = full
         self.repairingAreas = repairingAreas
+        plan = PlaylistSyncPlan(
+            sourceType: playlist.sourceType,
+            full: full,
+            repairingAreas: repairingAreas
+        )
         _progress = State(initialValue: SyncProgress(
-            steps: SyncStep.steps(for: playlist.sourceType, full: full, areas: repairingAreas)
+            steps: plan.steps
         ))
         // Start already in the syncing state for auto-sync so the "Ready" screen
         // (with its Start button) never flashes before `.task` kicks off.
@@ -106,7 +112,7 @@ struct SyncProgressView: View {
 
     private func startSync() {
         // Fresh progress for each attempt so a retry starts clean.
-        progress = SyncProgress(steps: SyncStep.steps(for: playlist.sourceType, full: full, areas: repairingAreas))
+        progress = SyncProgress(steps: plan.steps)
         syncError = nil
         phase = .syncing
 
@@ -118,16 +124,19 @@ struct SyncProgressView: View {
         epgSync.contentSyncDidStart()
         syncTask = Task {
             var succeeded = false
-            defer { epgSync.contentSyncDidFinish(succeeded: succeeded) }
+            var refreshedLiveTV = false
+            defer { epgSync.contentSyncDidFinish(succeeded: succeeded, refreshedLiveTV: refreshedLiveTV) }
             do {
                 let syncManager = ContentSyncManager(modelContainer: modelContext.container)
                 try await syncManager.syncPlaylist(
                     playlist,
                     progress: progress,
                     full: full,
-                    repairingAreas: repairingAreas
+                    repairingAreas: repairingAreas,
+                    syncAreas: plan.syncAreas
                 )
                 succeeded = true
+                refreshedLiveTV = plan.refreshesGuide
                 await MainActor.run {
                     // Newly synced titles need indexing; the launch-time pass
                     // may already be finished, so kick a fresh one — but hold it
@@ -177,6 +186,8 @@ struct SyncProgressView: View {
 
                     ScrollView {
                         VStack(alignment: .leading, spacing: 8) {
+                            if phase == .ready { SyncPlanSummary(plan: plan) }
+
                             ForEach(progress.steps) { step in
                                 StepRowView(
                                     step: step,
@@ -451,6 +462,7 @@ struct SyncProgressView: View {
 
         var tvSteps: some View {
             VStack(alignment: .leading, spacing: 6) {
+                if phase == .ready { SyncPlanSummary(plan: plan, large: true) }
                 ForEach(progress.steps) { step in
                     TVStepRow(
                         step: step,
@@ -584,10 +596,3 @@ struct SyncProgressView: View {
     }
 
 #endif
-
-#Preview("Ready") {
-    let container = previewContainer()
-    let playlist = PreviewData.samplePlaylist
-    return SyncProgressView(playlist: playlist)
-        .modelContainer(container)
-}
