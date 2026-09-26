@@ -29,16 +29,14 @@
             guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
             var state = state
             state.artworkFileName = artworkFileName
-            // Live programme windows go stale at the boundary (a refresh
-            // follows); otherwise keep the activity alive for a long feature.
-            let content = ActivityContent(
-                state: state,
-                staleDate: state.isLive ? state.windowEnd : Date.now.addingTimeInterval(4 * 60 * 60)
-            )
+            let content = ActivityContent(state: state, staleDate: Self.staleDate(for: state))
             if let activity {
                 Task { await activity.update(content) }
                 return
             }
+            // One playback activity at a time: anything still showing belongs to
+            // a session that never closed its player (see `endOrphanedActivities`).
+            endOrphanedActivities()
             do {
                 activity = try Activity.request(
                     attributes: PlaybackActivityAttributes(sessionID: UUID().uuidString),
@@ -65,6 +63,35 @@
                 artworkMediaID = mediaID
             } catch {
                 Logger.player.error("Live Activity artwork write failed: \(error.localizedDescription, privacy: .public)")
+            }
+        }
+
+        /// When the activity's content stops being trustworthy without an update.
+        ///
+        /// - Live: at the programme boundary (a refresh follows).
+        /// - Playing VOD: at the projected end of the title — the bar is a
+        ///   self-running timer, so past that point it only describes a session
+        ///   that stopped reporting.
+        /// - Paused VOD: the bar is frozen, so it stays accurate; allow a long
+        ///   pause.
+        static func staleDate(for state: PlaybackActivityAttributes.ContentState, now: Date = .now) -> Date? {
+            if state.isLive { return state.windowEnd }
+            if !state.isPaused, let end = state.windowEnd, end > now { return end }
+            return now.addingTimeInterval(4 * 60 * 60)
+        }
+
+        /// Ends playback activities this process doesn't own.
+        ///
+        /// The controller only knows the activity it requested itself. When the
+        /// app goes away without the player closing — killed in the background,
+        /// swiped away mid-playback, a crash — that activity outlives the process,
+        /// its self-running progress bar ticking on for hours with nothing left to
+        /// pause, update or end it; a relaunch never learned of it. Called at
+        /// launch and before every request, so a stranded activity is cleared the
+        /// next time the app runs.
+        func endOrphanedActivities() {
+            for orphan in Activity<PlaybackActivityAttributes>.activities where orphan.id != activity?.id {
+                Task { await orphan.end(nil, dismissalPolicy: .immediate) }
             }
         }
 
