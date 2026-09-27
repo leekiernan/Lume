@@ -21,10 +21,13 @@ extension CloudSyncEngine {
 
         let mirror = try fetchSimklAccountMirror()
         let cloud = mirror.map { Self.simklValues(from: $0) }
+        // A token missing from the keychain is a disconnect only if the user
+        // disconnected here; otherwise it was lost, and the cloud copy wins.
         let verdict = SimklCredentialValues.reconcile(
             local: local,
             cloud: cloud,
-            shadow: shadow.simklCredentialShadow()
+            shadow: shadow.simklCredentialShadow(),
+            linkState: CredentialLinkStateStore.state(for: .simkl)
         )
         applySimklVerdict(verdict, mirror: mirror, into: &result)
     }
@@ -40,6 +43,7 @@ extension CloudSyncEngine {
         case let .pushToCloud(value):
             applySimklToCloud(value, mirror: mirror)
             result.simklPushed += 1
+            if value == nil { result.credentialDeletionsPushed.insert(.simkl) }
             shadow.setSimklCredentialShadow(value)
         case let .pullToLocal(value):
             guard applySimklToLocal(value) else {

@@ -21,7 +21,7 @@
 //
 //  `CredentialBackend` pairs that storage with the `UserDefaults` holding the
 //  stores' small, non-secret device-local bookkeeping (the parental PIN presence
-//  cache), so a replaced backend replaces both together.
+//  cache, `CredentialLinkState`), so a replaced backend replaces both together.
 //
 
 import Foundation

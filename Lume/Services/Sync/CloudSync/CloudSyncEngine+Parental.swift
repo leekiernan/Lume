@@ -61,11 +61,13 @@ extension CloudSyncEngine {
         }
 
         let mirror = try fetchParentalPINMirror()
-        let verdict = CloudSyncMerge.reconcile(
+        // A PIN missing from the keychain is a removal only if the parent turned
+        // it off here — never a keychain that simply lost it.
+        let verdict = ParentalPINValues.reconcile(
             local: local,
             cloud: mirror.map { ParentalPINValues(hash: $0.pinHash) },
             shadow: shadow.parentalPINShadow(),
-            mergeConflict: ParentalPINValues.mergeConflict
+            linkState: CredentialLinkStateStore.state(for: .parentalPIN)
         )
         applyPINVerdict(verdict, mirror: mirror, into: &result)
     }
@@ -80,7 +82,7 @@ extension CloudSyncEngine {
             break
         case let .pushToCloud(value):
             applyPINToCloud(value, mirror: mirror)
-            if value != nil { result.parentalPushed += 1 }
+            if value != nil { result.parentalPushed += 1 } else { result.credentialDeletionsPushed.insert(.parentalPIN) }
             shadow.setParentalPINShadow(value)
         case let .pullToLocal(value):
             guard applyPINToLocal(value) else {

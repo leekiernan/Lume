@@ -31,14 +31,15 @@ struct ParentalMergePolicyTests {
     }
 
     @Test func `turning the PIN off pushes a deletion rather than re-arming it`() {
-        // The whole reason for a shadow: without the baseline, "no local PIN"
-        // would be indistinguishable from "this device never had one", and the
-        // cloud copy would be pulled straight back down.
-        let verdict = CloudSyncMerge.reconcile(
+        // The parent turned the PIN off on this device, and that decision is
+        // recorded (`CredentialLinkState`): without it, "no local PIN" would be
+        // indistinguishable from a keychain that lost it, and the cloud copy
+        // would be pulled straight back down.
+        let verdict = ParentalPINValues.reconcile(
             local: nil,
             cloud: ParentalPINValues(hash: "h"),
             shadow: ParentalPINValues(hash: "h"),
-            mergeConflict: ParentalPINValues.mergeConflict
+            linkState: .disconnectedByUser(pendingPush: true)
         )
         #expect(verdict == .pushToCloud(nil))
     }

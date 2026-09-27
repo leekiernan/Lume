@@ -107,6 +107,7 @@ nonisolated enum ParentalControlsStore {
     static func store(hash: String) -> Bool {
         guard CredentialBackend.current.storage.write(Data(hash.utf8), to: item) else { return false }
         cachePresence(true)
+        CredentialLinkStateStore.apply(.credentialStored, to: .parentalPIN)
         return true
     }
 
@@ -119,10 +120,27 @@ nonisolated enum ParentalControlsStore {
     }
 
     /// Removes the stored PIN. A missing item is treated as success.
+    ///
+    /// Not a user decision on its own: the sync reconcile calls this to apply a
+    /// PIN turned off on another device. The settings toggle goes through
+    /// `clearForUserRemoval()`.
     @discardableResult
     static func clear() -> Bool {
         guard CredentialBackend.current.storage.delete(item) else { return false }
         cachePresence(false)
+        return true
+    }
+
+    /// The parent turning the PIN off on this device: records the decision
+    /// before the hash goes, so the iCloud reconcile disarms the PIN on every
+    /// device rather than restoring it as if the keychain had merely lost it.
+    @discardableResult
+    static func clearForUserRemoval() -> Bool {
+        CredentialLinkStateStore.apply(.userDisconnected, to: .parentalPIN)
+        guard clear() else {
+            CredentialLinkStateStore.apply(.removalFailed, to: .parentalPIN)
+            return false
+        }
         return true
     }
 

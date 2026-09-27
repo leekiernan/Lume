@@ -78,19 +78,40 @@ nonisolated enum SimklTokenStore {
         return tokens
     }
 
-    /// Saves the token set, replacing any existing one. Uses update-then-add so
-    /// item metadata survives and there's no delete/add race.
+    /// Saves the token set, replacing any existing one — a sign-in, a refresh,
+    /// or a pair pulled from another device. Any of those means the account is
+    /// connected here again (`CredentialLinkState`).
     @discardableResult
     static func save(_ tokens: SimklTokens) -> Bool {
-        guard let data = try? JSONEncoder().encode(tokens) else { return false }
-        return CredentialBackend.current.storage.write(data, to: item)
+        guard let data = try? JSONEncoder().encode(tokens),
+              CredentialBackend.current.storage.write(data, to: item)
+        else { return false }
+        CredentialLinkStateStore.apply(.credentialStored, to: .simkl)
+        return true
     }
 
     /// Removes the stored token set. A missing item is treated as success — the
     /// desired end state (no token) is already met.
+    ///
+    /// Not a user decision on its own: the sync reconcile calls this to apply
+    /// another device's disconnect. The Disconnect button goes through
+    /// `clearForUserDisconnect()`.
     @discardableResult
     static func clear() -> Bool {
         CredentialBackend.current.storage.delete(item)
+    }
+
+    /// The user's explicit Disconnect: records the decision before the token
+    /// goes, so the iCloud reconcile propagates the removal to every device
+    /// rather than restoring the token as if the keychain had merely lost it.
+    @discardableResult
+    static func clearForUserDisconnect() -> Bool {
+        CredentialLinkStateStore.apply(.userDisconnected, to: .simkl)
+        guard clear() else {
+            CredentialLinkStateStore.apply(.removalFailed, to: .simkl)
+            return false
+        }
+        return true
     }
 }
 

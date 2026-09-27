@@ -217,7 +217,9 @@ final class TraktService {
         if let accessToken = tokens?.accessToken {
             try? await client.revokeToken(accessToken)
         }
-        if TraktTokenStore.clear() {
+        // Recorded as the user's decision, so the iCloud reconcile signs every
+        // device out instead of reading the missing token as a loss.
+        if TraktTokenStore.clearForUserDisconnect() {
             NotificationCenter.default.post(name: .lumeTraktCredentialsDidChange, object: nil)
         }
         TraktAccountIdentityStore.clear()

@@ -118,7 +118,7 @@ struct TraktCredentialValuesTests {
             createdAt: 200
         ))
 
-        let verdict = TraktCredentialValues.reconcile(local: newer, cloud: older, shadow: nil)
+        let verdict = TraktCredentialValues.reconcile(local: newer, cloud: older, shadow: nil, linkState: .connected)
         #expect(verdict == .writeBoth(newer))
     }
 
@@ -134,7 +134,7 @@ struct TraktCredentialValuesTests {
             createdAt: 200
         ))
 
-        let verdict = TraktCredentialValues.reconcile(local: nil, cloud: refreshed, shadow: original)
+        let verdict = TraktCredentialValues.reconcile(local: nil, cloud: refreshed, shadow: original, linkState: .disconnectedByUser(pendingPush: true))
         #expect(verdict == .pushToCloud(nil))
     }
 
@@ -145,7 +145,7 @@ struct TraktCredentialValuesTests {
             createdAt: 100
         ))
 
-        let verdict = TraktCredentialValues.reconcile(local: nil, cloud: cloud, shadow: nil)
+        let verdict = TraktCredentialValues.reconcile(local: nil, cloud: cloud, shadow: nil, linkState: .connected)
         #expect(verdict == .pullToLocal(cloud))
     }
 }

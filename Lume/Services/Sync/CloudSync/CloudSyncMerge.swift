@@ -85,6 +85,39 @@ nonisolated enum CloudSyncMerge {
             }
         }
     }
+
+    /// Three-way merge for a keychain-held credential (Trakt, Simkl, the
+    /// parental PIN), where "absent locally" is ambiguous in a way catalog state
+    /// isn't.
+    ///
+    /// A keychain item can vanish without the user doing anything — a restore,
+    /// a keychain reset, a test run in the hosting app — and a vanished item the
+    /// cloud still holds at the baseline looks exactly like a local deletion.
+    /// Pushing it would sign every device out. So absence is read through this
+    /// device's recorded intent (`CredentialLinkState`):
+    ///
+    ///   • local present                  → `merge`, unchanged
+    ///   • local missing, removal pending → the user's decision: delete the
+    ///                                      shared copy (`pushToCloud(nil)`),
+    ///                                      whatever the cloud holds
+    ///   • local missing, no decision     → a loss: pull the cloud copy back;
+    ///                                      with nothing in the cloud either,
+    ///                                      `merge` just settles the baseline
+    ///
+    /// A locked keychain never gets here — the engine skips the pass when the
+    /// read is inconclusive.
+    static func reconcileCredential<Value: Equatable>(
+        local: Value?,
+        cloud: Value?,
+        shadow: Value?,
+        linkState: CredentialLinkState,
+        merge: (_ local: Value?, _ cloud: Value?, _ shadow: Value?) -> MergeVerdict<Value>
+    ) -> MergeVerdict<Value> {
+        guard local == nil else { return merge(local, cloud, shadow) }
+        if linkState.removalPendingPush { return .pushToCloud(nil) }
+        if let cloud { return .pullToLocal(cloud) }
+        return merge(nil, nil, shadow)
+    }
 }
 
 // MARK: - Playlist config
@@ -219,6 +252,21 @@ nonisolated struct ParentalPINValues: Codable, Equatable {
     static func mergeConflict(local _: ParentalPINValues, cloud: ParentalPINValues) -> ParentalPINValues {
         cloud
     }
+
+    /// The PIN merge. A missing local PIN is a removal only when the parent
+    /// turned it off on this device (`linkState`); a PIN that merely vanished
+    /// from the keychain is restored from the cloud rather than disarming every
+    /// other device's gates. See `CloudSyncMerge.reconcileCredential`.
+    static func reconcile(
+        local: ParentalPINValues?,
+        cloud: ParentalPINValues?,
+        shadow: ParentalPINValues?,
+        linkState: CredentialLinkState
+    ) -> MergeVerdict<ParentalPINValues> {
+        CloudSyncMerge.reconcileCredential(local: local, cloud: cloud, shadow: shadow, linkState: linkState) {
+            CloudSyncMerge.reconcile(local: $0, cloud: $1, shadow: $2, mergeConflict: mergeConflict)
+        }
+    }
 }
 
 /// The syncable state of a category's parental restriction. Presence *is* the
@@ -270,25 +318,33 @@ nonisolated struct TraktCredentialValues: Codable, Equatable {
     /// edit over a delete": disconnect revokes the authorization server-side,
     /// so a concurrent refresh cannot be a usable resurrection. If both sides
     /// changed and either deleted its credentials, propagate the deletion.
+    ///
+    /// A missing local token counts as a disconnect only when the user
+    /// disconnected on this device (`linkState`); otherwise the keychain lost
+    /// it, and the cloud authorization is pulled back down. See
+    /// `CloudSyncMerge.reconcileCredential`.
     static func reconcile(
         local: TraktCredentialValues?,
         cloud: TraktCredentialValues?,
-        shadow: TraktCredentialValues?
+        shadow: TraktCredentialValues?,
+        linkState: CredentialLinkState
     ) -> MergeVerdict<TraktCredentialValues> {
-        let localChanged = local != shadow
-        let cloudChanged = cloud != shadow
-        if localChanged, cloudChanged, local == nil {
-            return .pushToCloud(nil)
+        CloudSyncMerge.reconcileCredential(local: local, cloud: cloud, shadow: shadow, linkState: linkState) { local, cloud, shadow in
+            let localChanged = local != shadow
+            let cloudChanged = cloud != shadow
+            if localChanged, cloudChanged, local == nil {
+                return .pushToCloud(nil)
+            }
+            if localChanged, cloudChanged, cloud == nil {
+                return .pullToLocal(nil)
+            }
+            return CloudSyncMerge.reconcile(
+                local: local,
+                cloud: cloud,
+                shadow: shadow,
+                mergeConflict: mergeConflict
+            )
         }
-        if localChanged, cloudChanged, cloud == nil {
-            return .pullToLocal(nil)
-        }
-        return CloudSyncMerge.reconcile(
-            local: local,
-            cloud: cloud,
-            shadow: shadow,
-            mergeConflict: mergeConflict
-        )
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -347,25 +403,35 @@ nonisolated struct SimklCredentialValues: Codable, Equatable {
         local.issuedAt > cloud.issuedAt ? local : cloud
     }
 
+    /// Same contract as `TraktCredentialValues.reconcile`: an explicit
+    /// disconnect wins over a concurrent refresh.
+    ///
+    /// A missing local token counts as a disconnect only when the user
+    /// disconnected on this device (`linkState`); otherwise the keychain lost
+    /// it, and the cloud authorization is pulled back down. See
+    /// `CloudSyncMerge.reconcileCredential`.
     static func reconcile(
         local: SimklCredentialValues?,
         cloud: SimklCredentialValues?,
-        shadow: SimklCredentialValues?
+        shadow: SimklCredentialValues?,
+        linkState: CredentialLinkState
     ) -> MergeVerdict<SimklCredentialValues> {
-        let localChanged = local != shadow
-        let cloudChanged = cloud != shadow
-        if localChanged, cloudChanged, local == nil {
-            return .pushToCloud(nil)
+        CloudSyncMerge.reconcileCredential(local: local, cloud: cloud, shadow: shadow, linkState: linkState) { local, cloud, shadow in
+            let localChanged = local != shadow
+            let cloudChanged = cloud != shadow
+            if localChanged, cloudChanged, local == nil {
+                return .pushToCloud(nil)
+            }
+            if localChanged, cloudChanged, cloud == nil {
+                return .pullToLocal(nil)
+            }
+            return CloudSyncMerge.reconcile(
+                local: local,
+                cloud: cloud,
+                shadow: shadow,
+                mergeConflict: mergeConflict
+            )
         }
-        if localChanged, cloudChanged, cloud == nil {
-            return .pullToLocal(nil)
-        }
-        return CloudSyncMerge.reconcile(
-            local: local,
-            cloud: cloud,
-            shadow: shadow,
-            mergeConflict: mergeConflict
-        )
     }
 
     private enum CodingKeys: String, CodingKey {

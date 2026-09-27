@@ -245,7 +245,9 @@ final class SimklService {
         if let accessToken = tokens?.accessToken {
             try? await client.revokeToken(accessToken)
         }
-        if SimklTokenStore.clear() {
+        // Recorded as the user's decision, so the iCloud reconcile signs every
+        // device out instead of reading the missing token as a loss.
+        if SimklTokenStore.clearForUserDisconnect() {
             NotificationCenter.default.post(name: .lumeSimklCredentialsDidChange, object: nil)
         }
         SimklAccountIdentityStore.clear()

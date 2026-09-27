@@ -104,13 +104,13 @@ struct SimklCredentialValuesTests {
     @Test func `a concurrent refresh keeps the newest issued token`() {
         let older = SimklCredentialValues(tokens: makeTokens(accessToken: "older", refreshToken: "older-refresh", issuedAt: 100))
         let newer = SimklCredentialValues(tokens: makeTokens(accessToken: "newer", refreshToken: "newer-refresh", issuedAt: 200))
-        #expect(SimklCredentialValues.reconcile(local: newer, cloud: older, shadow: nil) == .writeBoth(newer))
+        #expect(SimklCredentialValues.reconcile(local: newer, cloud: older, shadow: nil, linkState: .connected) == .writeBoth(newer))
     }
 
     @Test func `a concurrent disconnect wins over a token refresh`() {
         let original = SimklCredentialValues(tokens: makeTokens(accessToken: "original", refreshToken: "original-refresh", issuedAt: 100))
         let refreshed = SimklCredentialValues(tokens: makeTokens(accessToken: "refreshed", refreshToken: "refreshed-refresh", issuedAt: 200))
-        #expect(SimklCredentialValues.reconcile(local: nil, cloud: refreshed, shadow: original) == .pushToCloud(nil))
+        #expect(SimklCredentialValues.reconcile(local: nil, cloud: refreshed, shadow: original, linkState: .disconnectedByUser(pendingPush: true)) == .pushToCloud(nil))
     }
 }
 
