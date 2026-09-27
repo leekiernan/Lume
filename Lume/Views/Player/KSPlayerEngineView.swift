@@ -126,6 +126,11 @@ struct KSPlayerEngineView: View {
     @State var hideTask: Task<Void, Never>?
     @State private var hoverHideTask: Task<Void, Never>?
     @State var pipObservationTask: Task<Void, Never>?
+    #if os(macOS)
+        /// Drives PiP on macOS in place of the layer's `isPipActive`, whose
+        /// delegate leaves the PiP window's buttons dead there.
+        @State var macPip = KSMacPictureInPicture()
+    #endif
 
     #if os(tvOS)
         /// Republishes KSPlayer state to the shared overlay (`isPlaying`,
@@ -480,6 +485,9 @@ struct KSPlayerEngineView: View {
                 hideTask?.cancel()
                 hoverHideTask?.cancel()
                 pipObservationTask?.cancel()
+                #if os(macOS)
+                    macPip.stop(restoringWindow: false)
+                #endif
                 reconnector.cancel()
                 cancelStartupWatchdog()
                 cancelStallWatchdog()
@@ -502,6 +510,7 @@ struct KSPlayerEngineView: View {
                 toggleControls()
             }
             #if os(macOS)
+            .onChange(of: macPip.isActive) { _, active in isPipActive = active }
             .onContinuousHover(coordinateSpace: .local) { phase in
                 switch phase {
                 case .active:

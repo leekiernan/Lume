@@ -30,6 +30,7 @@ import SwiftUI
         @Binding var hideTask: Task<Void, Never>?
         var onClose: () -> Void
         var onTogglePlay: () -> Void
+        var onTogglePip: () -> Void
         var onResetHideTimer: () -> Void
         var onScheduleHide: () -> Void
         /// Seek / skip through the engine view, which hands a catch-up
@@ -125,7 +126,7 @@ import SwiftUI
 
         private var pipButton: some View {
             Button {
-                coordinator.playerLayer?.isPipActive.toggle()
+                onTogglePip()
                 onResetHideTimer()
             } label: {
                 circleGlyph(isPipActive ? "pip.exit" : "pip.enter", size: 16, diameter: 44)

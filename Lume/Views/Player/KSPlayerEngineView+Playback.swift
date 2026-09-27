@@ -29,6 +29,9 @@ extension KSPlayerEngineView {
             guard tick.start.isEngineReady else { return }
             markPlaybackStarted(tick.start.noteEngineStarted(requiringReady: true))
             setBuffering(false)
+            #if os(macOS)
+                macPip.prepare(coordinator.playerLayer)
+            #endif
         case .paused:
             setBuffering(false)
         case .playedToTheEnd:
@@ -399,23 +402,37 @@ extension KSPlayerEngineView {
 
 #if !os(tvOS)
     extension KSPlayerEngineView {
+        /// Start or stop PiP from the player's own button.
+        func togglePip() {
+            #if os(macOS)
+                macPip.toggle(coordinator.playerLayer)
+            #else
+                coordinator.playerLayer?.isPipActive.toggle()
+            #endif
+        }
+
         /// Poll until playerLayer is available, then observe its published isPipActive.
         /// The `for await` holds the layer strongly, so this task must be cancelled on
         /// disappear or the KSPlayerLayer (and its decoder session) outlives playback.
+        ///
+        /// Not on macOS: there `macPip` drives PiP and the layer's flag never moves,
+        /// so observing it would only reset the button mid-PiP on an in-player swap.
         func observePipState() {
             pipObservationTask?.cancel()
-            pipObservationTask = Task { @MainActor in
-                var attempts = 0
-                while coordinator.playerLayer == nil, attempts < 50 {
-                    try? await Task.sleep(nanoseconds: 100_000_000)
-                    attempts += 1
+            #if !os(macOS)
+                pipObservationTask = Task { @MainActor in
+                    var attempts = 0
+                    while coordinator.playerLayer == nil, attempts < 50 {
+                        try? await Task.sleep(nanoseconds: 100_000_000)
+                        attempts += 1
+                    }
+                    guard !Task.isCancelled, let playerLayer = coordinator.playerLayer else { return }
+                    for await active in playerLayer.$isPipActive.values {
+                        guard !Task.isCancelled else { return }
+                        isPipActive = active
+                    }
                 }
-                guard !Task.isCancelled, let playerLayer = coordinator.playerLayer else { return }
-                for await active in playerLayer.$isPipActive.values {
-                    guard !Task.isCancelled else { return }
-                    isPipActive = active
-                }
-            }
+            #endif
         }
     }
 #endif

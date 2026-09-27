@@ -95,8 +95,9 @@ final class LumeEngineCoordinator: NSObject, ObservableObject {
     /// The engine's video surface for the hosting representable.
     private(set) var displayLayer: LumeDisplayLayer?
 
-    private var session: PlayerSession?
-    private var pipBridge: PictureInPictureBridge?
+    private(set) var session: PlayerSession?
+    /// Internal for `LumeEngineCoordinator+PictureInPicture.swift`.
+    var pipBridge: PictureInPictureBridge?
     private var mediaInfo: MediaInfo?
     private var currentMedia: PlayableMedia?
     private var eventTask: Task<Void, Never>?
@@ -281,19 +282,6 @@ final class LumeEngineCoordinator: NSObject, ObservableObject {
         if catchup.route(.to(seconds)) { return }
         let session = session
         Task { await session?.seek(to: seconds) }
-    }
-
-    /// PiP starts and stops asynchronously; `syncPipState` picks up the result.
-    func togglePictureInPicture() {
-        pipBridge?.toggle()
-    }
-
-    /// Pause for backgrounding, unless Picture in Picture is carrying the video.
-    /// Reads the bridge, not the `isPipActive` mirror, which can trail a tick.
-    func pauseForBackground() {
-        guard pipBridge?.isActive != true, isPlaying else { return }
-        let session = session
-        Task { await session?.pause() }
     }
 
     /// Mirror the bridge's delegate-driven PiP state (start, stop, system close;
