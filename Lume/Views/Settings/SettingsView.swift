@@ -544,6 +544,35 @@ struct SettingsView: View {
                 }
             }
             .focusSection()
+            // Menu retraces the way in: out of a drill-in one level at a time,
+            // then to the category in the sidebar. Only reached while focus is
+            // inside this pane, so from the sidebar Menu stays the system's
+            // (focus to the tab bar). Deeper handlers — a lifted reorder row
+            // cancelling its lift — still take the press first.
+            .onExitCommand(perform: handleDetailBack)
+        }
+
+        private func handleDetailBack() {
+            let pane: SettingsBackStep.LanguagePane? = switch preferredLanguagePane {
+            case .list: .list
+            case .add: .add
+            case nil: nil
+            }
+            switch SettingsBackStep.next(
+                hasPlaylist: selectedPlaylist != nil,
+                showingEPGSources: showingEPGSources,
+                hasEngineOptions: selectedEngineOptions != nil,
+                languagePane: pane,
+                showingAreaCategories: showingAreaCategories
+            ) {
+            case .closePlaylist: selectedPlaylist = nil
+            case .closeEPGSources: showingEPGSources = false
+            case .closeEngineOptions: selectedEngineOptions = nil
+            case .closeLanguagePicker: preferredLanguagePane = .list
+            case .closeLanguageList: preferredLanguagePane = nil
+            case .closeAreaCategories: showingAreaCategories = false
+            case .toSidebar: focusedCategory = selectedCategory
+            }
         }
 
         private var tvSearchDetail: some View {
