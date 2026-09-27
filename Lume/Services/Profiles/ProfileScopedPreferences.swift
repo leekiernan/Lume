@@ -53,8 +53,7 @@ nonisolated enum ProfileScopedPreferences {
             (RecommendationSettings.baseEnabledKey, .bool(default: RecommendationSettings.enabledDefault)),
             (SportsSyncService.baseEnabledKey, .bool(default: SportsSyncService.enabledDefault)),
             (SportsSyncService.baseTabEnabledKey, .bool(default: SportsSyncService.tabEnabledDefault)),
-            (SportsSyncService.baseHideScoresKey, .bool(default: false)),
-            (SportsSyncService.baseSyncFrequencyKey, .string)
+            (SportsSyncService.baseHideScoresKey, .bool(default: false))
         ]
         for surface in SectionSurface.allCases {
             keys.append((HomeLayoutSettings.baseSectionOrderKey(surface), .string))
@@ -252,8 +251,7 @@ nonisolated enum ProfileScopedPreferences {
         if !defaults.bool(forKey: sportsMigrationFlagKey) {
             for base in [
                 SportsSyncService.baseEnabledKey,
-                SportsSyncService.baseTabEnabledKey,
-                SportsSyncService.baseSyncFrequencyKey
+                SportsSyncService.baseTabEnabledKey
             ] {
                 let scoped = key(base)
                 guard scoped != base, defaults.object(forKey: scoped) == nil,

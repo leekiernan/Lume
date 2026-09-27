@@ -50,8 +50,7 @@ struct ProfileScopedPreferencesTests {
                 RecommendationSettings.enabledKey,
                 SportsSyncService.enabledKey,
                 SportsSyncService.tabEnabledKey,
-                SportsSyncService.hideScoresKey,
-                SportsSyncService.syncFrequencyKey
+                SportsSyncService.hideScoresKey
             ]
             for surface in SectionSurface.allCases {
                 expected.insert(HomeLayoutSettings.sectionOrderKey(surface))
@@ -74,8 +73,7 @@ struct ProfileScopedPreferencesTests {
             RecommendationSettings.baseEnabledKey,
             SportsSyncService.baseEnabledKey,
             SportsSyncService.baseTabEnabledKey,
-            SportsSyncService.baseHideScoresKey,
-            SportsSyncService.baseSyncFrequencyKey
+            SportsSyncService.baseHideScoresKey
         ]
         for surface in SectionSurface.allCases {
             expectedBases.append(HomeLayoutSettings.baseSectionOrderKey(surface))
@@ -162,10 +160,6 @@ struct ProfileScopedPreferencesTests {
             SportsSyncService.baseEnabledKey,
             profileID: Self.profileA
         ))
-        source.set(SyncFrequency.weekly.rawValue, forKey: ProfileScopedPreferences.key(
-            SportsSyncService.baseSyncFrequencyKey,
-            profileID: Self.profileA
-        ))
 
         let captured = ProfileScopedPreferences.snapshot(profileID: Self.profileA, defaults: source)
         let json = try #require(ProfileScopedPreferences.encode(captured))
@@ -181,10 +175,6 @@ struct ProfileScopedPreferencesTests {
             SportsSyncService.baseEnabledKey,
             profileID: Self.profileB
         )))
-        #expect(destination.string(forKey: ProfileScopedPreferences.key(
-            SportsSyncService.baseSyncFrequencyKey,
-            profileID: Self.profileB
-        )) == SyncFrequency.weekly.rawValue)
     }
 
     @Test func `pristine profile does not claim an empty cloud snapshot`() throws {
@@ -399,7 +389,6 @@ struct ProfileScopedPreferencesTests {
         defaults.set(true, forKey: ProfileScopedPreferences.migrationFlagKey)
         defaults.set(false, forKey: SportsSyncService.baseEnabledKey)
         defaults.set(false, forKey: SportsSyncService.baseTabEnabledKey)
-        defaults.set(SyncFrequency.weekly.rawValue, forKey: SportsSyncService.baseSyncFrequencyKey)
 
         withActiveProfile(Self.profileA) {
             ProfileScopedPreferences.migrateLegacyValuesIfNeeded(defaults: defaults)
@@ -413,10 +402,6 @@ struct ProfileScopedPreferencesTests {
             SportsSyncService.baseTabEnabledKey,
             profileID: Self.profileA
         )))
-        #expect(defaults.string(forKey: ProfileScopedPreferences.key(
-            SportsSyncService.baseSyncFrequencyKey,
-            profileID: Self.profileA
-        )) == SyncFrequency.weekly.rawValue)
         #expect(defaults.bool(forKey: ProfileScopedPreferences.sportsMigrationFlagKey))
     }
 }
