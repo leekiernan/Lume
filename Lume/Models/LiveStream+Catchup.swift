@@ -44,3 +44,35 @@ extension LiveStream {
         supportsCatchup && CatchupWindow.contains(start: start, archiveDays: catchupArchiveDays, now: now)
     }
 }
+
+/// "Watch from Start" for the programme on air right now: the one rule every
+/// surface asks before offering to restart a live programme from its
+/// beginning. Plain values, so the guide's off-main snapshots can ask it too.
+nonisolated enum CatchupRestart {
+    /// The programme to restart, or `nil` when there is nothing to offer: no
+    /// guide data, a programme that hasn't started or has already ended, a
+    /// channel without catch-up, or a start that has fallen out of the archive.
+    /// "In progress" matches `EPGProgramCell.isLive(at:)` — inclusive of the
+    /// start, exclusive of the end.
+    static func programme(
+        _ current: EPGSlot?,
+        now: Date,
+        catchupCapable: Bool,
+        archiveDays: Int
+    ) -> EPGSlot? {
+        guard let current,
+              current.start <= now, now < current.end,
+              catchupCapable,
+              CatchupWindow.contains(start: current.start, archiveDays: archiveDays, now: now)
+        else { return nil }
+        return current
+    }
+}
+
+extension LiveStream {
+    /// The currently airing programme this channel can replay from its start
+    /// at `now` — see `CatchupRestart`.
+    func restartableProgramme(_ current: EPGSlot?, now: Date) -> EPGSlot? {
+        CatchupRestart.programme(current, now: now, catchupCapable: supportsCatchup, archiveDays: catchupArchiveDays)
+    }
+}
