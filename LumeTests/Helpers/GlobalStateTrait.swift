@@ -18,11 +18,19 @@
 //  write fence read the active profile) takes `.readsGlobalState`; everything
 //  else keeps running in parallel around them.
 //
+//  While any test holds the lock, the process runs as a fresh install's
+//  default profile (`TestProfileBaseline`): the tests run inside the app, so
+//  without this they would read — and pass or fail by — however the app on
+//  the machine running them happens to be configured (an active profile with
+//  Live TV switched off, say).
+//
 //  Prefer making a suite hermetic instead when the code under test can be
 //  handed its own `UserDefaults(suiteName:)` or store — this trait is for
 //  state that has no injection point.
 //
 
+import Foundation
+@testable import Lume
 import Testing
 
 /// Runs every test case that carries it under the process-wide global-state
@@ -133,6 +141,9 @@ actor GlobalStateLock {
         case .exclusive: hasWriter = false
         case .shared: readers -= 1
         }
+        // Last holder gone: hand the machine's own settings back — unless a
+        // waiter is about to take the lock, in which case the baseline stays.
+        if !hasWriter, readers == 0, waiters.isEmpty { TestProfileBaseline.exit() }
         // Wake waiters in arrival order: a run of readers together, or one
         // writer once the lock is fully free.
         while let next = waiters.first, canGrant(next.access) {
@@ -150,9 +161,58 @@ actor GlobalStateLock {
     }
 
     private func take(_ access: GlobalStateTrait.Access) {
+        // First holder of an idle lock: swap in the clean baseline. Done here,
+        // on the actor, so it can't interleave with another grant or release.
+        if !hasWriter, readers == 0 { TestProfileBaseline.enter() }
         switch access {
         case .exclusive: hasWriter = true
         case .shared: readers += 1
         }
+    }
+}
+
+/// The app state every global-state test runs against: no active profile and
+/// none of the profile-scoped preferences set — a fresh install's default
+/// profile, where every area is enabled. The machine's own values are saved on
+/// `enter()` and put back on `exit()`, so running the suite never alters the
+/// developer's installed app. The saved copy is also written to defaults, so a
+/// run that crashed mid-way is repaired at the start of the next one.
+nonisolated enum TestProfileBaseline {
+    private static let savedKey = "lumeTests.savedProfileBaseline"
+    private nonisolated(unsafe) static var isActive = false
+
+    private static var keys: [String] {
+        [ActiveProfileStore.key] + ProfileScopedPreferences.scopedBaseKeys
+    }
+
+    static func enter() {
+        guard !isActive else { return }
+        isActive = true
+        let defaults = UserDefaults.standard
+        // A previous run that never reached `exit()` left the baseline in
+        // place; restore the machine's values before saving them again.
+        restoreSaved(in: defaults)
+        var present: [String: Any] = [:]
+        for key in keys {
+            if let value = defaults.object(forKey: key) { present[key] = value }
+        }
+        defaults.set(present, forKey: savedKey)
+        for key in keys {
+            defaults.removeObject(forKey: key)
+        }
+    }
+
+    static func exit() {
+        guard isActive else { return }
+        isActive = false
+        restoreSaved(in: UserDefaults.standard)
+    }
+
+    private static func restoreSaved(in defaults: UserDefaults) {
+        guard let present = defaults.dictionary(forKey: savedKey) else { return }
+        for key in keys {
+            if let value = present[key] { defaults.set(value, forKey: key) } else { defaults.removeObject(forKey: key) }
+        }
+        defaults.removeObject(forKey: savedKey)
     }
 }
