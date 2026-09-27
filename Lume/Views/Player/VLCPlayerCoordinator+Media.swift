@@ -49,4 +49,36 @@ extension VLCPlayerCoordinator {
         if let jitter = options.clockJitter { media.addOption(":clock-jitter=\(jitter)") }
         if let synchro = options.clockSynchro { media.addOption(":clock-synchro=\(synchro)") }
     }
+
+    // MARK: - Video info
+
+    /// Reads the current video track's resolution, frame rate and codec.
+    /// Published only when the value actually changes to avoid view churn.
+    ///
+    /// Lives here rather than beside its callers purely for file size.
+    func refreshVideoInfo() {
+        let size = mediaPlayer.videoSize
+        let track = mediaPlayer.videoTracks.first
+
+        var width = Int(size.width.rounded())
+        var height = Int(size.height.rounded())
+        var fps = 0.0
+        var codec: String?
+
+        if let track {
+            if let video = track.video {
+                if video.width > 0 { width = Int(video.width) }
+                if video.height > 0 { height = Int(video.height) }
+                let denominator = max(Int(video.frameRateDenominator), 1)
+                if video.frameRate > 0 { fps = Double(video.frameRate) / Double(denominator) }
+            }
+            let name = track.codecName()
+            codec = name.isEmpty ? nil : name
+        }
+
+        let info = (width > 0 && height > 0)
+            ? PlayerVideoInfo(width: width, height: height, fps: fps, codec: codec)
+            : nil
+        if info != videoInfo { videoInfo = info }
+    }
 }

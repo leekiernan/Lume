@@ -427,6 +427,35 @@ struct KSPlayerOptions {
     }
 }
 
+/// The forward and maximum buffer KSPlayer is given for one stream, in seconds.
+/// Pure, so the per-stream rules are testable without building `KSOptions`.
+nonisolated struct KSPlayerBufferDurations: Equatable {
+    /// `KSOptions.preferredForwardBufferDuration`: how much must be buffered
+    /// before playback starts or resumes.
+    var preferredForward: TimeInterval
+    /// `KSOptions.maxBufferDuration`: where reading ahead pauses.
+    var maximum: TimeInterval
+
+    /// The user's buffer settings for a stream of this kind. A catch-up stream
+    /// caps the maximum at `PlayerSettings.KSPlayer.catchupMaxBuffer`, and the
+    /// forward buffer never exceeds the maximum; everything else is the
+    /// settings unchanged.
+    static func resolve(
+        liveBuffer: Int,
+        vodBuffer: Int,
+        maxBuffer: Int,
+        isLive: Bool,
+        isCatchup: Bool
+    ) -> KSPlayerBufferDurations {
+        let forward = TimeInterval(isLive ? liveBuffer : vodBuffer)
+        guard isCatchup else {
+            return KSPlayerBufferDurations(preferredForward: forward, maximum: TimeInterval(maxBuffer))
+        }
+        let maximum = TimeInterval(min(maxBuffer, PlayerSettings.KSPlayer.catchupMaxBuffer))
+        return KSPlayerBufferDurations(preferredForward: min(forward, maximum), maximum: maximum)
+    }
+}
+
 /// A point-in-time read of every Lume Engine option, taken when the coordinator
 /// builds its `PlayerConfiguration`.
 struct LumeEngineOptions {

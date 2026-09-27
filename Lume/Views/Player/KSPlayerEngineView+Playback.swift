@@ -26,8 +26,8 @@ extension KSPlayerEngineView {
             // Ignore a stale .bufferFinished from the previous session that
             // can arrive in the window between retryPlayback() resetting the
             // state and the new session emitting its own .readyToPlay.
-            guard hasSeenReadyToPlay else { return }
-            markPlaybackStarted()
+            guard tick.start.isEngineReady else { return }
+            markPlaybackStarted(tick.start.noteEngineStarted(requiringReady: true))
             setBuffering(false)
         case .paused:
             setBuffering(false)
@@ -66,43 +66,44 @@ extension KSPlayerEngineView {
     /// is playing, while a genuine stall or in-flight reconnect leaves it frozen
     /// (no advance → spinner stays). Cheap no-op once the spinner is already down.
     ///
-    /// The same signal also proves the stream *started*: half a second of real
-    /// progress on this stream marks the first frame even when its
-    /// `.readyToPlay` was lost. KSPlayer's callbacks are delivered async, so
-    /// across a quick swap (a catch-up seek, especially one made while the
-    /// previous segment was still loading) the new stream's ready callback can
-    /// be consumed before the swap's reset clears it — leaving a playing stream
-    /// marked unstarted, its spinner up and its startup watchdog armed.
+    /// The same signal also proves the stream *started* (`PlaybackStartTracker`):
+    /// half a second of real progress on this stream marks the first frame even
+    /// when its `.readyToPlay` was lost. KSPlayer's callbacks are delivered
+    /// async, so across a quick swap (a catch-up seek, especially one made while
+    /// the previous segment was still loading) the new stream's ready callback
+    /// can be consumed before the swap's reset clears it — leaving a playing
+    /// stream marked unstarted, its spinner up and its startup watchdog armed.
     func notePlaybackProgress(_ current: TimeInterval) {
         guard current.isFinite, !isSeeking else { return }
         defer { tick.lastPlayhead = current }
-        if tick.firstPlayhead < 0 || current < tick.firstPlayhead { tick.firstPlayhead = current }
-        if !hasStartedPlayback, current - tick.firstPlayhead >= Self.startProofProgress {
-            markPlaybackStarted(provenByPlayhead: true)
+        if let proof = tick.start.notePlayhead(current) {
+            markPlaybackStarted(proof)
             setBuffering(false)
         }
         guard isBuffering, tick.lastPlayhead >= 0, current > tick.lastPlayhead else { return }
-        markPlaybackStarted()
+        // A single tick of progress while ready is the engine playing, even
+        // without its `.bufferFinished`; still gated on this stream's
+        // `.readyToPlay` so a stale tick can't start it.
+        markPlaybackStarted(tick.start.noteEngineStarted(requiringReady: true))
         setBuffering(false)
     }
 
-    /// How far the playhead must advance on a stream before that alone counts
-    /// as its first frame — several 0.1 s ticks, so a stale sample or two from
-    /// the stream being replaced can't pass for progress.
-    static let startProofProgress: TimeInterval = 0.5
-
     /// Record that the stream has produced its first frame. Unlocks the controls
     /// for good and disarms the startup watchdog (a dead-stream timeout is moot
-    /// once frames are flowing). Idempotent.
+    /// once frames are flowing).
     ///
-    /// Guarded by `hasSeenReadyToPlay` so a stale `.bufferFinished` callback
-    /// from the *previous* session (which arrives after `retryPlayback()` resets
-    /// `hasStartedPlayback`) cannot prematurely cancel the watchdog before the
-    /// new session's prepare cycle has started — unless `provenByPlayhead`,
-    /// where the playhead itself has advanced on this stream (see
-    /// `notePlaybackProgress`), which no stale callback can fake.
-    func markPlaybackStarted(provenByPlayhead: Bool = false) {
-        guard !hasStartedPlayback, hasSeenReadyToPlay || provenByPlayhead else { return }
+    /// Takes what `tick.start` returned, which is non-`nil` exactly once per
+    /// stream. Engine signals go through `noteEngineStarted(requiringReady:)`,
+    /// so a stale `.bufferFinished` callback from the *previous* session (which
+    /// arrives after `retryPlayback()` resets the tracker) cannot prematurely
+    /// cancel the watchdog before the new session's own `.readyToPlay` — while
+    /// a playhead advance on this stream, which no stale callback can fake,
+    /// needs no such gate.
+    func markPlaybackStarted(_ proof: PlaybackStartTracker.Proof?) {
+        guard let proof else { return }
+        if proof == .playhead {
+            Logger.player.info("KSPlayer: first frame proven by playhead progress")
+        }
         hasStartedPlayback = true
         isCatchupSegmentLoading = false
         PlaybackQoE.shared.noteFirstFrame()
@@ -127,7 +128,7 @@ extension KSPlayerEngineView {
         }
         switch state {
         case .readyToPlay:
-            hasSeenReadyToPlay = true
+            tick.start.noteEngineReady()
             reconnector.reset()
         case .bufferFinished:
             // Guard: KSPlayerLayer.play() immediately sets state = .bufferFinished
@@ -137,7 +138,7 @@ extension KSPlayerEngineView {
             // that stale signal causes an infinite loop on persistent failures (e.g.
             // 403 token expiry) — the counter resets to 0 every cycle and never
             // reaches the give-up threshold.
-            if hasSeenReadyToPlay {
+            if tick.start.isEngineReady {
                 reconnector.reset()
             }
         case .error:
@@ -326,7 +327,7 @@ extension KSPlayerEngineView {
             isBuffering = true
         }
         hasStartedPlayback = false
-        hasSeenReadyToPlay = false
+        tick.start.beginStream()
         tick.lastPlayhead = -1
         reconnector.reset()
         #if os(tvOS)
@@ -377,8 +378,9 @@ extension KSPlayerEngineView {
     func reconnect() {
         guard let layer = coordinator.playerLayer else { return }
         // Reset session gates so stale callbacks from the previous session don't
-        // prematurely clear the spinner or reset the reconnect budget.
-        hasSeenReadyToPlay = false
+        // prematurely clear the spinner or reset the reconnect budget. Whether
+        // the stream had started is kept: a reconnect is not a new join.
+        tick.start.beginReconnect()
         tick.lastPlayhead = -1
         let resumeAt = catchupRouter.enginePosition(forClock: clock.current)
         if !media.isLive, resumeAt > 1 {

@@ -19,6 +19,8 @@ final class LumeEngineCoordinator: NSObject, ObservableObject {
     /// Set once the first frames are rendering; drives the loading indicator
     /// and the startup-failure watchdog.
     @Published private(set) var hasStartedPlayback = false
+    /// `.playing` or a playhead advance starts a session — `PlaybackStartTracker`.
+    private var startTracker = PlaybackStartTracker()
     @Published private(set) var videoInfo: PlayerVideoInfo?
     @Published private(set) var audioTrackOptions: [PlayerTrackOption] = []
     @Published private(set) var textTrackOptions: [PlayerTrackOption] = []
@@ -131,6 +133,7 @@ final class LumeEngineCoordinator: NSObject, ObservableObject {
         currentMedia = media
         catchup.load(media)
         reportedFailure = false
+        startTracker.beginStream()
         // Up from the start of every (re)load, not only once the engine
         // reports `.opening`, so a swap never shows a blank, idle surface.
         isBuffering = true
@@ -418,8 +421,7 @@ final class LumeEngineCoordinator: NSObject, ObservableObject {
                 PlaybackQoE.shared.noteStallEnded()
             }
             if state == .playing {
-                hasStartedPlayback = true
-                PlaybackQoE.shared.noteFirstFrame()
+                markPlaybackStarted(startTracker.noteEngineStarted())
                 onRecovered?()
             }
             if state == .failed {
@@ -452,6 +454,8 @@ final class LumeEngineCoordinator: NSObject, ObservableObject {
         let position = await session.position
         let duration = await session.duration ?? 0
         onTime?(position, duration)
+        // A tick in flight across a reload read the session it replaced.
+        if self.session === session { markPlaybackStarted(startTracker.notePlayhead(position)) }
 
         // Pipeline-health heartbeat: every ~3 s until playback settles, then
         // every ~30 s. Ground truth for triaging device-only failures (silent
@@ -522,6 +526,14 @@ final class LumeEngineCoordinator: NSObject, ObservableObject {
             return TrackLanguageMatcher.displayName(for: language)
         }
         return fallback
+    }
+
+    /// The first frame: `proof` is non-`nil` once per session. Ends the watchdog.
+    private func markPlaybackStarted(_ proof: PlaybackStartTracker.Proof?) {
+        guard let proof else { return }
+        if proof == .playhead { Logger.player.info("LumeEngine: first frame proven by playhead progress") }
+        hasStartedPlayback = true
+        PlaybackQoE.shared.noteFirstFrame()
     }
 
     private func reportFailure() {

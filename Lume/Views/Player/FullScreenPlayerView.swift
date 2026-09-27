@@ -44,7 +44,8 @@ struct FullScreenPlayerView: View {
     /// Index into `enginePriority` of the engine currently driving playback.
     /// Advanced when an engine fails to start a stream, falling the player back
     /// to the next engine in the list. Reset to the primary engine whenever the
-    /// active stream changes.
+    /// active stream changes — a catch-up segment included — so a fallback only
+    /// ever applies to the stream that failed.
     /// Non-private so the swap path in `FullScreenPlayerView+Navigation` can
     /// restart the fallback chain for a newly selected stream.
     @State var engineAttempt = 0
