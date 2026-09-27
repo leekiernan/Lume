@@ -88,6 +88,9 @@ extension SettingsView {
             if trakt.isConfigured {
                 sentences.append(String(localized: "Show your Trakt watchlist on Home."))
             }
+            if simkl.isConfigured {
+                sentences.append(String(localized: "Show your Simkl watchlist on Home."))
+            }
             if openSubtitles.isConfigured {
                 sentences.append(String(localized: "Download subtitles for anything that ships without them."))
             }

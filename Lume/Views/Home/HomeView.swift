@@ -242,10 +242,15 @@ struct HomeView: View {
                 feed.update(context: feedContext)
                 await feed.loadTrending(cacheKey: trendingKey)
             }
-            .task(id: watchlistKey) {
+            .task(id: watchlistKey(.trakt)) {
                 feed.heroRef = heroRef
                 feed.update(context: feedContext)
-                await feed.loadWatchlist(cacheKey: watchlistKey)
+                await feed.loadWatchlist(.trakt, cacheKey: watchlistKey(.trakt))
+            }
+            .task(id: watchlistKey(.simkl)) {
+                feed.heroRef = heroRef
+                feed.update(context: feedContext)
+                await feed.loadWatchlist(.simkl, cacheKey: watchlistKey(.simkl))
             }
             .task(id: recommendationsKey) {
                 await loadRecommendations()
@@ -339,11 +344,13 @@ struct HomeView: View {
                     Text("Trending Series"), feed.items(for: .builtin(section)),
                     section: .builtin(section), title: String(localized: "Trending Series")
                 )
-            case .traktWatchlist:
-                rail(
-                    Text("From Your Trakt Watchlist"), feed.items(for: .builtin(section)),
-                    section: .builtin(section), title: String(localized: "From Your Trakt Watchlist")
-                )
+            case .traktWatchlist, .simklWatchlist:
+                if let provider = WatchlistProvider(section: section) {
+                    rail(
+                        Text(provider.rowTitle), feed.items(for: .builtin(section)),
+                        section: .builtin(section), title: provider.rowTitleString
+                    )
+                }
             case .sports:
                 SportsHomeRail(isSyncBusy: isSyncBusy)
             case .recentlyAdded:
@@ -374,7 +381,7 @@ struct HomeView: View {
         case .trendingSeries:
             AppAreaSettings.isEnabled(.series, disabledRaw: disabledAreasRaw)
                 && HomeLayoutSettings.isEnabled(.builtin(section), disabledRaw: disabledSectionsRaw)
-        case .traktWatchlist:
+        case .traktWatchlist, .simklWatchlist:
             vodAvailable && HomeLayoutSettings.isEnabled(.builtin(section), disabledRaw: disabledSectionsRaw)
         default:
             HomeLayoutSettings.isEnabled(.builtin(section), disabledRaw: disabledSectionsRaw)
@@ -382,7 +389,7 @@ struct HomeView: View {
     }
 
     /// Whether Home may show anything sourced from the movie/series catalog —
-    /// the Trakt watchlist, custom list-backed rows, and the hero, none of
+    /// the Trakt/Simkl watchlists, custom list-backed rows, and the hero, none of
     /// which are scoped to a single medium the way the trending rows are.
     /// False only when the profile has switched off both VOD areas. Not
     /// `private`: read by the HomeView+HeroWarmStart extension (separate file).
@@ -400,10 +407,10 @@ struct HomeView: View {
         return "\(playlists.count)-\(selectedPlaylistID)-\(synced)-\(restriction.visibilityToken)"
     }
 
-    /// Same shape as `LibrarySectionsView`'s key — surface, Trakt account,
+    /// Same shape as `LibrarySectionsView`'s key — service, surface, account,
     /// catalog — so one watchlist load key reads the same on every surface.
-    var watchlistKey: String {
-        "watchlist-\(feed.surface.rawValue)-\(trakt.username ?? "disconnected")-\(trendingKey)"
+    func watchlistKey(_ provider: WatchlistProvider) -> String {
+        "watchlist-\(provider)-\(feed.surface.rawValue)-\(provider.account ?? "disconnected")-\(trendingKey)"
     }
 
     /// Identity of the custom-section load. Shares the trending key's playlist /
