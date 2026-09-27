@@ -150,17 +150,13 @@ struct TraktCredentialValuesTests {
     }
 }
 
-// MARK: - TraktTokenStore (keychain)
+// MARK: - TraktTokenStore (storage)
 
-/// Serialized because every test touches the single shared keychain item
-/// (service + account are constant), so concurrent runs would race.
-@Suite(.serialized, .globalState)
+/// Every test gets its own empty in-memory credential storage
+/// (`.isolatedCredentials`), so none of them can touch the real keychain item —
+/// or each other.
+@Suite(.isolatedCredentials)
 struct TraktTokenStoreTests {
-    init() {
-        // Start every test from a known-empty keychain slot.
-        TraktTokenStore.clear()
-    }
-
     private func makeTokens(accessToken: String = "access-token") -> TraktTokens {
         TraktTokens(
             accessToken: accessToken,
@@ -181,16 +177,14 @@ struct TraktTokenStoreTests {
         let tokens = makeTokens()
         #expect(TraktTokenStore.save(tokens) == true)
         #expect(TraktTokenStore.load() == tokens)
-        TraktTokenStore.clear()
     }
 
     @Test func `save overwrites an existing token set`() {
         #expect(TraktTokenStore.save(makeTokens(accessToken: "first")) == true)
-        // Second save exercises the SecItemUpdate path.
+        // Second save exercises the replace path.
         let updated = makeTokens(accessToken: "second")
         #expect(TraktTokenStore.save(updated) == true)
         #expect(TraktTokenStore.load() == updated)
-        TraktTokenStore.clear()
     }
 
     @Test func `clear removes stored tokens`() {
@@ -202,5 +196,19 @@ struct TraktTokenStoreTests {
     @Test func `clear succeeds when nothing is stored`() {
         // A missing item is the desired end state, so this reports success.
         #expect(TraktTokenStore.clear() == true)
+    }
+
+    @Test func `tokens are written to the Trakt keychain item`() throws {
+        let tokens = makeTokens()
+        #expect(TraktTokenStore.save(tokens))
+        let data = try #require(CredentialIsolation.scopedStorage().storedData(service: "bilipp.Lume.trakt"))
+        #expect(try JSONDecoder().decode(TraktTokens.self, from: data) == tokens)
+    }
+
+    @Test func `a locked keychain reads as unavailable, not as no token`() throws {
+        #expect(TraktTokenStore.save(makeTokens()))
+        try CredentialIsolation.scopedStorage().isLocked = true
+        #expect(TraktTokenStore.storedTokens() == .unavailable)
+        #expect(TraktTokenStore.load() == nil)
     }
 }
