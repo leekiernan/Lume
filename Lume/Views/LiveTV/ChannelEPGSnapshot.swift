@@ -29,6 +29,11 @@ nonisolated extension EPGSlot {
     init(_ listing: EPGWindowListing) {
         self.init(title: listing.title, start: listing.start, end: listing.end)
     }
+
+    /// A guide cell as the programme catch-up plays.
+    init(_ cell: EPGProgramCell) {
+        self.init(title: cell.title, start: cell.start, end: cell.end)
+    }
 }
 
 /// The now/next programme pair shown on a single channel card.

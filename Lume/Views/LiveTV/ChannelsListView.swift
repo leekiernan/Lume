@@ -18,6 +18,8 @@ struct ChannelsList: View {
     let playlistPrefix: String
     /// Seeds Multi-View with this channel, gated on Lume Pro by the host.
     let onStartMultiView: (LiveStream) -> Void
+    /// Replays the programme on air from its start, via catch-up.
+    let onWatchFromStart: (LiveStream, EPGSlot) -> Void
     let onPlay: (LiveStream) -> Void
     @Environment(\.modelContext) private var modelContext
     @Environment(\.contentRestriction) private var restriction
@@ -46,11 +48,13 @@ struct ChannelsList: View {
         playlistPrefix: String,
         sort: ContentSortOption,
         onStartMultiView: @escaping (LiveStream) -> Void,
+        onWatchFromStart: @escaping (LiveStream, EPGSlot) -> Void,
         onPlay: @escaping (LiveStream) -> Void
     ) {
         self.scope = scope
         self.playlistPrefix = playlistPrefix
         self.onStartMultiView = onStartMultiView
+        self.onWatchFromStart = onWatchFromStart
         self.onPlay = onPlay
         _streams = Query(LiveChannelQuery.descriptor(for: scope, sort: sort))
     }
@@ -111,10 +115,11 @@ struct ChannelsList: View {
                         )
                     } else {
                         ForEach(visible) { stream in
+                            let epg = epgByChannel[stream.epgChannelId ?? ""]
                             Button {
                                 onPlay(stream)
                             } label: {
-                                LiveStreamCardView(stream: stream, epg: epgByChannel[stream.epgChannelId ?? ""])
+                                LiveStreamCardView(stream: stream, epg: epg)
                                     .padding(.horizontal)
                                     .contentShape(Rectangle())
                             }
@@ -122,6 +127,9 @@ struct ChannelsList: View {
                             .liveChannelMenu(
                                 isFavorite: stream.isFavorite,
                                 onToggleFavorite: { LiveChannelFavorites.toggle(stream, in: modelContext) },
+                                onWatchFromStart: LiveChannelRestart.action(for: stream, current: epg?.current) {
+                                    onWatchFromStart(stream, $0)
+                                },
                                 onStartMultiView: { onStartMultiView(stream) },
                                 onRemoveFromRecents: scope == .recentlyWatched ? { removeFromRecentlyWatched(stream) } : nil
                             )

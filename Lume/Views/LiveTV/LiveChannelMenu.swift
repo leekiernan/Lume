@@ -14,15 +14,24 @@ import SwiftUI
 extension View {
     /// - Parameters:
     ///   - isFavorite: drives the favorite item's wording and glyph.
+    ///   - onWatchFromStart: restarts the programme on air from its beginning;
+    ///     nil hides the item (see `LiveChannelRestart.action`).
     ///   - onStartMultiView: omitted where Multi-View has no entry point.
     ///   - onRemoveFromRecents: only in the Recently Watched collection.
     func liveChannelMenu(
         isFavorite: Bool,
         onToggleFavorite: @escaping () -> Void,
+        onWatchFromStart: (() -> Void)? = nil,
         onStartMultiView: (() -> Void)? = nil,
         onRemoveFromRecents: (() -> Void)? = nil
     ) -> some View {
         contextMenu {
+            if let onWatchFromStart {
+                Button(action: onWatchFromStart) {
+                    Label("Watch from Start", systemImage: "play.fill")
+                }
+            }
+
             FavoriteMenuItems.favorite(isFavorite: isFavorite, action: onToggleFavorite)
 
             if let onStartMultiView {
@@ -55,6 +64,26 @@ enum FavoriteMenuItems {
     static func removeFromRecents(_ action: @escaping () -> Void) -> some View {
         Button(role: .destructive, action: action) {
             Label("Remove from Recently Watched", systemImage: "clock.badge.xmark")
+        }
+    }
+}
+
+/// Builds a channel row's "Watch from Start" action from the now/next snapshot
+/// it already shows. Eligibility is `LiveStream.restartableProgramme` — asked
+/// when the row renders, to decide whether the item appears, and again when it
+/// is chosen, because a menu can stay open past the programme's end or the
+/// snapshot can go stale under it: then the action does nothing.
+enum LiveChannelRestart {
+    static func action(
+        for stream: LiveStream,
+        current: EPGSlot?,
+        now: Date = .now,
+        perform: @escaping (EPGSlot) -> Void
+    ) -> (() -> Void)? {
+        guard stream.restartableProgramme(current, now: now) != nil else { return nil }
+        return {
+            guard let programme = stream.restartableProgramme(current, now: .now) else { return }
+            perform(programme)
         }
     }
 }

@@ -110,7 +110,7 @@ struct LiveTVView: View {
                     playlistPrefix: playlistPrefix,
                     sort: contentSort,
                     onPlay: { playChannel($0, scope: section.scope) },
-                    onPlayCatchup: { playCatchup($0, cell: $1) },
+                    onPlayCatchup: { playCatchup($0, programme: EPGSlot($1)) },
                     onStartMultiView: { startMultiView(with: $0) }
                 )
             } else {
@@ -130,6 +130,7 @@ struct LiveTVView: View {
                 onLeadingLeft: { openBrowse(from: $0) },
                 sourceType: activePlaylist?.knownSourceType,
                 onStartMultiView: { startMultiView(with: $0) },
+                onWatchFromStart: { playCatchup($0, programme: $1) },
                 onPlay: { playChannel($0, scope: section.scope) }
             )
             .frame(maxWidth: .infinity)
@@ -139,6 +140,7 @@ struct LiveTVView: View {
                 playlistPrefix: playlistPrefix,
                 sort: contentSort,
                 onStartMultiView: { startMultiView(with: $0) },
+                onWatchFromStart: { playCatchup($0, programme: $1) },
                 onPlay: { playChannel($0, scope: section.scope) }
             )
         #endif
@@ -303,7 +305,7 @@ struct LiveTVView: View {
                 contentSort: contentSort,
                 onOpenBrowse: { openBrowse(from: $0) },
                 onPlay: { playChannel($0, scope: displayed?.scope) },
-                onPlayCatchup: { playCatchup($0, cell: $1) },
+                onPlayCatchup: { playCatchup($0, programme: $1) },
                 onOpenMultiView: { openMultiView() },
                 onStartMultiView: { startMultiView(with: $0) },
                 playlistPrefix: playlistPrefix,
@@ -417,15 +419,18 @@ struct LiveTVView: View {
         present(media)
     }
 
-    /// Replays a past programme from the channel's catch-up archive.
-    private func playCatchup(_ stream: LiveStream, cell: EPGProgramCell) {
+    /// Replays a programme from the channel's catch-up archive — a finished one
+    /// picked in the guide, or the one on air restarted from its beginning (the
+    /// guide's detail sheet and a list row's "Watch from Start"). Catch-up has
+    /// no surf scope, whichever list it came from.
+    private func playCatchup(_ stream: LiveStream, programme: EPGSlot) {
         guard let playlist = activePlaylist,
               let media = PlayableMedia.catchup(
                   stream: stream,
                   playlist: playlist,
-                  programTitle: cell.title,
-                  start: cell.start,
-                  end: cell.end
+                  programTitle: programme.title,
+                  start: programme.start,
+                  end: programme.end
               ) else { return }
         present(media)
     }

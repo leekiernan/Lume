@@ -24,6 +24,8 @@
         let sourceType: PlaylistSourceType?
         /// Seeds Multi-View with this channel, gated on Lume Pro by the host.
         let onStartMultiView: (LiveStream) -> Void
+        /// Replays the programme on air from its start, via catch-up.
+        let onWatchFromStart: (LiveStream, EPGSlot) -> Void
         let onPlay: (LiveStream) -> Void
         @Environment(\.modelContext) private var modelContext
         /// Drops channels in categories locked away from a child profile — the
@@ -59,6 +61,7 @@
             onLeadingLeft: @escaping (String?) -> Void,
             sourceType: PlaylistSourceType?,
             onStartMultiView: @escaping (LiveStream) -> Void,
+            onWatchFromStart: @escaping (LiveStream, EPGSlot) -> Void,
             onPlay: @escaping (LiveStream) -> Void,
             focusToken: Int = 0,
             focusTarget: String? = nil,
@@ -69,6 +72,7 @@
             self.onLeadingLeft = onLeadingLeft
             self.sourceType = sourceType
             self.onStartMultiView = onStartMultiView
+            self.onWatchFromStart = onWatchFromStart
             self.onPlay = onPlay
             self.focusToken = focusToken
             self.focusTarget = focusTarget
@@ -109,6 +113,7 @@
                                     epg: epgByChannel[stream.epgChannelId ?? ""],
                                     onRemove: scope == .recentlyWatched ? { removeFromRecentlyWatched(stream) } : nil,
                                     onStartMultiView: { onStartMultiView(stream) },
+                                    onWatchFromStart: { onWatchFromStart(stream, $0) },
                                     onPlay: { onPlay(stream) }
                                 )
                                 .onLeadingEdgeLeft { onLeadingLeft(stream.id) }
@@ -200,6 +205,7 @@
         var epg: ChannelEPG?
         var onRemove: (() -> Void)?
         var onStartMultiView: (() -> Void)?
+        var onWatchFromStart: ((EPGSlot) -> Void)?
         let onPlay: () -> Void
 
         @Environment(\.modelContext) private var modelContext
@@ -284,6 +290,9 @@
             .liveChannelMenu(
                 isFavorite: stream.isFavorite,
                 onToggleFavorite: { LiveChannelFavorites.toggle(stream, in: modelContext) },
+                onWatchFromStart: onWatchFromStart.flatMap { perform in
+                    LiveChannelRestart.action(for: stream, current: currentEPG, perform: perform)
+                },
                 onStartMultiView: onStartMultiView,
                 onRemoveFromRecents: onRemove
             )
@@ -334,7 +343,9 @@
         let contentSort: ContentSortOption
         let onOpenBrowse: (String?) -> Void
         let onPlay: (LiveStream) -> Void
-        let onPlayCatchup: (LiveStream, EPGProgramCell) -> Void
+        /// Plays a programme from catch-up — a guide cell, or a list row's
+        /// "Watch from Start".
+        let onPlayCatchup: (LiveStream, EPGSlot) -> Void
         /// Raises Multi-View (or the paywall) from the header.
         let onOpenMultiView: () -> Void
         /// Raises Multi-View seeded with a channel, from its long-press menu.
@@ -381,7 +392,7 @@
                         playlistPrefix: playlistPrefix,
                         sort: contentSort,
                         onPlay: onPlay,
-                        onPlayCatchup: onPlayCatchup,
+                        onPlayCatchup: { onPlayCatchup($0, EPGSlot($1)) },
                         onStartMultiView: onStartMultiView,
                         focusToken: contentFocusToken,
                         onDidClaimFocus: { contentFocusToken = 0 },
@@ -397,6 +408,7 @@
                         onLeadingLeft: onOpenBrowse,
                         sourceType: sourceType,
                         onStartMultiView: onStartMultiView,
+                        onWatchFromStart: onPlayCatchup,
                         onPlay: onPlay,
                         focusToken: contentFocusToken,
                         focusTarget: contentFocusTarget,
