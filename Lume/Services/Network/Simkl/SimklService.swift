@@ -58,13 +58,25 @@ final class SimklService {
 
     /// Mirrors Trakt's durable-history status so a temporary network failure
     /// cannot silently lose a local watched/unwatched choice.
-    private(set) var pendingMutationCount = 0
-    private(set) var failedMutationCount = 0
-    private(set) var isSyncingMutations = false
-    private(set) var mutationSyncError: String?
+    var pendingMutationCount: Int {
+        mutations.pendingCount
+    }
 
-    private var mutationDrainTask: Task<Void, Never>?
-    private var mutationDrainID: UUID?
+    var failedMutationCount: Int {
+        mutations.failedCount
+    }
+
+    var isSyncingMutations: Bool {
+        mutations.isSyncing
+    }
+
+    var mutationSyncError: String? {
+        mutations.syncError
+    }
+
+    /// Durable watched intent — shared with Trakt, see `TrackerMutationQueue`.
+    let mutations: TrackerMutationQueue<SimklAccountBackend>
+
     private var watchlistTask: Task<[SimklWatchlistEntry], Never>?
 
     /// The catalog context the connect flow captured, so the watched-history
@@ -72,28 +84,19 @@ final class SimklService {
     private var importContext: ModelContext?
 
     private let client = SimklClient.shared
-    private let mutationOutbox = TrackerMutationOutbox(storageKey: "simkl.mutationOutbox.v1")
 
     private init() {
-        session.identityDidChange = { [weak self] identity, confirmed in
-            guard let self else { return }
-            if let identity {
-                mutationOutbox.adoptMutations(from: identity.legacyScope, into: identity.scope)
-            }
-            refreshMutationStatus()
-            if confirmed { retryPendingMutations() }
-        }
+        mutations = TrackerMutationQueue(
+            session: session,
+            outbox: TrackerMutationOutbox(storageKey: SimklAccountBackend.outboxStorageKey)
+        )
         session.didConnect = { [weak self] in
-            guard let self else { return }
-            refreshMutationStatus()
-            retryPendingMutations()
             // The account's watched history imports on connect, not only on
             // demand. Runs on the context the connect call captured; the manual
             // re-import stays available for later.
-            if let context = importContext {
-                importContext = nil
-                await importWatched(into: context)
-            }
+            guard let self, let context = importContext else { return }
+            importContext = nil
+            await importWatched(into: context)
         }
     }
 
@@ -121,14 +124,14 @@ final class SimklService {
             // Signed out elsewhere (the credential left through iCloud): the
             // cached watchlist belongs to that account.
             SimklWatchlistStore.clear()
-            refreshMutationStatus()
+            mutations.refreshStatus()
         case .waiting:
             // Offline, or the refresh was rejected. Keep the pair: the
             // remembered identity still queues changes, and a re-authorized
             // pair may yet arrive through CloudKit.
             break
         case .ready:
-            refreshMutationStatus()
+            mutations.refreshStatus()
             retryPendingMutations()
         }
     }
@@ -155,19 +158,13 @@ final class SimklService {
     /// Disconnects: revokes the token server-side (best effort) and clears all
     /// local state.
     func disconnect() async {
-        mutationDrainTask?.cancel()
-        mutationDrainTask = nil
-        mutationDrainID = nil
+        mutations.reset()
         await session.disconnect()
         // Parked watched state belongs to the account that was just signed out.
         SimklPendingWatchedStore.clearAll()
         SimklWatchlistStore.clear()
         lastImport = nil
         importContext = nil
-        pendingMutationCount = 0
-        failedMutationCount = 0
-        isSyncingMutations = false
-        mutationSyncError = nil
     }
 
     // MARK: - Durable watched sync
@@ -176,111 +173,20 @@ final class SimklService {
     /// so the model never crosses an actor boundary; Simkl resolves the title
     /// from it. No-ops when not connected or the movie has no TMDB id.
     func syncWatched(movie: Movie, watched: Bool) {
-        guard let account = mutationAccount, let tmdbID = movie.tmdbId else { return }
-        mutationOutbox.enqueue(target: .movie(tmdbID: tmdbID), watched: watched, account: account)
-        refreshMutationStatus()
-        retryPendingMutations()
+        guard let tmdbID = movie.tmdbId else { return }
+        mutations.enqueue(.history, .movie(tmdbID: tmdbID), isPresent: watched)
     }
 
     /// Syncs an episode's watched state to Simkl using its show's TMDB id plus
     /// the season/episode numbers.
     func syncWatched(episode: Episode, watched: Bool) {
-        guard let account = mutationAccount, let showTMDBID = episode.series?.tmdbId else { return }
-        mutationOutbox.enqueue(
-            target: .episode(showTMDBID: showTMDBID, season: episode.seasonNum, episode: episode.episodeNum),
-            watched: watched,
-            account: account
-        )
-        refreshMutationStatus()
-        retryPendingMutations()
+        guard let showTMDBID = episode.series?.tmdbId else { return }
+        mutations.enqueue(.history, .episode(showTMDBID: showTMDBID, season: episode.seasonNum, episode: episode.episodeNum), isPresent: watched)
     }
 
+    /// Retries the connected account's durable mutations, oldest first.
     func retryPendingMutations() {
-        guard mutationDrainTask == nil, let account = mutationAccount,
-              mutationOutbox.firstMutation(account: account) != nil
-        else {
-            refreshMutationStatus()
-            return
-        }
-        mutationSyncError = nil
-        isSyncingMutations = true
-        let drainID = UUID()
-        mutationDrainID = drainID
-        mutationDrainTask = Task { [weak self] in
-            await self?.drainPendingMutations(account: account, drainID: drainID)
-        }
-    }
-
-    private func drainPendingMutations(account: String, drainID: UUID) async {
-        defer {
-            if mutationDrainID == drainID {
-                mutationDrainTask = nil
-                mutationDrainID = nil
-                isSyncingMutations = false
-                refreshMutationStatus()
-            }
-        }
-        while !Task.isCancelled,
-              mutationAccount == account,
-              let mutation = mutationOutbox.firstMutation(account: account)
-        {
-            guard let accessToken = await session.validAccessToken() else {
-                mutationOutbox.recordFailure(id: mutation.id, account: account)
-                mutationSyncError = "Couldn't sync changes to Simkl. Please try again."
-                break
-            }
-            do {
-                guard let items = historyItems(for: mutation.target) else {
-                    // The shared queue can represent Trakt's show-watchlist
-                    // target, but Simkl history has no equivalent request.
-                    // It cannot originate from Simkl's enqueue sites, so drop
-                    // it defensively rather than blocking the account forever.
-                    mutationOutbox.acknowledge(id: mutation.id, account: account)
-                    continue
-                }
-                if mutation.watched {
-                    try await client.addToHistory(items, accessToken: accessToken)
-                } else {
-                    try await client.removeFromHistory(items, accessToken: accessToken)
-                }
-                mutationOutbox.acknowledge(id: mutation.id, account: account)
-            } catch {
-                mutationOutbox.recordFailure(id: mutation.id, account: account)
-                mutationSyncError = "Couldn't sync changes to Simkl. Please try again."
-                if mutationOutbox.contains(id: mutation.id, account: account) { break }
-            }
-        }
-    }
-
-    private func historyItems(for target: TrackerHistoryMutation.Target) -> SimklSyncItems? {
-        switch target {
-        case let .movie(tmdbID): SimklSyncItems.movie(tmdbID: tmdbID, title: nil)
-        case .show: nil
-        case let .episode(showTMDBID, season, episode):
-            SimklSyncItems.episode(showTMDBID: showTMDBID, showTitle: nil, season: season, episode: episode)
-        }
-    }
-
-    private var mutationAccount: String? {
-        guard isConnected, let scope = session.identity?.scope, !scope.isEmpty else { return nil }
-        return scope
-    }
-
-    private func refreshMutationStatus() {
-        guard let account = mutationAccount else {
-            pendingMutationCount = 0
-            failedMutationCount = 0
-            mutationSyncError = nil
-            return
-        }
-        let status = mutationOutbox.status(account: account)
-        pendingMutationCount = status.pendingCount
-        failedMutationCount = status.failedCount
-        if status.failedCount == 0 {
-            mutationSyncError = nil
-        } else if mutationSyncError == nil {
-            mutationSyncError = "Some Simkl changes are waiting to retry."
-        }
+        mutations.retry()
     }
 
     // MARK: - Playback scrobbling

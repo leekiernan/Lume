@@ -33,6 +33,15 @@ nonisolated protocol TrackerAccountIdentity: Equatable {
     var username: String { get }
     /// Stable partition for the account's durable mutations.
     var scope: String { get }
+    /// Partitions earlier builds filed this account's mutations under; their
+    /// entries move to `scope` once the identity is known.
+    var previousScopes: [String] { get }
+}
+
+extension TrackerAccountIdentity {
+    var previousScopes: [String] {
+        []
+    }
 }
 
 /// One device-flow poll.
@@ -64,6 +73,8 @@ protocol TrackerAccountBackend {
     static var name: String { get }
     /// Seconds added to the poll interval on a slow-down reply.
     static var slowDownStep: TimeInterval { get }
+    /// Where the account's durable mutations are kept.
+    static var outboxStorageKey: String { get }
 
     var isConfigured: Bool { get }
 
@@ -72,6 +83,10 @@ protocol TrackerAccountBackend {
     func refresh(_ refreshToken: String) async -> TrackerRefreshOutcome<Tokens>
     func revoke(accessToken: String) async
     func fetchIdentity(accessToken: String) async -> Identity?
+    /// Sends one durable mutation. Returns false for a kind or target this
+    /// service has no request for, which is dropped rather than left to block
+    /// the queue; throws to keep the mutation for a retry.
+    func deliver(_ mutation: TrackerMutation, accessToken: String) async throws -> Bool
 
     func loadTokens() -> Tokens?
     /// Returns whether storage changed.

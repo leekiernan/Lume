@@ -11,12 +11,17 @@ import Foundation
 
 extension SimklDeviceCode: TrackerDeviceCode {}
 extension SimklTokens: TrackerTokens {}
-extension SimklAccountIdentity: TrackerAccountIdentity {}
+extension SimklAccountIdentity: TrackerAccountIdentity {
+    var previousScopes: [String] {
+        [legacyScope]
+    }
+}
 
 struct SimklAccountBackend: TrackerAccountBackend {
     static let name = "Simkl"
     /// Simkl asks for a flat +5 s on slow-down.
     static let slowDownStep: TimeInterval = 5
+    static let outboxStorageKey = "simkl.mutationOutbox.v1"
 
     private let client = SimklClient.shared
 
@@ -68,6 +73,27 @@ struct SimklAccountBackend: TrackerAccountBackend {
     func fetchIdentity(accessToken: String) async -> SimklAccountIdentity? {
         guard let settings = try? await client.userSettings(accessToken: accessToken) else { return nil }
         return SimklAccountIdentity(settings: settings)
+    }
+
+    /// History only: the shared queue can carry Trakt's watchlist kinds and a
+    /// show-level target, which Simkl history has no request for.
+    func deliver(_ mutation: TrackerMutation, accessToken: String) async throws -> Bool {
+        guard mutation.kind == .history else { return false }
+        let items: SimklSyncItems? = switch mutation.target {
+        case let .movie(tmdbID):
+            SimklSyncItems.movie(tmdbID: tmdbID, title: nil)
+        case let .episode(showTMDBID, season, episode):
+            SimklSyncItems.episode(showTMDBID: showTMDBID, showTitle: nil, season: season, episode: episode)
+        case .show:
+            nil
+        }
+        guard let items else { return false }
+        if mutation.isPresent {
+            try await client.addToHistory(items, accessToken: accessToken)
+        } else {
+            try await client.removeFromHistory(items, accessToken: accessToken)
+        }
+        return true
     }
 
     func loadTokens() -> SimklTokens? {
