@@ -309,13 +309,14 @@ struct LumeEngineEngineView: View {
         }
         coordinator.onStalled = {
             // Mid-stream drop: bounded exponential backoff, then give up loudly.
+            // Schedule first, then check, as KSPlayer and VLC do: the budget
+            // only reads as spent on the call after its last retry.
+            Logger.player.warning("LumeEngine stalled → scheduling engine reload")
+            reconnector.scheduleRetry { coordinator.reload() }
             if reconnector.hasGivenUp {
                 Logger.player.error("LumeEngine stall retries exhausted → failure overlay")
                 isCatchupSegmentLoading = false
                 withAnimation(.easeInOut(duration: 0.25)) { loadFailed = true }
-            } else {
-                Logger.player.warning("LumeEngine stalled → scheduling engine reload")
-                reconnector.scheduleRetry { coordinator.reload() }
             }
         }
         coordinator.onRecovered = { reconnector.reset() }

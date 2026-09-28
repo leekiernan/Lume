@@ -98,19 +98,25 @@ final class LumeEngineCoordinator: NSObject, ObservableObject {
     private(set) var session: PlayerSession?
     /// Internal for `LumeEngineCoordinator+PictureInPicture.swift`.
     var pipBridge: PictureInPictureBridge?
-    private var mediaInfo: MediaInfo?
+    /// Internal (read-only) for `+ExternalSubtitles.swift`.
+    private(set) var mediaInfo: MediaInfo?
     private var currentMedia: PlayableMedia?
     private var eventTask: Task<Void, Never>?
     private var tickTask: Task<Void, Never>?
     /// 10 Hz tick counter driving the diagnostics heartbeat cadence.
     private var tickCount = 0
     private var startupTask: Task<Void, Never>?
+    /// The session open for the stream being loaded. Cancelled with the
+    /// session it opens: a late failure or success from a replaced session
+    /// must not land on the next one.
+    private var openTask: Task<Void, Never>?
     private var reportedFailure = false
     /// Mirrors `PlayerSession.selectedAudioTrackIndex`, read back after `open`
     /// rather than assumed: the engine starts on its own preferred/default
     /// pick, which is not necessarily the first track.
     private var selectedAudioID: String?
-    private var selectedSubtitleID: String?
+    /// Internal for `+ExternalSubtitles.swift`.
+    var selectedSubtitleID: String?
     /// A manual pick in the audio or subtitle menu outranks the preferred
     /// languages for the rest of this stream: the engine has no rebuild in
     /// place, so a stall recovery re-opens through `makeConfiguration` and
@@ -122,25 +128,36 @@ final class LumeEngineCoordinator: NSObject, ObservableObject {
     /// Kept so the track survives a switch to an embedded track and back — the
     /// engine's sidecar loader is a one-shot parse, so re-selecting means
     /// re-reading the file.
-    private var externalSubtitle: ExternalSubtitle?
+    var externalSubtitle: ExternalSubtitle?
 
     // MARK: Lifecycle
 
-    func configure(media: PlayableMedia) {
-        tearDown()
+    /// Loads `media` on a fresh engine session. `reconnecting` re-opens the
+    /// stream already playing (stall recovery): it stays started — a
+    /// reconnect is not a new join, so a slow one can't read as a start
+    /// failure and fall back to another engine mid-watch — and stays the same
+    /// stats session.
+    func configure(media: PlayableMedia, reconnecting: Bool = false) {
+        let reconnect = reconnecting && hasStartedPlayback
+        tearDown(endingStatsSession: !reconnect)
         if media.url != currentMedia?.url {
             hasManualTrackSelection = false
         }
         currentMedia = media
         catchup.load(media)
-        reportedFailure = false
-        startTracker.beginStream()
         // Up from the start of every (re)load, not only once the engine
         // reports `.opening`, so a swap never shows a blank, idle surface.
         isBuffering = true
-        // After `tearDown` (which closes any previous session) so a reload counts
-        // as its own startup attempt rather than extending the last one.
-        PlaybackQoE.shared.beginStartup(engine: .lumeEngine, isLive: media.isLive, owner: self)
+        if reconnect {
+            hasStartedPlayback = true
+            startTracker.beginReconnect()
+        } else {
+            reportedFailure = false
+            startTracker.beginStream()
+            // After `tearDown` (which closes any previous session) so a load
+            // counts as its own startup attempt rather than extending the last.
+            PlaybackQoE.shared.beginStartup(engine: .lumeEngine, isLive: media.isLive, owner: self)
+        }
 
         let session = PlayerSession(configuration: makeConfiguration(for: media))
         self.session = session
@@ -159,61 +176,9 @@ final class LumeEngineCoordinator: NSObject, ObservableObject {
                 await self.tick()
             }
         }
-        startupTask = makeStartupWatchdog()
+        startupTask = reconnect ? makeReconnectWatchdog() : makeStartupWatchdog()
 
-        Task {
-            do {
-                let info = try await session.open(url: media.url.absoluteString)
-                self.mediaInfo = info
-                self.selectedAudioID = await session.selectedAudioTrackIndex.map { String($0) }
-                // Non-nil only when the engine turned a forced track on by
-                // itself because the chosen audio is foreign to the viewer;
-                // embedded subtitles otherwise start off as they always have.
-                self.selectedSubtitleID = await session.selectedSubtitleTrackIndex.map { String($0) }
-                self.publishTracks(info: info)
-                self.publishVideoInfo(info: info)
-                if !self.isEmbedded {
-                    self.pipBridge = PictureInPictureBridge(session: session, mediaInfo: info)
-                }
-                // Resume position is handled by the engine via
-                // configuration.startPosition (seek-before-first-read).
-                if media.startTime > 1, !media.isLive, !info.isSeekable {
-                    Logger.player.warning("LumeEngine cannot resume: source is not seekable")
-                }
-                await session.play()
-            } catch {
-                self.reportFailure()
-            }
-        }
-    }
-
-    /// Startup failure watchdog. The window is rolling while the engine
-    /// demonstrably downloads: a multi-second buffer target on a ~1× link
-    /// legitimately pre-buffers past any fixed window, while a dead stream
-    /// shows no byte progress and still fails within `startupTimeout`. A hard
-    /// cap bounds pathological "downloads but never starts" cases.
-    private func makeStartupWatchdog() -> Task<Void, Never> {
-        Task { [startupTimeout] in
-            let hardDeadline = Date(timeIntervalSinceNow: max(startupTimeout * 3, 60))
-            var deadline = Date(timeIntervalSinceNow: startupTimeout)
-            var lastBytes: Int64 = 0
-            while !Task.isCancelled, !self.hasStartedPlayback {
-                try? await Task.sleep(for: .seconds(5))
-                guard !Task.isCancelled, !self.hasStartedPlayback else { return }
-                if let session = self.session {
-                    let bytes = await session.diagnostics.deliveredBytes
-                    if bytes > lastBytes {
-                        lastBytes = bytes
-                        deadline = min(Date(timeIntervalSinceNow: startupTimeout), hardDeadline)
-                    }
-                }
-                if Date() >= deadline {
-                    Logger.player.error("LumeEngine startup window elapsed (read \(lastBytes) bytes, never played)")
-                    self.reportFailure()
-                    return
-                }
-            }
-        }
+        openTask = open(session, media: media)
     }
 
     /// Fresh session for the same stream (stall recovery), resuming from the
@@ -224,11 +189,17 @@ final class LumeEngineCoordinator: NSObject, ObservableObject {
             let resumeAt = sessionPositionSnapshot(session)
             media = media.resuming(at: resumeAt)
         }
-        configure(media: media)
+        configure(media: media, reconnecting: true)
     }
 
-    func tearDown() {
-        PlaybackQoE.shared.endSession(owner: self)
+    /// Closes the engine session. `endingStatsSession` is false only for a
+    /// reconnect, which carries the stats session over.
+    func tearDown(endingStatsSession: Bool = true) {
+        if endingStatsSession {
+            PlaybackQoE.shared.endSession(owner: self)
+        }
+        openTask?.cancel()
+        openTask = nil
         eventTask?.cancel()
         tickTask?.cancel()
         startupTask?.cancel()
@@ -464,7 +435,8 @@ final class LumeEngineCoordinator: NSObject, ObservableObject {
         }
     }
 
-    private func publishTracks(info: MediaInfo) {
+    /// Internal for `+ExternalSubtitles.swift`.
+    func publishTracks(info: MediaInfo) {
         // `selectedAudioID` mirrors the engine's own `selectedAudioTrackIndex`,
         // which it sets whenever an audio track exists. Falling back to the
         // first row while it is still nil keeps the menu from rendering with no
@@ -524,7 +496,8 @@ final class LumeEngineCoordinator: NSObject, ObservableObject {
         PlaybackQoE.shared.noteFirstFrame()
     }
 
-    private func reportFailure() {
+    /// Internal for `+Watchdogs.swift`.
+    func reportFailure() {
         guard !reportedFailure else { return }
         reportedFailure = true
         if !hasStartedPlayback {
@@ -540,39 +513,41 @@ final class LumeEngineCoordinator: NSObject, ObservableObject {
     }
 }
 
-// MARK: - External subtitles
+// MARK: - Startup
 
-extension LumeEngineCoordinator: ExternalSubtitleLoading {
-    /// Id for the sidecar track in the overlay's subtitle menu. Prefixed so it
-    /// can never collide with an embedded track's stream index.
-    static var externalTrackID: String {
-        "external"
-    }
-
-    func loadExternalSubtitle(_ subtitle: ExternalSubtitle) {
-        externalSubtitle = subtitle
-        selectedSubtitleID = Self.externalTrackID
-        loadExternalSubtitleFile(subtitle)
-    }
-
-    /// Hands the file to the engine, which parses it in full and replaces
-    /// whatever subtitle lane was active. On failure the track is dropped from
-    /// the menu rather than left selected but silent.
-    private func loadExternalSubtitleFile(_ subtitle: ExternalSubtitle) {
-        subtitleCues.update(nil)
-        if let info = mediaInfo {
-            publishTracks(info: info)
-        }
-        let session = session
+extension LumeEngineCoordinator {
+    /// Opens `session` and starts it. Ignores the outcome once the session has
+    /// been replaced (a swap or reload since) — see `openTask`.
+    private func open(_ session: PlayerSession, media: PlayableMedia) -> Task<Void, Never> {
         Task {
             do {
-                try await session?.loadExternalSubtitles(url: subtitle.fileURL.absoluteString)
+                let info = try await session.open(url: media.url.absoluteString)
+                guard !Task.isCancelled, self.session === session else { return }
+                self.mediaInfo = info
+                self.selectedAudioID = await session.selectedAudioTrackIndex.map { String($0) }
+                // Non-nil only when the engine turned a forced track on by
+                // itself because the chosen audio is foreign to the viewer;
+                // embedded subtitles otherwise start off as they always have.
+                self.selectedSubtitleID = await session.selectedSubtitleTrackIndex.map { String($0) }
+                self.publishTracks(info: info)
+                self.publishVideoInfo(info: info)
+                if !self.isEmbedded {
+                    self.pipBridge = PictureInPictureBridge(session: session, mediaInfo: info)
+                }
+                // Resume position is handled by the engine via
+                // configuration.startPosition (seek-before-first-read).
+                if media.startTime > 1, !media.isLive, !info.isSeekable {
+                    Logger.player.warning("LumeEngine cannot resume: source is not seekable")
+                }
+                await session.play()
             } catch {
-                Logger.player.error("LumeEngine could not load external subtitles: \(LogRedaction.describe(error), privacy: .public)")
-                self.externalSubtitle = nil
-                self.selectedSubtitleID = nil
-                if let info = self.mediaInfo {
-                    self.publishTracks(info: info)
+                guard !Task.isCancelled, self.session === session else { return }
+                // A stream that had been playing goes back through the
+                // reconnect budget; one that never started is a start failure.
+                if self.hasStartedPlayback {
+                    self.onStalled?()
+                } else {
+                    self.reportFailure()
                 }
             }
         }
