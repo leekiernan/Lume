@@ -42,7 +42,7 @@ final class TrackerAccountSession<Backend: TrackerAccountBackend> {
     /// After a device-flow sign-in completes on this device.
     @ObservationIgnored var didConnect: (() async -> Void)?
 
-    @ObservationIgnored private let backend: Backend
+    @ObservationIgnored let backend: Backend
     @ObservationIgnored private var tokens: Backend.Tokens?
     @ObservationIgnored private var pollingTask: Task<Void, Never>?
     @ObservationIgnored private var identityTask: Task<Void, Never>?
@@ -276,8 +276,10 @@ final class TrackerAccountSession<Backend: TrackerAccountBackend> {
         apply(newTokens)
         let fresh = await backend.fetchIdentity(accessToken: newTokens.accessToken)
         if let fresh {
+            // Just fetched with the new token, so work queued for the account
+            // can go out.
             backend.saveIdentity(fresh)
-            setIdentity(fresh, confirmed: false)
+            setIdentity(fresh, confirmed: true)
         }
         send(.tokensHeld(account: fresh?.username))
         await didConnect?()

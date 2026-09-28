@@ -35,6 +35,7 @@ extension TraktAccountIdentity: TrackerAccountIdentity {
 struct TraktAccountBackend: TrackerAccountBackend {
     static let name = "Trakt"
     static let slowDownStep: TimeInterval = 1
+    static let outboxStorageKey = "trakt.mutationOutbox.v1"
 
     private let client = TraktClient.shared
 
@@ -82,6 +83,10 @@ struct TraktAccountBackend: TrackerAccountBackend {
     func fetchIdentity(accessToken: String) async -> TraktAccountIdentity? {
         guard let user = try? await client.currentUser(accessToken: accessToken) else { return nil }
         return TraktAccountIdentity(user: user)
+    }
+
+    func deliver(_ mutation: TrackerMutation, accessToken: String) async throws -> Bool {
+        try await client.apply(mutation, accessToken: accessToken)
     }
 
     func loadTokens() -> TraktTokens? {

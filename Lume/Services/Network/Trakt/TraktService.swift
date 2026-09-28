@@ -56,29 +56,37 @@ final class TraktService {
 
     /// Durable history/watchlist intent waiting to reach the connected account.
     /// Failed mutations remain here until a later retry succeeds.
-    private(set) var pendingMutationCount = 0
-    private(set) var failedMutationCount = 0
-    private(set) var isSyncingMutations = false
-    private(set) var mutationSyncError: String?
+    var pendingMutationCount: Int {
+        mutations.pendingCount
+    }
+
+    var failedMutationCount: Int {
+        mutations.failedCount
+    }
+
+    var isSyncingMutations: Bool {
+        mutations.isSyncing
+    }
+
+    var mutationSyncError: String? {
+        mutations.syncError
+    }
+
+    /// Durable watched/watchlist intent — shared with Simkl, see
+    /// `TrackerMutationQueue`.
+    let mutations: TrackerMutationQueue<TraktAccountBackend>
 
     /// Serialises playback events so a slow start request can never arrive
     /// after the pause or stop that followed it.
     private var scrobbleTask: Task<Void, Never>?
-    private var mutationDrainTask: Task<Void, Never>?
-    private var mutationDrainID: UUID?
 
     private let client = TraktClient.shared
-    private let mutationOutbox = TraktMutationOutbox()
 
     private init() {
-        session.identityDidChange = { [weak self] _, confirmed in
-            self?.refreshMutationStatus()
-            if confirmed { self?.retryPendingMutations() }
-        }
-        session.didConnect = { [weak self] in
-            self?.refreshMutationStatus()
-            self?.retryPendingMutations()
-        }
+        mutations = TrackerMutationQueue(
+            session: session,
+            outbox: TrackerMutationOutbox(storageKey: TraktAccountBackend.outboxStorageKey)
+        )
     }
 
     /// Whether the build has Trakt credentials at all. When false the whole
@@ -101,14 +109,14 @@ final class TraktService {
         guard isConfigured else { return }
         switch await session.restore() {
         case .signedOut:
-            refreshMutationStatus()
+            mutations.refreshStatus()
         case .waiting:
             // A sibling device may currently be rotating the shared single-use
             // refresh token. Keep the local credentials until CloudKit delivers
             // the replacement instead of revoking the whole shared session.
             break
         case .ready:
-            refreshMutationStatus()
+            mutations.refreshStatus()
             retryPendingMutations()
         }
     }
@@ -132,17 +140,11 @@ final class TraktService {
     func disconnect() async {
         scrobbleTask?.cancel()
         scrobbleTask = nil
-        mutationDrainTask?.cancel()
-        mutationDrainTask = nil
-        mutationDrainID = nil
+        mutations.reset()
         await session.disconnect()
         // Parked watched state belongs to the account that was just signed out.
         TraktPendingWatchedStore.clearAll()
         lastImport = nil
-        pendingMutationCount = 0
-        failedMutationCount = 0
-        isSyncingMutations = false
-        mutationSyncError = nil
     }
 
     // MARK: - Durable mutation sync
@@ -151,97 +153,22 @@ final class TraktService {
     /// the model never crosses an actor boundary. No-ops when not connected or
     /// the movie has no TMDB id.
     func syncWatched(movie: Movie, watched: Bool) {
-        guard let account = mutationAccount, let tmdbID = movie.tmdbId else { return }
-        mutationOutbox.enqueue(
-            kind: .history,
-            target: .movie(tmdbID: tmdbID),
-            isPresent: watched,
-            account: account
-        )
-        refreshMutationStatus()
-        retryPendingMutations()
+        guard let tmdbID = movie.tmdbId else { return }
+        mutations.enqueue(.history, .movie(tmdbID: tmdbID), isPresent: watched)
     }
 
     /// Syncs an episode's watched state to Trakt using its show's TMDB id plus
     /// the season/episode numbers.
     func syncWatched(episode: Episode, watched: Bool) {
-        guard let account = mutationAccount, let showTMDBID = episode.series?.tmdbId else { return }
-        mutationOutbox.enqueue(
-            kind: .history,
-            target: .episode(
-                showTMDBID: showTMDBID,
-                season: episode.seasonNum,
-                episode: episode.episodeNum
-            ),
-            isPresent: watched,
-            account: account
-        )
-        refreshMutationStatus()
-        retryPendingMutations()
+        guard let showTMDBID = episode.series?.tmdbId else { return }
+        mutations.enqueue(.history, .episode(showTMDBID: showTMDBID, season: episode.seasonNum, episode: episode.episodeNum), isPresent: watched)
     }
 
     /// Retries the connected account's durable mutations. The oldest intent is
     /// always sent first; one failure stops the drain so later mutations cannot
     /// overtake it. Calling this while a drain is active is a no-op.
     func retryPendingMutations() {
-        guard mutationDrainTask == nil, let account = mutationAccount,
-              mutationOutbox.firstMutation(account: account) != nil
-        else {
-            refreshMutationStatus()
-            return
-        }
-
-        mutationSyncError = nil
-        isSyncingMutations = true
-        let drainID = UUID()
-        mutationDrainID = drainID
-        mutationDrainTask = Task { [weak self] in
-            await self?.drainPendingMutations(account: account, drainID: drainID)
-        }
-    }
-
-    private func drainPendingMutations(account: String, drainID: UUID) async {
-        defer {
-            if mutationDrainID == drainID {
-                mutationDrainTask = nil
-                mutationDrainID = nil
-                isSyncingMutations = false
-                refreshMutationStatus()
-            }
-        }
-
-        while !Task.isCancelled,
-              mutationAccount == account,
-              let mutation = mutationOutbox.firstMutation(account: account)
-        {
-            guard let accessToken = await session.validAccessToken() else {
-                mutationOutbox.recordFailure(id: mutation.id, account: account)
-                mutationSyncError = "Couldn't sync changes to Trakt. Please try again."
-                break
-            }
-
-            do {
-                guard try await client.apply(mutation, accessToken: accessToken) else {
-                    Logger.network.error(
-                        "Discarding malformed Trakt \(mutation.kind.rawValue, privacy: .public) mutation"
-                    )
-                    mutationOutbox.acknowledge(id: mutation.id, account: account)
-                    continue
-                }
-                mutationOutbox.acknowledge(id: mutation.id, account: account)
-            } catch {
-                mutationOutbox.recordFailure(id: mutation.id, account: account)
-                let reason = error.localizedDescription
-                Logger.network.warning("Trakt mutation failed: \(reason, privacy: .public)")
-                mutationSyncError = "Couldn't sync changes to Trakt. Please try again."
-                // If this intent was replaced while its request was in flight,
-                // it is no longer the queue head. Continue with the new intent;
-                // otherwise preserve strict FIFO ordering and wait for a retry.
-                if mutationOutbox.contains(id: mutation.id, account: account) {
-                    break
-                }
-            }
-        }
+        mutations.retry()
     }
 
     // MARK: - Playback scrobbling
@@ -275,28 +202,6 @@ final class TraktService {
         }
     }
 
-    private var mutationAccount: String? {
-        guard isConnected, let scope = session.identity?.scope, !scope.isEmpty else { return nil }
-        return scope
-    }
-
-    private func refreshMutationStatus() {
-        guard let account = mutationAccount else {
-            pendingMutationCount = 0
-            failedMutationCount = 0
-            mutationSyncError = nil
-            return
-        }
-        let status = mutationOutbox.status(account: account)
-        pendingMutationCount = status.pendingCount
-        failedMutationCount = status.failedCount
-        if status.failedCount == 0 {
-            mutationSyncError = nil
-        } else if mutationSyncError == nil {
-            mutationSyncError = "Some Trakt changes are waiting to retry."
-        }
-    }
-
     // MARK: - Watchlist
 
     /// Fetches the watchlist without collapsing a transport/auth failure into
@@ -313,28 +218,14 @@ final class TraktService {
     /// Captures the TMDB id before starting asynchronous work so the SwiftData
     /// model never crosses an actor boundary.
     func syncWatchlist(movie: Movie, watchlisted: Bool) {
-        guard let account = mutationAccount, let tmdbID = movie.tmdbId else { return }
-        mutationOutbox.enqueue(
-            kind: .watchlist,
-            target: .movie(tmdbID: tmdbID),
-            isPresent: watchlisted,
-            account: account
-        )
-        refreshMutationStatus()
-        retryPendingMutations()
+        guard let tmdbID = movie.tmdbId else { return }
+        mutations.enqueue(.watchlist, .movie(tmdbID: tmdbID), isPresent: watchlisted)
     }
 
     /// Series counterpart
     func syncWatchlist(series: Series, watchlisted: Bool) {
-        guard let account = mutationAccount, let tmdbID = series.tmdbId else { return }
-        mutationOutbox.enqueue(
-            kind: .watchlist,
-            target: .show(tmdbID: tmdbID),
-            isPresent: watchlisted,
-            account: account
-        )
-        refreshMutationStatus()
-        retryPendingMutations()
+        guard let tmdbID = series.tmdbId else { return }
+        mutations.enqueue(.watchlist, .show(tmdbID: tmdbID), isPresent: watchlisted)
     }
 
     // MARK: - Lists
