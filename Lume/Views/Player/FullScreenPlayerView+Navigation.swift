@@ -61,11 +61,10 @@ extension FullScreenPlayerView {
             moveToCatchupSegment(newMedia)
             return
         }
-        // Settle Trakt against the outgoing identity while its clock is intact.
-        stopTraktScrobble()
-        // Flush the outgoing stream's progress before the clock resets — capture
-        // happens synchronously inside `persistProgressDetached`.
-        persistProgressDetached()
+        // Settle Trakt and flush progress against the outgoing identity while
+        // its clock is intact (capture happens synchronously).
+        session.send(.leave(.swap))
+        startCause = .swap
         // The completion claim covers exactly that one flush. Left standing, a
         // step back onto the same episode would never record progress again.
         completedRef = nil

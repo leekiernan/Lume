@@ -68,8 +68,10 @@ struct LumeEngineEngineView: View {
     var onRemoteAdvance: ((PlayerMediaSwapper.Step) -> Bool)?
     /// Takes every seek and skip on a catch-up programme — see `CatchupSeekRouter`.
     var onCatchupSeek: ((CatchupSeek) -> Void)?
+    /// The full-screen session this engine reports to; nil in Multi-View.
+    var session: PlaybackSession?
 
-    @StateObject private var coordinator = LumeEngineCoordinator()
+    @StateObject var coordinator = LumeEngineCoordinator()
     /// Drives bounded backoff reconnects when the stream drops mid-playback.
     @State private var reconnector = PlaybackRetryController()
     @State private var isControlsVisible = true
@@ -80,7 +82,7 @@ struct LumeEngineEngineView: View {
     /// Set once the stream is given up on (initial-load failure with no fallback
     /// left, or the reconnect budget spent). Swaps the player for the
     /// `PlayerErrorIndicator` (Try Again / Back).
-    @State private var loadFailed = false
+    @State var loadFailed = false
     @State private var isSeeking = false
     @State private var seekPosition: TimeInterval = 0
     @State private var hideTask: Task<Void, Never>?
@@ -120,7 +122,7 @@ struct LumeEngineEngineView: View {
 
     private let autoHideInterval: TimeInterval = 4
 
-    var body: some View {
+    var engineBody: some View {
         ZStack {
             Color.black
                 .ignoresSafeArea()

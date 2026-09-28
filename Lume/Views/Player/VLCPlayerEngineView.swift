@@ -71,8 +71,10 @@ struct VLCPlayerEngineView: View {
     var onRemoteAdvance: ((PlayerMediaSwapper.Step) -> Bool)?
     /// Takes every seek and skip on a catch-up programme — see `CatchupSeekRouter`.
     var onCatchupSeek: ((CatchupSeek) -> Void)?
+    /// The full-screen session this engine reports to; nil in Multi-View.
+    var session: PlaybackSession?
 
-    @StateObject private var coordinator = VLCPlayerCoordinator()
+    @StateObject var coordinator = VLCPlayerCoordinator()
     @State private var isControlsVisible = true
     /// Presents the OpenSubtitles browser. Held here rather than in the controls
     /// overlay: the overlay is removed when the controls auto-hide, which would
@@ -80,7 +82,7 @@ struct VLCPlayerEngineView: View {
     @State private var isSearchingSubtitles = false
     /// Set once the stream is given up on (initial-load failure with no fallback
     /// left). Swaps the player for the `PlayerErrorIndicator` (Try Again / Back).
-    @State private var loadFailed = false
+    @State var loadFailed = false
     @State private var isSeeking = false
     @State private var seekPosition: TimeInterval = 0
     @State private var hideTask: Task<Void, Never>?
@@ -124,7 +126,7 @@ struct VLCPlayerEngineView: View {
     /// hanging engine hands off promptly rather than stalling on a black screen.
     private let fallbackStartupTimeout: TimeInterval = 15
 
-    var body: some View {
+    var engineBody: some View {
         ZStack {
             // Backdrop. On macOS the host NSView is deliberately not
             // layer-backed (see VLCVideoContainer), so it can't paint its

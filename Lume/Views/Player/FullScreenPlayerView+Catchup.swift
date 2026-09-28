@@ -71,6 +71,7 @@ extension FullScreenPlayerView {
     ///   primary engine is built once, directly on the new segment.
     /// - The Now Playing session carries on; only its resume snapshot moves.
     func moveToCatchupSegment(_ segment: PlayableMedia) {
+        startCause = .catchupSegment
         clock.rebase(onto: segment)
         engineAttempt = 0
         activeMedia = segment
@@ -108,6 +109,7 @@ extension FullScreenPlayerView {
             // change even when both values move).
             clock.releaseHold()
             clock.rebase(onto: segment)
+            startCause = .catchupSegment
             engineAttempt = 0
             catchupRestartCount += 1
             return

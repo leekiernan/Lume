@@ -63,6 +63,8 @@ struct KSPlayerEngineView: View {
     var onRemoteAdvance: ((PlayerMediaSwapper.Step) -> Bool)?
     /// Takes every seek and skip on a catch-up programme — see `CatchupSeekRouter`.
     var onCatchupSeek: ((CatchupSeek) -> Void)?
+    /// The full-screen session this engine reports to; nil in Multi-View.
+    var session: PlaybackSession?
 
     @StateObject var coordinator = KSVideoPlayer.Coordinator()
     /// KSPlayer's coordinator is the library's, so the catch-up routing lives
@@ -107,7 +109,7 @@ struct KSPlayerEngineView: View {
     /// `startupTimeout`. Covers a stream that hangs in `.preparing`/`.buffering`
     /// forever without ever emitting `.error` (so the reconnector never engages).
     @State var startupWatchdog: Task<Void, Never>?
-    /// Fires `retryPlayback()` if a live stream sits in `.buffering` for
+    /// Fires a reconnect (`recoverWedgedStream`) if a live stream sits in `.buffering` for
     /// `stallTimeout` after playback had started. A mid-stream decode failure
     /// wedges KSPlayer in `.buffering` forever without ever emitting `.error`
     /// (so the reconnector never engages, and the startup watchdog is already
@@ -191,11 +193,23 @@ struct KSPlayerEngineView: View {
     let stallTimeout: TimeInterval = 30
 
     var body: some View {
-        #if os(tvOS)
-            tvBody
-        #else
-            standardBody
-        #endif
+        Group {
+            #if os(tvOS)
+                tvBody
+            #else
+                standardBody
+            #endif
+        }
+        .reportsPlayback(
+            to: session, engine: .ksPlayer,
+            report: .init(
+                started: hasStartedPlayback, buffering: isBuffering,
+                // `isPlaying` only follows `.bufferFinished`, which a started
+                // stream can miss; anything short of a pause is playback.
+                playing: coordinator.state != .paused, failed: loadFailed
+            ),
+            failureOverlay: $loadFailed
+        )
     }
 
     // MARK: - tvOS body (shared overlay)
