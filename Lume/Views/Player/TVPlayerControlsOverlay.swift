@@ -333,7 +333,9 @@
         @ViewBuilder
         private var leadingTransportButton: some View {
             if isSeries {
-                circleButton(systemImage: "backward.fill", focus: .previousItem, enabled: episodeNav.previous != nil) {
+                // `backward.end` (|<), as on iOS and macOS: the movie's
+                // `backward.fill` (<<) is a 5-minute rewind.
+                circleButton(systemImage: "backward.end.fill", focus: .previousItem, enabled: episodeNav.previous != nil) {
                     stepItem(.previous)
                 }
             } else {
@@ -347,7 +349,7 @@
         @ViewBuilder
         private var trailingTransportButton: some View {
             if isSeries {
-                circleButton(systemImage: "forward.fill", focus: .nextItem, enabled: episodeNav.next != nil) {
+                circleButton(systemImage: "forward.end.fill", focus: .nextItem, enabled: episodeNav.next != nil) {
                     stepItem(.next)
                 }
             } else {
