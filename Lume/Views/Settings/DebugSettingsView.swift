@@ -45,7 +45,7 @@ enum DiagnosticsReport {
         return DebugLogExporter(metadata: metadata, container: container)
     }
 
-    /// The `mailto:` a phone opens from the Apple TV QR code: support address,
+    /// The `mailto:` a phone opens from the Apple TV QR code: diagnostics address,
     /// subject, and the compact summary as the body.
     nonisolated static func mailtoLink(summary: String, appVersion: String) -> String {
         var allowed = CharacterSet.urlQueryAllowed
@@ -53,7 +53,7 @@ enum DiagnosticsReport {
         let subject = "Lume Diagnostics — \(appVersion)"
         let encodedSubject = subject.addingPercentEncoding(withAllowedCharacters: allowed) ?? ""
         let encodedBody = summary.addingPercentEncoding(withAllowedCharacters: allowed) ?? ""
-        return "mailto:\(SupportInfo.email)?subject=\(encodedSubject)&body=\(encodedBody)"
+        return "mailto:\(SupportInfo.diagnosticsEmail)?subject=\(encodedSubject)&body=\(encodedBody)"
     }
 }
 
@@ -190,7 +190,7 @@ extension SettingsView {
             #if os(iOS)
             .sheet(item: $mailItem) { item in
                 MailComposeView(
-                    recipient: SupportInfo.email,
+                    recipient: SupportInfo.diagnosticsEmail,
                     subject: String(localized: "Lume Diagnostics — \(SupportInfo.appVersion)"),
                     body: mailBody,
                     attachmentURL: item.url
@@ -238,7 +238,7 @@ extension SettingsView {
                     }
                     .disabled(isPreparing)
 
-                    if let url = SupportInfo.emailURL {
+                    if let url = SupportInfo.diagnosticsEmailURL {
                         Link(destination: url) {
                             Label("Email the Developer", systemImage: "envelope")
                         }
@@ -248,9 +248,9 @@ extension SettingsView {
                 Text("Send")
             } footer: {
                 #if os(macOS)
-                    Text("Prepare the report, then share it or attach it to an email to \(SupportInfo.email).")
+                    Text("Prepare the report, then share it or attach it to an email to \(SupportInfo.diagnosticsEmail).")
                 #else
-                    Text("Reports go to \(SupportInfo.email).")
+                    Text("Reports go to \(SupportInfo.diagnosticsEmail).")
                 #endif
             }
         }

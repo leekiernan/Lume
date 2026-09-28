@@ -41,7 +41,7 @@
     /// The app writes a downscaled artwork copy here; the widget extension
     /// reads it back. Both sides resolve the same app-group container.
     nonisolated enum PlaybackActivityArtworkStore {
-        static let appGroupID = "group.com.bilipp.lume"
+        static let appGroupID = "group.com.leekiernan.lume"
         static let directoryName = "LiveActivityArtwork"
 
         static var directoryURL: URL? {
