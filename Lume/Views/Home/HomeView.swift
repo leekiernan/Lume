@@ -8,6 +8,7 @@
 //  see HomeLayoutSettings); each row only renders when it has content.
 //
 
+import OSLog
 import SwiftData
 import SwiftUI
 
@@ -147,28 +148,30 @@ struct HomeView: View {
     var body: some View {
         // Derived once per pass — see `DerivedContent`.
         let content = derivedContent()
+        let snapshot = surfaceSnapshot(content)
         NavigationStack {
             Group {
-                if playlists.isEmpty {
+                switch snapshot.display {
+                case .noPlaylists:
                     ContentUnavailableView(
                         "No Playlists",
                         systemImage: "house",
                         description: Text("Add a playlist in Settings to get started")
                     )
-                } else if isEmpty(content) {
+                case .empty:
                     ContentUnavailableView(
                         "Nothing Here Yet",
                         systemImage: "house",
                         description: Text("Watch something or mark titles as favorites and they'll show up here.")
                     )
-                } else {
+                case let .content(hero):
                     #if os(tvOS)
                         // Immersive Apple TV-style home: full-screen backdrop,
                         // teasing first row, fold-snapping scroll. Lives in
                         // `TVHomeScreen.swift`.
                         TVHomeScreen(
                             heroItems: feed.heroItems,
-                            reservesHero: feed.heroState.reservesSpace,
+                            reservesHero: hero.reservesSpace,
                             warmStartBackdropURL: heroWarmStartBackdropURL,
                             onSelectHero: { selectedHero = $0 },
                             rows: { homeRows(content) }
@@ -179,7 +182,7 @@ struct HomeView: View {
                             LazyVStack(alignment: .leading, spacing: PosterCardMetrics.sectionSpacing) {
                                 if !feed.heroItems.isEmpty {
                                     HomeHeroCarousel(items: feed.heroItems)
-                                } else if feed.heroState.reservesSpace {
+                                } else if hero.reservesSpace {
                                     HomeHeroWarmStart(backdropURL: heroWarmStartBackdropURL)
                                 }
                                 homeRows(content)
@@ -187,7 +190,7 @@ struct HomeView: View {
                             // The hero fills the top inset itself when it's
                             // showing; without one, Home takes the same inset as
                             // the Movies and Series pages.
-                            .padding(.top, feed.heroState.reservesSpace ? 0 : PosterCardMetrics.sectionVerticalPadding)
+                            .padding(.top, hero.reservesSpace ? 0 : PosterCardMetrics.sectionVerticalPadding)
                             .padding(.bottom, PosterCardMetrics.sectionVerticalPadding)
                         }
                         .browseActivity()
@@ -195,9 +198,12 @@ struct HomeView: View {
                         // Only let content run under the nav bar when the hero
                         // backdrop is there to fill it; otherwise the first row
                         // would sit hidden behind the bar.
-                        .ignoresSafeArea(edges: feed.heroState.reservesSpace ? .top : [])
+                        .ignoresSafeArea(edges: hero.reservesSpace ? .top : [])
                     #endif
                 }
+            }
+            .onChange(of: snapshot, initial: true) { _, snapshot in
+                Logger.home.info("home: \(snapshot.logDescription)")
             }
             .profileMenuToolbar()
             .libraryToolbar(config: LibraryToolbarConfiguration(
