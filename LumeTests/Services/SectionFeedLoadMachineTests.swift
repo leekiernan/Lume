@@ -1,0 +1,99 @@
+//
+//  SectionFeedLoadMachineTests.swift
+//  LumeTests
+//
+//  The section feed's load lifecycle: per-source transitions, settling, and
+//  the scope change that must reload every source it resets.
+//
+
+import Foundation
+@testable import Lume
+import SwiftData
+import Testing
+
+@MainActor
+struct SectionFeedLoadMachineTests {
+    @Test func `a load shows as loading or cached until it finishes`() {
+        var machine = SectionFeedLoadMachine()
+        _ = machine.handle(.began(.trending, key: "a", cache: .missing))
+        _ = machine.handle(.began(.custom, key: "a", cache: .stale))
+        #expect(machine.state(of: .trending) == .loading)
+        #expect(machine.state(of: .custom) == .cached)
+
+        _ = machine.handle(.finished(.trending, .loaded))
+        _ = machine.handle(.finished(.custom, .failed))
+        #expect(machine.state(of: .trending) == .loaded)
+        #expect(machine.state(of: .custom) == .failed)
+    }
+
+    @Test func `a load that never began cannot finish`() {
+        var machine = SectionFeedLoadMachine()
+        let finish = SectionFeedLoadMachine.Event.finished(.watchlist(.simkl), .loaded)
+        #expect(!SectionFeedLoadMachine.isValid(finish, in: machine.state(of: .watchlist(.simkl))))
+        _ = machine.handle(finish)
+        #expect(machine.state(of: .watchlist(.simkl)) == .idle)
+    }
+
+    @Test func `the surface is settled only once every source is`() {
+        var machine = SectionFeedLoadMachine()
+        for source in SectionFeedSource.allCases.dropLast() {
+            _ = machine.handle(.began(source, key: "k", cache: .missing))
+            _ = machine.handle(.finished(source, .loaded))
+        }
+        #expect(!machine.isSettled)
+        _ = machine.handle(.began(.custom, key: "k", cache: .missing))
+        _ = machine.handle(.finished(.custom, .failed))
+        #expect(machine.isSettled)
+    }
+
+    @Test func `the first scope and an unchanged scope need nothing`() {
+        var machine = SectionFeedLoadMachine()
+        #expect(machine.handle(.contextChanged(identity: "a")).isEmpty)
+        _ = machine.handle(.began(.trending, key: "k", cache: .missing))
+        #expect(machine.handle(.contextChanged(identity: "a")).isEmpty)
+        #expect(machine.state(of: .trending) == .loading)
+    }
+
+    @Test func `a scope change resets every source and reloads each one asked for`() {
+        var machine = SectionFeedLoadMachine()
+        _ = machine.handle(.contextChanged(identity: "playlist-a"))
+        _ = machine.handle(.began(.trending, key: "t1", cache: .missing))
+        _ = machine.handle(.finished(.trending, .loaded))
+        _ = machine.handle(.began(.watchlist(.trakt), key: "w1", cache: .fresh))
+
+        let effects = machine.handle(.contextChanged(identity: "playlist-b"))
+
+        #expect(effects == [
+            .discardCatalogModels,
+            .reload(.trending, key: "t1"),
+            .reload(.watchlist(.trakt), key: "w1")
+        ])
+        #expect(SectionFeedSource.allCases.allSatisfy { machine.state(of: $0) == .idle })
+        #expect(machine.contextIdentity == "playlist-b")
+    }
+
+    /// The gap the machine closes: a scope change wipes every row, and a source
+    /// whose view task doesn't re-run must still come back rather than stay
+    /// empty for the session.
+    @Test func `a feed reloads a source its view never asks for again`() async throws {
+        let schema = Schema([Movie.self, Series.self, Episode.self, LiveStream.self])
+        let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true, cloudKitDatabase: .none)
+        let container = try ModelContainer(for: schema, configurations: [config])
+        let feed = SectionFeed(surface: .home)
+        func context(_ prefix: String) -> SectionFeed.Context {
+            SectionFeed.Context(modelContext: container.mainContext, restriction: ContentRestriction(), playlistPrefix: prefix)
+        }
+
+        feed.update(context: context("a-"))
+        await feed.loadCustomSections(cacheKey: "custom", sections: [])
+        #expect(feed.loads.state(of: .custom) == .loaded)
+
+        feed.update(context: context("b-"))
+        #expect(feed.loads.state(of: .custom) == .idle)
+
+        for _ in 0 ..< 50 where feed.loads.state(of: .custom) != .loaded {
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        #expect(feed.loads.state(of: .custom) == .loaded)
+    }
+}

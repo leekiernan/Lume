@@ -21,11 +21,7 @@ import SwiftUI
 @MainActor
 @Observable
 final class SectionFeed {
-    private enum CacheRestore {
-        case missing
-        case stale
-        case fresh
-    }
+    private typealias CacheRestore = SectionFeedLoadMachine.CacheHit
 
     /// What a load needs from the view: the store to match against, the
     /// viewer's hidden categories, and the active playlist's id prefix (nil
@@ -62,10 +58,11 @@ final class SectionFeed {
     /// available for an incrementally-loaded full grid without keeping all of
     /// its SwiftData models alive on the browse screen.
     private(set) var collections: [HomeSectionRef: SectionCollectionSnapshot] = [:]
-    private(set) var trendingState: HomeLoadState = .idle
-    /// One per watchlist service; a service never loaded yet reads `.idle`.
-    private(set) var watchlistStates: [WatchlistProvider: HomeLoadState] = [:]
-    private(set) var customState: HomeLoadState = .idle
+    /// Every source's load state and the catalog scope they were matched in —
+    /// see `SectionFeedLoadMachine`. Only `transition(_:)` advances it.
+    private(set) var loads = SectionFeedLoadMachine()
+    /// The custom sections last asked for, so a scope change can reload them.
+    private var requestedCustomSections: [CustomHomeSection] = []
     /// Sources that reached a terminal transport/provider failure without a
     /// usable cached collection. Kept per section so one failed custom list
     /// cannot make a successfully empty sibling look broken.
@@ -88,48 +85,6 @@ final class SectionFeed {
 
     func collection(for section: HomeSectionRef) -> SectionCollectionSnapshot? {
         collections[section]
-    }
-
-    /// Resolves another local-catalog window from the retained source list.
-    /// Nothing calls this from the 20-card rail; it is the common continuation
-    /// path a full collection grid can use without refetching its remote list.
-    func page(
-        for section: HomeSectionRef,
-        from cursor: Int,
-        limit: Int = 100
-    ) async -> SectionCollectionPage {
-        guard let collection = collections[section], let context else {
-            return SectionCollectionPage(items: [], nextOffset: cursor, hasMoreCandidates: false)
-        }
-        return await page(entries: collection.entries, from: cursor, limit: limit, context: context)
-    }
-
-    /// Resolves a page from a grid's captured source snapshot. A feed may
-    /// revalidate while the grid is open; keeping that grid on one ordered
-    /// source prevents its cursor from suddenly referring to a different list.
-    func page(
-        entries: [HomeListEntry],
-        from cursor: Int,
-        limit: Int = 100
-    ) async -> SectionCollectionPage {
-        guard let context else {
-            return SectionCollectionPage(items: [], nextOffset: cursor, hasMoreCandidates: false)
-        }
-        return await page(entries: entries, from: cursor, limit: limit, context: context)
-    }
-
-    private func page(
-        entries: [HomeListEntry],
-        from cursor: Int,
-        limit: Int,
-        context: Context
-    ) async -> SectionCollectionPage {
-        await SectionCollectionResolver.page(
-            entries: entries,
-            from: cursor,
-            limit: limit,
-            context: context
-        )
     }
 
     /// The promoted row's titles, as hero slides. Titles whose backdrop hasn't
@@ -161,9 +116,7 @@ final class SectionFeed {
     /// True once every remote row has settled, so a surface can tell "still
     /// loading" from "genuinely empty" before showing an empty state.
     var isSettled: Bool {
-        trendingState.isSettled
-            && WatchlistProvider.allCases.allSatisfy { (watchlistStates[$0] ?? .idle).isSettled }
-            && customState.isSettled
+        loads.isSettled
     }
 
     /// The hero's explicit UI state. Views reserve its large first-frame slot
@@ -191,15 +144,15 @@ final class SectionFeed {
         switch section {
         case let .builtin(section):
             switch section {
-            case .trendingMovies, .trendingSeries: trendingState
-            case .traktWatchlist: watchlistStates[.trakt] ?? .idle
-            case .simklWatchlist: watchlistStates[.simkl] ?? .idle
+            case .trendingMovies, .trendingSeries: loads.state(of: .trending)
+            case .traktWatchlist: loads.state(of: .watchlist(.trakt))
+            case .simklWatchlist: loads.state(of: .watchlist(.simkl))
             // Sports has its own pipeline (`SportsFollowService`/`SportsStore`) —
             // this feed never fetches it, so there is nothing here to wait on.
             case .recentlyWatched, .favorites, .recentlyAdded, .forYou, .sports: .loaded
             }
         case .custom:
-            customState
+            loads.state(of: .custom)
         }
     }
 
@@ -208,13 +161,13 @@ final class SectionFeed {
     func loadTrending(cacheKey: String) async {
         let request = loadGate.begin(.trending)
         let cached = restoreTrending(cacheKey: cacheKey)
-        trendingState = cached == .missing ? .loading : .cached
+        transition(.began(.trending, key: cacheKey, cache: cached))
         if cached == .fresh {
             await refreshHeroArtwork()
             guard loadGate.isCurrent(request, for: .trending) else { return }
             failedSections.remove(.builtin(.trendingMovies))
             failedSections.remove(.builtin(.trendingSeries))
-            trendingState = .loaded
+            transition(.finished(.trending, .loaded))
             return
         }
         guard let context else {
@@ -256,7 +209,9 @@ final class SectionFeed {
         guard loadGate.isCurrent(request, for: .trending) else { return }
         collections[.builtin(.trendingMovies)] = movieCollection
         collections[.builtin(.trendingSeries)] = seriesCollection
-        SectionFeedCache.shared.storeTrending(surface, key: cacheKey, entry: .init(
+        logMatch("trending movies", movieCollection)
+        logMatch("trending series", seriesCollection)
+        SectionFeedCache.shared.storeTrending(surface, key: scoped(cacheKey), entry: .init(
             movies: movieCollection,
             series: seriesCollection
         ))
@@ -264,7 +219,7 @@ final class SectionFeed {
         guard loadGate.isCurrent(request, for: .trending) else { return }
         failedSections.remove(.builtin(.trendingMovies))
         failedSections.remove(.builtin(.trendingSeries))
-        trendingState = .loaded
+        transition(.finished(.trending, .loaded))
     }
 
     private func trendingTitles(using client: TMDBClient) async throws -> ([TrendingTitle], [TrendingTitle]) {
@@ -276,7 +231,7 @@ final class SectionFeed {
     }
 
     private func restoreTrending(cacheKey: String) -> CacheRestore {
-        guard let cached = SectionFeedCache.shared.trendingEntry(surface, for: cacheKey) else { return .missing }
+        guard let cached = SectionFeedCache.shared.trendingEntry(surface, for: scoped(cacheKey)) else { return .missing }
         collections[.builtin(.trendingMovies)] = cached.value.movies
         collections[.builtin(.trendingSeries)] = cached.value.series
         return cached.isFresh ? .fresh : .stale
@@ -287,9 +242,8 @@ final class SectionFeed {
         for ref in refs where items(for: ref).isEmpty {
             failedSections.insert(ref)
         }
-        trendingState = cached != .missing && refs.contains(where: { !items(for: $0).isEmpty })
-            ? .loaded
-            : .failed
+        let usable = cached != .missing && refs.contains(where: { !items(for: $0).isEmpty })
+        transition(.finished(.trending, usable ? .loaded : .failed))
     }
 }
 
@@ -302,15 +256,15 @@ extension SectionFeed {
     /// medium.
     func loadWatchlist(_ provider: WatchlistProvider, cacheKey: String) async {
         let ref = HomeSectionRef.builtin(provider.section)
-        let feed = SectionFeedLoadGate.Feed.watchlist(provider)
+        let feed = SectionFeedSource.watchlist(provider)
         let request = loadGate.begin(feed)
         let cached = restoreWatchlist(provider, cacheKey: cacheKey)
-        watchlistStates[provider] = cached == .missing ? .loading : .cached
+        transition(.began(feed, key: cacheKey, cache: cached))
         if cached == .fresh {
             await refreshHeroArtwork()
             guard loadGate.isCurrent(request, for: feed) else { return }
             failedSections.remove(ref)
-            watchlistStates[provider] = .loaded
+            transition(.finished(.watchlist(provider), .loaded))
             return
         }
         guard let context else {
@@ -320,7 +274,7 @@ extension SectionFeed {
         guard provider.isConnected else {
             collections[ref] = .empty
             failedSections.remove(ref)
-            watchlistStates[provider] = .loaded
+            transition(.finished(.watchlist(provider), .loaded))
             return
         }
         do {
@@ -329,11 +283,12 @@ extension SectionFeed {
             let collection = await makeCollection(entries: entries, context: context)
             guard loadGate.isCurrent(request, for: feed) else { return }
             collections[ref] = collection
-            SectionFeedCache.shared.storeWatchlist(surface, provider, key: cacheKey, collection: collection)
+            logMatch("\(provider) watchlist", collection)
+            SectionFeedCache.shared.storeWatchlist(surface, provider, key: scoped(cacheKey), collection: collection)
             await refreshHeroArtwork()
             guard loadGate.isCurrent(request, for: feed) else { return }
             failedSections.remove(ref)
-            watchlistStates[provider] = .loaded
+            transition(.finished(.watchlist(provider), .loaded))
         } catch {
             // Preserve a stale row when revalidation fails. A transport error is
             // not evidence that the remote watchlist became empty.
@@ -346,7 +301,7 @@ extension SectionFeed {
     }
 
     private func restoreWatchlist(_ provider: WatchlistProvider, cacheKey: String) -> CacheRestore {
-        guard let cached = SectionFeedCache.shared.watchlistEntry(surface, provider, for: cacheKey) else {
+        guard let cached = SectionFeedCache.shared.watchlistEntry(surface, provider, for: scoped(cacheKey)) else {
             return .missing
         }
         collections[.builtin(provider.section)] = cached.value
@@ -356,10 +311,10 @@ extension SectionFeed {
     private func finishWatchlistFailure(_ provider: WatchlistProvider, cached: CacheRestore) {
         let ref = HomeSectionRef.builtin(provider.section)
         if cached != .missing, !items(for: ref).isEmpty {
-            watchlistStates[provider] = .loaded
+            transition(.finished(.watchlist(provider), .loaded))
         } else {
             failedSections.insert(ref)
-            watchlistStates[provider] = .failed
+            transition(.finished(.watchlist(provider), .failed))
         }
     }
 
@@ -370,17 +325,19 @@ extension SectionFeed {
     /// source remains in the snapshot for later pages.
     func loadCustomSections(cacheKey: String, sections: [CustomHomeSection]) async {
         let request = loadGate.begin(.custom)
+        requestedCustomSections = sections
         guard !sections.isEmpty else {
+            transition(.began(.custom, key: cacheKey, cache: .missing))
             replaceCustomCollections(with: [:])
             failedSections = failedSections.filter { ref in
                 if case .custom = ref { return false }
                 return true
             }
-            customState = .loaded
+            transition(.finished(.custom, .loaded))
             return
         }
         let cached = restoreCustom(cacheKey: cacheKey)
-        customState = cached.state == .missing ? .loading : .cached
+        transition(.began(.custom, key: cacheKey, cache: cached.state))
         if cached.state == .fresh {
             // A recreated surface has a new transient presentation map even
             // though the session memo can restore its collection models. Run
@@ -391,7 +348,7 @@ extension SectionFeed {
             for section in sections {
                 failedSections.remove(.custom(section.id))
             }
-            customState = .loaded
+            transition(.finished(.custom, .loaded))
             return
         }
         guard let context else {
@@ -415,9 +372,9 @@ extension SectionFeed {
         // since the cache key doesn't change until the catalog or the sections do.
         guard loadGate.isCurrent(request, for: .custom) else { return }
         updateCustomFailures(sections: sections, lists: result.lists, fallback: cached.collections)
-        customState = .loaded
+        transition(.finished(.custom, .loaded))
         guard sections.allSatisfy({ (result.lists[$0.id] ?? nil) != nil }) else { return }
-        SectionFeedCache.shared.storeCustom(surface, key: cacheKey, collections: result.collections)
+        SectionFeedCache.shared.storeCustom(surface, key: scoped(cacheKey), collections: result.collections)
     }
 
     private func resolveCustomListsProgressively(
@@ -467,6 +424,7 @@ extension SectionFeed {
                 }
                 resolved[id] = collection
                 collections[.custom(id)] = collection
+                logMatch("custom list", collection)
                 failedSections.remove(.custom(id))
 
                 // A custom hero should not wait for an unrelated slow list.
@@ -494,7 +452,7 @@ extension SectionFeed {
     private func restoreCustom(
         cacheKey: String
     ) -> (state: CacheRestore, collections: [UUID: SectionCollectionSnapshot]) {
-        guard let cached = SectionFeedCache.shared.customEntry(surface, for: cacheKey) else {
+        guard let cached = SectionFeedCache.shared.customEntry(surface, for: scoped(cacheKey)) else {
             return (.missing, [:])
         }
         replaceCustomCollections(with: cached.value)
@@ -508,7 +466,8 @@ extension SectionFeed {
         for section in sections where cached[section.id]?.preview.isEmpty != false {
             failedSections.insert(.custom(section.id))
         }
-        customState = cached.values.contains(where: { !$0.preview.isEmpty }) ? .loaded : .failed
+        let usable = cached.values.contains(where: { !$0.preview.isEmpty })
+        transition(.finished(.custom, usable ? .loaded : .failed))
     }
 
     private func updateCustomFailures(
@@ -536,27 +495,80 @@ extension SectionFeed {
     /// call so the `.task` sites stay as short as they were when this logic
     /// lived on `HomeView`.
     func update(context: Context) {
-        let previousIdentity = self.context.map(contextIdentity)
-        let nextIdentity = contextIdentity(context)
         self.context = context
-        guard previousIdentity != nil, previousIdentity != nextIdentity else { return }
-
-        // Catalog models belong to the previous playlist/visibility scope. Drop
-        // them before the new tasks restore matching cache entries, and revoke
-        // every in-flight request so an A → B → A switch cannot publish late.
-        loadGate.invalidateAll()
-        collections.removeAll()
-        heroPresentationOverrides.removeAll()
-        heroEnrichmentIDs.removeAll()
-        failedSections.removeAll()
-        heroArtworkRevision &+= 1
-        trendingState = .idle
-        watchlistStates.removeAll()
-        customState = .idle
+        transition(.contextChanged(identity: contextIdentity(context)))
     }
 
     private func contextIdentity(_ context: Context) -> String {
         "\(context.playlistPrefix ?? "*")|\(context.restriction.visibilityToken)"
+    }
+
+    /// A session-cache key scoped to the catalog it was matched against. The
+    /// cached collections hold models from that scope, so a key the view
+    /// happens to reuse after a scope change must not find them.
+    private func scoped(_ cacheKey: String) -> String {
+        "\(loads.contextIdentity ?? "*")|\(cacheKey)"
+    }
+
+    /// How a resolved list met the catalog. "0 shown, 20 of 20 checked" means
+    /// the list arrived but none of it matched — a catalog without TMDB ids, or
+    /// the wrong playlist scope — which is otherwise indistinguishable on screen
+    /// from a list that never loaded.
+    private func logMatch(_ label: String, _ collection: SectionCollectionSnapshot) {
+        Logger.home.info(
+            "\(surface.rawValue) \(label): \(collection.preview.count) shown, \(collection.nextOffset) of \(collection.entries.count) checked"
+        )
+    }
+
+    /// The one way load state changes: applies `event`, journals the
+    /// transition, and performs what the machine asks for.
+    private func transition(_ event: SectionFeedLoadMachine.Event) {
+        let source: SectionFeedSource? = switch event {
+        case let .began(source, _, _), let .finished(source, _): source
+        case .contextChanged: nil
+        }
+        let before = source.map(loads.state(of:))
+        guard source.map({ SectionFeedLoadMachine.isValid(event, in: loads.state(of: $0)) }) ?? true else {
+            Logger.home.warning("\(surface.rawValue) \(String(describing: source)): ignored \(String(describing: event)) while \(String(describing: before))")
+            return
+        }
+        let effects = loads.handle(event)
+        if let source, let before {
+            Logger.home.info("\(surface.rawValue) \(source): \(before) → \(loads.state(of: source))")
+        }
+        for effect in effects {
+            perform(effect)
+        }
+    }
+
+    private func perform(_ effect: SectionFeedLoadMachine.Effect) {
+        switch effect {
+        case .discardCatalogModels:
+            // Catalog models belong to the previous playlist/visibility scope.
+            // Drop them, and revoke every in-flight request so an A → B → A
+            // switch cannot publish late.
+            Logger.home.info("\(surface.rawValue): catalog scope changed; discarding matched rows")
+            loadGate.invalidateAll()
+            collections.removeAll()
+            heroPresentationOverrides.removeAll()
+            heroEnrichmentIDs.removeAll()
+            failedSections.removeAll()
+            heroArtworkRevision &+= 1
+        case let .reload(source, key):
+            // Usually the view's own tasks re-run for the new scope and begin
+            // these loads themselves; give them a moment, then load whatever is
+            // still idle so no source is left empty because its task didn't.
+            Task { [weak self] in
+                try? await Task.sleep(for: .milliseconds(250))
+                guard let self, loads.state(of: source) == .idle else { return }
+                Logger.home.notice("\(surface.rawValue) \(source): reloading after scope change")
+                switch source {
+                case .trending: await loadTrending(cacheKey: key)
+                case let .watchlist(provider): await loadWatchlist(provider, cacheKey: key)
+                case .custom: await loadCustomSections(cacheKey: key, sections: requestedCustomSections)
+                }
+            }
+        }
     }
 
     private func makeCollection(

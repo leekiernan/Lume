@@ -106,27 +106,21 @@ final class SectionFeedCache {
 /// the newer A request merely because their string keys match again.
 @MainActor
 final class SectionFeedLoadGate {
-    enum Feed: Hashable {
-        case trending
-        case watchlist(WatchlistProvider)
-        case custom
-    }
-
     struct Request {
         fileprivate let id: UUID
         fileprivate let revision: UInt
     }
 
-    private var current: [Feed: UUID] = [:]
+    private var current: [SectionFeedSource: UUID] = [:]
     private(set) var revision: UInt = 0
 
-    func begin(_ feed: Feed) -> Request {
+    func begin(_ feed: SectionFeedSource) -> Request {
         let id = UUID()
         current[feed] = id
         return Request(id: id, revision: revision)
     }
 
-    func isCurrent(_ request: Request, for feed: Feed) -> Bool {
+    func isCurrent(_ request: Request, for feed: SectionFeedSource) -> Bool {
         !Task.isCancelled
             && request.revision == revision
             && current[feed] == request.id
