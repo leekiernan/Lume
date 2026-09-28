@@ -33,7 +33,7 @@
                     VStack(alignment: .leading, spacing: 6) {
                         Text("Send Diagnostics")
                             .font(.system(size: 38, weight: .bold))
-                        Text("Scan the code with your phone to email a diagnostic summary to \(SupportInfo.email). Add a sentence about what went wrong before you send it.")
+                        Text("Scan the code with your phone to email a diagnostic summary to \(SupportInfo.diagnosticsEmail). Add a sentence about what went wrong before you send it.")
                             .font(.system(size: TVSettingsMetrics.secondaryFontSize))
                             .foregroundStyle(.secondary)
                     }

@@ -281,7 +281,7 @@ struct DiagnosticReportTests {
 
     @Test func `mailto link encodes the body`() {
         let link = DiagnosticsReport.mailtoLink(summary: "a & b = c\nline", appVersion: "1.0")
-        #expect(link.hasPrefix("mailto:\(SupportInfo.email)?subject="))
+        #expect(link.hasPrefix("mailto:\(SupportInfo.diagnosticsEmail)?subject="))
         #expect(link.contains("&body=a%20%26%20b%20%3D%20c%0Aline"))
     }
 }

@@ -252,6 +252,24 @@ If you're unsure which a branch came from, check its upstream tracking
 (`git branch -vv`): branches showing `[upstream/main: …]` are community branches
 and are kept; branches tracking (or based on) `origin/main` are deleted on merge.
 
+### Upstream intake and the project file
+
+Upstream is taken by `git cherry-pick -x`, not by merging `upstream/main`.
+The fork's `project.pbxproj` is upstream's plus a fixed set of overrides
+(signing identity, Xcode's recommended settings) kept as data in
+`Scripts/fork-project-overrides.json`. When a cherry-pick conflicts in the
+project file, don't hand-merge it:
+
+```bash
+Scripts/fork-project.py apply --from <upstream-commit>
+git add Lume.xcodeproj/project.pbxproj
+```
+
+After a deliberate project change of our own (e.g. accepting a new
+recommended setting), run `Scripts/fork-project.py capture` and commit the
+JSON with it; `Scripts/fork-project.py check` confirms the file is exactly
+upstream + overrides.
+
 ---
 
 ## GitHub

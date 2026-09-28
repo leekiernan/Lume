@@ -13,6 +13,10 @@ import Foundation
 nonisolated enum SupportInfo {
     static let website = "https://getlume.org"
     static let email = "support@getlume.org"
+    /// Where diagnostic reports go — this fork's own inbox, so logs from these
+    /// builds reach the people who can act on them. Support, website and
+    /// Discord stay upstream's.
+    static let diagnosticsEmail = "lume@starlord.co"
     static let discord = "https://discord.gg/DMnQfr69Ug"
 
     /// The App Store deep link that opens straight to the write-a-review
@@ -33,6 +37,10 @@ nonisolated enum SupportInfo {
 
     static var emailURL: URL? {
         URL(string: "mailto:\(email)")
+    }
+
+    static var diagnosticsEmailURL: URL? {
+        URL(string: "mailto:\(diagnosticsEmail)")
     }
 
     static var appStoreReviewURL: URL? {
