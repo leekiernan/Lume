@@ -49,7 +49,9 @@ final class VLCPlayerCoordinator: NSObject, ObservableObject {
     /// How long to wait for the first frame before declaring the stream dead.
     /// Set by the host before `configure` — shorter when a fallback engine is
     /// available so the hand-off is prompt.
-    var startupTimeout: TimeInterval = 40
+    var startupTimeout = PlaybackPolicy.startupTimeout
+    /// Whether an error before the first frame retries — see `PlaybackPolicy`.
+    var retriesStartupErrors = false
 
     /// Live technical characteristics of the current video track, surfaced in
     /// the tvOS overlay's right-hand caption. `nil` until the demuxer has
@@ -254,11 +256,11 @@ final class VLCPlayerCoordinator: NSObject, ObservableObject {
             }
         case .error:
             // A hard error before the first frame means this engine can't open
-            // the stream — report it straight away so the host can fall back
-            // (or raise the overlay) rather than retrying an engine that already
-            // gave a definitive failure. After playback has started, fall back
+            // the stream — report it straight away so the host can fall back,
+            // unless this is the last engine, where a bounded retry is all that
+            // is left (`PlaybackPolicy`). After playback has started, fall back
             // on the bounded reconnect and only report once it's exhausted.
-            if !hasStartedPlayback {
+            if !hasStartedPlayback, !retriesStartupErrors {
                 reportFailure()
             } else {
                 retry.scheduleRetry { [weak self] in self?.reconnect() }

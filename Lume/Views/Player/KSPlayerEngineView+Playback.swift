@@ -175,7 +175,7 @@ extension KSPlayerEngineView {
     /// budget on an engine that already gave a definitive "no". Otherwise drive
     /// the bounded reconnect, surfacing the failure overlay once it's exhausted.
     private func handleErrorState() {
-        if !hasStartedPlayback, reportsStartupFailure {
+        if !hasStartedPlayback, !PlaybackPolicy.retriesStartupError(canFallBack: reportsStartupFailure) {
             failPlayback()
             return
         }
@@ -289,7 +289,7 @@ extension KSPlayerEngineView {
         // timeout before declaring the stream dead, so a silently-hanging engine
         // hands off to the next one promptly instead of stalling on a black
         // screen for the full startup timeout.
-        let timeout = usesQuickStartupTimeout ? fallbackStartupTimeout : startupTimeout
+        let timeout = startupTimeout
         startupWatchdog = Task { @MainActor in
             try? await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
             guard !Task.isCancelled, !hasStartedPlayback else { return }

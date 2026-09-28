@@ -193,7 +193,8 @@ struct LumeEngineEngineView: View {
         .preferredColorScheme(.dark)
         .onAppear {
             wireCoordinator()
-            coordinator.startupTimeout = usesQuickStartupTimeout ? 15 : 40
+            coordinator.startupTimeout = PlaybackPolicy.startupTimeout(quick: usesQuickStartupTimeout)
+            coordinator.retriesStartupErrors = PlaybackPolicy.retriesStartupError(canFallBack: reportsStartupFailure)
             clock.reset(for: media)
             coordinator.configure(media: media)
             NowPlayingService.shared.attachTransport(.init(

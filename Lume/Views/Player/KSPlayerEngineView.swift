@@ -178,19 +178,18 @@ struct KSPlayerEngineView: View {
     let autoHideInterval: TimeInterval = 4
     /// How long to wait for the first frame before declaring a stream dead. The
     /// engine legitimately sits in `.preparing`/`.buffering` for ~10–20s on a
-    /// healthy open, so this is set well clear of that. The reconnect budget
-    /// (~31s of bounded backoff) usually trips first on a stream that *errors*;
-    /// this catches the one that simply never responds.
-    let startupTimeout: TimeInterval = 40
-    /// Shorter startup timeout used when a fallback engine is available: there's
-    /// no point waiting the full `startupTimeout` on a black screen when another
-    /// engine can be tried, so hand off after this if no frame has appeared.
-    let fallbackStartupTimeout: TimeInterval = 15
+    /// healthy open; the reconnect budget (~31s of bounded backoff) usually
+    /// trips first on a stream that *errors*, and this catches the one that
+    /// simply never responds. See `PlaybackPolicy`.
+    var startupTimeout: TimeInterval {
+        PlaybackPolicy.startupTimeout(quick: usesQuickStartupTimeout)
+    }
+
     /// How long a live stream may sit in `.buffering` mid-playback before the
-    /// stall watchdog rebuilds it. A healthy rebuffer only has to reach the
-    /// live-buffer target (a few seconds), so 30s of no recovery means the
-    /// pipeline is wedged, not catching up.
-    let stallTimeout: TimeInterval = 30
+    /// stall watchdog rebuilds it — see `PlaybackPolicy.liveStallTimeout`.
+    var stallTimeout: TimeInterval {
+        PlaybackPolicy.liveStallTimeout
+    }
 
     var body: some View {
         Group {

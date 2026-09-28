@@ -56,7 +56,9 @@ final class LumeEngineCoordinator: NSObject, ObservableObject {
     /// Playback reached a healthy playing state — the view resets its
     /// reconnect budget.
     var onRecovered: (() -> Void)?
-    var startupTimeout: TimeInterval = 40
+    var startupTimeout = PlaybackPolicy.startupTimeout
+    /// Whether a start failure retries — see `PlaybackPolicy`.
+    var retriesStartupErrors = false
     /// Catch-up seeks and programme-clock mapping — see `CatchupSeekRouter`.
     let catchup = CatchupSeekRouter()
 
@@ -387,7 +389,7 @@ final class LumeEngineCoordinator: NSObject, ObservableObject {
                 // Local copy: os_log interpolation is an autoclosure; swiftformat strips `self.`
                 let started = hasStartedPlayback
                 Logger.player.error("LumeEngine failed (hasStartedPlayback: \(started))")
-                if hasStartedPlayback {
+                if hasStartedPlayback || retriesStartupErrors {
                     onStalled?()
                 } else {
                     reportFailure()
@@ -544,7 +546,7 @@ extension LumeEngineCoordinator {
                 guard !Task.isCancelled, self.session === session else { return }
                 // A stream that had been playing goes back through the
                 // reconnect budget; one that never started is a start failure.
-                if self.hasStartedPlayback {
+                if self.hasStartedPlayback || self.retriesStartupErrors {
                     self.onStalled?()
                 } else {
                     self.reportFailure()

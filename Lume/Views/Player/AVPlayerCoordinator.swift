@@ -48,7 +48,10 @@ final class AVPlayerCoordinator: NSObject, ObservableObject {
     /// How long to wait for playback to start before declaring the stream dead.
     /// Set by the host before `configure` — shorter when a fallback engine is
     /// available so the hand-off is prompt.
-    var startupTimeout: TimeInterval = 40
+    var startupTimeout = PlaybackPolicy.startupTimeout
+    /// Whether an item failure before the first frame retries — see
+    /// `PlaybackPolicy`.
+    var retriesStartupErrors = false
 
     /// Drives the content-mode (fit / fill) toggle in the overlay; applied to
     /// the player layer's `videoGravity`.
@@ -116,11 +119,15 @@ final class AVPlayerCoordinator: NSObject, ObservableObject {
     private var selectedRate: Float = 1.0
 
     /// The stream currently loaded, kept so the failure-retry path can rebuild it.
-    private var currentMedia: PlayableMedia?
+    /// Internal (read-only) for `+Reconnect.swift`.
+    private(set) var currentMedia: PlayableMedia?
     /// Fires `onPlaybackFailure` if playback never starts within `startupTimeout`.
     private var startupWatchdog: Task<Void, Never>?
     /// Guards `onPlaybackFailure` so a failure is reported at most once per load.
     private var didReportFailure = false
+    /// Bounded reconnect after the item fails — the budget every engine uses.
+    /// Internal for `+Reconnect.swift`.
+    let retry = PlaybackRetryController()
 
     // Cached media-selection groups so the overlay can map an opaque option id
     // back to the `AVMediaSelectionOption` to select.
@@ -198,7 +205,11 @@ final class AVPlayerCoordinator: NSObject, ObservableObject {
         load(media: media)
     }
 
-    private func load(media: PlayableMedia) {
+    /// `reconnecting` re-opens the stream already playing: it stays started and
+    /// in the same stats session, so a slow reconnect can't read as a start
+    /// failure.
+    func load(media: PlayableMedia, reconnecting: Bool = false) {
+        let reconnect = reconnecting && hasStartedPlayback
         teardownItemObservers()
         trackLoadTask?.cancel()
 
@@ -216,11 +227,15 @@ final class AVPlayerCoordinator: NSObject, ObservableObject {
         audioTrackOptions = []
         textTrackOptions = []
         isBuffering = true
-        hasStartedPlayback = false
-        startTracker.beginStream()
-        didReportFailure = false
-        PlaybackQoE.shared.beginStartup(engine: .avPlayer, isLive: media.isLive, owner: self)
-        startStartupWatchdog()
+        if reconnect {
+            startTracker.beginReconnect()
+        } else {
+            hasStartedPlayback = false
+            startTracker.beginStream()
+            didReportFailure = false
+            PlaybackQoE.shared.beginStartup(engine: .avPlayer, isLive: media.isLive, owner: self)
+            startStartupWatchdog()
+        }
 
         let asset = if let headers = media.httpHeaders, !headers.isEmpty {
             AVURLAsset(url: media.url, options: ["AVURLAssetHTTPHeaderFieldsKey": headers])
@@ -272,7 +287,8 @@ final class AVPlayerCoordinator: NSObject, ObservableObject {
     /// Report a stream that couldn't be started. Fires `onPlaybackFailure` at
     /// most once per load; the engine view decides whether to fall back or show
     /// the failure overlay.
-    private func reportFailure() {
+    /// Internal for `+Reconnect.swift`.
+    func reportFailure() {
         guard !didReportFailure else { return }
         didReportFailure = true
         if !hasStartedPlayback {
@@ -286,6 +302,7 @@ final class AVPlayerCoordinator: NSObject, ObservableObject {
     /// Re-prepare the current stream after a failure (the Try Again button).
     func retryAfterFailure() {
         guard let currentMedia else { return }
+        retry.reset()
         load(media: currentMedia)
     }
 
@@ -295,6 +312,7 @@ final class AVPlayerCoordinator: NSObject, ObservableObject {
         teardownItemObservers()
         trackLoadTask?.cancel()
         cancelStartupWatchdog()
+        retry.cancel()
         PlaybackQoE.shared.endSession(owner: self)
         pipController?.stopPictureInPicture()
         pipController = nil
@@ -474,8 +492,9 @@ final class AVPlayerCoordinator: NSObject, ObservableObject {
                     self?.refreshTrackSelection()
                 }
             case .failed:
-                // The item can't be played (bad URL, unsupported container/codec).
-                DispatchQueue.main.async { [weak self] in self?.reportFailure() }
+                // The item can't be played (bad URL, unsupported container/codec,
+                // or a stream that dropped).
+                DispatchQueue.main.async { [weak self] in self?.handleItemFailure() }
             default:
                 break
             }
@@ -492,6 +511,7 @@ final class AVPlayerCoordinator: NSObject, ObservableObject {
                     PlaybackQoE.shared.noteStallEnded()
                 }
                 if player.timeControlStatus == .playing {
+                    retry.reset()
                     markPlaybackStarted(startTracker.noteEngineStarted())
                 }
             }
