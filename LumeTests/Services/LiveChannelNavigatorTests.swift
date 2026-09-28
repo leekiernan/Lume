@@ -125,8 +125,8 @@ struct LiveChannelNavigatorTests {
     }
 
     @Test func `an unset preference surfs the way it always has`() {
-        #expect(LiveSurfMode.resolve(nil) == .channelUpDown)
-        #expect(LiveSurfMode.resolve("not a mode") == .channelUpDown)
+        #expect(LiveSurfMode.resolve(nil) == .listOrder)
+        #expect(LiveSurfMode.resolve("not a mode") == .listOrder)
     }
 
     // MARK: - Next / previous

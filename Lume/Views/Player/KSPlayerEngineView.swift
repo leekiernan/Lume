@@ -373,7 +373,10 @@ struct KSPlayerEngineView: View {
             }
             .buttonStyle(KSInvisibleButtonStyle())
             // Yield focus to the failure overlay's buttons when a stream dies.
-            .disabled(isControlsVisible || isChannelBrowserOpen || loadFailed)
+            // Only while the controls are actually drawn (from the first frame):
+            // until then this is what hears the remote, so a second surf press
+            // lands while the channel is still starting.
+            .disabled((isControlsVisible && (hasStartedPlayback || isCatchupSegmentLoading)) || isChannelBrowserOpen || loadFailed)
             .focused($catcherFocused)
             .tvRemoteMoveCommand { direction in
                 // Watching live TV with the controls hidden, left opens the

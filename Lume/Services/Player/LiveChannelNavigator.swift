@@ -33,8 +33,10 @@ enum LiveSurfMode: String, CaseIterable, Identifiable {
     /// the way every other up/down handler in the app moves.
     case listOrder = "list"
 
-    /// The channel rocker, which is how in-player surfing has always behaved.
-    static let `default` = LiveSurfMode.channelUpDown
+    /// The list's own direction: up and down move the way the channel list and
+    /// guide on screen do. The rocker stays a setting for lineups kept in
+    /// channel-number order.
+    static let `default` = LiveSurfMode.listOrder
 
     var id: String {
         rawValue
