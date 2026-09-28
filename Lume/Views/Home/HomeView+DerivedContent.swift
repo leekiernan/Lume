@@ -70,17 +70,28 @@ extension HomeView {
         DerivedContent(recentlyWatched: recentlyWatched, favorites: favorites, customSections: customSections)
     }
 
-    /// Truly empty home — only show the empty state once trending has settled
-    /// so async-loaded content doesn't make the empty view flash on launch.
-    func isEmpty(_ content: DerivedContent) -> Bool {
-        content.recentlyWatched.isEmpty
-            && content.favorites.isEmpty
-            && feed.items(for: .builtin(.trendingMovies)).isEmpty
-            && feed.items(for: .builtin(.trendingSeries)).isEmpty
-            && WatchlistProvider.allCases.allSatisfy { feed.items(for: .builtin($0.section)).isEmpty }
-            && visibleCustomSections(of: content.customSections).allSatisfy { feed.items(for: .custom($0.id)).isEmpty }
-            && !sportsRailHasContent
-            && feed.isSettled
+    /// Everything Home's display decision rests on — see
+    /// `SectionSurfaceSnapshot.display`.
+    func surfaceSnapshot(_ content: DerivedContent) -> SectionSurfaceSnapshot {
+        var feedRows: [String: Int] = [:]
+        let builtins: [HomeSection] = [.trendingMovies, .trendingSeries] + WatchlistProvider.allCases.map(\.section)
+        for section in builtins {
+            feedRows[section.rawValue] = feed.items(for: .builtin(section)).count
+        }
+        for section in visibleCustomSections(of: content.customSections) {
+            feedRows[HomeSectionRef.custom(section.id).token] = feed.items(for: .custom(section.id)).count
+        }
+        return SectionSurfaceSnapshot(
+            hasPlaylists: !playlists.isEmpty,
+            localRows: [
+                HomeSection.recentlyWatched.rawValue: content.recentlyWatched.count,
+                HomeSection.favorites.rawValue: content.favorites.count
+            ],
+            feedRows: feedRows,
+            hasOtherContent: sportsRailHasContent,
+            feedSettled: feed.isSettled,
+            hero: feed.heroState
+        )
     }
 
     // MARK: - Recently watched

@@ -72,6 +72,53 @@ struct SectionFeedLoadMachineTests {
         #expect(machine.contextIdentity == "playlist-b")
     }
 
+    @Test func `row failures are tracked per row and cleared by a scope change`() {
+        var machine = SectionFeedLoadMachine()
+        let alpha = HomeSectionRef.custom(UUID())
+        let beta = HomeSectionRef.custom(UUID())
+        _ = machine.handle(.contextChanged(identity: "a"))
+        _ = machine.handle(.rowsFailed([alpha, beta]))
+        _ = machine.handle(.rowsRecovered([beta]))
+        #expect(machine.failedRows == [alpha])
+
+        _ = machine.handle(.contextChanged(identity: "b"))
+        #expect(machine.failedRows.isEmpty)
+    }
+
+    @Test func `hero state follows its source until it settles`() {
+        var machine = SectionFeedLoadMachine()
+        let hero = HomeSectionRef.builtin(.trendingMovies)
+        #expect(machine.heroState(for: nil, hasSlides: false, rowHasItems: false) == .disabled)
+        #expect(machine.heroState(for: hero, hasSlides: false, rowHasItems: false) == .loading)
+
+        _ = machine.handle(.began(.trending, key: "k", cache: .stale))
+        #expect(machine.heroState(for: hero, hasSlides: false, rowHasItems: true) == .loading)
+        #expect(machine.heroState(for: hero, hasSlides: true, rowHasItems: true) == .content)
+
+        _ = machine.handle(.finished(.trending, .loaded))
+        // Resolved to nothing: empty. Resolved titles but no wide art: failed.
+        #expect(machine.heroState(for: hero, hasSlides: false, rowHasItems: false) == .empty)
+        #expect(machine.heroState(for: hero, hasSlides: false, rowHasItems: true) == .failed)
+
+        _ = machine.handle(.rowsFailed([hero]))
+        #expect(machine.heroState(for: hero, hasSlides: false, rowHasItems: false) == .failed)
+    }
+
+    @Test func `a hero whose source failed is failed`() {
+        var machine = SectionFeedLoadMachine()
+        let hero = HomeSectionRef.builtin(.traktWatchlist)
+        _ = machine.handle(.began(.watchlist(.trakt), key: "k", cache: .missing))
+        _ = machine.handle(.finished(.watchlist(.trakt), .failed))
+        #expect(machine.heroState(for: hero, hasSlides: false, rowHasItems: false) == .failed)
+    }
+
+    @Test func `rows map to the feed that loads them`() {
+        #expect(SectionFeedSource(row: .builtin(.trendingSeries)) == .trending)
+        #expect(SectionFeedSource(row: .builtin(.simklWatchlist)) == .watchlist(.simkl))
+        #expect(SectionFeedSource(row: .custom(UUID())) == .custom)
+        #expect(SectionFeedSource(row: .builtin(.recentlyWatched)) == nil)
+    }
+
     /// The gap the machine closes: a scope change wipes every row, and a source
     /// whose view task doesn't re-run must still come back rather than stay
     /// empty for the session.

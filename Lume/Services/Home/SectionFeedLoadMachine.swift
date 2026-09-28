@@ -26,6 +26,18 @@ enum SectionFeedSource: Hashable, CustomStringConvertible {
     case watchlist(WatchlistProvider)
     case custom
 
+    /// The feed a row is loaded by; nil for the rows each surface queries
+    /// locally (Recently Watched, Favorites, Recently Added, For You, Sports).
+    init?(row: HomeSectionRef) {
+        switch row {
+        case .builtin(.trendingMovies), .builtin(.trendingSeries): self = .trending
+        case .builtin(.traktWatchlist): self = .watchlist(.trakt)
+        case .builtin(.simklWatchlist): self = .watchlist(.simkl)
+        case .custom: self = .custom
+        case .builtin: return nil
+        }
+    }
+
     static var allCases: [SectionFeedSource] {
         [.trending] + WatchlistProvider.allCases.map(SectionFeedSource.watchlist) + [.custom]
     }
@@ -60,6 +72,10 @@ struct SectionFeedLoadMachine: Equatable {
         /// A load for `source` started under `key`.
         case began(SectionFeedSource, key: String, cache: CacheHit)
         case finished(SectionFeedSource, Outcome)
+        /// Rows that reached a terminal failure with nothing cached to show.
+        case rowsFailed([HomeSectionRef])
+        /// Rows that resolved (or are no longer asked for) since failing.
+        case rowsRecovered([HomeSectionRef])
     }
 
     enum Effect: Equatable {
@@ -76,6 +92,9 @@ struct SectionFeedLoadMachine: Equatable {
 
     private(set) var contextIdentity: String?
     private var slots: [SectionFeedSource: Slot] = [:]
+    /// Per row rather than per source: one failed custom list must not make a
+    /// successfully empty sibling look broken.
+    private(set) var failedRows: Set<HomeSectionRef> = []
 
     func state(of source: SectionFeedSource) -> HomeLoadState {
         slots[source]?.state ?? .idle
@@ -96,6 +115,7 @@ struct SectionFeedLoadMachine: Equatable {
             let previous = contextIdentity
             contextIdentity = identity
             guard let previous, previous != identity else { return [] }
+            failedRows.removeAll()
             var effects: [Effect] = [.discardCatalogModels]
             for source in SectionFeedSource.allCases {
                 let key = slots[source]?.key
@@ -112,6 +132,32 @@ struct SectionFeedLoadMachine: Equatable {
             guard Self.isValid(event, in: state(of: source)) else { return [] }
             slots[source]?.state = outcome == .loaded ? .loaded : .failed
             return []
+
+        case let .rowsFailed(rows):
+            failedRows.formUnion(rows)
+            return []
+
+        case let .rowsRecovered(rows):
+            failedRows.subtract(rows)
+            return []
+        }
+    }
+
+    /// What the promoted row can show. A hero with slides shows them; one whose
+    /// source is still working holds its space; once the source settles, a row
+    /// that failed — or that resolved titles but none with wide artwork — is a
+    /// failed hero, and a row that resolved to nothing is an empty one.
+    func heroState(for heroRef: HomeSectionRef?, hasSlides: Bool, rowHasItems: Bool) -> HeroLoadState {
+        guard let heroRef else { return .disabled }
+        if hasSlides { return .content }
+        switch SectionFeedSource(row: heroRef).map(state(of:)) ?? .loaded {
+        case .idle, .loading, .cached:
+            return .loading
+        case .failed:
+            return .failed
+        case .loaded:
+            if failedRows.contains(heroRef) { return .failed }
+            return rowHasItems ? .failed : .empty
         }
     }
 

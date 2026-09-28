@@ -63,10 +63,6 @@ final class SectionFeed {
     private(set) var loads = SectionFeedLoadMachine()
     /// The custom sections last asked for, so a scope change can reload them.
     private var requestedCustomSections: [CustomHomeSection] = []
-    /// Sources that reached a terminal transport/provider failure without a
-    /// usable cached collection. Kept per section so one failed custom list
-    /// cannot make a successfully empty sibling look broken.
-    private var failedSections: Set<HomeSectionRef> = []
     let loadGate = SectionFeedLoadGate()
     var context: Context?
 
@@ -123,37 +119,11 @@ final class SectionFeed {
     /// only while this says it may still produce content; a terminal empty or
     /// failed source lets the rows move up instead of leaving a blank expanse.
     var heroState: HeroLoadState {
-        guard let heroRef else { return .disabled }
-        if !heroItems.isEmpty { return .content }
-
-        switch loadState(for: heroRef) {
-        case .idle, .loading, .cached:
-            return .loading
-        case .failed:
-            return .failed
-        case .loaded:
-            if failedSections.contains(heroRef) { return .failed }
-            // A resolved list with no local matches is genuinely empty. When
-            // it has matches but still no wide artwork after enrichment, the
-            // hero itself failed even though its ordinary row remains usable.
-            return items(for: heroRef).isEmpty ? .empty : .failed
-        }
-    }
-
-    private func loadState(for section: HomeSectionRef) -> HomeLoadState {
-        switch section {
-        case let .builtin(section):
-            switch section {
-            case .trendingMovies, .trendingSeries: loads.state(of: .trending)
-            case .traktWatchlist: loads.state(of: .watchlist(.trakt))
-            case .simklWatchlist: loads.state(of: .watchlist(.simkl))
-            // Sports has its own pipeline (`SportsFollowService`/`SportsStore`) —
-            // this feed never fetches it, so there is nothing here to wait on.
-            case .recentlyWatched, .favorites, .recentlyAdded, .forYou, .sports: .loaded
-            }
-        case .custom:
-            loads.state(of: .custom)
-        }
+        loads.heroState(
+            for: heroRef,
+            hasSlides: !heroItems.isEmpty,
+            rowHasItems: heroRef.map { !items(for: $0).isEmpty } ?? false
+        )
     }
 
     // MARK: - Trending
@@ -165,8 +135,7 @@ final class SectionFeed {
         if cached == .fresh {
             await refreshHeroArtwork()
             guard loadGate.isCurrent(request, for: .trending) else { return }
-            failedSections.remove(.builtin(.trendingMovies))
-            failedSections.remove(.builtin(.trendingSeries))
+            transition(.rowsRecovered([.builtin(.trendingMovies), .builtin(.trendingSeries)]))
             transition(.finished(.trending, .loaded))
             return
         }
@@ -217,8 +186,7 @@ final class SectionFeed {
         ))
         await refreshHeroArtwork()
         guard loadGate.isCurrent(request, for: .trending) else { return }
-        failedSections.remove(.builtin(.trendingMovies))
-        failedSections.remove(.builtin(.trendingSeries))
+        transition(.rowsRecovered([.builtin(.trendingMovies), .builtin(.trendingSeries)]))
         transition(.finished(.trending, .loaded))
     }
 
@@ -240,7 +208,7 @@ final class SectionFeed {
     private func finishTrendingFailure(cached: CacheRestore) {
         let refs: [HomeSectionRef] = [.builtin(.trendingMovies), .builtin(.trendingSeries)]
         for ref in refs where items(for: ref).isEmpty {
-            failedSections.insert(ref)
+            transition(.rowsFailed([ref]))
         }
         let usable = cached != .missing && refs.contains(where: { !items(for: $0).isEmpty })
         transition(.finished(.trending, usable ? .loaded : .failed))
@@ -263,7 +231,7 @@ extension SectionFeed {
         if cached == .fresh {
             await refreshHeroArtwork()
             guard loadGate.isCurrent(request, for: feed) else { return }
-            failedSections.remove(ref)
+            transition(.rowsRecovered([ref]))
             transition(.finished(.watchlist(provider), .loaded))
             return
         }
@@ -273,7 +241,7 @@ extension SectionFeed {
         }
         guard provider.isConnected else {
             collections[ref] = .empty
-            failedSections.remove(ref)
+            transition(.rowsRecovered([ref]))
             transition(.finished(.watchlist(provider), .loaded))
             return
         }
@@ -287,7 +255,7 @@ extension SectionFeed {
             SectionFeedCache.shared.storeWatchlist(surface, provider, key: scoped(cacheKey), collection: collection)
             await refreshHeroArtwork()
             guard loadGate.isCurrent(request, for: feed) else { return }
-            failedSections.remove(ref)
+            transition(.rowsRecovered([ref]))
             transition(.finished(.watchlist(provider), .loaded))
         } catch {
             // Preserve a stale row when revalidation fails. A transport error is
@@ -313,7 +281,7 @@ extension SectionFeed {
         if cached != .missing, !items(for: ref).isEmpty {
             transition(.finished(.watchlist(provider), .loaded))
         } else {
-            failedSections.insert(ref)
+            transition(.rowsFailed([ref]))
             transition(.finished(.watchlist(provider), .failed))
         }
     }
@@ -329,10 +297,7 @@ extension SectionFeed {
         guard !sections.isEmpty else {
             transition(.began(.custom, key: cacheKey, cache: .missing))
             replaceCustomCollections(with: [:])
-            failedSections = failedSections.filter { ref in
-                if case .custom = ref { return false }
-                return true
-            }
+            transition(.rowsRecovered(Array(loads.failedRows.filter { SectionFeedSource(row: $0) == .custom })))
             transition(.finished(.custom, .loaded))
             return
         }
@@ -346,7 +311,7 @@ extension SectionFeed {
             await refreshHeroArtwork()
             guard loadGate.isCurrent(request, for: .custom) else { return }
             for section in sections {
-                failedSections.remove(.custom(section.id))
+                transition(.rowsRecovered([.custom(section.id)]))
             }
             transition(.finished(.custom, .loaded))
             return
@@ -425,7 +390,7 @@ extension SectionFeed {
                 resolved[id] = collection
                 collections[.custom(id)] = collection
                 logMatch("custom list", collection)
-                failedSections.remove(.custom(id))
+                transition(.rowsRecovered([.custom(id)]))
 
                 // A custom hero should not wait for an unrelated slow list.
                 // Finish its bounded artwork pass as soon as its own source is
@@ -464,7 +429,7 @@ extension SectionFeed {
         cached: [UUID: SectionCollectionSnapshot]
     ) {
         for section in sections where cached[section.id]?.preview.isEmpty != false {
-            failedSections.insert(.custom(section.id))
+            transition(.rowsFailed([.custom(section.id)]))
         }
         let usable = cached.values.contains(where: { !$0.preview.isEmpty })
         transition(.finished(.custom, usable ? .loaded : .failed))
@@ -480,9 +445,9 @@ extension SectionFeed {
             let failedWithoutCache = (lists[section.id] ?? nil) == nil
                 && fallback[section.id]?.preview.isEmpty != false
             if failedWithoutCache {
-                failedSections.insert(ref)
+                transition(.rowsFailed([ref]))
             } else {
-                failedSections.remove(ref)
+                transition(.rowsRecovered([ref]))
             }
         }
     }
@@ -525,14 +490,21 @@ extension SectionFeed {
     private func transition(_ event: SectionFeedLoadMachine.Event) {
         let source: SectionFeedSource? = switch event {
         case let .began(source, _, _), let .finished(source, _): source
-        case .contextChanged: nil
+        case .contextChanged, .rowsFailed, .rowsRecovered: nil
         }
         let before = source.map(loads.state(of:))
         guard source.map({ SectionFeedLoadMachine.isValid(event, in: loads.state(of: $0)) }) ?? true else {
             Logger.home.warning("\(surface.rawValue) \(String(describing: source)): ignored \(String(describing: event)) while \(String(describing: before))")
             return
         }
+        let failedBefore = loads.failedRows
         let effects = loads.handle(event)
+        for row in loads.failedRows.subtracting(failedBefore) {
+            Logger.home.notice("\(surface.rawValue) row \(row.token): failed with nothing cached")
+        }
+        for row in failedBefore.subtracting(loads.failedRows) {
+            Logger.home.info("\(surface.rawValue) row \(row.token): recovered")
+        }
         if let source, let before {
             Logger.home.info("\(surface.rawValue) \(source): \(before) → \(loads.state(of: source))")
         }
@@ -552,7 +524,6 @@ extension SectionFeed {
             collections.removeAll()
             heroPresentationOverrides.removeAll()
             heroEnrichmentIDs.removeAll()
-            failedSections.removeAll()
             heroArtworkRevision &+= 1
         case let .reload(source, key):
             // Usually the view's own tasks re-run for the new scope and begin
