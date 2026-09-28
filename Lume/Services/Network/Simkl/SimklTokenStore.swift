@@ -6,17 +6,13 @@
 //  secrets, so they live in the keychain rather than UserDefaults — encrypted
 //  at rest and excluded from plaintext backups.
 //
-//  Uses the SecItem API directly (the safe add-or-update pattern) rather than a
-//  wrapper, and stores items with `AfterFirstUnlock` accessibility so a refresh
-//  can succeed even if it ever runs while the device is locked.
-//
-//  Mirrors `TraktTokenStore`: SecItem directly with the safe update-then-add
-//  pattern, `AfterFirstUnlock` accessibility, and `kSecUseDataProtectionKeychain`
-//  to keep macOS aligned with iOS/tvOS behaviour.
+//  Mirrors `TraktTokenStore`: the keychain work goes through
+//  `CredentialBackend` (the safe update-then-add pattern), and the item uses
+//  `AfterFirstUnlock` accessibility so a refresh can succeed even if it ever
+//  runs while the device is locked.
 //
 
 import Foundation
-import Security
 
 /// The OAuth token set returned by Simkl's `/oauth2/token`, plus the metadata
 /// needed to know when the access token needs refreshing.
@@ -43,23 +39,15 @@ nonisolated struct SimklTokens: Codable, Equatable {
     }
 }
 
-/// Reads and writes the Simkl token set in the keychain. Stateless and
-/// thread-safe — the keychain itself serializes access.
+/// Reads and writes the Simkl token set in the keychain (through
+/// `CredentialBackend`). Stateless and thread-safe — the storage serializes
+/// access.
 nonisolated enum SimklTokenStore {
-    private static let service = "bilipp.Lume.simkl"
-    private static let account = "oauth-tokens"
-
-    /// Base query identifying the single token item by its primary key
-    /// (service + account). `kSecUseDataProtectionKeychain` keeps macOS aligned
-    /// with iOS/tvOS behaviour.
-    private static var baseQuery: [String: Any] {
-        [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: account,
-            kSecUseDataProtectionKeychain as String: true
-        ]
-    }
+    private static let item = CredentialItem(
+        service: "bilipp.Lume.simkl",
+        account: "oauth-tokens",
+        accessibility: .afterFirstUnlock
+    )
 
     /// A sync reconcile must distinguish a missing token from a keychain read
     /// that failed while the device was locked. Treating the latter as a user
@@ -71,18 +59,15 @@ nonisolated enum SimklTokenStore {
     }
 
     static func storedTokens() -> StoredTokens {
-        var query = baseQuery
-        query[kSecReturnData as String] = true
-        query[kSecMatchLimit as String] = kSecMatchLimitOne
-
-        var result: AnyObject?
-        let status = SecItemCopyMatching(query as CFDictionary, &result)
-        if status == errSecItemNotFound { return .notSet }
-        guard status == errSecSuccess,
-              let data = result as? Data,
-              let tokens = try? JSONDecoder().decode(SimklTokens.self, from: data)
-        else { return .unavailable }
-        return .tokens(tokens)
+        switch CredentialBackend.current.storage.read(item) {
+        case .notFound:
+            return .notSet
+        case .unavailable:
+            return .unavailable
+        case let .found(data):
+            guard let tokens = try? JSONDecoder().decode(SimklTokens.self, from: data) else { return .unavailable }
+            return .tokens(tokens)
+        }
     }
 
     /// Loads the stored token set, or nil if it is absent or temporarily
@@ -93,33 +78,40 @@ nonisolated enum SimklTokenStore {
         return tokens
     }
 
-    /// Saves the token set, replacing any existing one. Uses update-then-add so
-    /// item metadata survives and there's no delete/add race.
+    /// Saves the token set, replacing any existing one — a sign-in, a refresh,
+    /// or a pair pulled from another device. Any of those means the account is
+    /// connected here again (`CredentialLinkState`).
     @discardableResult
     static func save(_ tokens: SimklTokens) -> Bool {
-        guard let data = try? JSONEncoder().encode(tokens) else { return false }
-
-        let attributes: [String: Any] = [
-            kSecValueData as String: data,
-            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock
-        ]
-
-        var status = SecItemUpdate(baseQuery as CFDictionary, attributes as CFDictionary)
-        if status == errSecItemNotFound {
-            var addQuery = baseQuery
-            addQuery[kSecValueData as String] = data
-            addQuery[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
-            status = SecItemAdd(addQuery as CFDictionary, nil)
-        }
-        return status == errSecSuccess
+        guard let data = try? JSONEncoder().encode(tokens),
+              CredentialBackend.current.storage.write(data, to: item)
+        else { return false }
+        CredentialLinkStateStore.apply(.credentialStored, to: .simkl)
+        return true
     }
 
     /// Removes the stored token set. A missing item is treated as success — the
     /// desired end state (no token) is already met.
+    ///
+    /// Not a user decision on its own: the sync reconcile calls this to apply
+    /// another device's disconnect. The Disconnect button goes through
+    /// `clearForUserDisconnect()`.
     @discardableResult
     static func clear() -> Bool {
-        let status = SecItemDelete(baseQuery as CFDictionary)
-        return status == errSecSuccess || status == errSecItemNotFound
+        CredentialBackend.current.storage.delete(item)
+    }
+
+    /// The user's explicit Disconnect: records the decision before the token
+    /// goes, so the iCloud reconcile propagates the removal to every device
+    /// rather than restoring the token as if the keychain had merely lost it.
+    @discardableResult
+    static func clearForUserDisconnect() -> Bool {
+        CredentialLinkStateStore.apply(.userDisconnected, to: .simkl)
+        guard clear() else {
+            CredentialLinkStateStore.apply(.removalFailed, to: .simkl)
+            return false
+        }
+        return true
     }
 }
 

@@ -6,15 +6,10 @@
 //  syncing over CloudKit rather than staying on whichever device set them.
 //
 //  The restriction tests are the bulk of this file and touch no keychain. The
-//  single PIN test does, so the suite is `.serialized`: `ParentalControlsStore`
-//  talks to the process-wide keychain, and a PIN left set by one test would be
-//  picked up by another test's reconcile pass running concurrently.
-//
-//  `.serialized` alone isn't enough, though: the keychain outlives the *process*,
-//  so a PIN stranded by an interrupted run (or by manual testing on the same
-//  simulator) would still be there on the next one — and because `parentalPushed`
-//  counts the PIN and the restrictions together, it would add a phantom push to
-//  every count assertion below. Hence the per-test `init` that clears it.
+//  PIN tests do, so the engine suite runs `.isolatedCredentials`: each test gets
+//  its own empty in-memory credential storage, so a PIN one test sets can't leak
+//  into another's reconcile pass (`parentalPushed` counts the PIN and the
+//  restrictions together), and no test can reach the real keychain item.
 //
 
 import Foundation
@@ -36,14 +31,15 @@ struct ParentalMergePolicyTests {
     }
 
     @Test func `turning the PIN off pushes a deletion rather than re-arming it`() {
-        // The whole reason for a shadow: without the baseline, "no local PIN"
-        // would be indistinguishable from "this device never had one", and the
-        // cloud copy would be pulled straight back down.
-        let verdict = CloudSyncMerge.reconcile(
+        // The parent turned the PIN off on this device, and that decision is
+        // recorded (`CredentialLinkState`): without it, "no local PIN" would be
+        // indistinguishable from a keychain that lost it, and the cloud copy
+        // would be pulled straight back down.
+        let verdict = ParentalPINValues.reconcile(
             local: nil,
             cloud: ParentalPINValues(hash: "h"),
             shadow: ParentalPINValues(hash: "h"),
-            mergeConflict: ParentalPINValues.mergeConflict
+            linkState: .disconnectedByUser(pendingPush: true)
         )
         #expect(verdict == .pushToCloud(nil))
     }
@@ -72,15 +68,8 @@ struct ParentalMergePolicyTests {
 // MARK: - Engine integration (in-memory, no CloudKit)
 
 @MainActor
-@Suite(.serialized, .globalState)
+@Suite(.serialized, .globalState, .isolatedCredentials)
 struct CloudSyncParentalEngineTests {
-    /// Runs before every test in the suite (Swift Testing instantiates the suite
-    /// per test): start from a keychain with no PIN, so the shared
-    /// `parentalPushed` counter reflects only what the test itself set up.
-    init() {
-        ParentalControlsStore.clear()
-    }
-
     private func freshShadow() -> CloudSyncShadow {
         let suite = UserDefaults(suiteName: "cloudsync.parental.test.\(UUID().uuidString)")!
         return CloudSyncShadow(defaults: suite)
@@ -212,9 +201,6 @@ struct CloudSyncParentalEngineTests {
     }
 
     @Test func `a local PIN exports to the cloud and a cloud PIN lands in the keychain`() async throws {
-        ParentalControlsStore.clear()
-        defer { ParentalControlsStore.clear() }
-
         let container = try makeProfileTestContainer()
         let ctx = container.mainContext
 

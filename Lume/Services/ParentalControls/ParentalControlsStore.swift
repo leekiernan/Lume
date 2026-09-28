@@ -9,9 +9,9 @@
 //  never the PIN itself, so a keychain dump can't reveal a PIN the user might
 //  reuse elsewhere.
 //
-//  Mirrors `TraktTokenStore`: SecItem directly with the safe update-then-add
-//  pattern, `kSecUseDataProtectionKeychain` for macOS parity. `WhenUnlocked`
-//  accessibility keeps the hash unreadable while the device is locked.
+//  Mirrors `TraktTokenStore`: the keychain work goes through `CredentialBackend`
+//  (the safe update-then-add pattern). `WhenUnlocked` accessibility keeps the
+//  hash unreadable while the device is locked.
 //
 //  The keychain is the local store of record — `verify` reads it and nothing
 //  else. It is *not* the transport between devices: iCloud Keychain never syncs
@@ -29,28 +29,21 @@
 //  `nonisolated` because that reconcile runs on the `CloudSyncEngine` actor, off
 //  the main actor (the project defaults to main-actor isolation). Safe: this type
 //  holds no state of its own — every call goes straight to the thread-safe
-//  `SecItem` API.
+//  `CredentialStorage`.
 //
 
 import CryptoKit
 import Foundation
-import Security
 
 nonisolated enum ParentalControlsStore {
-    private static let service = "bilipp.Lume.parental"
-    private static let account = "pin-hash"
+    private static let item = CredentialItem(
+        service: "bilipp.Lume.parental",
+        account: "pin-hash",
+        accessibility: .whenUnlocked
+    )
     /// Mixed into the hash. Not a secret (it ships in the binary); it only stops
     /// the stored value from being a bare SHA-256 of a four-digit PIN.
     private static let salt = "lume.parental.v1"
-
-    private static var baseQuery: [String: Any] {
-        [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: account,
-            kSecUseDataProtectionKeychain as String: true
-        ]
-    }
 
     /// The result of reading the stored hash. `unavailable` is the case that must
     /// never be collapsed into `notSet`: the keychain refused the read (the
@@ -71,13 +64,11 @@ nonisolated enum ParentalControlsStore {
     /// Whether a PIN has been set. A presence check — never returns the hash.
     /// Falls back to the last conclusive answer when the keychain can't be read.
     static var isSet: Bool {
-        var query = baseQuery
-        query[kSecMatchLimit as String] = kSecMatchLimitOne
-        switch SecItemCopyMatching(query as CFDictionary, nil) {
-        case errSecSuccess: return cachePresence(true)
-        case errSecItemNotFound: return cachePresence(false)
-        default: return UserDefaults.standard.bool(forKey: presenceKey)
+        let backend = CredentialBackend.current
+        guard let present = backend.storage.contains(item) else {
+            return backend.defaults.bool(forKey: presenceKey)
         }
+        return cachePresence(present)
     }
 
     /// Stores the salted hash of `pin`, replacing any existing one.
@@ -91,22 +82,17 @@ nonisolated enum ParentalControlsStore {
     /// Only the sync reconciler should need this — it is what gets mirrored to
     /// the other devices. UI code wants `isSet` or `verify` instead.
     static func storedHash() -> StoredHash {
-        var query = baseQuery
-        query[kSecReturnData as String] = true
-        query[kSecMatchLimit as String] = kSecMatchLimitOne
-
-        var result: AnyObject?
-        let status = SecItemCopyMatching(query as CFDictionary, &result)
-        if status == errSecItemNotFound {
+        switch CredentialBackend.current.storage.read(item) {
+        case .notFound:
             cachePresence(false)
             return .notSet
+        case .unavailable:
+            return .unavailable
+        case let .found(data):
+            guard let hash = String(data: data, encoding: .utf8) else { return .unavailable }
+            cachePresence(true)
+            return .hash(hash)
         }
-        guard status == errSecSuccess,
-              let data = result as? Data,
-              let hash = String(data: data, encoding: .utf8)
-        else { return .unavailable }
-        cachePresence(true)
-        return .hash(hash)
     }
 
     /// Writes an already-hashed PIN. The counterpart to `storedHash` — used when
@@ -119,49 +105,48 @@ nonisolated enum ParentalControlsStore {
     /// push it, wiping the PIN on every other device.
     @discardableResult
     static func store(hash: String) -> Bool {
-        let data = Data(hash.utf8)
-        let attributes: [String: Any] = [
-            kSecValueData as String: data,
-            kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlocked
-        ]
-        var status = SecItemUpdate(baseQuery as CFDictionary, attributes as CFDictionary)
-        if status == errSecItemNotFound {
-            var addQuery = baseQuery
-            addQuery[kSecValueData as String] = data
-            addQuery[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlocked
-            status = SecItemAdd(addQuery as CFDictionary, nil)
-        }
-        guard status == errSecSuccess else { return false }
+        guard CredentialBackend.current.storage.write(Data(hash.utf8), to: item) else { return false }
         cachePresence(true)
+        CredentialLinkStateStore.apply(.credentialStored, to: .parentalPIN)
         return true
     }
 
     /// Whether `pin` matches the stored PIN. False when no PIN is set.
     static func verify(pin: String) -> Bool {
-        var query = baseQuery
-        query[kSecReturnData as String] = true
-        query[kSecMatchLimit as String] = kSecMatchLimitOne
-
-        var result: AnyObject?
-        guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess,
-              let data = result as? Data,
+        guard case let .found(data) = CredentialBackend.current.storage.read(item),
               let stored = String(data: data, encoding: .utf8)
         else { return false }
         return verify(pin: pin, against: stored)
     }
 
     /// Removes the stored PIN. A missing item is treated as success.
+    ///
+    /// Not a user decision on its own: the sync reconcile calls this to apply a
+    /// PIN turned off on another device. The settings toggle goes through
+    /// `clearForUserRemoval()`.
     @discardableResult
     static func clear() -> Bool {
-        let status = SecItemDelete(baseQuery as CFDictionary)
-        guard status == errSecSuccess || status == errSecItemNotFound else { return false }
+        guard CredentialBackend.current.storage.delete(item) else { return false }
         cachePresence(false)
+        return true
+    }
+
+    /// The parent turning the PIN off on this device: records the decision
+    /// before the hash goes, so the iCloud reconcile disarms the PIN on every
+    /// device rather than restoring it as if the keychain had merely lost it.
+    @discardableResult
+    static func clearForUserRemoval() -> Bool {
+        CredentialLinkStateStore.apply(.userDisconnected, to: .parentalPIN)
+        guard clear() else {
+            CredentialLinkStateStore.apply(.removalFailed, to: .parentalPIN)
+            return false
+        }
         return true
     }
 
     @discardableResult
     private static func cachePresence(_ present: Bool) -> Bool {
-        UserDefaults.standard.set(present, forKey: presenceKey)
+        CredentialBackend.current.defaults.set(present, forKey: presenceKey)
         return present
     }
 

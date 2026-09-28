@@ -104,27 +104,23 @@ struct SimklCredentialValuesTests {
     @Test func `a concurrent refresh keeps the newest issued token`() {
         let older = SimklCredentialValues(tokens: makeTokens(accessToken: "older", refreshToken: "older-refresh", issuedAt: 100))
         let newer = SimklCredentialValues(tokens: makeTokens(accessToken: "newer", refreshToken: "newer-refresh", issuedAt: 200))
-        #expect(SimklCredentialValues.reconcile(local: newer, cloud: older, shadow: nil) == .writeBoth(newer))
+        #expect(SimklCredentialValues.reconcile(local: newer, cloud: older, shadow: nil, linkState: .connected) == .writeBoth(newer))
     }
 
     @Test func `a concurrent disconnect wins over a token refresh`() {
         let original = SimklCredentialValues(tokens: makeTokens(accessToken: "original", refreshToken: "original-refresh", issuedAt: 100))
         let refreshed = SimklCredentialValues(tokens: makeTokens(accessToken: "refreshed", refreshToken: "refreshed-refresh", issuedAt: 200))
-        #expect(SimklCredentialValues.reconcile(local: nil, cloud: refreshed, shadow: original) == .pushToCloud(nil))
+        #expect(SimklCredentialValues.reconcile(local: nil, cloud: refreshed, shadow: original, linkState: .disconnectedByUser(pendingPush: true)) == .pushToCloud(nil))
     }
 }
 
-// MARK: - SimklTokenStore (keychain)
+// MARK: - SimklTokenStore (storage)
 
-/// Serialized because every test touches the single shared keychain item
-/// (service + account are constant), so concurrent runs would race.
-@Suite(.serialized, .globalState)
+/// Every test gets its own empty in-memory credential storage
+/// (`.isolatedCredentials`), so none of them can touch the real keychain item —
+/// or each other.
+@Suite(.isolatedCredentials)
 struct SimklTokenStoreTests {
-    init() {
-        // Start every test from a known-empty keychain slot.
-        SimklTokenStore.clear()
-    }
-
     private func makeTokens(accessToken: String = "access-token") -> SimklTokens {
         SimklTokens(
             accessToken: accessToken,
@@ -145,16 +141,14 @@ struct SimklTokenStoreTests {
         let tokens = makeTokens()
         #expect(SimklTokenStore.save(tokens) == true)
         #expect(SimklTokenStore.load() == tokens)
-        SimklTokenStore.clear()
     }
 
     @Test func `save overwrites an existing token set`() {
         #expect(SimklTokenStore.save(makeTokens(accessToken: "first")) == true)
-        // Second save exercises the SecItemUpdate path.
+        // Second save exercises the replace path.
         let updated = makeTokens(accessToken: "second")
         #expect(SimklTokenStore.save(updated) == true)
         #expect(SimklTokenStore.load() == updated)
-        SimklTokenStore.clear()
     }
 
     @Test func `clear removes stored tokens`() {
@@ -166,5 +160,19 @@ struct SimklTokenStoreTests {
     @Test func `clear succeeds when nothing is stored`() {
         // A missing item is the desired end state, so this reports success.
         #expect(SimklTokenStore.clear() == true)
+    }
+
+    @Test func `tokens are written to the Simkl keychain item`() throws {
+        let tokens = makeTokens()
+        #expect(SimklTokenStore.save(tokens))
+        let data = try #require(CredentialIsolation.scopedStorage().storedData(service: "bilipp.Lume.simkl"))
+        #expect(try JSONDecoder().decode(SimklTokens.self, from: data) == tokens)
+    }
+
+    @Test func `a locked keychain reads as unavailable, not as no token`() throws {
+        #expect(SimklTokenStore.save(makeTokens()))
+        try CredentialIsolation.scopedStorage().isLocked = true
+        #expect(SimklTokenStore.storedTokens() == .unavailable)
+        #expect(SimklTokenStore.load() == nil)
     }
 }

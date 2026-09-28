@@ -34,6 +34,10 @@ nonisolated struct CloudSyncReconcileResult: Equatable {
     var simklPushed = 0
     var simklPulled = 0
     var simklPending = 0
+    /// Credentials whose shared cloud copy this pass deleted. Their
+    /// `CredentialLinkState` advances only once the pass has saved, so a failed
+    /// save leaves an explicit disconnect pending for the retry.
+    var credentialDeletionsPushed: Set<SyncedCredentialKind> = []
     /// Cloud states whose local catalog item hasn't synced yet — left pending
     /// (shadow untouched) so a later pass applies them once the catalog lands.
     var contentPending = 0
@@ -185,6 +189,9 @@ actor CloudSyncEngine {
             // 3-way merge is idempotent).
             try saveStores()
             shadow.persist()
+            for kind in result.credentialDeletionsPushed {
+                CredentialLinkStateStore.apply(.deletionPushed, to: kind)
+            }
             Logger.sync.info("Reconcile pl +\(result.playlistsPushed) new \(result.playlistsCreatedLocally) ct +\(result.contentPushed)/\(result.contentPulled) pend \(result.contentPending) epg +\(result.epgSourcesPushed)/\(result.epgSourcesPulled) par +\(result.parentalPushed)/\(result.parentalPulled) pend \(result.parentalPending) trakt +\(result.traktPushed)/\(result.traktPulled) pend \(result.traktPending) simkl +\(result.simklPushed)/\(result.simklPulled) pend \(result.simklPending) sports \(result.sportsFollowsKept)-\(result.sportsFollowsDeduped)") // swiftlint:disable:this line_length
         } catch {
             catalogContext.rollback()

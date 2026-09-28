@@ -54,8 +54,10 @@ final class ParentalControls {
         isPINSet = ParentalControlsStore.save(pin: pin)
     }
 
+    /// The parent turning the PIN off here — recorded as a decision, so the
+    /// iCloud reconcile turns it off on every device rather than restoring it.
     func disablePIN() {
-        isPINSet = !ParentalControlsStore.clear()
+        isPINSet = !ParentalControlsStore.clearForUserRemoval()
     }
 
     func verify(_ pin: String) -> Bool {

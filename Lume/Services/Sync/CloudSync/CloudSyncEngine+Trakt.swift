@@ -29,10 +29,13 @@ extension CloudSyncEngine {
 
         let mirror = try fetchTraktAccountMirror()
         let cloud = mirror.map { Self.traktValues(from: $0) }
+        // A token missing from the keychain is a disconnect only if the user
+        // disconnected here; otherwise it was lost, and the cloud copy wins.
         let verdict = TraktCredentialValues.reconcile(
             local: local,
             cloud: cloud,
-            shadow: shadow.traktCredentialShadow()
+            shadow: shadow.traktCredentialShadow(),
+            linkState: CredentialLinkStateStore.state(for: .trakt)
         )
         applyTraktVerdict(verdict, mirror: mirror, into: &result)
     }
@@ -48,6 +51,7 @@ extension CloudSyncEngine {
         case let .pushToCloud(value):
             applyTraktToCloud(value, mirror: mirror)
             result.traktPushed += 1
+            if value == nil { result.credentialDeletionsPushed.insert(.trakt) }
             shadow.setTraktCredentialShadow(value)
         case let .pullToLocal(value):
             guard applyTraktToLocal(value) else {
