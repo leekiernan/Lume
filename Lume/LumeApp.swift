@@ -32,6 +32,8 @@ struct LumeApp: App {
     #endif
 
     init() {
+        // First, so the launch marker precedes anything the setup below logs.
+        DiagnosticSession.start()
         let (catalog, cloud) = Self.makeModelContainers()
         catalogContainer = catalog
         cloudContainer = cloud
@@ -261,16 +263,13 @@ struct LumeApp: App {
                     // hand off to their own utility Tasks.
                     SportsFollowService.shared.configure(container: cloudContainer, profileManager: profileManager)
                     SportsSyncService.shared.configure(followSource: SportsFollowService.shared)
-                    // Refreshes fixtures / standings on their own schedule. Hits
-                    // ESPN, not the provider host, so it never competes with a
-                    // playlist sync for the account's one connection.
-                    SportsSyncService.shared.syncIfDue()
-                    // Fetches any followed league with no cached fixtures, so the
-                    // Home rail has data on first render even after the system
-                    // purged Caches/. `HomeView.warmSports` asks again whenever
-                    // the entitlement or the followed set changes — a rail with
-                    // nothing to show renders nothing, so it cannot ask itself.
-                    SportsSyncService.shared.refreshMissing()
+                    // Re-fetches every followed league whose snapshot is missing
+                    // or stale, so the Home rail has current data on first render
+                    // even after the system purged Caches/. Hits ESPN, not the
+                    // provider host, so it never competes with a playlist sync for
+                    // the account's one connection. `HomeView.warmSports` asks
+                    // again whenever the entitlement or the followed set changes.
+                    SportsSyncService.shared.refreshIfStale()
 
                     // Restore a previously connected Trakt session (refreshing
                     // the token if stale) so watched-sync and the watchlist work
@@ -316,6 +315,7 @@ struct LumeApp: App {
                     SportsFollowService.shared.reload()
                 }
                 .onChange(of: scenePhase) { _, phase in
+                    DiagnosticSession.scenePhaseChanged(to: phase)
                     cloudSync.handleScenePhaseChange(to: phase)
                     if phase == .active {
                         // Durable Trakt history changes survive termination and

@@ -77,7 +77,7 @@ extension HomeView {
             && content.favorites.isEmpty
             && feed.items(for: .builtin(.trendingMovies)).isEmpty
             && feed.items(for: .builtin(.trendingSeries)).isEmpty
-            && feed.items(for: .builtin(.traktWatchlist)).isEmpty
+            && WatchlistProvider.allCases.allSatisfy { feed.items(for: .builtin($0.section)).isEmpty }
             && visibleCustomSections(of: content.customSections).allSatisfy { feed.items(for: .custom($0.id)).isEmpty }
             && !sportsRailHasContent
             && feed.isSettled

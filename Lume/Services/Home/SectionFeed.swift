@@ -3,7 +3,7 @@
 //  Lume
 //
 //  The remote-backed rows shared by every section surface (Home, Movies,
-//  Series): TMDB trending, the Trakt watchlist, and the user's custom list
+//  Series): TMDB trending, the Trakt/Simkl watchlists, and the user's custom list
 //  rows. Each surface owns one `SectionFeed`; the locally-queried rows
 //  (Recently Watched, Favorites, Recently Added) stay as @Query-backed views.
 //
@@ -63,7 +63,8 @@ final class SectionFeed {
     /// its SwiftData models alive on the browse screen.
     private(set) var collections: [HomeSectionRef: SectionCollectionSnapshot] = [:]
     private(set) var trendingState: HomeLoadState = .idle
-    private(set) var watchlistState: HomeLoadState = .idle
+    /// One per watchlist service; a service never loaded yet reads `.idle`.
+    private(set) var watchlistStates: [WatchlistProvider: HomeLoadState] = [:]
     private(set) var customState: HomeLoadState = .idle
     /// Sources that reached a terminal transport/provider failure without a
     /// usable cached collection. Kept per section so one failed custom list
@@ -160,7 +161,9 @@ final class SectionFeed {
     /// True once every remote row has settled, so a surface can tell "still
     /// loading" from "genuinely empty" before showing an empty state.
     var isSettled: Bool {
-        trendingState.isSettled && watchlistState.isSettled && customState.isSettled
+        trendingState.isSettled
+            && WatchlistProvider.allCases.allSatisfy { (watchlistStates[$0] ?? .idle).isSettled }
+            && customState.isSettled
     }
 
     /// The hero's explicit UI state. Views reserve its large first-frame slot
@@ -189,7 +192,8 @@ final class SectionFeed {
         case let .builtin(section):
             switch section {
             case .trendingMovies, .trendingSeries: trendingState
-            case .traktWatchlist: watchlistState
+            case .traktWatchlist: watchlistStates[.trakt] ?? .idle
+            case .simklWatchlist: watchlistStates[.simkl] ?? .idle
             // Sports has its own pipeline (`SportsFollowService`/`SportsStore`) —
             // this feed never fetches it, so there is nothing here to wait on.
             case .recentlyWatched, .favorites, .recentlyAdded, .forYou, .sports: .loaded
@@ -292,80 +296,70 @@ final class SectionFeed {
 // MARK: - Watchlist and custom sections
 
 extension SectionFeed {
-    /// Loads the connected user's Trakt watchlist and keeps only the titles the
-    /// user actually owns in the active playlist — matched by TMDB id, the same
-    /// way the trending rows work, and narrowed to the surface's medium.
-    func loadWatchlist(cacheKey: String) async {
-        let request = loadGate.begin(.watchlist)
-        let cached = restoreWatchlist(cacheKey: cacheKey)
-        watchlistState = cached == .missing ? .loading : .cached
+    /// Loads the connected user's watchlist from `provider` and keeps only the
+    /// titles the user actually owns in the active playlist — matched by TMDB
+    /// id, the same way the trending rows work, and narrowed to the surface's
+    /// medium.
+    func loadWatchlist(_ provider: WatchlistProvider, cacheKey: String) async {
+        let ref = HomeSectionRef.builtin(provider.section)
+        let feed = SectionFeedLoadGate.Feed.watchlist(provider)
+        let request = loadGate.begin(feed)
+        let cached = restoreWatchlist(provider, cacheKey: cacheKey)
+        watchlistStates[provider] = cached == .missing ? .loading : .cached
         if cached == .fresh {
             await refreshHeroArtwork()
-            guard loadGate.isCurrent(request, for: .watchlist) else { return }
-            failedSections.remove(.builtin(.traktWatchlist))
-            watchlistState = .loaded
+            guard loadGate.isCurrent(request, for: feed) else { return }
+            failedSections.remove(ref)
+            watchlistStates[provider] = .loaded
             return
         }
         guard let context else {
-            finishWatchlistFailure(cached: cached)
+            finishWatchlistFailure(provider, cached: cached)
             return
         }
-        guard TraktService.shared.isConnected else {
-            collections[.builtin(.traktWatchlist)] = .empty
-            failedSections.remove(.builtin(.traktWatchlist))
-            watchlistState = .loaded
+        guard provider.isConnected else {
+            collections[ref] = .empty
+            failedSections.remove(ref)
+            watchlistStates[provider] = .loaded
             return
         }
         do {
-            let items = try await TraktService.shared.watchlistItems()
-            guard loadGate.isCurrent(request, for: .watchlist) else { return }
-            let collection = await makeCollection(entries: watchlistEntries(items), context: context)
-            guard loadGate.isCurrent(request, for: .watchlist) else { return }
-            collections[.builtin(.traktWatchlist)] = collection
-            SectionFeedCache.shared.storeWatchlist(surface, key: cacheKey, collection: collection)
+            let entries = try await provider.entries()
+            guard loadGate.isCurrent(request, for: feed) else { return }
+            let collection = await makeCollection(entries: entries, context: context)
+            guard loadGate.isCurrent(request, for: feed) else { return }
+            collections[ref] = collection
+            SectionFeedCache.shared.storeWatchlist(surface, provider, key: cacheKey, collection: collection)
             await refreshHeroArtwork()
-            guard loadGate.isCurrent(request, for: .watchlist) else { return }
-            failedSections.remove(.builtin(.traktWatchlist))
-            watchlistState = .loaded
+            guard loadGate.isCurrent(request, for: feed) else { return }
+            failedSections.remove(ref)
+            watchlistStates[provider] = .loaded
         } catch {
             // Preserve a stale row when revalidation fails. A transport error is
             // not evidence that the remote watchlist became empty.
-            if cached == .missing, loadGate.isCurrent(request, for: .watchlist) {
-                collections[.builtin(.traktWatchlist)] = .empty
+            if cached == .missing, loadGate.isCurrent(request, for: feed) {
+                collections[ref] = .empty
             }
-            guard loadGate.isCurrent(request, for: .watchlist) else { return }
-            finishWatchlistFailure(cached: cached)
+            guard loadGate.isCurrent(request, for: feed) else { return }
+            finishWatchlistFailure(provider, cached: cached)
         }
     }
 
-    private func restoreWatchlist(cacheKey: String) -> CacheRestore {
-        guard let cached = SectionFeedCache.shared.watchlistEntry(surface, for: cacheKey) else { return .missing }
-        collections[.builtin(.traktWatchlist)] = cached.value
+    private func restoreWatchlist(_ provider: WatchlistProvider, cacheKey: String) -> CacheRestore {
+        guard let cached = SectionFeedCache.shared.watchlistEntry(surface, provider, for: cacheKey) else {
+            return .missing
+        }
+        collections[.builtin(provider.section)] = cached.value
         return cached.isFresh ? .fresh : .stale
     }
 
-    private func finishWatchlistFailure(cached: CacheRestore) {
-        let ref = HomeSectionRef.builtin(.traktWatchlist)
+    private func finishWatchlistFailure(_ provider: WatchlistProvider, cached: CacheRestore) {
+        let ref = HomeSectionRef.builtin(provider.section)
         if cached != .missing, !items(for: ref).isEmpty {
-            watchlistState = .loaded
+            watchlistStates[provider] = .loaded
         } else {
             failedSections.insert(ref)
-            watchlistState = .failed
-        }
-    }
-
-    private func watchlistEntries(_ items: [TraktWatchlistItem]) -> [HomeListEntry] {
-        items.compactMap { item in
-            switch item.type {
-            case "movie":
-                guard let media = item.movie, let tmdbId = media.ids.tmdb else { return nil }
-                return HomeListEntry(tmdbId: tmdbId, mediaType: .movie, title: media.title ?? "")
-            case "show":
-                guard let media = item.show, let tmdbId = media.ids.tmdb else { return nil }
-                return HomeListEntry(tmdbId: tmdbId, mediaType: .series, title: media.title ?? "")
-            default:
-                return nil
-            }
+            watchlistStates[provider] = .failed
         }
     }
 
@@ -557,7 +551,7 @@ extension SectionFeed {
         failedSections.removeAll()
         heroArtworkRevision &+= 1
         trendingState = .idle
-        watchlistState = .idle
+        watchlistStates.removeAll()
         customState = .idle
     }
 

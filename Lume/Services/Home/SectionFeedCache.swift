@@ -3,7 +3,7 @@
 //  Lume
 //
 //  Session-lived stale-while-revalidate cache of the remote-backed rows on each
-//  section surface: TMDB trending, the Trakt watchlist and the user's custom
+//  section surface: TMDB trending, the Trakt/Simkl watchlists and the user's custom
 //  list rows. tvOS renders
 //  only the selected tab, so a surface's view (and its state) is torn down on
 //  every tab switch — without this cache the hero carousel refetched and
@@ -46,7 +46,7 @@ final class SectionFeedCache {
     /// One slot per surface per feed, so Home's trending memo and the Movies
     /// page's never clobber each other.
     private var trending: [SectionSurface: Slot<TrendingEntry>] = [:]
-    private var watchlist: [SectionSurface: Slot<SectionCollectionSnapshot>] = [:]
+    private var watchlist: [SectionSurface: [WatchlistProvider: Slot<SectionCollectionSnapshot>]] = [:]
     private var custom: [SectionSurface: Slot<[UUID: SectionCollectionSnapshot]>] = [:]
 
     func trendingEntry(_ surface: SectionSurface, for key: String, now: Date = .now) -> Lookup<TrendingEntry>? {
@@ -60,20 +60,22 @@ final class SectionFeedCache {
 
     func watchlistEntry(
         _ surface: SectionSurface,
+        _ provider: WatchlistProvider,
         for key: String,
         now: Date = .now
     ) -> Lookup<SectionCollectionSnapshot>? {
-        guard let slot = watchlist[surface], slot.key == key else { return nil }
+        guard let slot = watchlist[surface]?[provider], slot.key == key else { return nil }
         return lookup(slot, lifetime: Self.watchlistLifetime, now: now)
     }
 
     func storeWatchlist(
         _ surface: SectionSurface,
+        _ provider: WatchlistProvider,
         key: String,
         collection: SectionCollectionSnapshot,
         now: Date = .now
     ) {
-        watchlist[surface] = Slot(key: key, value: collection, storedAt: now)
+        watchlist[surface, default: [:]][provider] = Slot(key: key, value: collection, storedAt: now)
     }
 
     func customEntry(
@@ -106,7 +108,7 @@ final class SectionFeedCache {
 final class SectionFeedLoadGate {
     enum Feed: Hashable {
         case trending
-        case watchlist
+        case watchlist(WatchlistProvider)
         case custom
     }
 

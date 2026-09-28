@@ -78,10 +78,15 @@ struct LibrarySectionsView<CollectionRow: View>: View {
             feed.update(context: feedContext)
             await feed.loadTrending(cacheKey: catalogKey)
         }
-        .task(id: watchlistKey) {
+        .task(id: watchlistKey(.trakt)) {
             feed.heroRef = heroRef
             feed.update(context: feedContext)
-            await feed.loadWatchlist(cacheKey: watchlistKey)
+            await feed.loadWatchlist(.trakt, cacheKey: watchlistKey(.trakt))
+        }
+        .task(id: watchlistKey(.simkl)) {
+            feed.heroRef = heroRef
+            feed.update(context: feedContext)
+            await feed.loadWatchlist(.simkl, cacheKey: watchlistKey(.simkl))
         }
         .task(id: customSectionsKey) {
             seedDefaultHeroIfNeeded()
@@ -132,11 +137,13 @@ struct LibrarySectionsView<CollectionRow: View>: View {
                 Text("Trending Series"), feed.items(for: .builtin(section)),
                 section: .builtin(section), collectionTitle: String(localized: "Trending Series")
             )
-        case .traktWatchlist:
-            rail(
-                Text("From Your Trakt Watchlist"), feed.items(for: .builtin(section)),
-                section: .builtin(section), collectionTitle: String(localized: "From Your Trakt Watchlist")
-            )
+        case .traktWatchlist, .simklWatchlist:
+            if let provider = WatchlistProvider(section: section) {
+                rail(
+                    Text(provider.rowTitle), feed.items(for: .builtin(section)),
+                    section: .builtin(section), collectionTitle: provider.rowTitleString
+                )
+            }
         case .forYou, .sports:
             // Home only — `HomeSection.cases(for:)` never yields either here.
             EmptyView()
@@ -169,8 +176,8 @@ struct LibrarySectionsView<CollectionRow: View>: View {
 
     // MARK: - Load keys
 
-    private var watchlistKey: String {
-        "watchlist-\(surface.rawValue)-\(trakt.username ?? "disconnected")-\(catalogKey)"
+    private func watchlistKey(_ provider: WatchlistProvider) -> String {
+        "watchlist-\(provider)-\(surface.rawValue)-\(provider.account ?? "disconnected")-\(catalogKey)"
     }
 
     /// Includes the promoted section: choosing a hero changes neither the

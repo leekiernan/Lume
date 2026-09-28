@@ -22,6 +22,7 @@ enum HomeSection: String, CaseIterable, Identifiable {
     case trendingMovies
     case trendingSeries
     case traktWatchlist
+    case simklWatchlist
     case sports
 
     var id: String {
@@ -35,16 +36,17 @@ enum HomeSection: String, CaseIterable, Identifiable {
     static func cases(for surface: SectionSurface) -> [HomeSection] {
         switch surface {
         case .home:
-            [.recentlyWatched, .favorites, .forYou, .trendingMovies, .trendingSeries, .traktWatchlist]
+            [.recentlyWatched, .favorites, .forYou, .trendingMovies, .trendingSeries, .traktWatchlist, .simklWatchlist]
         case .movies:
-            [.recentlyWatched, .favorites, .recentlyAdded, .trendingMovies, .traktWatchlist]
+            [.recentlyWatched, .favorites, .recentlyAdded, .trendingMovies, .traktWatchlist, .simklWatchlist]
         case .series:
-            [.recentlyWatched, .favorites, .recentlyAdded, .trendingSeries, .traktWatchlist]
+            [.recentlyWatched, .favorites, .recentlyAdded, .trendingSeries, .traktWatchlist, .simklWatchlist]
         }
     }
 
     /// The label shown in the layout settings. Mirrors the row's own header
-    /// (the Trakt row is shortened from "From Your Trakt Watchlist").
+    /// (the watchlist rows are shortened from "From Your Trakt/Simkl Watchlist" —
+    /// see `WatchlistProvider.rowTitle`).
     var title: LocalizedStringKey {
         switch self {
         case .recentlyWatched: "Recently Watched"
@@ -54,6 +56,7 @@ enum HomeSection: String, CaseIterable, Identifiable {
         case .trendingMovies: "Trending Movies"
         case .trendingSeries: "Trending Series"
         case .traktWatchlist: "Trakt Watchlist"
+        case .simklWatchlist: "Simkl Watchlist"
         case .sports: "Sports"
         }
     }
@@ -70,6 +73,7 @@ enum HomeSection: String, CaseIterable, Identifiable {
         case .trendingMovies: String(localized: "Trending Movies")
         case .trendingSeries: String(localized: "Trending Series")
         case .traktWatchlist: String(localized: "Trakt Watchlist")
+        case .simklWatchlist: String(localized: "Simkl Watchlist")
         case .sports: String(localized: "Sports")
         }
     }
@@ -79,7 +83,7 @@ enum HomeSection: String, CaseIterable, Identifiable {
     /// page, so the feed that builds the hero never sees their items.
     var isPromotable: Bool {
         switch self {
-        case .trendingMovies, .trendingSeries, .traktWatchlist: true
+        case .trendingMovies, .trendingSeries, .traktWatchlist, .simklWatchlist: true
         case .recentlyWatched, .favorites, .recentlyAdded, .forYou, .sports: false
         }
     }
@@ -92,7 +96,7 @@ enum HomeSection: String, CaseIterable, Identifiable {
         case .forYou: "sparkles"
         case .trendingMovies: "film"
         case .trendingSeries: "tv"
-        case .traktWatchlist: "rectangle.stack.badge.play"
+        case .traktWatchlist, .simklWatchlist: "rectangle.stack.badge.play"
         case .sports: "sportscourt"
         }
     }

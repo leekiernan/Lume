@@ -71,7 +71,7 @@ struct HomeLayoutSettingsTests {
         let input: [HomeSectionRef] = [
             .builtin(.recentlyWatched), .custom(Self.alpha.id), .builtin(.favorites),
             .builtin(.forYou), .builtin(.trendingMovies), .builtin(.trendingSeries),
-            .builtin(.traktWatchlist), .custom(Self.beta.id)
+            .builtin(.traktWatchlist), .builtin(.simklWatchlist), .custom(Self.beta.id)
         ]
         let encoded = HomeLayoutSettings.encode(input)
         let decoded = HomeLayoutSettings.decode(encoded)
