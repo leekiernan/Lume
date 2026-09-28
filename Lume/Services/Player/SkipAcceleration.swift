@@ -42,10 +42,10 @@ nonisolated struct SkipAcceleration: Equatable {
         return forward ? ladder[level] : -ladder[level]
     }
 
-    /// How a step reads on screen: "+3m", "−10s".
+    /// How a step reads on screen: "+3 min", "−10 sec" (localised).
     static func label(for step: TimeInterval) -> String {
         let magnitude = Duration.seconds(abs(step))
-            .formatted(.units(allowed: [.minutes, .seconds], width: .narrow))
+            .formatted(.units(allowed: [.minutes, .seconds], width: .abbreviated))
         return (step < 0 ? "−" : "+") + magnitude
     }
 }
@@ -55,4 +55,10 @@ nonisolated struct SkipAcceleration: Equatable {
 nonisolated struct SkipBadge: Equatable {
     let id = UUID()
     let step: TimeInterval
+
+    /// Keeps one indicator on screen through a run in one direction, so its
+    /// number climbs in place rather than the panel re-appearing each press.
+    var forward: Bool {
+        step > 0
+    }
 }

@@ -82,19 +82,14 @@
         @State var isScrubbing = false
         @State var scrubTarget: TimeInterval = 0
         @State var wasPlayingBeforeScrub = false
-        /// Grows on sustained same-direction input so a held d-pad covers
-        /// ground quickly while a single tap still nudges precisely.
-        @State var scrubStepLevel = 0
-        @State var scrubLastDirection: MoveCommandDirection?
-        /// Decays `scrubStepLevel` back to zero after a pause in input.
-        @State var scrubResetTask: Task<Void, Never>?
 
         enum TabKind: Hashable { case episodes, recent, info }
         @State var openTab: TabKind?
         @FocusState var focus: TVPlayerFocus?
-        /// Quick-press skip steps and the badge for the last one (`SkipAcceleration`).
-        @State private var skipAcceleration = SkipAcceleration()
-        @State private var skipBadge: SkipBadge?
+        /// Quick-press skip steps — buttons, progress bar and scrub alike — and
+        /// the indicator for the last one. See `SkipAcceleration`.
+        @State var skipAcceleration = SkipAcceleration()
+        @State var skipBadge: SkipBadge?
 
         // MARK: - Body
 
@@ -113,6 +108,9 @@
                 .padding(.horizontal, 80)
                 .padding(.bottom, 56)
             }
+            .overlay {
+                if let skipBadge { SkipBadgeLabel(badge: skipBadge).id(skipBadge.forward) }
+            }
             .defaultFocus($focus, .transport)
             .tvRemoteMoveCommand { direction in
                 // While scrubbing, left/right step the playhead; vertical moves
@@ -121,6 +119,11 @@
                     if direction == .left || direction == .right {
                         moveScrub(direction)
                     }
+                    return
+                }
+                // On the bar itself, left/right seek straight away.
+                if focus == .scrubber, !media.isLive, direction == .left || direction == .right {
+                    skip(forward: direction == .right)
                     return
                 }
                 // With the controls up, up/down still surf channels — but only
@@ -326,7 +329,7 @@
         }
 
         /// ∓10 s, or a drop-in minute on catch-up.
-        private var skipStep: PlayerSkipStep {
+        var skipStep: PlayerSkipStep {
             PlayerSkipStep(seconds: media.skipInterval(default: 10))
         }
 
@@ -353,15 +356,7 @@
                 systemImage: forward ? skipStep.forwardSymbol : skipStep.backSymbol,
                 focus: forward ? .skipForward : .skipBackward
             ) {
-                let step = skipAcceleration.step(forward: forward, base: skipStep.seconds)
-                coordinator.skip(by: step)
-                skipBadge = SkipBadge(step: step)
-                onResetHideTimer()
-            }
-            .overlay(alignment: .top) {
-                if let skipBadge, (skipBadge.step > 0) == forward {
-                    SkipBadgeLabel(badge: skipBadge).offset(y: -44)
-                }
+                skip(forward: forward)
             }
         }
 

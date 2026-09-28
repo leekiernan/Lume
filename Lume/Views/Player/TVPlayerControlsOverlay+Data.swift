@@ -28,8 +28,6 @@
         func resolveContent() async {
             // A stream swap invalidates any in-flight scrub.
             isScrubbing = false
-            scrubResetTask?.cancel()
-            scrubResetTask = nil
             episode = nil
             seasonEpisodes = []
             episodeNav = .none
@@ -132,8 +130,6 @@
             wasPlayingBeforeScrub = coordinator.isPlaying
             if coordinator.isPlaying { onTogglePlay() }
             scrubTarget = clock.current.isFinite ? clock.current : 0
-            scrubStepLevel = 0
-            scrubLastDirection = nil
             onPanelOpenChange(true)
             withAnimation(.easeOut(duration: 0.15)) { isScrubbing = true }
         }
@@ -155,8 +151,6 @@
         }
 
         private func finishScrub(resume: Bool) {
-            scrubResetTask?.cancel()
-            scrubResetTask = nil
             withAnimation(.easeOut(duration: 0.15)) { isScrubbing = false }
             onPanelOpenChange(false)
             if resume, !coordinator.isPlaying { onTogglePlay() }
@@ -164,32 +158,24 @@
             onResetHideTimer()
         }
 
-        /// Step the scrub target on a left/right press. The step grows with
-        /// sustained input in one direction and decays after a brief pause.
+        /// Step the scrub target on a left/right press, on the same ladder as
+        /// every other skip (`SkipAcceleration`).
         func moveScrub(_ direction: MoveCommandDirection) {
-            guard isScrubbing, clock.duration > 0 else { return }
-            let sign: Double
-            switch direction {
-            case .left: sign = -1
-            case .right: sign = 1
-            default: return
-            }
-            if direction != scrubLastDirection { scrubStepLevel = 0 }
-            scrubLastDirection = direction
-            scrubStepLevel = min(scrubStepLevel + 1, 40)
-            // A single tap nudges ~30s; a held d-pad ramps to ~20 min/press, so
-            // even a long movie crosses in a second or two of sustained input.
-            let step = 30.0 * Double(scrubStepLevel)
-            scrubTarget = min(max(scrubTarget + sign * step, 0), clock.duration)
+            guard isScrubbing, clock.duration > 0,
+                  direction == .left || direction == .right else { return }
+            let step = skipAcceleration.step(forward: direction == .right, base: skipStep.seconds)
+            scrubTarget = min(max(scrubTarget + step, 0), clock.duration)
+            skipBadge = SkipBadge(step: step)
             onResetHideTimer()
+        }
 
-            scrubResetTask?.cancel()
-            scrubResetTask = Task { @MainActor in
-                try? await Task.sleep(nanoseconds: 450_000_000)
-                guard !Task.isCancelled else { return }
-                scrubStepLevel = 0
-                scrubLastDirection = nil
-            }
+        /// One skip press — a transport button, or left/right on the progress
+        /// bar: the next step on the ladder, and the indicator for it.
+        func skip(forward: Bool) {
+            let step = skipAcceleration.step(forward: forward, base: skipStep.seconds)
+            coordinator.skip(by: step)
+            skipBadge = SkipBadge(step: step)
+            onResetHideTimer()
         }
 
         // MARK: Actions
