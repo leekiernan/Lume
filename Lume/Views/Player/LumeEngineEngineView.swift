@@ -336,7 +336,8 @@ struct LumeEngineEngineView: View {
             }
             .buttonStyle(LumeEngineInvisibleButtonStyle())
             // Yield focus to the failure overlay's buttons when a stream dies.
-            .disabled(isControlsVisible || isChannelBrowserOpen || loadFailed)
+            // Only while the controls are actually drawn — see KSPlayerEngineView.
+            .disabled((isControlsVisible && (coordinator.hasStartedPlayback || isCatchupSegmentLoading)) || isChannelBrowserOpen || loadFailed)
             .focused($catcherFocused)
             .tvRemoteMoveCommand { direction in
                 // Watching live TV with the controls hidden, left opens the
