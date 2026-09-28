@@ -535,6 +535,9 @@ struct FullScreenPlayerView: View {
         // What was written, so a resume point that looks wrong can be checked
         // against a diagnostics report.
         Logger.player.info("progress saved: \(now, format: .fixed(precision: 1))s of \(total, format: .fixed(precision: 0))s")
+        // The screen reopening this title reads a model that may not have
+        // caught up with the write below yet — see `RecentResumePoints`.
+        if now > 0 { RecentResumePoints.record(now, for: ref) }
         // Held so `endReviewSession` can await it: `writer` is an actor, so the
         // await below suspends, and without the handle the review policy would
         // read `completedTitles` before this task increments it — the third
