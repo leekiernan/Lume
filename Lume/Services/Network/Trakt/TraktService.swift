@@ -23,18 +23,29 @@ import SwiftUI
 final class TraktService {
     static let shared = TraktService()
 
-    /// The connected Trakt username, or nil when not connected.
-    private(set) var username: String?
+    /// Sign-in and tokens — shared with Simkl, see `TrackerAccountSession`.
+    let session = TrackerAccountSession(backend: TraktAccountBackend())
+
+    /// The connected Trakt username, or nil when signed out or not yet known.
+    var username: String? {
+        session.username
+    }
 
     /// The in-flight device code while the user is approving authorization.
-    private(set) var pendingCode: TraktDeviceCode?
+    var pendingCode: TraktDeviceCode? {
+        session.pendingCode
+    }
 
     /// A human-readable failure from the last connect attempt, surfaced in the
     /// Settings UI. Cleared when a new attempt begins.
-    private(set) var connectionError: String?
+    var connectionError: String? {
+        session.connectionError
+    }
 
-    /// Whether a device-code authorization is currently being polled.
-    private(set) var isConnecting = false
+    /// Whether a device-code authorization is in progress.
+    var isConnecting: Bool {
+        session.isConnecting
+    }
 
     /// Whether a watched-history import is currently running.
     private(set) var isImporting = false
@@ -50,156 +61,68 @@ final class TraktService {
     private(set) var isSyncingMutations = false
     private(set) var mutationSyncError: String?
 
-    private var tokens: TraktTokens?
-    private var pollingTask: Task<Void, Never>?
-    private var refreshTask: Task<String?, Never>?
     /// Serialises playback events so a slow start request can never arrive
     /// after the pause or stop that followed it.
     private var scrobbleTask: Task<Void, Never>?
-    /// A refresh token that Trakt rejected. Another device may have consumed
-    /// this single-use token and be exporting its replacement through CloudKit,
-    /// so suppress repeated retries until a different token arrives.
-    private var refreshFailedForToken: String?
     private var mutationDrainTask: Task<Void, Never>?
     private var mutationDrainID: UUID?
-    private var mutationAccountScope: String?
 
     private let client = TraktClient.shared
     private let mutationOutbox = TraktMutationOutbox()
 
-    private init() {}
+    private init() {
+        session.identityDidChange = { [weak self] _, confirmed in
+            self?.refreshMutationStatus()
+            if confirmed { self?.retryPendingMutations() }
+        }
+        session.didConnect = { [weak self] in
+            self?.refreshMutationStatus()
+            self?.retryPendingMutations()
+        }
+    }
 
     /// Whether the build has Trakt credentials at all. When false the whole
     /// integration is hidden.
     var isConfigured: Bool {
-        client.isConfigured
+        session.isConfigured
     }
 
+    /// Whether this device holds Trakt tokens. The username can lag behind
+    /// (after a reinstall it has to be fetched again).
     var isConnected: Bool {
-        username != nil
+        session.isConnected
     }
 
     // MARK: - Lifecycle
 
-    /// Restores a previously connected session at launch: loads the stored
-    /// tokens, refreshes them if stale, and fetches the username. Best-effort.
+    /// Restores a previously connected session at launch, or after iCloud
+    /// replaced the tokens. Best-effort.
     func restore() async {
         guard isConfigured else { return }
-        guard let stored = TraktTokenStore.load() else {
-            tokens = nil
-            username = nil
-            refreshFailedForToken = nil
-            mutationAccountScope = nil
-            TraktAccountIdentityStore.clear()
+        switch await session.restore() {
+        case .signedOut:
             refreshMutationStatus()
-            return
-        }
-        tokens = stored
-        username = nil
-        mutationAccountScope = nil
-        if let identity = TraktAccountIdentityStore.load() {
-            username = identity.username
-            mutationAccountScope = identity.scope
-        }
-        if refreshFailedForToken != stored.refreshToken {
-            refreshFailedForToken = nil
-        }
-        guard let accessToken = await validAccessToken() else {
+        case .waiting:
             // A sibling device may currently be rotating the shared single-use
             // refresh token. Keep the local credentials until CloudKit delivers
             // the replacement instead of revoking the whole shared session.
-            return
+            break
+        case .ready:
+            refreshMutationStatus()
+            retryPendingMutations()
         }
-        if let user = try? await client.currentUser(accessToken: accessToken) {
-            applyAccountIdentity(user)
-        }
-        refreshMutationStatus()
-        retryPendingMutations()
     }
 
     // MARK: - Connect (device flow)
 
     /// Begins the device-flow connect: requests a code and starts polling.
     func connect() {
-        guard isConfigured, !isConnecting else { return }
-        connectionError = nil
-        isConnecting = true
-
-        pollingTask?.cancel()
-        pollingTask = Task { [weak self] in
-            await self?.runDeviceFlow()
-        }
+        session.connect()
     }
 
     /// Cancels an in-progress connect.
     func cancelConnect() {
-        pollingTask?.cancel()
-        pollingTask = nil
-        pendingCode = nil
-        isConnecting = false
-    }
-
-    private func runDeviceFlow() async {
-        do {
-            let code = try await client.requestDeviceCode()
-            pendingCode = code
-
-            let deadline = Date().addingTimeInterval(TimeInterval(code.expiresIn))
-            var interval = TimeInterval(max(code.interval, 1))
-
-            while !Task.isCancelled, Date() < deadline {
-                try await Task.sleep(for: .seconds(interval))
-                if Task.isCancelled {
-                    return
-                }
-
-                do {
-                    let response = try await client.pollForToken(deviceCode: code.deviceCode)
-                    await finishConnect(with: response)
-                    return
-                } catch TraktError.authorizationPending {
-                    continue
-                } catch TraktError.slowDown {
-                    interval += 1
-                    continue
-                } catch TraktError.codeExpired {
-                    failConnect("The code expired. Please try connecting again.")
-                    return
-                } catch TraktError.codeDenied {
-                    failConnect("Authorization was declined.")
-                    return
-                } catch TraktError.codeUsed {
-                    failConnect("That code was already used. Please try again.")
-                    return
-                }
-            }
-
-            if !Task.isCancelled {
-                failConnect("The code expired. Please try connecting again.")
-            }
-        } catch is CancellationError {
-            // Cancelled via cancelConnect() — state already reset there.
-        } catch {
-            failConnect("Couldn't reach Trakt. Check your connection and try again.")
-        }
-    }
-
-    private func finishConnect(with response: TraktTokenResponse) async {
-        applyTokens(response.tokens)
-        if let user = try? await client.currentUser(accessToken: response.accessToken) {
-            applyAccountIdentity(user)
-        }
-        pendingCode = nil
-        isConnecting = false
-        connectionError = nil
-        refreshMutationStatus()
-        retryPendingMutations()
-    }
-
-    private func failConnect(_ message: String) {
-        connectionError = message
-        pendingCode = nil
-        isConnecting = false
+        session.cancelConnect()
     }
 
     // MARK: - Disconnect
@@ -207,29 +130,14 @@ final class TraktService {
     /// Disconnects: revokes the token server-side (best effort) and clears all
     /// local state.
     func disconnect() async {
-        pollingTask?.cancel()
-        pollingTask = nil
         scrobbleTask?.cancel()
         scrobbleTask = nil
         mutationDrainTask?.cancel()
         mutationDrainTask = nil
         mutationDrainID = nil
-        if let accessToken = tokens?.accessToken {
-            try? await client.revokeToken(accessToken)
-        }
-        // Recorded as the user's decision, so the iCloud reconcile signs every
-        // device out instead of reading the missing token as a loss.
-        if TraktTokenStore.clearForUserDisconnect() {
-            NotificationCenter.default.post(name: .lumeTraktCredentialsDidChange, object: nil)
-        }
-        TraktAccountIdentityStore.clear()
+        await session.disconnect()
         // Parked watched state belongs to the account that was just signed out.
         TraktPendingWatchedStore.clearAll()
-        tokens = nil
-        username = nil
-        mutationAccountScope = nil
-        pendingCode = nil
-        isConnecting = false
         lastImport = nil
         pendingMutationCount = 0
         failedMutationCount = 0
@@ -306,7 +214,7 @@ final class TraktService {
               mutationAccount == account,
               let mutation = mutationOutbox.firstMutation(account: account)
         {
-            guard let accessToken = await validAccessToken() else {
+            guard let accessToken = await session.validAccessToken() else {
                 mutationOutbox.recordFailure(id: mutation.id, account: account)
                 mutationSyncError = "Couldn't sync changes to Trakt. Please try again."
                 break
@@ -351,7 +259,7 @@ final class TraktService {
         scrobbleTask = Task { [weak self] in
             await previous?.value
             guard !Task.isCancelled, let self,
-                  let accessToken = await validAccessToken()
+                  let accessToken = await session.validAccessToken()
             else { return }
 
             do {
@@ -368,21 +276,8 @@ final class TraktService {
     }
 
     private var mutationAccount: String? {
-        guard isConnected, let mutationAccountScope, !mutationAccountScope.isEmpty else { return nil }
-        return mutationAccountScope
-    }
-
-    private func applyAccountIdentity(_ user: TraktUser) {
-        username = user.username
-        let scope: String
-        if let traktID = user.ids?.trakt {
-            scope = "trakt:\(traktID)"
-        } else {
-            let normalized = user.username.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-            scope = "username:\(normalized)"
-        }
-        mutationAccountScope = scope
-        TraktAccountIdentityStore.save(TraktAccountIdentity(username: user.username, scope: scope))
+        guard isConnected, let scope = session.identity?.scope, !scope.isEmpty else { return nil }
+        return scope
     }
 
     private func refreshMutationStatus() {
@@ -408,7 +303,7 @@ final class TraktService {
     /// an authoritative empty result. Feed caches use this to retain stale data
     /// until a later successful revalidation.
     func watchlistItems() async throws -> [TraktWatchlistItem] {
-        guard let accessToken = await validAccessToken() else {
+        guard let accessToken = await session.validAccessToken() else {
             throw TraktError.notAuthenticated
         }
         return try await client.watchlist(accessToken: accessToken)
@@ -448,7 +343,7 @@ final class TraktService {
     /// section, refreshed if stale; nil when not connected. Public lists read
     /// without one.
     func listAccessToken() async -> String? {
-        await validAccessToken()
+        await session.validAccessToken()
     }
 
     // MARK: - Watched import
@@ -464,7 +359,7 @@ final class TraktService {
         lastImport = nil
         defer { isImporting = false }
 
-        guard let accessToken = await validAccessToken() else {
+        guard let accessToken = await session.validAccessToken() else {
             lastImport = .failure
             return
         }
@@ -474,66 +369,6 @@ final class TraktService {
             lastImport = TraktWatchedImporter.apply(movies: movies, shows: shows, in: context)
         } catch {
             lastImport = .failure
-        }
-    }
-
-    // MARK: - Tokens
-
-    /// Returns a usable access token, refreshing first if it's stale. Coalesces
-    /// concurrent refreshes into a single request.
-    private func validAccessToken() async -> String? {
-        guard let current = tokens else { return nil }
-        if !current.needsRefresh {
-            return current.accessToken
-        }
-        // Trakt refresh tokens are single-use. A rejection commonly means a
-        // sibling device refreshed first; wait for its CloudKit update instead
-        // of hammering the same invalid token or disconnecting every device.
-        guard refreshFailedForToken != current.refreshToken else { return nil }
-
-        if let refreshTask {
-            return await refreshTask.value
-        }
-
-        let task = Task { [weak self] () -> String? in
-            guard let self else { return nil }
-            do {
-                let response = try await client.refreshToken(current.refreshToken)
-                applyTokens(response.tokens)
-                return tokens?.accessToken
-            } catch let error as TraktError {
-                // Only suppress another attempt when Trakt actually rejected
-                // the token. Transient transport and server failures should be
-                // retried the next time an authenticated operation runs.
-                switch error {
-                case .server(400), .notAuthenticated:
-                    if tokens?.refreshToken == current.refreshToken {
-                        refreshFailedForToken = current.refreshToken
-                    }
-                default:
-                    break
-                }
-                return nil
-            } catch {
-                return nil
-            }
-        }
-        refreshTask = task
-        let result = await task.value
-        refreshTask = nil
-        return result
-    }
-
-    private func applyTokens(_ newTokens: TraktTokens) {
-        // An older in-flight refresh must never overwrite a newer token pair
-        // that just arrived from CloudKit.
-        if let current = tokens, current.createdAt > newTokens.createdAt {
-            return
-        }
-        tokens = newTokens
-        refreshFailedForToken = nil
-        if TraktTokenStore.save(newTokens) {
-            NotificationCenter.default.post(name: .lumeTraktCredentialsDidChange, object: nil)
         }
     }
 }

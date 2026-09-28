@@ -25,18 +25,29 @@ import SwiftUI
 final class SimklService {
     static let shared = SimklService()
 
-    /// The connected Simkl username, or nil when not connected.
-    private(set) var username: String?
+    /// Sign-in and tokens — shared with Trakt, see `TrackerAccountSession`.
+    let session = TrackerAccountSession(backend: SimklAccountBackend())
+
+    /// The connected Simkl username, or nil when signed out or not yet known.
+    var username: String? {
+        session.username
+    }
 
     /// The in-flight device code while the user is approving authorization.
-    private(set) var pendingCode: SimklDeviceCode?
+    var pendingCode: SimklDeviceCode? {
+        session.pendingCode
+    }
 
     /// A human-readable failure from the last connect attempt, surfaced in the
     /// Settings UI. Cleared when a new attempt begins.
-    private(set) var connectionError: String?
+    var connectionError: String? {
+        session.connectionError
+    }
 
-    /// Whether a device-code authorization is currently being polled.
-    private(set) var isConnecting = false
+    /// Whether a device-code authorization is in progress.
+    var isConnecting: Bool {
+        session.isConnecting
+    }
 
     /// Whether a watched-history import is currently running.
     private(set) var isImporting = false
@@ -52,18 +63,6 @@ final class SimklService {
     private(set) var isSyncingMutations = false
     private(set) var mutationSyncError: String?
 
-    private var tokens: SimklTokens?
-    /// The outbox partition for the connected account; see
-    /// `SimklAccountIdentity.scope`.
-    private var mutationAccountScope: String?
-    /// A refresh token Simkl rejected, so it isn't retried on every call.
-    /// Simkl's refresh token doesn't rotate, so a rejection means it was revoked
-    /// or expired; the pair is kept rather than erased, because clearing it
-    /// would sync the disconnect to every device, and a re-authorized pair may
-    /// still arrive through CloudKit.
-    private var refreshFailedForToken: String?
-    private var pollingTask: Task<Void, Never>?
-    private var refreshTask: Task<String?, Never>?
     private var mutationDrainTask: Task<Void, Never>?
     private var mutationDrainID: UUID?
     private var watchlistTask: Task<[SimklWatchlistEntry], Never>?
@@ -75,60 +74,63 @@ final class SimklService {
     private let client = SimklClient.shared
     private let mutationOutbox = TrackerMutationOutbox(storageKey: "simkl.mutationOutbox.v1")
 
-    private init() {}
+    private init() {
+        session.identityDidChange = { [weak self] identity, confirmed in
+            guard let self else { return }
+            if let identity {
+                mutationOutbox.adoptMutations(from: identity.legacyScope, into: identity.scope)
+            }
+            refreshMutationStatus()
+            if confirmed { retryPendingMutations() }
+        }
+        session.didConnect = { [weak self] in
+            guard let self else { return }
+            refreshMutationStatus()
+            retryPendingMutations()
+            // The account's watched history imports on connect, not only on
+            // demand. Runs on the context the connect call captured; the manual
+            // re-import stays available for later.
+            if let context = importContext {
+                importContext = nil
+                await importWatched(into: context)
+            }
+        }
+    }
 
     /// Whether the build has Simkl credentials at all. When false the whole
     /// integration is hidden.
     var isConfigured: Bool {
-        client.isConfigured
+        session.isConfigured
     }
 
+    /// Whether this device holds Simkl tokens. The username can lag behind
+    /// (after a reinstall it has to be fetched again).
     var isConnected: Bool {
-        username != nil
+        session.isConnected
     }
 
     // MARK: - Lifecycle
 
-    /// Restores a previously connected session at launch: loads the stored
-    /// tokens and the remembered account identity, refreshes the tokens if
-    /// stale, and re-fetches the identity. Best-effort — offline, the
-    /// remembered identity keeps the account connected so watched changes
-    /// still queue.
+    /// Restores a previously connected session at launch, or after iCloud
+    /// replaced the tokens. Best-effort — offline, the remembered identity
+    /// keeps the account connected so watched changes still queue.
     func restore() async {
         guard isConfigured else { return }
-        guard let stored = SimklTokenStore.load() else {
-            tokens = nil
-            username = nil
-            mutationAccountScope = nil
-            SimklAccountIdentityStore.clear()
+        switch await session.restore() {
+        case .signedOut:
             // Signed out elsewhere (the credential left through iCloud): the
             // cached watchlist belongs to that account.
             SimklWatchlistStore.clear()
-            refreshFailedForToken = nil
             refreshMutationStatus()
-            return
-        }
-        tokens = stored
-        username = nil
-        mutationAccountScope = nil
-        if let identity = SimklAccountIdentityStore.load() {
-            username = identity.username
-            mutationAccountScope = identity.scope
-        }
-        if refreshFailedForToken != stored.refreshToken {
-            refreshFailedForToken = nil
-        }
-        guard let accessToken = await validAccessToken() else {
+        case .waiting:
             // Offline, or the refresh was rejected. Keep the pair: the
             // remembered identity still queues changes, and a re-authorized
             // pair may yet arrive through CloudKit.
-            return
+            break
+        case .ready:
+            refreshMutationStatus()
+            retryPendingMutations()
         }
-        if let settings = try? await client.userSettings(accessToken: accessToken) {
-            applyAccountIdentity(settings)
-        }
-        refreshMutationStatus()
-        retryPendingMutations()
     }
 
     // MARK: - Connect (device flow)
@@ -137,98 +139,14 @@ final class SimklService {
     /// approval imports the account's watched history into the given catalog
     /// context. Passing nil skips the automatic import.
     func connect(into context: ModelContext? = nil) {
-        guard isConfigured, !isConnecting else { return }
-        connectionError = nil
-        isConnecting = true
+        guard !isConnecting else { return }
         importContext = context
-
-        pollingTask?.cancel()
-        pollingTask = Task { [weak self] in
-            await self?.runDeviceFlow()
-        }
+        session.connect()
     }
 
     /// Cancels an in-progress connect.
     func cancelConnect() {
-        pollingTask?.cancel()
-        pollingTask = nil
-        pendingCode = nil
-        isConnecting = false
-        importContext = nil
-    }
-
-    private func runDeviceFlow() async {
-        do {
-            let code = try await client.requestDeviceCode()
-            pendingCode = code
-
-            let deadline = Date().addingTimeInterval(TimeInterval(code.expiresIn))
-            var interval = TimeInterval(max(code.interval, 1))
-
-            // A declined code is indistinguishable from an untouched one —
-            // Simkl records nothing on decline — so the `expiresIn` deadline is
-            // the only way this loop ends for a user who says no.
-            while !Task.isCancelled, Date() < deadline {
-                try await Task.sleep(for: .seconds(interval))
-                if Task.isCancelled {
-                    return
-                }
-
-                do {
-                    let response = try await client.pollForToken(deviceCode: code.deviceCode)
-                    await finishConnect(with: response)
-                    return
-                } catch SimklError.authorizationPending {
-                    continue
-                } catch SimklError.slowDown {
-                    // Simkl asks for a flat +5 s on slow-down; retrying at the
-                    // old cadence re-arms their poll window and locks the loop
-                    // out until the code expires.
-                    interval += 5
-                    continue
-                } catch SimklError.codeExpired {
-                    failConnect("The code expired. Please try connecting again.")
-                    return
-                } catch SimklError.invalidClient {
-                    failConnect("Simkl rejected this app's credentials.")
-                    return
-                }
-            }
-
-            if !Task.isCancelled {
-                failConnect("The code expired. Please try connecting again.")
-            }
-        } catch is CancellationError {
-            // Cancelled via cancelConnect() — state already reset there.
-        } catch {
-            failConnect("Couldn't reach Simkl. Check your connection and try again.")
-        }
-    }
-
-    private func finishConnect(with response: SimklTokenResponse) async {
-        applyTokens(response.tokens)
-        if let settings = try? await client.userSettings(accessToken: response.accessToken) {
-            applyAccountIdentity(settings)
-        }
-        pendingCode = nil
-        isConnecting = false
-        connectionError = nil
-        refreshMutationStatus()
-        retryPendingMutations()
-
-        // The issue's contract: the account's watched history imports on
-        // connect, not only on demand. Runs on the context the connect call
-        // captured; the manual re-import below stays available for later.
-        if let context = importContext {
-            importContext = nil
-            await importWatched(into: context)
-        }
-    }
-
-    private func failConnect(_ message: String) {
-        connectionError = message
-        pendingCode = nil
-        isConnecting = false
+        session.cancelConnect()
         importContext = nil
     }
 
@@ -237,28 +155,13 @@ final class SimklService {
     /// Disconnects: revokes the token server-side (best effort) and clears all
     /// local state.
     func disconnect() async {
-        pollingTask?.cancel()
-        pollingTask = nil
         mutationDrainTask?.cancel()
         mutationDrainTask = nil
         mutationDrainID = nil
-        if let accessToken = tokens?.accessToken {
-            try? await client.revokeToken(accessToken)
-        }
-        // Recorded as the user's decision, so the iCloud reconcile signs every
-        // device out instead of reading the missing token as a loss.
-        if SimklTokenStore.clearForUserDisconnect() {
-            NotificationCenter.default.post(name: .lumeSimklCredentialsDidChange, object: nil)
-        }
-        SimklAccountIdentityStore.clear()
+        await session.disconnect()
         // Parked watched state belongs to the account that was just signed out.
         SimklPendingWatchedStore.clearAll()
         SimklWatchlistStore.clear()
-        tokens = nil
-        username = nil
-        mutationAccountScope = nil
-        pendingCode = nil
-        isConnecting = false
         lastImport = nil
         importContext = nil
         pendingMutationCount = 0
@@ -321,7 +224,7 @@ final class SimklService {
               mutationAccount == account,
               let mutation = mutationOutbox.firstMutation(account: account)
         {
-            guard let accessToken = await validAccessToken() else {
+            guard let accessToken = await session.validAccessToken() else {
                 mutationOutbox.recordFailure(id: mutation.id, account: account)
                 mutationSyncError = "Couldn't sync changes to Simkl. Please try again."
                 break
@@ -359,16 +262,8 @@ final class SimklService {
     }
 
     private var mutationAccount: String? {
-        guard isConnected, let mutationAccountScope, !mutationAccountScope.isEmpty else { return nil }
-        return mutationAccountScope
-    }
-
-    private func applyAccountIdentity(_ settings: SimklUserSettings) {
-        let identity = SimklAccountIdentity(settings: settings)
-        username = identity.username
-        mutationAccountScope = identity.scope
-        mutationOutbox.adoptMutations(from: identity.legacyScope, into: identity.scope)
-        SimklAccountIdentityStore.save(identity)
+        guard isConnected, let scope = session.identity?.scope, !scope.isEmpty else { return nil }
+        return scope
     }
 
     private func refreshMutationStatus() {
@@ -418,7 +313,7 @@ final class SimklService {
     }
 
     private func loadWatchlist() async -> [SimklWatchlistEntry] {
-        guard let username, let accessToken = await validAccessToken() else { return [] }
+        guard let username, let accessToken = await session.validAccessToken() else { return [] }
         var cache = SimklWatchlistStore.load(for: username) ?? SimklWatchlistCache(username: username)
         guard let activities = try? await client.activities(accessToken: accessToken) else {
             return cache.entries
@@ -456,7 +351,7 @@ final class SimklService {
         lastImport = nil
         defer { isImporting = false }
 
-        guard let accessToken = await validAccessToken() else {
+        guard let accessToken = await session.validAccessToken() else {
             lastImport = .failure
             return
         }
@@ -465,61 +360,6 @@ final class SimklService {
             lastImport = SimklWatchedImporter.apply(items: items, in: context)
         } catch {
             lastImport = .failure
-        }
-    }
-
-    // MARK: - Tokens
-
-    /// Returns a usable access token, refreshing first if it's stale. Coalesces
-    /// concurrent refreshes into a single request.
-    private func validAccessToken() async -> String? {
-        guard let current = tokens else { return nil }
-        if !current.needsRefresh {
-            return current.accessToken
-        }
-
-        guard refreshFailedForToken != current.refreshToken else { return nil }
-
-        if let refreshTask {
-            return await refreshTask.value
-        }
-
-        let task = Task { [weak self] () -> String? in
-            guard let self else { return nil }
-            do {
-                let response = try await client.refreshToken(current.refreshToken)
-                applyTokens(response.tokens)
-                return tokens?.accessToken
-            } catch let error as SimklError {
-                switch error {
-                // A rejected refresh token comes back as an OAuth error
-                // envelope at 400; `postOAuth` never throws notAuthenticated.
-                case .server(400):
-                    if tokens?.refreshToken == current.refreshToken {
-                        refreshFailedForToken = current.refreshToken
-                    }
-                default:
-                    break
-                }
-                return nil
-            } catch {
-                return nil
-            }
-        }
-        refreshTask = task
-        let result = await task.value
-        refreshTask = nil
-        return result
-    }
-
-    private func applyTokens(_ newTokens: SimklTokens) {
-        if let current = tokens, current.issuedAt > newTokens.issuedAt {
-            return
-        }
-        tokens = newTokens
-        refreshFailedForToken = nil
-        if SimklTokenStore.save(newTokens) {
-            NotificationCenter.default.post(name: .lumeSimklCredentialsDidChange, object: nil)
         }
     }
 }
