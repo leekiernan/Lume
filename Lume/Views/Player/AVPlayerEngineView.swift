@@ -65,12 +65,14 @@ struct AVPlayerEngineView: View {
     var onRemoteAdvance: ((PlayerMediaSwapper.Step) -> Bool)?
     /// Takes every seek and skip on a catch-up programme — see `CatchupSeekRouter`.
     var onCatchupSeek: ((CatchupSeek) -> Void)?
+    /// The full-screen session this engine reports to; nil in Multi-View.
+    var session: PlaybackSession?
 
-    @StateObject private var coordinator = AVPlayerCoordinator()
+    @StateObject var coordinator = AVPlayerCoordinator()
     @State private var isControlsVisible = true
     /// Set once the stream is given up on (initial-load failure with no fallback
     /// left). Swaps the player for the `PlayerErrorIndicator` (Try Again / Back).
-    @State private var loadFailed = false
+    @State var loadFailed = false
     @State private var isSeeking = false
     @State private var seekPosition: TimeInterval = 0
     @State private var hideTask: Task<Void, Never>?
@@ -112,7 +114,7 @@ struct AVPlayerEngineView: View {
     /// hanging engine hands off promptly rather than stalling on a black screen.
     private let fallbackStartupTimeout: TimeInterval = 15
 
-    var body: some View {
+    var engineBody: some View {
         ZStack {
             Color.black
                 .ignoresSafeArea()

@@ -203,7 +203,7 @@ extension KSPlayerEngineView {
             guard !Task.isCancelled else { return }
             stallWatchdog = nil
             Logger.player.error("stall watchdog: live stream stuck buffering for \(stallTimeout, format: .fixed(precision: 0), privacy: .public)s, rebuilding stream")
-            retryPlayback()
+            recoverWedgedStream()
         }
     }
 
@@ -261,7 +261,19 @@ extension KSPlayerEngineView {
         guard now - tick.lastDriftRecovery >= Self.driftRecoveryCooldown else { return }
         tick.lastDriftRecovery = now
         Logger.player.error("clock-drift watchdog: A/V sync diff \(diff, format: .fixed(precision: 1), privacy: .public)s persisted, rebuilding live stream")
-        retryPlayback()
+        recoverWedgedStream()
+    }
+
+    /// Rebuild a live stream that was playing and wedged (the stall and
+    /// clock-drift watchdogs). A reconnect, not a new join: `reconnect()` keeps
+    /// the stream marked started, so a slow rebuild can't read as a start
+    /// failure and hand playback to another engine mid-watch — which
+    /// `retryPlayback()` (the Try Again path) used to do from here. Bounded by
+    /// the same reconnect budget as a dropped stream; the budget resets once the
+    /// rebuilt stream is ready, and an exhausted one raises the failure overlay.
+    private func recoverWedgedStream() {
+        reconnector.scheduleRetry { reconnect() }
+        if reconnector.hasGivenUp { failPlayback() }
     }
 
     // MARK: - Dead-stream handling
