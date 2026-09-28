@@ -327,7 +327,7 @@ struct KSPlayerEngineView: View {
                 reconnector.cancel()
                 cancelStartupWatchdog()
                 cancelStallWatchdog()
-                PlaybackQoE.shared.endSession()
+                PlaybackQoE.shared.endSession(owner: coordinator)
                 NowPlayingService.shared.detachTransport(owner: coordinator)
                 coordinator.resetPlayer()
             }
@@ -505,7 +505,7 @@ struct KSPlayerEngineView: View {
                 reconnector.cancel()
                 cancelStartupWatchdog()
                 cancelStallWatchdog()
-                PlaybackQoE.shared.endSession()
+                PlaybackQoE.shared.endSession(owner: coordinator)
                 NowPlayingService.shared.detachTransport(owner: coordinator)
                 coordinator.resetPlayer()
             }

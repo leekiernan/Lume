@@ -140,7 +140,7 @@ final class LumeEngineCoordinator: NSObject, ObservableObject {
         isBuffering = true
         // After `tearDown` (which closes any previous session) so a reload counts
         // as its own startup attempt rather than extending the last one.
-        PlaybackQoE.shared.beginStartup(engine: .lumeEngine, isLive: media.isLive)
+        PlaybackQoE.shared.beginStartup(engine: .lumeEngine, isLive: media.isLive, owner: self)
 
         let session = PlayerSession(configuration: makeConfiguration(for: media))
         self.session = session
@@ -228,7 +228,7 @@ final class LumeEngineCoordinator: NSObject, ObservableObject {
     }
 
     func tearDown() {
-        PlaybackQoE.shared.endSession()
+        PlaybackQoE.shared.endSession(owner: self)
         eventTask?.cancel()
         tickTask?.cancel()
         startupTask?.cancel()

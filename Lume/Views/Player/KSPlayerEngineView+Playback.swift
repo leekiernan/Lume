@@ -284,7 +284,7 @@ extension KSPlayerEngineView {
         startupWatchdog?.cancel()
         // Every startup attempt goes through here — open, channel swap, retry —
         // which makes it the one place join time can be started from.
-        PlaybackQoE.shared.beginStartup(engine: .ksPlayer, isLive: media.isLive)
+        PlaybackQoE.shared.beginStartup(engine: .ksPlayer, isLive: media.isLive, owner: coordinator)
         // With a fallback engine available, wait only the shorter fallback
         // timeout before declaring the stream dead, so a silently-hanging engine
         // hands off to the next one promptly instead of stalling on a black

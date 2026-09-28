@@ -13,6 +13,9 @@ import Testing
 
 @MainActor
 struct PlaybackQoETests {
+    /// The engine instance that owns the sessions these tests open.
+    private let engineInstance = NSObject()
+
     /// A tracker backed by a throwaway suite.
     private func makeTracker() -> (qoe: PlaybackQoE, suiteName: String) {
         let suiteName = "PlaybackQoETests-\(UUID().uuidString)"
@@ -29,7 +32,7 @@ struct PlaybackQoETests {
         let (qoe, suite) = makeTracker()
         defer { tearDown(suite) }
 
-        qoe.beginStartup(engine: .ksPlayer, isLive: true)
+        qoe.beginStartup(engine: .ksPlayer, isLive: true, owner: engineInstance)
         qoe.noteFirstFrame()
 
         let stats = qoe.summary.engines[PlayerEngineKind.ksPlayer.rawValue]
@@ -44,7 +47,7 @@ struct PlaybackQoETests {
         let (qoe, suite) = makeTracker()
         defer { tearDown(suite) }
 
-        qoe.beginStartup(engine: .avPlayer, isLive: false)
+        qoe.beginStartup(engine: .avPlayer, isLive: false, owner: engineInstance)
         qoe.noteFirstFrame()
         qoe.noteFirstFrame()
         qoe.noteFirstFrame()
@@ -57,8 +60,8 @@ struct PlaybackQoETests {
         let (qoe, suite) = makeTracker()
         defer { tearDown(suite) }
 
-        qoe.beginStartup(engine: .vlcKit, isLive: true)
-        qoe.endSession()
+        qoe.beginStartup(engine: .vlcKit, isLive: true, owner: engineInstance)
+        qoe.endSession(owner: engineInstance)
 
         let stats = qoe.summary.engines[PlayerEngineKind.vlcKit.rawValue]
         #expect(stats?.exitsBeforeVideoStart == 1)
@@ -71,7 +74,7 @@ struct PlaybackQoETests {
         let (qoe, suite) = makeTracker()
         defer { tearDown(suite) }
 
-        qoe.beginStartup(engine: .ksPlayer, isLive: true)
+        qoe.beginStartup(engine: .ksPlayer, isLive: true, owner: engineInstance)
         // Startup buffering — the spinner before any frame arrives.
         qoe.noteStallBegan()
         qoe.noteStallEnded()
@@ -85,7 +88,7 @@ struct PlaybackQoETests {
         let (qoe, suite) = makeTracker()
         defer { tearDown(suite) }
 
-        qoe.beginStartup(engine: .ksPlayer, isLive: true)
+        qoe.beginStartup(engine: .ksPlayer, isLive: true, owner: engineInstance)
         qoe.noteFirstFrame()
         qoe.noteStallBegan()
         // A repeated "still stalled" signal must not double-count.
@@ -104,7 +107,7 @@ struct PlaybackQoETests {
         let defaults = try #require(UserDefaults(suiteName: suiteName))
 
         let qoe = PlaybackQoE(defaults: defaults)
-        qoe.beginStartup(engine: .ksPlayer, isLive: true)
+        qoe.beginStartup(engine: .ksPlayer, isLive: true, owner: engineInstance)
         qoe.noteFirstFrame()
         qoe.noteStallBegan()
         qoe.noteStallEnded()
@@ -112,7 +115,7 @@ struct PlaybackQoETests {
         let midPlayback = PlaybackQoE(defaults: defaults)
         #expect(midPlayback.summary.engines[PlayerEngineKind.ksPlayer.rawValue]?.rebuffers == 0)
 
-        qoe.endSession()
+        qoe.endSession(owner: engineInstance)
         let afterSession = PlaybackQoE(defaults: defaults)
         #expect(afterSession.summary.engines[PlayerEngineKind.ksPlayer.rawValue]?.rebuffers == 1)
     }
@@ -122,10 +125,10 @@ struct PlaybackQoETests {
         let (qoe, suite) = makeTracker()
         defer { tearDown(suite) }
 
-        qoe.beginStartup(engine: .lumeEngine, isLive: true)
+        qoe.beginStartup(engine: .lumeEngine, isLive: true, owner: engineInstance)
         qoe.noteFirstFrame()
         qoe.noteStallBegan()
-        qoe.endSession()
+        qoe.endSession(owner: engineInstance)
 
         #expect(qoe.summary.engines[PlayerEngineKind.lumeEngine.rawValue]?.rebuffers == 1)
     }
@@ -136,9 +139,9 @@ struct PlaybackQoETests {
         defer { tearDown(suite) }
 
         // A live-channel zap: the engine begins a new attempt without a teardown.
-        qoe.beginStartup(engine: .ksPlayer, isLive: true)
+        qoe.beginStartup(engine: .ksPlayer, isLive: true, owner: engineInstance)
         qoe.noteFirstFrame()
-        qoe.beginStartup(engine: .ksPlayer, isLive: true)
+        qoe.beginStartup(engine: .ksPlayer, isLive: true, owner: engineInstance)
         qoe.noteFirstFrame()
 
         let stats = qoe.summary.engines[PlayerEngineKind.ksPlayer.rawValue]
@@ -151,7 +154,7 @@ struct PlaybackQoETests {
         let (qoe, suite) = makeTracker()
         defer { tearDown(suite) }
 
-        qoe.beginStartup(engine: .ksPlayer, isLive: true)
+        qoe.beginStartup(engine: .ksPlayer, isLive: true, owner: engineInstance)
         qoe.noteStartupFailure()
         qoe.noteEngineFallback(to: .vlcKit)
 
@@ -166,7 +169,7 @@ struct PlaybackQoETests {
         let defaults = try #require(UserDefaults(suiteName: suiteName))
 
         let first = PlaybackQoE(defaults: defaults)
-        first.beginStartup(engine: .ksPlayer, isLive: false)
+        first.beginStartup(engine: .ksPlayer, isLive: false, owner: engineInstance)
         first.noteFirstFrame()
 
         let second = PlaybackQoE(defaults: defaults)
@@ -188,11 +191,31 @@ struct PlaybackQoETests {
         let (qoe, suite) = makeTracker()
         defer { tearDown(suite) }
 
-        qoe.beginStartup(engine: .ksPlayer, isLive: true)
+        qoe.beginStartup(engine: .ksPlayer, isLive: true, owner: engineInstance)
         qoe.noteFirstFrame()
         qoe.reset()
 
         #expect(qoe.summary.engines.isEmpty)
         #expect(qoe.summary.totalSessions == 0)
+    }
+
+    /// A fallback or rebuild overlaps two engine views: the next one opens its
+    /// session before the last one's teardown runs. That teardown must not
+    /// close the new session.
+    @Test
+    func `a replaced engine's teardown doesn't close its replacement's session`() {
+        let (qoe, suite) = makeTracker()
+        defer { tearDown(suite) }
+        let failing = NSObject()
+        let replacement = NSObject()
+
+        qoe.beginStartup(engine: .ksPlayer, isLive: true, owner: failing)
+        qoe.beginStartup(engine: .vlcKit, isLive: true, owner: replacement)
+        qoe.endSession(owner: failing)
+        qoe.noteFirstFrame()
+
+        let vlc = qoe.summary.engines[PlayerEngineKind.vlcKit.rawValue]
+        #expect(vlc?.firstFrames == 1)
+        #expect(vlc?.exitsBeforeVideoStart ?? 0 == 0)
     }
 }

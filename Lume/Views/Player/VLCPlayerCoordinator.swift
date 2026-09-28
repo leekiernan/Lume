@@ -179,7 +179,7 @@ final class VLCPlayerCoordinator: NSObject, ObservableObject {
         startTracker.beginStream()
         setBuffering(true)
         didReportFailure = false
-        PlaybackQoE.shared.beginStartup(engine: .vlcKit, isLive: media.isLive)
+        PlaybackQoE.shared.beginStartup(engine: .vlcKit, isLive: media.isLive, owner: self)
         startStartupWatchdog()
         mediaPlayer.delegate = self
 
@@ -224,7 +224,7 @@ final class VLCPlayerCoordinator: NSObject, ObservableObject {
         startTracker.beginStream()
         setBuffering(true)
         didReportFailure = false
-        PlaybackQoE.shared.beginStartup(engine: .vlcKit, isLive: media.isLive)
+        PlaybackQoE.shared.beginStartup(engine: .vlcKit, isLive: media.isLive, owner: self)
         startStartupWatchdog()
 
         installMedia(media.url, isLive: media.isLive)
@@ -384,7 +384,7 @@ final class VLCPlayerCoordinator: NSObject, ObservableObject {
         stopStatsLogging()
         retry.cancel()
         cancelStartupWatchdog()
-        PlaybackQoE.shared.endSession()
+        PlaybackQoE.shared.endSession(owner: self)
         Logger.player.log("tearDown")
         mediaPlayer.delegate = nil
         if mediaPlayer.isPlaying { mediaPlayer.stop() }

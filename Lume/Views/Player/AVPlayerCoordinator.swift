@@ -219,7 +219,7 @@ final class AVPlayerCoordinator: NSObject, ObservableObject {
         hasStartedPlayback = false
         startTracker.beginStream()
         didReportFailure = false
-        PlaybackQoE.shared.beginStartup(engine: .avPlayer, isLive: media.isLive)
+        PlaybackQoE.shared.beginStartup(engine: .avPlayer, isLive: media.isLive, owner: self)
         startStartupWatchdog()
 
         let asset = if let headers = media.httpHeaders, !headers.isEmpty {
@@ -295,7 +295,7 @@ final class AVPlayerCoordinator: NSObject, ObservableObject {
         teardownItemObservers()
         trackLoadTask?.cancel()
         cancelStartupWatchdog()
-        PlaybackQoE.shared.endSession()
+        PlaybackQoE.shared.endSession(owner: self)
         pipController?.stopPictureInPicture()
         pipController = nil
         player.pause()
