@@ -34,9 +34,4 @@ enum RecentResumePoints {
         if let storedAt, storedAt > recent.at { return stored }
         return recent.position
     }
-
-    /// Test-only: forget every record.
-    static func reset() {
-        saved.removeAll()
-    }
 }

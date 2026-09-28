@@ -10,15 +10,12 @@ import Foundation
 @testable import Lume
 import Testing
 
+/// The record is process-wide and these run in parallel, so each test works on
+/// a title of its own rather than resetting shared state.
 @MainActor
-@Suite(.readsGlobalState)
 struct RecentResumePointsTests {
-    private let episode = PlayableMedia.ContentRef.episode("e1")
+    private let episode = PlayableMedia.ContentRef.episode(UUID().uuidString)
     private let then = Date(timeIntervalSince1970: 1_700_000_000)
-
-    init() {
-        RecentResumePoints.reset()
-    }
 
     /// The reported sequence: saved at 5:51, reopened from a model still at 0.
     @Test func `a save newer than the model wins`() {
@@ -37,7 +34,7 @@ struct RecentResumePointsTests {
     }
 
     @Test func `live channels are not recorded`() {
-        let live = PlayableMedia.ContentRef.live("c1")
+        let live = PlayableMedia.ContentRef.live(UUID().uuidString)
         RecentResumePoints.record(120, for: live, at: then)
         #expect(RecentResumePoints.position(for: live, stored: 0, storedAt: nil) == 0)
     }
