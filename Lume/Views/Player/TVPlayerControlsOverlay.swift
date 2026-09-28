@@ -92,6 +92,8 @@
         enum TabKind: Hashable { case episodes, recent, info }
         @State var openTab: TabKind?
         @FocusState var focus: TVPlayerFocus?
+        /// Grows the skip step on quick repeated presses — see `SkipAcceleration`.
+        @State private var skipAcceleration = SkipAcceleration()
 
         // MARK: - Body
 
@@ -301,7 +303,7 @@
                 if !media.isLive {
                     leadingTransportButton
                     circleButton(systemImage: skipStep.backSymbol, focus: .skipBackward) {
-                        coordinator.skip(by: -skipStep.seconds)
+                        coordinator.skip(by: skipAcceleration.step(forward: false, base: skipStep.seconds))
                         onResetHideTimer()
                     }
                 }
@@ -315,7 +317,7 @@
 
                 if !media.isLive {
                     circleButton(systemImage: skipStep.forwardSymbol, focus: .skipForward) {
-                        coordinator.skip(by: skipStep.seconds)
+                        coordinator.skip(by: skipAcceleration.step(forward: true, base: skipStep.seconds))
                         onResetHideTimer()
                     }
                     trailingTransportButton
