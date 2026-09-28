@@ -183,7 +183,14 @@ final class TraktService {
     ) {
         guard isConnected else { return }
         let previous = scrobbleTask
+        // The last scrobble — the stop sent as the player closes — usually
+        // goes out as the app leaves the foreground (tvOS closes the player on
+        // Home). Without asking for background time the request is suspended
+        // mid-flight and Trakt shows the title as watching until its runtime
+        // runs out.
+        let backgroundTime = ScrobbleBackgroundTime.begin()
         scrobbleTask = Task { [weak self] in
+            defer { backgroundTime.end() }
             await previous?.value
             guard !Task.isCancelled, let self,
                   let accessToken = await session.validAccessToken()
@@ -269,4 +276,32 @@ extension Notification.Name {
     /// disconnect). CloudSyncCoordinator responds by exporting the keychain
     /// state; credentials pulled from CloudKit do not repost it and loop.
     static let lumeTraktCredentialsDidChange = Notification.Name("LumeTraktCredentialsDidChange")
+}
+
+/// Background time for one scrobble request, so a stop sent as the app leaves
+/// the foreground still reaches Trakt. A no-op where apps aren't suspended.
+@MainActor
+struct ScrobbleBackgroundTime {
+    #if canImport(UIKit)
+        private let identifier: UIBackgroundTaskIdentifier
+
+        static func begin() -> ScrobbleBackgroundTime {
+            var identifier = UIBackgroundTaskIdentifier.invalid
+            identifier = UIApplication.shared.beginBackgroundTask(withName: "Trakt scrobble") {
+                UIApplication.shared.endBackgroundTask(identifier)
+            }
+            return ScrobbleBackgroundTime(identifier: identifier)
+        }
+
+        func end() {
+            guard identifier != .invalid else { return }
+            UIApplication.shared.endBackgroundTask(identifier)
+        }
+    #else
+        static func begin() -> ScrobbleBackgroundTime {
+            ScrobbleBackgroundTime()
+        }
+
+        func end() {}
+    #endif
 }
