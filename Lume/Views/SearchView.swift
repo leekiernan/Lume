@@ -31,9 +31,15 @@ struct SearchView: View {
     /// list stays responsive even when a playlist holds tens of thousands of items.
     private let resultLimit = 50
 
-    private var trimmedQuery: String {
-        searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-    }
+    // How long typing has to pause before a query runs. Longer on tvOS: a
+    // remote enters a letter every second or so, which a short debounce turns
+    // into a full search and list rebuild per letter while the keyboard is
+    // still being driven.
+    #if os(tvOS)
+        private static let debounce: Duration = .milliseconds(700)
+    #else
+        private static let debounce: Duration = .milliseconds(300)
+    #endif
 
     /// Everything that changes which rows a settled query is allowed to show.
     /// Keeping this separate from the raw input debounce also lets the UI hide
@@ -60,17 +66,25 @@ struct SearchView: View {
             && (trimmedQuery != debouncedSearchText || completedSearchKey != currentSearchKey)
     }
 
+    /// Whether the content filter is on screen. tvOS keeps it up while the
+    /// query is empty too, so the first letter doesn't restructure the list
+    /// under the keyboard.
+    private var showsFilter: Bool {
+        #if os(tvOS)
+            true
+        #else
+            !trimmedQuery.isEmpty
+        #endif
+    }
+
+    private var trimmedQuery: String {
+        searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     var body: some View {
         NavigationStack {
             List {
-                if trimmedQuery.isEmpty {
-                    ContentUnavailableView(
-                        "Search",
-                        systemImage: "magnifyingglass",
-                        description: Text("Search for movies, series, or live TV channels")
-                    )
-                } else {
-                    // Filter Picker
+                if showsFilter {
                     Picker("Filter", selection: $selectedFilter) {
                         ForEach(ContentFilter.allCases) { filter in
                             Text(filter.label).tag(filter)
@@ -79,7 +93,15 @@ struct SearchView: View {
                     .pickerStyle(.segmented)
                     .listRowInsets(EdgeInsets())
                     .listRowBackground(Color.clear)
+                }
 
+                if trimmedQuery.isEmpty {
+                    ContentUnavailableView(
+                        "Search",
+                        systemImage: "magnifyingglass",
+                        description: Text("Search for movies, series, or live TV channels")
+                    )
+                } else {
                     // Results — only show "No Results" once a query has actually
                     // been run, so it doesn't flash while the input is debouncing.
                     if isSearchPending {
@@ -135,41 +157,38 @@ struct SearchView: View {
                 }
             }
             .platformNavigationTitle("Search")
-            .searchable(text: $searchText, prompt: "Movies, Series, Live TV...")
-            #if os(iOS)
-                .searchToolbarMinimizeIfAvailable()
-            #endif
-                .navigationDestination(for: Movie.self) { movie in
-                    MovieDetailView(movie: movie, animationNamespace: animationNamespace)
-                    #if os(iOS)
-                        .navigationTransition(.zoom(sourceID: movie.id, in: animationNamespace))
-                    #endif
+            .searchField(text: $searchText)
+            .navigationDestination(for: Movie.self) { movie in
+                MovieDetailView(movie: movie, animationNamespace: animationNamespace)
+                #if os(iOS)
+                    .navigationTransition(.zoom(sourceID: movie.id, in: animationNamespace))
+                #endif
+            }
+            .navigationDestination(for: Series.self) { series in
+                SeriesDetailView(series: series, animationNamespace: animationNamespace)
+                #if os(iOS)
+                    .navigationTransition(.zoom(sourceID: series.id, in: animationNamespace))
+                #endif
+            }
+            .task(id: searchText) {
+                // Debounce raw keystrokes. .task(id:) cancels the in-flight task
+                // (including this sleep) the instant searchText changes, so the
+                // fetch below only fires once typing actually pauses.
+                let trimmed = trimmedQuery
+                guard !trimmed.isEmpty else {
+                    debouncedSearchText = ""
+                    return
                 }
-                .navigationDestination(for: Series.self) { series in
-                    SeriesDetailView(series: series, animationNamespace: animationNamespace)
-                    #if os(iOS)
-                        .navigationTransition(.zoom(sourceID: series.id, in: animationNamespace))
-                    #endif
-                }
-                .task(id: searchText) {
-                    // Debounce raw keystrokes. .task(id:) cancels the in-flight task
-                    // (including this sleep) the instant searchText changes, so the
-                    // fetch below only fires once typing actually pauses.
-                    let trimmed = trimmedQuery
-                    guard !trimmed.isEmpty else {
-                        debouncedSearchText = ""
-                        return
-                    }
-                    try? await Task.sleep(for: .milliseconds(300))
-                    guard !Task.isCancelled else { return }
-                    debouncedSearchText = trimmed
-                }
-                .task(id: currentSearchKey) {
-                    // Re-run whenever the settled query, filter, provider or
-                    // viewer visibility changes. Filter and scope changes are
-                    // instant; only text input is debounced.
-                    await updateResults()
-                }
+                try? await Task.sleep(for: Self.debounce)
+                guard !Task.isCancelled else { return }
+                debouncedSearchText = trimmed
+            }
+            .task(id: currentSearchKey) {
+                // Re-run whenever the settled query, filter, provider or
+                // viewer visibility changes. Filter and scope changes are
+                // instant; only text input is debounced.
+                await updateResults()
+            }
         }
         #if os(iOS) || os(tvOS)
         .fullScreenCover(item: $playingMedia) { media in
@@ -302,16 +321,17 @@ struct SearchView: View {
     ) async -> SearchHits {
         // Scope to the active playlist unless cross-playlist search is on, in
         // which case every playlist is named and each gets its own share of the
-        // budget — one alphabetically-early catalog would otherwise fill all
-        // `resultLimit` rows and the others would look unsearched. Every
-        // catalog row's id carries its playlist's UUID as a prefix (see
-        // `SearchScope.playlistIDPrefix`), so a prefix test on the indexed `id`
-        // limits results to that playlist. Hidden/restricted categories are
-        // excluded in the fetch rather than afterwards, so `resultLimit` isn't
-        // spent on rows the viewer will never see.
+        // budget — one catalog would otherwise fill all `resultLimit` rows and
+        // the others would look unsearched. Every catalog row's id carries its
+        // playlist's UUID as a prefix (see `SearchScope.playlistIDPrefix`), so a
+        // prefix test on the indexed `id` limits results to that playlist.
+        // Hidden/restricted categories are excluded in the fetch rather than
+        // afterwards, so `resultLimit` isn't spent on rows the viewer will
+        // never see.
+        let scoped = searchAllPlaylists ? playlists : [playlist].compactMap(\.self)
         let request = SearchRequest(
             query: query,
-            playlistIDs: searchAllPlaylists ? playlists.map(\.id.uuidString) : [playlist?.id.uuidString].compactMap(\.self),
+            playlistIDs: scoped.map(\.id.uuidString),
             wantMovies: wantMovies,
             wantSeries: wantSeries,
             wantLive: wantLive,
@@ -324,7 +344,7 @@ struct SearchView: View {
         // used to leave its scans running to the end, so on a large catalog the
         // superseded work piled up behind the query the viewer is waiting for.
         // Forwarding the cancellation lets `SearchFetcher` bail between its
-        // three scans; the partial hits it returns are dropped by
+        // scans; the partial hits it returns are dropped by
         // `updateResults`, which is the task being cancelled.
         let fetch = Task.detached(priority: .userInitiated) {
             SearchFetcher.fetch(container: container, request: request)
@@ -360,29 +380,21 @@ struct SearchView: View {
         // has always shown is restored here, over at most `resultLimit`
         // hydrated rows per type. `localizedStandardCompare` is what
         // `SortDescriptor(\.name)` used, so the ordering is unchanged.
-        for movie in hydrateSortedByName(localHits.movies, name: \Movie.name) {
+        for movie in sortedByName(hydrateSearchHits(localHits.movies, in: modelContext) as [Movie], name: \.name) {
             add(.movie(movie), categoryID: movie.categoryId)
         }
-        for series in hydrateSortedByName(localHits.series, name: \Series.name) {
+        for series in sortedByName(hydrateSearchHits(localHits.series, in: modelContext) as [Series], name: \.name) {
             add(.series(series), categoryID: series.categoryId)
         }
-        for stream in hydrateSortedByName(localHits.streams, name: \LiveStream.name) {
+        for stream in sortedByName(hydrateSearchHits(localHits.streams, in: modelContext) as [LiveStream], name: \.name) {
             add(.liveStream(stream), categoryID: stream.categoryId)
         }
         return matches
     }
 
-    /// Hydrates rows the background fetch matched, in name order. The fetch
-    /// itself no longer sorts (a `sortBy:` would make SQLite sort every match
-    /// before applying the limit), so this is where the list's per-type
-    /// alphabetical order comes from — over at most `resultLimit` rows.
-    /// `localizedStandardCompare` is the comparator `SortDescriptor(\.name)`
-    /// defaulted to, so the resulting order is the same one the list showed.
-    private func hydrateSortedByName<Model: PersistentModel>(
-        _ ids: [PersistentIdentifier], name: KeyPath<Model, String>
-    ) -> [Model] {
-        ids.compactMap { modelContext.model(for: $0) as? Model }
-            .sorted { $0[keyPath: name].localizedStandardCompare($1[keyPath: name]) == .orderedAscending }
+    /// Name order, by the comparator `SortDescriptor(\.name)` defaults to.
+    private func sortedByName<Model>(_ models: [Model], name: KeyPath<Model, String>) -> [Model] {
+        models.sorted { $0[keyPath: name].localizedStandardCompare($1[keyPath: name]) == .orderedAscending }
     }
 
     /// Fetches `Movie` rows for the given ids in one query, returned in id order.
@@ -403,6 +415,54 @@ struct SearchView: View {
         )) ?? []
         let byId = Dictionary(fetched.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         return ids.compactMap { byId[$0] }
+    }
+}
+
+// MARK: - Search field
+
+private extension View {
+    /// The search field, focused when the tab opens. In regular width (iPad)
+    /// it is pinned under the title: iPadOS 26 otherwise parks the search tab's
+    /// field in the toolbar as a collapsed magnifier button that has to be
+    /// tapped before it takes input. Compact width keeps the search tab's own
+    /// field in the tab bar.
+    func searchField(text: Binding<String>) -> some View {
+        modifier(SearchFieldModifier(text: text))
+    }
+}
+
+private struct SearchFieldModifier: ViewModifier {
+    @Binding var text: String
+    #if !os(tvOS)
+        @FocusState private var isFocused: Bool
+    #endif
+    #if os(iOS)
+        @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    #endif
+
+    func body(content: Content) -> some View {
+        #if os(tvOS)
+            content.searchable(text: $text, prompt: "Movies, Series, Live TV...")
+        #else
+            content
+                .searchable(text: $text, placement: placement, prompt: "Movies, Series, Live TV...")
+                .searchFocused($isFocused)
+                .task {
+                    // Opening the tab goes straight to typing — but not when
+                    // coming back from a result, where the keyboard would cover
+                    // the list just left.
+                    guard text.isEmpty else { return }
+                    isFocused = true
+                }
+        #endif
+    }
+
+    private var placement: SearchFieldPlacement {
+        #if os(iOS)
+            horizontalSizeClass == .regular ? .navigationBarDrawer(displayMode: .always) : .automatic
+        #else
+            .automatic
+        #endif
     }
 }
 
