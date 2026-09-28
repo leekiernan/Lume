@@ -123,4 +123,23 @@ struct SeriesEpisodeCacheTests {
 
         #expect(series.episodes.count == 5)
     }
+
+    /// Cloud watched state waits as pending until its episode exists; adding
+    /// episodes must prompt a sync pass so it applies while the page is open.
+    @Test func `adding episodes announces them, and only new ones`() throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        let series = Series(id: "p-series-2", seriesId: 2, name: "Show", lastModified: "1700000000")
+        context.insert(series)
+        var announcements = 0
+        let observer = NotificationCenter.default.addObserver(
+            forName: .lumeEpisodesDidMaterialize, object: series, queue: nil
+        ) { _ in announcements += 1 }
+        defer { NotificationCenter.default.removeObserver(observer) }
+
+        series.insertEpisodes([parsed(season: 1, number: 1)], into: context)
+        series.insertEpisodes([parsed(season: 1, number: 1)], into: context)
+
+        #expect(announcements == 1)
+    }
 }
