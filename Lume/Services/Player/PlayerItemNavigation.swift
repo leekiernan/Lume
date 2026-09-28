@@ -24,6 +24,9 @@ enum PlayerItemNavigation {
         /// Previous/next channel, one position along the list playback started
         /// from.
         case channel
+        /// Previous/next programme on a catch-up channel — the next one live
+        /// once it hasn't finished airing. See `+Programmes`.
+        case programme
     }
 
     /// What the previous/next buttons should do for one stream.
@@ -87,6 +90,8 @@ enum PlayerItemNavigation {
             episodeNeighbours(for: media.contentRef, in: context)
         case .channel:
             channelNeighbours(for: media, sort: sort, restriction: restriction, in: context)
+        case .programme:
+            programmeNeighbours(for: media, in: context)
         case nil:
             .none
         }
@@ -106,9 +111,9 @@ enum PlayerItemNavigation {
         case .live:
             // Catch-up plays a recording of a channel as on-demand video.
             // Surfing would drop the viewer out of the recording and into live
-            // TV, so the channel axis is suppressed for it — the kind, not the
+            // TV, so it steps between programmes instead — the kind, not the
             // ref, is what separates the two.
-            if case .live = media.kind { .channel } else { nil }
+            if case .live = media.kind { .channel } else if media.catchup != nil { .programme } else { nil }
         case .movie:
             nil
         }

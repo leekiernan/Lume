@@ -302,7 +302,7 @@
         private var transportControls: some View {
             HStack(spacing: 26) {
                 if !media.isLive {
-                    if isSeries { leadingTransportButton }
+                    if hasItemButtons { leadingTransportButton }
                     skipButton(forward: false)
                 }
 
@@ -315,7 +315,7 @@
 
                 if !media.isLive {
                     skipButton(forward: true)
-                    if isSeries { trailingTransportButton }
+                    if hasItemButtons { trailingTransportButton }
                 }
             }
             .task(id: skipBadge?.id) {
@@ -330,8 +330,8 @@
             PlayerSkipStep(seconds: media.skipInterval(default: 10))
         }
 
-        /// The outer buttons step between episodes, and only episodes: a movie or
-        /// catch-up programme covers the same ground with the accelerating skip.
+        /// The outer buttons step between items — episodes, catch-up programmes —
+        /// and only items: a movie covers the ground with the accelerating skip.
         private var leadingTransportButton: some View {
             // `backward.end` (|<), as on iOS and macOS.
             circleButton(systemImage: "backward.end.fill", focus: .previousItem, enabled: episodeNav.previous != nil) {

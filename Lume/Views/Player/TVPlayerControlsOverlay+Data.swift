@@ -19,6 +19,12 @@
             if case .episode = media.contentRef { true } else { false }
         }
 
+        /// Whether the outer transport buttons step between items: episodes,
+        /// and catch-up programmes (the next one live once it's still airing).
+        var hasItemButtons: Bool {
+            isSeries || media.catchup != nil
+        }
+
         func resolveContent() async {
             // A stream swap invalidates any in-flight scrub.
             isScrubbing = false
@@ -47,6 +53,9 @@
             case .live:
                 guard let stream = TVPlayerContent.liveStream(for: media.contentRef, in: modelContext) else { return }
                 liveStream = stream
+                if media.catchup != nil {
+                    episodeNav = PlayerItemNavigation.programmeNeighbours(for: media, in: modelContext)
+                }
                 let channels = LiveChannelHistory.recentChannels(current: stream, in: modelContext, restriction: restriction)
                 recentChannels = channels
                 // The guide reads run off the main actor while the stream
