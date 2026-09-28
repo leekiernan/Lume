@@ -3,9 +3,11 @@
 //  Lume
 //
 //  Repeated presses of a skip button in one direction take bigger steps, so
-//  crossing an episode doesn't take a hundred presses of 10 s: 10, 30, 60,
-//  180, then 300 s a press while the presses keep coming. A pause or a change
-//  of direction starts again at the base step.
+//  crossing an episode doesn't take a hundred presses of 10 s. The steps are
+//  the same everywhere — 10 s, 30 s, 1 min, 3 min, then 5 min a press — from
+//  the content's own finest step up: catch-up archives are split by the
+//  minute, so they start at 1 min and climb 1, 3, 5. A pause or a change of
+//  direction starts again at the finest step.
 //
 //  A small pure state machine: the overlay holds one and asks it for each
 //  press's step.
@@ -14,9 +16,9 @@
 import Foundation
 
 nonisolated struct SkipAcceleration: Equatable {
-    /// Multiples of the base step, climbed one per quick press; the last one
-    /// repeats. A 10 s base gives 10, 30, 60, 180, 300 s.
-    static let ladder: [Double] = [1, 3, 6, 18, 30]
+    /// The shared steps, finest first. A content's ladder is its own base
+    /// step followed by every shared step above it; the last repeats.
+    static let steps: [TimeInterval] = [10, 30, 60, 180, 300]
     /// How soon the next press must come to keep climbing.
     static let window: TimeInterval = 1
 
@@ -24,15 +26,33 @@ nonisolated struct SkipAcceleration: Equatable {
     private var level = 0
     private var lastPress: Date?
 
+    static func ladder(base: TimeInterval) -> [TimeInterval] {
+        [base] + steps.filter { $0 > base }
+    }
+
     /// The signed step for a press, advancing the ladder when it continues a
     /// quick run in the same direction.
     mutating func step(forward: Bool, base: TimeInterval, at now: Date = Date()) -> TimeInterval {
+        let ladder = Self.ladder(base: base)
         let continuing = self.forward == forward
             && lastPress.map { now.timeIntervalSince($0) <= Self.window } == true
-        level = continuing ? min(level + 1, Self.ladder.count - 1) : 0
+        level = continuing ? min(level + 1, ladder.count - 1) : 0
         self.forward = forward
         lastPress = now
-        let magnitude = base * Self.ladder[level]
-        return forward ? magnitude : -magnitude
+        return forward ? ladder[level] : -ladder[level]
     }
+
+    /// How a step reads on screen: "+3m", "−10s".
+    static func label(for step: TimeInterval) -> String {
+        let magnitude = Duration.seconds(abs(step))
+            .formatted(.units(allowed: [.minutes, .seconds], width: .narrow))
+        return (step < 0 ? "−" : "+") + magnitude
+    }
+}
+
+/// The step a skip press just took, shown on the button until the run ends.
+/// Its own identity, so the same step twice still refreshes the badge.
+nonisolated struct SkipBadge: Equatable {
+    let id = UUID()
+    let step: TimeInterval
 }

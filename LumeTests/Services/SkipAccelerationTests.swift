@@ -35,9 +35,21 @@ struct SkipAccelerationTests {
         #expect(acceleration.step(forward: false, base: 10, at: start.addingTimeInterval(0.9)) == -30)
     }
 
-    @Test func `the ladder scales with the base step`() {
+    /// Catch-up archives are split by the minute: the ladder starts there and
+    /// meets VOD's steps from then on.
+    @Test func `a coarser base starts higher on the same steps`() {
+        #expect(SkipAcceleration.ladder(base: 10) == [10, 30, 60, 180, 300])
+        #expect(SkipAcceleration.ladder(base: 60) == [60, 180, 300])
+        #expect(SkipAcceleration.ladder(base: 15) == [15, 30, 60, 180, 300])
         var acceleration = SkipAcceleration()
-        _ = acceleration.step(forward: true, base: 60, at: start)
-        #expect(acceleration.step(forward: true, base: 60, at: start.addingTimeInterval(0.5)) == 180)
+        let steps = (0 ..< 4).map { press in
+            acceleration.step(forward: true, base: 60, at: start.addingTimeInterval(Double(press) * 0.4))
+        }
+        #expect(steps == [60, 180, 300, 300])
+    }
+
+    @Test func `the badge reads the step with its direction`() {
+        #expect(SkipAcceleration.label(for: 180).hasPrefix("+"))
+        #expect(SkipAcceleration.label(for: -10).hasPrefix("−"))
     }
 }

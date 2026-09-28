@@ -92,8 +92,9 @@
         enum TabKind: Hashable { case episodes, recent, info }
         @State var openTab: TabKind?
         @FocusState var focus: TVPlayerFocus?
-        /// Grows the skip step on quick repeated presses — see `SkipAcceleration`.
+        /// Quick-press skip steps and the badge for the last one (`SkipAcceleration`).
         @State private var skipAcceleration = SkipAcceleration()
+        @State private var skipBadge: SkipBadge?
 
         // MARK: - Body
 
@@ -301,11 +302,8 @@
         private var transportControls: some View {
             HStack(spacing: 26) {
                 if !media.isLive {
-                    leadingTransportButton
-                    circleButton(systemImage: skipStep.backSymbol, focus: .skipBackward) {
-                        coordinator.skip(by: skipAcceleration.step(forward: false, base: skipStep.seconds))
-                        onResetHideTimer()
-                    }
+                    if isSeries { leadingTransportButton }
+                    skipButton(forward: false)
                 }
 
                 Button(action: onTogglePlay) {
@@ -316,12 +314,14 @@
                 .focused($focus, equals: .transport)
 
                 if !media.isLive {
-                    circleButton(systemImage: skipStep.forwardSymbol, focus: .skipForward) {
-                        coordinator.skip(by: skipAcceleration.step(forward: true, base: skipStep.seconds))
-                        onResetHideTimer()
-                    }
-                    trailingTransportButton
+                    skipButton(forward: true)
+                    if isSeries { trailingTransportButton }
                 }
+            }
+            .task(id: skipBadge?.id) {
+                guard skipBadge != nil else { return }
+                try? await Task.sleep(for: .seconds(SkipAcceleration.window + 0.3))
+                withAnimation(.easeOut(duration: 0.2)) { skipBadge = nil }
             }
         }
 
@@ -330,34 +330,37 @@
             PlayerSkipStep(seconds: media.skipInterval(default: 10))
         }
 
-        /// Leading outer button: previous episode for series, otherwise a longer
-        /// rewind for movies.
-        @ViewBuilder
+        /// The outer buttons step between episodes, and only episodes: a movie or
+        /// catch-up programme covers the same ground with the accelerating skip.
         private var leadingTransportButton: some View {
-            if isSeries {
-                // `backward.end` (|<), as on iOS and macOS: the movie's
-                // `backward.fill` (<<) is a 5-minute rewind.
-                circleButton(systemImage: "backward.end.fill", focus: .previousItem, enabled: episodeNav.previous != nil) {
-                    stepItem(.previous)
-                }
-            } else {
-                circleButton(systemImage: "backward.fill", focus: .previousItem) {
-                    coordinator.skip(by: -300)
-                    onResetHideTimer()
-                }
+            // `backward.end` (|<), as on iOS and macOS.
+            circleButton(systemImage: "backward.end.fill", focus: .previousItem, enabled: episodeNav.previous != nil) {
+                stepItem(.previous)
             }
         }
 
-        @ViewBuilder
         private var trailingTransportButton: some View {
-            if isSeries {
-                circleButton(systemImage: "forward.end.fill", focus: .nextItem, enabled: episodeNav.next != nil) {
-                    stepItem(.next)
-                }
-            } else {
-                circleButton(systemImage: "forward.fill", focus: .nextItem) {
-                    coordinator.skip(by: 300)
-                    onResetHideTimer()
+            circleButton(systemImage: "forward.end.fill", focus: .nextItem, enabled: episodeNav.next != nil) {
+                stepItem(.next)
+            }
+        }
+
+        /// A skip button that climbs `SkipAcceleration`'s ladder on quick
+        /// presses, badging the step it just took so the viewer can see how
+        /// far each press goes.
+        private func skipButton(forward: Bool) -> some View {
+            circleButton(
+                systemImage: forward ? skipStep.forwardSymbol : skipStep.backSymbol,
+                focus: forward ? .skipForward : .skipBackward
+            ) {
+                let step = skipAcceleration.step(forward: forward, base: skipStep.seconds)
+                coordinator.skip(by: step)
+                skipBadge = SkipBadge(step: step)
+                onResetHideTimer()
+            }
+            .overlay(alignment: .top) {
+                if let skipBadge, (skipBadge.step > 0) == forward {
+                    SkipBadgeLabel(badge: skipBadge).offset(y: -44)
                 }
             }
         }
