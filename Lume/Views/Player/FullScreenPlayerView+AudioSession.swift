@@ -15,7 +15,16 @@ import AVFoundation
 import OSLog
 
 extension FullScreenPlayerView {
-    func configureAudioSessionForPlayback() {
+    /// Off the main thread: activating the session can take a moment (HDMI
+    /// negotiating the route), and on the main thread that is the player's
+    /// first frames — the system warns about exactly this.
+    func configureAudioSessionForPlayback() async {
+        await Task.detached(priority: .userInitiated) {
+            Self.activateAudioSession()
+        }.value
+    }
+
+    private nonisolated static func activateAudioSession() {
         // tvOS needs this as much as iOS: LumeEngine renders PCM through
         // AVSampleBufferAudioRenderer and sizes its downmix to the session's
         // *negotiated* output channels — without an active .playback session
@@ -44,6 +53,9 @@ extension FullScreenPlayerView {
         #endif
     }
 
+    /// Synchronous on purpose: it must finish before a player opened straight
+    /// after this one activates the session again, or it could switch that
+    /// player's session off.
     func releaseAudioSession() {
         #if os(iOS) || os(tvOS)
             try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)

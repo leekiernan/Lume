@@ -251,8 +251,12 @@ final class VLCPlayerCoordinator: NSObject, ObservableObject {
             isReloading = false
             if state == .playing {
                 retry.reset()
-                setBuffering(false)
-                markPlaybackStarted(startTracker.noteEngineStarted())
+                // VLC reports playing mid-buffer (after a resume seek, ~20 s
+                // before a frame); then the playhead proves the start instead.
+                if bufferingStartedAt == nil {
+                    setBuffering(false)
+                    markPlaybackStarted(startTracker.noteEngineStarted())
+                }
             }
         case .error:
             // A hard error before the first frame means this engine can't open
@@ -475,6 +479,8 @@ extension VLCPlayerCoordinator: VLCMediaPlayerDelegate {
             guard let self else { return }
             if progress >= 1.0 {
                 PlaybackQoE.shared.noteStallEnded()
+                // Before the first frame the spinner waits for the start proof.
+                if hasStartedPlayback { setBuffering(false) }
                 if let started = bufferingStartedAt {
                     let elapsed = Date().timeIntervalSince(started)
                     bufferingStartedAt = nil
@@ -484,6 +490,8 @@ extension VLCPlayerCoordinator: VLCMediaPlayerDelegate {
                 // Mid-stream only; `PlaybackQoE` ignores stalls before the first
                 // frame, which are join time rather than rebuffering.
                 PlaybackQoE.shared.noteStallBegan()
+                // VLC's only stall signal: drives the spinner, not just stats.
+                setBuffering(true)
                 bufferingStartedAt = Date()
                 Logger.player.log("buffering started")
             }
