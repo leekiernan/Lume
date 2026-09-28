@@ -29,7 +29,9 @@
 //  Pruning is confined to the local-only catalog store, so a delete never
 //  propagates to CloudKit; and user state (favorites, progress, watchlist)
 //  lives in `UserContentState` in the cloud mirror keyed by `contentId`, so it
-//  survives a prune and is re-applied if the content ever returns.
+//  survives a prune and is re-applied if the content ever returns (the
+//  reconcile keeps a cloud record whose catalog row is gone — see
+//  `CloudSyncEngine.resolveAbsentContent`).
 //
 
 import Foundation
@@ -143,9 +145,9 @@ extension ContentSyncManager {
     // with no `Content-Length`, so a connection cut mid-download leaves a
     // *valid* short playlist: the parse succeeds, the import commits, and the
     // rows the truncated tail never mentioned look dropped. Sweeping on that
-    // deletes them, and the iCloud reconcile that follows
-    // `.lumeContentSyncDidComplete` turns each delete into a push that destroys
-    // the matching `UserContentState` on every device. So the m3u sweeps take
+    // deletes them — the viewer's catalog shrinks (their `UserContentState`
+    // survives in iCloud: the reconcile no longer reads a missing row as the
+    // user clearing its state, see `resolveAbsentContent`). So the m3u sweeps take
     // the same gate as the Xtream ones: a payload must cover at least a tenth
     // of the rows already stored, tolerated `maximumConsecutiveSweepSkips`
     // times before a shrink is believed.
