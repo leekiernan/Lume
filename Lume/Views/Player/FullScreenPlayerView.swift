@@ -532,6 +532,9 @@ struct FullScreenPlayerView: View {
         if ref == completedRef { return }
         let now = clock.current
         let total = clock.duration
+        // What was written, so a resume point that looks wrong can be checked
+        // against a diagnostics report.
+        Logger.player.info("progress saved: \(now, format: .fixed(precision: 1))s of \(total, format: .fixed(precision: 0))s")
         // Held so `endReviewSession` can await it: `writer` is an actor, so the
         // await below suspends, and without the handle the review policy would
         // read `completedTitles` before this task increments it — the third
