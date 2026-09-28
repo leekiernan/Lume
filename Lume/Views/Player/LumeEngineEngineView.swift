@@ -96,6 +96,15 @@ struct LumeEngineEngineView: View {
     /// the viewer can keep seeking instead of waiting out the load behind a
     /// spinner. Cleared by the first frame or a failure.
     @State private var isCatchupSegmentLoading = false
+
+    /// Whether the controls are on screen — see `PlayerChrome`.
+    private var drawsControls: Bool {
+        PlayerChrome.drawsControls(
+            requested: isControlsVisible, started: coordinator.hasStartedPlayback,
+            catchupSegmentLoading: isCatchupSegmentLoading, failed: loadFailed
+        )
+    }
+
     #if os(tvOS)
         /// The full channel browser (categories + channels) raised by a left
         /// press while watching live TV with the controls hidden.
@@ -146,7 +155,7 @@ struct LumeEngineEngineView: View {
             // Hold the controls back until the stream starts, so the loading
             // indicator stands in for a player that would otherwise look paused
             // behind its Play button.
-            if isControlsVisible, coordinator.hasStartedPlayback || isCatchupSegmentLoading, !loadFailed {
+            if drawsControls {
                 controlsOverlay
                     .transition(.opacity.animation(.easeInOut(duration: 0.2)))
             }
@@ -337,7 +346,7 @@ struct LumeEngineEngineView: View {
             .buttonStyle(LumeEngineInvisibleButtonStyle())
             // Yield focus to the failure overlay's buttons when a stream dies.
             // Only while the controls are actually drawn — see KSPlayerEngineView.
-            .disabled((isControlsVisible && (coordinator.hasStartedPlayback || isCatchupSegmentLoading)) || isChannelBrowserOpen || loadFailed)
+            .disabled(drawsControls || isChannelBrowserOpen || loadFailed)
             .focused($catcherFocused)
             .tvRemoteMoveCommand { direction in
                 // Watching live TV with the controls hidden, left opens the

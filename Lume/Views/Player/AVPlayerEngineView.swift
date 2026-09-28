@@ -123,7 +123,7 @@ struct AVPlayerEngineView: View {
             tapCatcher
                 .ignoresSafeArea()
 
-            if isControlsVisible, !loadFailed {
+            if PlayerChrome.drawsControls(requested: isControlsVisible, started: coordinator.hasStartedPlayback, failed: loadFailed) {
                 controlsOverlay
                     .transition(.opacity.animation(.easeInOut(duration: 0.2)))
             }
@@ -262,7 +262,8 @@ struct AVPlayerEngineView: View {
             }
             .buttonStyle(AVInvisibleButtonStyle())
             // Yield focus to the failure overlay's buttons when a stream dies.
-            .disabled(isControlsVisible || isChannelBrowserOpen || loadFailed)
+            // Only while the controls are actually drawn — see `PlayerChrome`.
+            .disabled(PlayerChrome.drawsControls(requested: isControlsVisible, started: coordinator.hasStartedPlayback, failed: loadFailed) || isChannelBrowserOpen || loadFailed)
             .focused($catcherFocused)
             .tvRemoteMoveCommand { direction in
                 // Left opens the channel browser; up/down surf adjacent

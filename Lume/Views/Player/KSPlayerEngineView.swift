@@ -116,6 +116,15 @@ struct KSPlayerEngineView: View {
     /// disarmed). See `handleState`.
     @State var stallWatchdog: Task<Void, Never>?
     @State var isControlsVisible = true
+
+    /// Whether the controls are on screen — see `PlayerChrome`.
+    var drawsControls: Bool {
+        PlayerChrome.drawsControls(
+            requested: isControlsVisible, started: hasStartedPlayback,
+            catchupSegmentLoading: isCatchupSegmentLoading, failed: loadFailed
+        )
+    }
+
     /// Presents the OpenSubtitles browser. Held here rather than in the controls
     /// overlay: the overlay is removed when the controls auto-hide, which would
     /// take a sheet anchored there down with it mid-search.
@@ -270,7 +279,7 @@ struct KSPlayerEngineView: View {
                 // Suppress the controls (and their Play button) until the stream
                 // has actually started, so viewers see a loading indicator
                 // instead of a player that looks paused.
-                if isControlsVisible, hasStartedPlayback || isCatchupSegmentLoading, !loadFailed {
+                if drawsControls {
                     TVPlayerControlsOverlay(
                         coordinator: engine,
                         media: media,
@@ -375,7 +384,7 @@ struct KSPlayerEngineView: View {
             // Only while the controls are actually drawn (from the first frame):
             // until then this is what hears the remote, so a second surf press
             // lands while the channel is still starting.
-            .disabled((isControlsVisible && (hasStartedPlayback || isCatchupSegmentLoading)) || isChannelBrowserOpen || loadFailed)
+            .disabled(drawsControls || isChannelBrowserOpen || loadFailed)
             .focused($catcherFocused)
             .tvRemoteMoveCommand { direction in
                 // Watching live TV with the controls hidden, left opens the
@@ -467,7 +476,7 @@ struct KSPlayerEngineView: View {
                 // Hold the controls back until the stream starts, so the loading
                 // indicator stands in for a player that would otherwise look
                 // paused behind its Play button.
-                if isControlsVisible, hasStartedPlayback || isCatchupSegmentLoading, !loadFailed {
+                if drawsControls {
                     controlsOverlay
                         .transition(.opacity.animation(.easeInOut(duration: 0.2)))
                 }
