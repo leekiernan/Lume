@@ -300,7 +300,7 @@ struct KSPlayerEngineView: View {
                 }
 
                 if isBuffering {
-                    PlayerLoadingIndicator(title: hasStartedPlayback || isCatchupSegmentLoading ? nil : media.title)
+                    PlayerLoadingIndicator(opening: hasStartedPlayback || isCatchupSegmentLoading ? nil : media)
                         .transition(.opacity)
                 }
 
@@ -476,7 +476,7 @@ struct KSPlayerEngineView: View {
                 episodeOverlays(controlsVisible: isControlsVisible) { seek(to: $0) }
 
                 if isBuffering {
-                    PlayerLoadingIndicator(title: hasStartedPlayback || isCatchupSegmentLoading ? nil : media.title)
+                    PlayerLoadingIndicator(opening: hasStartedPlayback || isCatchupSegmentLoading ? nil : media)
                         .transition(.opacity)
                 }
 
