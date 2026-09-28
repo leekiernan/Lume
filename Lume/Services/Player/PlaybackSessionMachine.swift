@@ -126,7 +126,9 @@ struct PlaybackSessionMachine: Equatable {
             state = .starting(cause)
             return []
         case let .reported(engine, report):
-            guard engine == self.engine else { return nil }
+            // Between streams, whatever the engine reports belongs to the one
+            // being left — a quick second surf lands its first frame here.
+            guard engine == self.engine, state != .idle else { return nil }
             return apply(report)
         case let .failedToStart(engine, canFallBack):
             return failedToStart(engine, canFallBack: canFallBack)
@@ -161,33 +163,43 @@ struct PlaybackSessionMachine: Equatable {
 
     private mutating func apply(_ report: EngineReport) -> [Effect] {
         let previous = state
-        let next: State = if report.failed {
-            .failed(report.started ? .playback : .startup)
-        } else if !report.started {
-            // Not started: still joining — or, from a failure, the viewer's
-            // Try Again.
-            if case let .starting(cause) = previous { .starting(cause) } else { .starting(.retry) }
-        } else if report.buffering {
-            .rebuffering
-        } else if report.playing {
-            .playing
-        } else {
-            .paused
-        }
+        let next = Self.state(after: report, from: previous)
         guard next != previous else { return [] }
         state = next
+        return Self.effects(from: previous, to: next)
+    }
 
+    /// What an engine report means, given where the session was.
+    private static func state(after report: EngineReport, from previous: State) -> State {
+        let startingCause: Cause? = if case let .starting(cause) = previous { cause } else { nil }
+        if report.failed {
+            return .failed(report.started ? .playback : .startup)
+        }
+        if !report.started {
+            // Not started: still joining — or, from a failure, the viewer's
+            // Try Again.
+            return .starting(startingCause ?? .retry)
+        }
+        if report.buffering {
+            // Started but still buffering while starting is the first frame
+            // arriving in two writes, not a stall.
+            return startingCause.map(State.starting) ?? .rebuffering
+        }
+        return report.playing ? .playing : .paused
+    }
+
+    private static func effects(from previous: State, to next: State) -> [Effect] {
         switch (previous, next) {
         case (_, .playing):
-            return [.scrobble(.start)]
+            [.scrobble(.start)]
         case (.playing, .paused), (.rebuffering, .paused):
             // A pause is a natural boundary to save the position at, and it's
             // off the playback path: nothing is rendering.
-            return [.scrobble(.pause), .persistProgress]
+            [.scrobble(.pause), .persistProgress]
         case (.playing, .failed), (.paused, .failed), (.rebuffering, .failed):
-            return [.scrobble(.stop)]
+            [.scrobble(.stop)]
         default:
-            return []
+            []
         }
     }
 }
