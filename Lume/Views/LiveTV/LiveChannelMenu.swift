@@ -95,6 +95,7 @@ enum LiveChannelFavorites {
     @discardableResult
     static func toggle(_ stream: LiveStream, in context: ModelContext) -> Bool {
         stream.isFavorite.toggle()
+        if !stream.isFavorite { ContentClearLedger.shared.record(stream.id) }
         try? context.save()
         return stream.isFavorite
     }

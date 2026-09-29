@@ -76,6 +76,8 @@ extension Episode {
             lastWatchedDate = Date()
         } else {
             watchProgress = 0
+            // Only ever the viewer's doing — see `ContentClearLedger`.
+            ContentClearLedger.shared.record(id)
         }
     }
 

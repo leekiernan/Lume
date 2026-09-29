@@ -44,14 +44,29 @@ struct ParentalMergePolicyTests {
         #expect(verdict == .pushToCloud(nil))
     }
 
-    @Test func `a restriction is presence, so lifting one merges as a deletion`() {
-        let verdict = CloudSyncMerge.reconcile(
-            local: nil,
-            cloud: CategoryRestrictionValues(),
-            shadow: CategoryRestrictionValues(),
-            mergeConflict: CategoryRestrictionValues.mergeConflict
+    /// A lift is written as a record saying so, not a deletion another device
+    /// couldn't tell from a record it hasn't imported yet.
+    @Test func `lifting a restriction writes the lift`() {
+        let restricted = CategoryRestrictionValues()
+        let verdict = IntentMerge.reconcile(
+            local: LocalRestrictionReading.clearedByUser, cloud: .state(restricted), shadow: restricted
         )
-        #expect(verdict == .pushToCloud(nil))
+        #expect(verdict == .pushToCloud(.cleared))
+    }
+
+    /// The resync case: a category row re-created unrestricted is not a
+    /// parent lifting anything.
+    @Test func `an unrestricted row nobody lifted keeps the restriction`() {
+        let restricted = CategoryRestrictionValues()
+        let verdict = IntentMerge.reconcile(
+            local: LocalRestrictionReading.blank, cloud: .state(restricted), shadow: restricted
+        )
+        #expect(verdict == .pullToLocal(restricted))
+    }
+
+    @Test func `restricted against lifted, the restriction stands`() {
+        let merged = CategoryRestrictionValues.mergeConflict(local: .cleared, cloud: CategoryRestrictionValues())
+        #expect(merged.isRestricted)
     }
 
     @Test func `two devices locking the same category is not a conflict`() {
@@ -165,23 +180,73 @@ struct CloudSyncParentalEngineTests {
         #expect(try isRestricted(categoryID, in: ctx))
     }
 
-    @Test func `unlocking a category deletes its cloud restriction`() async throws {
+    @Test func `unlocking a category writes a lifted record`() async throws {
         let container = try makeProfileTestContainer()
         let ctx = container.mainContext
-        let shadow = freshShadow()
+        let lifts = try ContentClearLedger(defaults: #require(UserDefaults(suiteName: "parental.lifts.\(UUID())")))
         let (_, category) = try seedCategory(in: ctx, restricted: true)
 
-        let engine = CloudSyncEngine(container: container, shadow: shadow)
+        let engine = CloudSyncEngine(container: container, shadow: freshShadow(), lifts: lifts)
         _ = await engine.reconcile()
         #expect(try ctx.fetch(FetchDescriptor<SyncedCategoryRestriction>()).count == 1)
 
-        // The parent unlocks it. The shadow is what lets this read as a deletion
-        // rather than as "this device just hasn't heard about it yet".
+        // The parent unlocks it — recorded, as `ContentOrganizer.toggleRestricted` does.
         category.isRestricted = false
+        lifts.record(category.id)
         try ctx.save()
 
         _ = await engine.reconcile()
+        let records = try ctx.fetch(FetchDescriptor<SyncedCategoryRestriction>())
+        #expect(records.count == 1)
+        #expect(records.first?.isRestricted == false)
+        #expect(lifts.ids.isEmpty)
+    }
+
+    /// A playlist resync re-creates the category unrestricted. Before, that
+    /// lifted the restriction on every device.
+    @Test func `a re-created category stays restricted`() async throws {
+        let container = try makeProfileTestContainer()
+        let ctx = container.mainContext
+        let (_, category) = try seedCategory(in: ctx, restricted: true)
+        let engine = CloudSyncEngine(container: container, shadow: freshShadow())
+        _ = await engine.reconcile()
+
+        category.isRestricted = false
+        try ctx.save()
+        _ = await engine.reconcile()
+
+        #expect(try isRestricted(category.id, in: ctx))
+        #expect(try ctx.fetch(FetchDescriptor<SyncedCategoryRestriction>()).first?.isRestricted == true)
+    }
+
+    @Test func `a lift from another device unlocks here`() async throws {
+        let container = try makeProfileTestContainer()
+        let ctx = container.mainContext
+        let (_, category) = try seedCategory(in: ctx, restricted: true)
+        let engine = CloudSyncEngine(container: container, shadow: freshShadow())
+        _ = await engine.reconcile()
+
+        let record = try #require(try ctx.fetch(FetchDescriptor<SyncedCategoryRestriction>()).first)
+        record.isRestricted = false
+        try ctx.save()
+        _ = await engine.reconcile()
+
+        #expect(try !isRestricted(category.id, in: ctx))
+    }
+
+    @Test func `a lifted record expires`() async throws {
+        let container = try makeProfileTestContainer()
+        let ctx = container.mainContext
+        let (_, category) = try seedCategory(in: ctx, restricted: false)
+        let old = Date().addingTimeInterval(-IntentMerge.clearedRecordLifetime - 60)
+        ctx.insert(SyncedCategoryRestriction(categoryID: category.id, isRestricted: false, updatedAt: old))
+        try ctx.save()
+
+        let result = await CloudSyncEngine(container: container, shadow: freshShadow()).reconcile()
+
+        #expect(result.clearedRecordsExpired == 1)
         #expect(try ctx.fetch(FetchDescriptor<SyncedCategoryRestriction>()).isEmpty)
+        #expect(try !isRestricted(category.id, in: ctx))
     }
 
     @Test func `a restriction whose playlist is gone is garbage-collected`() async throws {

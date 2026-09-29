@@ -112,7 +112,7 @@ struct ChannelManagementView: View {
                                 items: streams,
                                 title: { $0.name },
                                 isHidden: { $0.isHidden },
-                                onToggleHidden: { $0.isHidden.toggle() },
+                                onToggleHidden: { ContentOrganizer.toggleHidden($0) },
                                 onCommitOrder: { ContentOrganizer.commitOrder($0) },
                                 isReordering: $isReordering,
                                 scrollProxy: proxy
@@ -156,7 +156,7 @@ struct ChannelManagementView: View {
                                 title: stream.name,
                                 iconURL: URL(string: stream.streamIcon ?? ""),
                                 isHidden: stream.isHidden,
-                                onToggleHidden: { stream.isHidden.toggle() }
+                                onToggleHidden: { ContentOrganizer.toggleHidden(stream) }
                             )
                         }
                         .onMove(perform: moveHandler)

@@ -220,29 +220,50 @@ struct ProfileEngineTests {
         #expect(preserved?.isWatched == true)
     }
 
-    @Test func `switching profiles deletes cleared state when the catalog item exists`() async throws {
+    /// The viewer's clear this session goes into the outgoing profile's record
+    /// as a cleared record — written, not deleted (see `ContentIntentMerge`).
+    @Test func `switching profiles writes the viewer's clears into the profile`() async throws {
+        let (ctx, engine, clears, movieID, profileA, profileB) = try profileWithFavourite()
+        clears.record(movieID)
+
+        let saved = ActiveProfileStore.current
+        defer { ActiveProfileStore.current = saved }
+        try await engine.switchProfile(from: profileA, to: profileB)
+
+        let record = try ctx.fetch(FetchDescriptor<UserContentState>())
+            .first { $0.profileID == profileA && $0.contentId == movieID }
+        #expect(record?.isFavorite == false)
+        #expect(clears.ids.isEmpty)
+    }
+
+    /// A blank row nobody cleared — re-created by a catalog sync — says
+    /// nothing about the profile's state.
+    @Test func `switching profiles keeps state a blank row didn't clear`() async throws {
+        let (ctx, engine, _, movieID, profileA, profileB) = try profileWithFavourite()
+
+        let saved = ActiveProfileStore.current
+        defer { ActiveProfileStore.current = saved }
+        try await engine.switchProfile(from: profileA, to: profileB)
+
+        let record = try ctx.fetch(FetchDescriptor<UserContentState>())
+            .first { $0.profileID == profileA && $0.contentId == movieID }
+        #expect(record?.isFavorite == true)
+    }
+
+    // swiftlint:disable:next large_tuple
+    private func profileWithFavourite() throws -> (ModelContext, CloudSyncEngine, ContentClearLedger, String, UUID, UUID) {
         let container = try makeProfileTestContainer()
         let ctx = container.mainContext
         let profileA = UUID()
         let profileB = UUID()
         let movieID = "pl-movie-cleared"
+        // The row is blank; profile A's record says favourite.
         ctx.insert(Movie(id: movieID, streamId: 1, name: "Film"))
-        ctx.insert(UserContentState(
-            contentId: movieID,
-            kind: .movie,
-            profileID: profileA,
-            isFavorite: true
-        ))
+        ctx.insert(UserContentState(contentId: movieID, kind: .movie, profileID: profileA, isFavorite: true))
         try ctx.save()
-
-        let saved = ActiveProfileStore.current
-        defer { ActiveProfileStore.current = saved }
-
-        let engine = CloudSyncEngine(container: container, shadow: freshShadow())
-        try await engine.switchProfile(from: profileA, to: profileB)
-
-        let states = try ctx.fetch(FetchDescriptor<UserContentState>())
-        #expect(!states.contains { $0.profileID == profileA && $0.contentId == movieID })
+        let clears = ContentClearLedger(defaults: UserDefaults(suiteName: "profile.clears.\(UUID())")!)
+        let engine = CloudSyncEngine(container: container, shadow: freshShadow(), clears: clears)
+        return (ctx, engine, clears, movieID, profileA, profileB)
     }
 
     @Test func `reconcile only projects the active profile's mirrors`() async throws {

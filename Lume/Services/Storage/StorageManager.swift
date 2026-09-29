@@ -225,6 +225,8 @@ enum StorageManager {
                 }
 
                 try context.save()
+                // The viewer's decision, for iCloud sync — see `ContentClearLedger`.
+                ContentClearLedger.shared.record(movies.map(\.id) + episodes.map(\.id) + series.map(\.id))
 
                 try LiveChannelHistory.clearRecents(in: context, batchSize: clearBatchSize)
             } catch {

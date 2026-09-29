@@ -77,6 +77,8 @@ extension CloudSyncEngine {
             // catalog or the active-profile pointer name the new projection.
             shadow.resetContent()
             shadow.persist()
+            // They were the outgoing profile's, and are in its records now.
+            clears.reset()
             // Flip the active-profile pointer *inside* this actor-isolated
             // critical section, atomically with the projection swap and shadow
             // reset — not afterwards on the main actor. `reconcile()` reads the
@@ -156,23 +158,19 @@ private extension CloudSyncEngine {
     }
 
     /// Precisely sync the catalog's user state into a profile's mirrors: upsert
-    /// every non-default catalog item, and delete mirrors whose *present* catalog
-    /// item was cleared this session (so an un-favorite during the session
-    /// sticks). A mirror whose catalog item has not been imported on this device
-    /// is preserved: absence from a partial local catalog is not a user deletion.
+    /// every non-default catalog item, and write the viewer's clears this
+    /// session as cleared records (so an un-favourite during the session
+    /// sticks). A blank row the viewer didn't clear — re-created by a catalog
+    /// sync — and a row not on this device say nothing, so their records stay
+    /// (see `ContentIntentMerge`).
     func exportCatalogState(toProfile profileID: UUID, localValues: [String: LocalContentEntry]) throws {
         var mirrors = try fetchMirrors(forProfile: profileID)
         for (id, entry) in localValues {
             upsertMirror(&mirrors, id: id, profileID: profileID, kind: entry.kind, values: entry.values)
         }
-
-        var unresolvedIDsByKind: [SyncedContentKind: [String]] = [:]
-        for (id, mirror) in mirrors where localValues[id] == nil {
-            unresolvedIDsByKind[mirror.kind, default: []].append(id)
-        }
-        let resolvedCatalogModels = try fetchCatalogModels(byKind: unresolvedIDsByKind)
-        for (id, mirror) in mirrors where localValues[id] == nil && resolvedCatalogModels[id] != nil {
-            cloudContext.delete(mirror)
+        let cleared = clears.ids
+        for (id, mirror) in mirrors where localValues[id] == nil && cleared.contains(id) {
+            upsertMirror(&mirrors, id: id, profileID: profileID, kind: mirror.kind, values: .empty)
         }
     }
 

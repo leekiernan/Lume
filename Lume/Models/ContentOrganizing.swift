@@ -55,13 +55,29 @@ enum ContentOrganizer {
 
     /// Clears the user-defined order for a group, reverting to provider order.
     static func resetOrder(_ items: [some ContentItem]) {
+        ContentClearLedger.shared.record(items.map(\.id))
         for item in items {
             item.customOrder = nil
         }
     }
 
+    /// Shows or hides one item. Showing it again clears user state, which
+    /// iCloud sync needs to know was the viewer's — see `ContentClearLedger`.
+    static func toggleHidden(_ item: some ContentItem) {
+        item.isHidden.toggle()
+        if !item.isHidden { ContentClearLedger.shared.record(item.id) }
+    }
+
+    /// Restricts a category, or lifts its restriction. A lift is the parent's
+    /// decision, which iCloud sync needs to know — see `ContentClearLedger`.
+    static func toggleRestricted(_ category: Category) {
+        category.isRestricted.toggle()
+        if !category.isRestricted { ContentClearLedger.restrictionLifts.record(category.id) }
+    }
+
     /// Un-hides every item in a group.
     static func showAll(_ items: [some ContentItem]) {
+        ContentClearLedger.shared.record(items.map(\.id))
         for item in items {
             item.isHidden = false
         }
@@ -135,6 +151,7 @@ extension ContentOrganizer {
 
     /// Clears the user-defined favorites order, reverting to the default order.
     static func resetFavoriteOrder(_ items: [any FavoriteOrderable]) {
+        ContentClearLedger.shared.record(items.map(\.id))
         for item in items {
             item.favoriteOrder = nil
         }

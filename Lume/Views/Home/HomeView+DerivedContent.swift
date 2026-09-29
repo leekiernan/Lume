@@ -100,8 +100,12 @@ extension HomeView {
     /// row. The @Query-backed rows update automatically once the change is saved.
     func removeFromRecentlyWatched(_ item: HomeMediaItem) {
         switch item {
-        case let .movie(movie): movie.lastWatchedDate = nil
-        case let .series(series): series.lastWatchedDate = nil
+        case let .movie(movie):
+            movie.lastWatchedDate = nil
+            ContentClearLedger.shared.record(movie.id)
+        case let .series(series):
+            series.lastWatchedDate = nil
+            ContentClearLedger.shared.record(series.id)
         case let .live(stream):
             // Shared with Live TV so the in-player rail and recall agree.
             LiveChannelHistory.removeFromRecents(stream, in: modelContext)

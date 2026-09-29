@@ -41,6 +41,12 @@ nonisolated struct CloudSyncReconcileResult: Equatable {
     /// Cloud states whose local catalog item hasn't synced yet — left pending
     /// (shadow untouched) so a later pass applies them once the catalog lands.
     var contentPending = 0
+    /// The viewer's clears this pass read; removed from the ledger once saved.
+    var contentClearsSeen: Set<String> = []
+    /// Likewise the parent's restriction lifts.
+    var restrictionLiftsSeen: Set<String> = []
+    /// Cleared records past `IntentMerge.clearedRecordLifetime`, deleted.
+    var clearedRecordsExpired = 0
     /// Set when the pass was aborted because the local catalog store was
     /// unreadable (a fetch threw — a transient `no such table` detach or a
     /// corrupt store). No stores or shadow were touched; a later pass retries.
@@ -96,6 +102,10 @@ actor CloudSyncEngine {
     /// The CloudKit-mirrored store (SyncedPlaylist, UserContentState, UserProfile).
     let cloudContext: ModelContext
     let shadow: CloudSyncShadow
+    /// The viewer's clears on this device — see `IntentMerge`.
+    let clears: ContentClearLedger
+    /// The parent's restriction lifts on this device.
+    let lifts: ContentClearLedger
 
     /// The profile whose state the catalog currently projects. Read from
     /// `ActiveProfileStore` at the start of each reconcile, so content state is
@@ -104,12 +114,20 @@ actor CloudSyncEngine {
     /// Not `private`: `CloudSyncEngine+Fetch.swift` reads it (`fetchContentMirrors`).
     var activeProfileID = UserProfile.defaultProfileID
 
-    init(catalogContainer: ModelContainer, cloudContainer: ModelContainer, shadow: CloudSyncShadow = CloudSyncShadow()) {
+    init(
+        catalogContainer: ModelContainer,
+        cloudContainer: ModelContainer,
+        shadow: CloudSyncShadow = CloudSyncShadow(),
+        clears: ContentClearLedger = .shared,
+        lifts: ContentClearLedger = .restrictionLifts
+    ) {
         catalogContext = ModelContext(catalogContainer)
         catalogContext.autosaveEnabled = false
         cloudContext = ModelContext(cloudContainer)
         cloudContext.autosaveEnabled = false
         self.shadow = shadow
+        self.clears = clears
+        self.lifts = lifts
     }
 
     #if DEBUG
@@ -121,6 +139,8 @@ actor CloudSyncEngine {
         init(
             container: ModelContainer,
             shadow: CloudSyncShadow = CloudSyncShadow(),
+            clears: ContentClearLedger = ContentClearLedger(defaults: UserDefaults(suiteName: "CloudSyncEngineTests.\(UUID())")!),
+            lifts: ContentClearLedger = ContentClearLedger(defaults: UserDefaults(suiteName: "CloudSyncEngineTests.\(UUID())")!),
             saveFailureInjector: SaveFailureInjector? = nil
         ) {
             let ctx = ModelContext(container)
@@ -128,6 +148,8 @@ actor CloudSyncEngine {
             catalogContext = ctx
             cloudContext = ctx
             self.shadow = shadow
+            self.clears = clears
+            self.lifts = lifts
             self.saveFailureInjector = saveFailureInjector
         }
     #endif
@@ -192,6 +214,8 @@ actor CloudSyncEngine {
             for kind in result.credentialDeletionsPushed {
                 CredentialLinkStateStore.apply(.deletionPushed, to: kind)
             }
+            clears.remove(result.contentClearsSeen)
+            lifts.remove(result.restrictionLiftsSeen)
             Logger.sync.info("Reconcile pl +\(result.playlistsPushed) new \(result.playlistsCreatedLocally) ct +\(result.contentPushed)/\(result.contentPulled) pend \(result.contentPending) epg +\(result.epgSourcesPushed)/\(result.epgSourcesPulled) par +\(result.parentalPushed)/\(result.parentalPulled) pend \(result.parentalPending) trakt +\(result.traktPushed)/\(result.traktPulled) pend \(result.traktPending) simkl +\(result.simklPushed)/\(result.simklPulled) pend \(result.simklPending) sports \(result.sportsFollowsKept)-\(result.sportsFollowsDeduped)") // swiftlint:disable:this line_length
         } catch {
             catalogContext.rollback()
@@ -267,72 +291,6 @@ actor CloudSyncEngine {
     }
 
     // MARK: - Content state
-
-    private func reconcileContent(livePrefixes: Set<String>, into result: inout CloudSyncReconcileResult) throws {
-        let mirrors = try fetchContentMirrors()
-        let localValues = try fetchLocalContentValues()
-
-        var ids = Set(mirrors.keys).union(localValues.keys)
-        ids.formUnion(shadow.contentShadowIDs())
-
-        // Pull verdicts whose catalog model isn't already in `localValues` are
-        // deferred and resolved with one batched fetch per kind below — a fresh
-        // device pulling a whole profile's states would otherwise issue one
-        // single-row fetch per id.
-        var deferred: [(id: String, verdict: MergeVerdict<ContentStateValues>)] = []
-        var deferredIDs: [SyncedContentKind: [String]] = [:]
-        // Cloud deletions for ids with no local state, held until we know
-        // whether the catalog row still exists — see `resolveAbsentContent`.
-        var absentIDs: [SyncedContentKind: [String]] = [:]
-
-        for id in ids {
-            // Garbage-collect state whose owning playlist no longer exists on
-            // either side (deleted however). Clear the cloud record, reset any
-            // local orphan, and drop the shadow.
-            guard livePrefixes.contains(String(id.prefix(36))) else {
-                if let mirror = mirrors[id] { cloudContext.delete(mirror) }
-                if let entry = localValues[id] { resetLocalContent(entry) }
-                shadow.setContentShadow(id, nil)
-                continue
-            }
-
-            let verdict = CloudSyncMerge.reconcile(
-                local: localValues[id]?.values,
-                cloud: mirrors[id].map(Self.values(from:)),
-                shadow: shadow.contentShadow(id),
-                mergeConflict: ContentStateValues.mergeConflict
-            )
-            if verdict.writesLocal, localValues[id] == nil, let kind = mirrors[id]?.kind {
-                deferred.append((id, verdict))
-                deferredIDs[kind, default: []].append(id)
-                continue
-            }
-            if verdict == .pushToCloud(nil), localValues[id] == nil, let kind = mirrors[id]?.kind {
-                absentIDs[kind, default: []].append(id)
-                continue
-            }
-            try applyContentVerdict(
-                verdict,
-                id: id,
-                mirror: mirrors[id],
-                loaded: localValues[id]?.model,
-                into: &result
-            )
-        }
-
-        let loaded = try fetchCatalogModels(byKind: deferredIDs)
-        for (id, verdict) in deferred {
-            // The batch fetch is authoritative: a miss means the catalog item
-            // hasn't synced to this device yet — count it pending (shadow
-            // untouched, same as the old per-id miss) without re-fetching.
-            guard let model = loaded[id] else {
-                result.contentPending += 1
-                continue
-            }
-            try applyContentVerdict(verdict, id: id, mirror: mirrors[id], loaded: model, into: &result)
-        }
-        try resolveAbsentContent(absentIDs, mirrors: mirrors, into: &result)
-    }
 
     // MARK: - Manual EPG sources
 
@@ -458,68 +416,6 @@ private extension CloudSyncEngine {
             applyEPGSourceToLocal(value, id: id, local: local)
             result.epgSourcesPushed += 1
             shadow.setEPGSourceShadow(key, value)
-        }
-    }
-
-    func applyContentVerdict(
-        _ verdict: MergeVerdict<ContentStateValues>,
-        id: String,
-        mirror: UserContentState?,
-        loaded: (any PersistentModel)?,
-        into result: inout CloudSyncReconcileResult
-    ) throws {
-        let kind = mirror?.kind ?? Self.kind(of: loaded)
-        switch verdict {
-        case .noChange:
-            break
-        case let .pushToCloud(value):
-            applyContentToCloud(value, id: id, kind: kind, mirror: mirror)
-            if value != nil { result.contentPushed += 1 }
-            shadow.setContentShadow(id, value)
-        case let .pullToLocal(value):
-            // A missing catalog item leaves the change pending (shadow untouched).
-            guard try applyContentToLocal(value, id: id, kind: kind, loaded: loaded) else {
-                result.contentPending += 1
-                return
-            }
-            if value != nil { result.contentPulled += 1 }
-            shadow.setContentShadow(id, value)
-        case let .writeBoth(value):
-            guard try applyContentToLocal(value, id: id, kind: kind, loaded: loaded) else {
-                result.contentPending += 1
-                return
-            }
-            applyContentToCloud(value, id: id, kind: kind, mirror: mirror)
-            result.contentPushed += 1
-            shadow.setContentShadow(id, value)
-        }
-    }
-}
-
-// MARK: - Absent content
-
-private extension CloudSyncEngine {
-    /// An id whose state was synced before but has none locally now reads, to
-    /// the three-way merge, as the user clearing it — and would delete the
-    /// cloud record on every device. Only a catalog row that still exists
-    /// supports that reading (unwatched here: the user unmarked it). A row
-    /// that's gone — its series pruned by a catalog sync, or not synced to this
-    /// device yet — says nothing about the user: the cloud record stays, and
-    /// the shadow is dropped so the record is pulled back when the row returns.
-    func resolveAbsentContent(
-        _ absentIDs: [SyncedContentKind: [String]],
-        mirrors: [String: UserContentState],
-        into result: inout CloudSyncReconcileResult
-    ) throws {
-        guard !absentIDs.isEmpty else { return }
-        let present = try fetchCatalogModels(byKind: absentIDs)
-        for id in absentIDs.values.joined() {
-            if let model = present[id] {
-                try applyContentVerdict(.pushToCloud(nil), id: id, mirror: mirrors[id], loaded: model, into: &result)
-            } else {
-                shadow.setContentShadow(id, nil)
-                result.contentPending += 1
-            }
         }
     }
 }

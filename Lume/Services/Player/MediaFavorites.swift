@@ -43,10 +43,8 @@ enum MediaFavorites {
 
     /// The single unfavorite semantic, shared with `FavoriteManagementView`.
     ///
-    /// All three fields have to go: `ContentStateValues.isEmpty` requires
-    /// `!isFavorite && addedToWatchlistDate == nil && favoriteOrder == nil`
-    /// before `CloudSyncEngine` deletes the iCloud mirror record — leave the
-    /// watchlist stamp behind and the record survives with `isFavorite == false`.
+    /// All three fields have to go: leave the watchlist stamp behind and the
+    /// title still reads as on the watchlist everywhere it's synced.
     /// Saving is the caller's business, since the favorites manager mutates
     /// under its own `@Query` context.
     static func clearFavoriteState(_ model: any FavoriteOrderable) {
@@ -55,6 +53,8 @@ enum MediaFavorites {
     }
 
     private static func clearFavoriteFields(_ model: any FavoriteOrderable) {
+        // The viewer's decision, for iCloud sync — see `ContentClearLedger`.
+        ContentClearLedger.shared.record(model.id)
         model.isFavorite = false
         model.favoriteOrder = nil
         (model as? any WatchlistFavoritable)?.addedToWatchlistDate = nil

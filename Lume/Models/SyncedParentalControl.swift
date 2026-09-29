@@ -60,9 +60,11 @@ final class SyncedParentalPIN {
 /// profile and then never re-apply it while the child's profile was active —
 /// which is the bug this record exists to prevent.
 ///
-/// Only restricted categories get a record. An unrestricted category has no row
-/// at all, so a playlist the user never locked anything in costs nothing; the
-/// reconciler reads presence itself as the restriction.
+/// Only categories a parent restricted get a record, so a playlist nobody
+/// locked anything in costs nothing. Lifting a restriction keeps the record,
+/// with `isRestricted` false, so another device can tell a lift from a record
+/// it hasn't imported yet (`IntentMerge`); lifted records expire after
+/// `IntentMerge.clearedRecordLifetime`.
 ///
 /// `categoryID` matches `Category.id` verbatim, which embeds the playlist UUID,
 /// so a record written on one device addresses the same category on every other
@@ -72,10 +74,8 @@ final class SyncedCategoryRestriction {
     /// Mirrors `Category.id`. Not unique (CloudKit can't enforce it) — the
     /// reconciler dedupes by this value itself.
     var categoryID: String = ""
-    /// Always `true` in practice; the row's *existence* is the restriction, and
-    /// lifting it deletes the row. Stored anyway so a record is self-describing
-    /// in the CloudKit console and so the field is there if restrictions ever
-    /// gain a third state.
+    /// False once a parent lifted the restriction. (Builds before lifts were
+    /// records read a false record as no restriction too.)
     var isRestricted: Bool = true
     /// Last time this record changed. Dedupe tie-break only.
     var updatedAt: Date = Date()
