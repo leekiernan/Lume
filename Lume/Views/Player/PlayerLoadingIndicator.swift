@@ -8,14 +8,33 @@
 //  instead — otherwise the idle Play button reads as "paused, press me".
 //
 
+import SwiftData
 import SwiftUI
 
 /// Centered spinner shown while the engine is preparing or (re)buffering. The
 /// optional `title` is supplied only on the first open — where the dimmed
 /// backdrop reads as "Loading <title>…" — and dropped for mid-stream stalls so
-/// the spinner sits unobtrusively over the paused frame.
+/// the spinner sits unobtrusively over the paused frame. Opening a live
+/// channel, it also shows what's on it now, so a surf reads as where it's
+/// going before the picture arrives.
 struct PlayerLoadingIndicator: View {
     let title: String?
+    private let channel: PlayableMedia?
+
+    @Environment(\.modelContext) private var modelContext
+    @State private var nowShowing: String?
+
+    init(title: String?) {
+        self.title = title
+        channel = nil
+    }
+
+    /// Opening `media` (nil once it has started): its title, and for a live
+    /// channel the programme on air.
+    init(opening media: PlayableMedia?) {
+        title = media?.title
+        channel = media
+    }
 
     var body: some View {
         ZStack {
@@ -40,9 +59,38 @@ struct PlayerLoadingIndicator: View {
                         .padding(.horizontal, 40)
                         .shadow(radius: 8)
                 }
+                if title != nil, let nowShowing {
+                    Text(nowShowing)
+                        .font(nowShowingFont)
+                        .foregroundStyle(.white.opacity(0.8))
+                        .lineLimit(1)
+                        .padding(.horizontal, 40)
+                        .shadow(radius: 8)
+                        .transition(.opacity)
+                }
             }
         }
         .allowsHitTesting(false)
+        .task(id: channel?.id) {
+            // Cleared first: a second surf must not show the last channel's
+            // programme under the new channel's name.
+            nowShowing = nil
+            nowShowing = await Self.programmeOnAir(for: channel, in: modelContext)
+        }
+    }
+
+    /// The programme on air on a live channel, from the guide, off the main
+    /// thread. Nil for anything but a live channel, or with no guide data.
+    private static func programmeOnAir(for media: PlayableMedia?, in context: ModelContext) async -> String? {
+        guard let media, case .live = media.kind, case let .live(id) = media.contentRef,
+              let channelId = PlayerContentLookup.liveStream(id, in: context)?.epgChannelId
+        else { return nil }
+        let container = context.container
+        let now = Date()
+        let epg = await Task.detached(priority: .userInitiated) {
+            ChannelEPGLoader.load(container: container, channelIds: [channelId], now: now)
+        }.value
+        return epg[channelId]?.current?.title
     }
 
     #if os(tvOS)
@@ -57,6 +105,10 @@ struct PlayerLoadingIndicator: View {
         private var titleFont: Font {
             .system(size: 40, weight: .semibold)
         }
+
+        private var nowShowingFont: Font {
+            .system(size: 28, weight: .regular)
+        }
     #else
         private var spacing: CGFloat {
             20
@@ -68,6 +120,10 @@ struct PlayerLoadingIndicator: View {
 
         private var titleFont: Font {
             .title3.weight(.semibold)
+        }
+
+        private var nowShowingFont: Font {
+            .callout
         }
     #endif
 }

@@ -168,7 +168,7 @@ struct VLCPlayerEngineView: View {
             #endif
 
             if coordinator.isBuffering, !loadFailed {
-                PlayerLoadingIndicator(title: coordinator.hasStartedPlayback ? nil : media.title)
+                PlayerLoadingIndicator(opening: coordinator.hasStartedPlayback ? nil : media)
                     .transition(.opacity)
             }
 

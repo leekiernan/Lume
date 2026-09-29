@@ -406,7 +406,7 @@ struct FullScreenPlayerView: View {
             PlayerErrorIndicator(title: activeMedia.title, onRetry: retryResolve, onClose: closePlayer)
         } else {
             // Resolving the Stalker stream URL before the engine can load it.
-            PlayerLoadingIndicator(title: activeMedia.title)
+            PlayerLoadingIndicator(opening: activeMedia)
         }
     }
 
