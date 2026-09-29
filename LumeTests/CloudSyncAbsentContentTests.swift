@@ -133,6 +133,27 @@ struct CloudSyncAbsentContentTests {
         #expect(try records(in: synced.context).first?.isWatched == true)
     }
 
+    /// Cleared records are kept long enough for every device to see them,
+    /// then deleted; a recent one stays.
+    @Test func `a cleared record expires`() async throws {
+        let synced = try await syncedWatchedMovie()
+        let record = try #require(try records(in: synced.context).first)
+        record.isWatched = false
+        record.updatedAt = Date()
+        try synced.context.save()
+        _ = await synced.engine.reconcile()
+        #expect(try records(in: synced.context).count == 1)
+
+        record.updatedAt = Date().addingTimeInterval(-IntentMerge.clearedRecordLifetime - 60)
+        try synced.context.save()
+        let result = await synced.engine.reconcile()
+
+        #expect(result.clearedRecordsExpired == 1)
+        #expect(try records(in: synced.context).isEmpty)
+        // Gone from the cloud is not a clear of anything here.
+        #expect(try movie(synced.movieID, in: synced.context)?.isWatched == false)
+    }
+
     /// A clear recorded while a pass runs belongs to the next one.
     @Test func `the ledger keeps clears the pass didn't read`() async throws {
         let synced = try await syncedWatchedMovie()

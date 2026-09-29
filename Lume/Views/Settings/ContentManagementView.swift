@@ -334,7 +334,7 @@ struct ContentManagementView: View {
                     isReordering: $isReordering,
                     scrollProxy: proxy,
                     isRestricted: { $0.isRestricted },
-                    onToggleRestricted: { $0.isRestricted.toggle() }
+                    onToggleRestricted: { ContentOrganizer.toggleRestricted($0) }
                 )
             }
         }
@@ -401,7 +401,7 @@ struct ContentManagementView: View {
                                 isRestricted: category.isRestricted,
                                 drillInValue: selectedType == .live ? category : nil,
                                 onToggleHidden: { ContentOrganizer.toggleHidden(category) },
-                                onToggleRestricted: { category.isRestricted.toggle() },
+                                onToggleRestricted: { ContentOrganizer.toggleRestricted(category) },
                                 onDrillIn: { selectedCategory = $0 }
                             )
                         }

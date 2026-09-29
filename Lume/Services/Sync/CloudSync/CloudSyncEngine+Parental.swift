@@ -133,20 +133,27 @@ extension CloudSyncEngine {
 
     // MARK: - Category restrictions
 
+    /// Restrictions go through `IntentMerge` like per-title state: a category
+    /// row re-created unrestricted by a playlist resync used to read as the
+    /// parent lifting its restriction — and lifted it on every device.
     private func reconcileCategoryRestrictions(livePrefixes: Set<String>, into result: inout CloudSyncReconcileResult) throws {
         let localIDs = try fetchRestrictedCategoryIDs()
-        let mirrorsByID = try fetchCategoryRestrictionMirrors()
+        var mirrorsByID = try fetchCategoryRestrictionMirrors()
+        expireLiftedRestrictions(&mirrorsByID, into: &result)
+        let lifted = lifts.ids
+        result.restrictionLiftsSeen = lifted
 
         // Union of all three sources, so a restriction lifted on either side is
         // still visited — an id that vanished locally is exactly what the shadow
         // is there to remember.
         var ids = localIDs.union(mirrorsByID.keys)
         ids.formUnion(shadow.categoryRestrictionShadowIDs())
+        ids.formUnion(lifted)
         guard !ids.isEmpty else { return }
 
         // One chunked `IN` fetch for every id this pass touches, rather than a
-        // single-row fetch per id — the same batching the content pass was
-        // rewritten to use (`fetchCatalogModels`).
+        // single-row fetch per id — the same batching the content pass uses
+        // (`fetchCatalogModels`).
         let categories = try fetchCatalogModels(byKind: [.category: Array(ids)])
 
         for id in ids {
@@ -165,20 +172,41 @@ extension CloudSyncEngine {
                 continue
             }
 
-            let verdict = CloudSyncMerge.reconcile(
-                local: localIDs.contains(id) ? CategoryRestrictionValues() : nil,
-                // A record that somehow says `false` reads as no restriction at
-                // all — presence is the restriction, so the two must agree.
-                cloud: mirrorsByID[id].flatMap { $0.isRestricted ? CategoryRestrictionValues() : nil },
-                shadow: shadow.categoryRestrictionShadow(id),
-                mergeConflict: CategoryRestrictionValues.mergeConflict
-            )
+            let local: LocalRestrictionReading = if let category {
+                if category.isRestricted {
+                    .state(CategoryRestrictionValues())
+                } else {
+                    lifted.contains(id) ? .clearedByUser : .blank
+                }
+            } else {
+                .missingRow
+            }
+            let cloud: CloudRestrictionReading = mirrorsByID[id]
+                .map { .state(CategoryRestrictionValues(isRestricted: $0.isRestricted)) } ?? .absent
+            let verdict = IntentMerge.reconcile(local: local, cloud: cloud, shadow: shadow.categoryRestrictionShadow(id))
             applyRestrictionVerdict(verdict, id: id, category: category, mirror: mirrorsByID[id], into: &result)
         }
     }
 
+    /// Lifted restrictions are records too; like cleared content they're
+    /// deleted once every device has had the time to see them.
+    private func expireLiftedRestrictions(
+        _ mirrors: inout [String: SyncedCategoryRestriction],
+        into result: inout CloudSyncReconcileResult
+    ) {
+        let now = Date()
+        for (id, mirror) in mirrors
+            where !mirror.isRestricted && IntentMerge.clearedRecordExpired(updatedAt: mirror.updatedAt, now: now)
+        {
+            cloudContext.delete(mirror)
+            mirrors[id] = nil
+            shadow.setCategoryRestrictionShadow(id, nil)
+            result.clearedRecordsExpired += 1
+        }
+    }
+
     private func applyRestrictionVerdict(
-        _ verdict: MergeVerdict<CategoryRestrictionValues>,
+        _ verdict: IntentVerdict<CategoryRestrictionValues>,
         id: String,
         category: Category?,
         mirror: SyncedCategoryRestriction?,
@@ -187,53 +215,41 @@ extension CloudSyncEngine {
         switch verdict {
         case .noChange:
             break
+        case .pending:
+            result.parentalPending += 1
         case let .pushToCloud(value):
             applyRestrictionToCloud(value, id: id, mirror: mirror)
-            if value != nil { result.parentalPushed += 1 }
+            result.parentalPushed += 1
             shadow.setCategoryRestrictionShadow(id, value)
         case let .pullToLocal(value):
-            guard applyRestrictionToLocal(value, category: category) else {
+            guard let category else {
                 result.parentalPending += 1
                 return
             }
-            if value != nil { result.parentalPulled += 1 }
+            category.isRestricted = value.isRestricted
+            result.parentalPulled += 1
             shadow.setCategoryRestrictionShadow(id, value)
         case let .writeBoth(value):
-            guard applyRestrictionToLocal(value, category: category) else {
+            guard let category else {
                 result.parentalPending += 1
                 return
             }
+            category.isRestricted = value.isRestricted
             applyRestrictionToCloud(value, id: id, mirror: mirror)
             result.parentalPushed += 1
             shadow.setCategoryRestrictionShadow(id, value)
         }
     }
 
-    /// Returns false — leaving the change pending, shadow untouched — when the
-    /// category hasn't synced to this device yet, matching how content state
-    /// waits for its catalog item.
-    private func applyRestrictionToLocal(_ value: CategoryRestrictionValues?, category: Category?) -> Bool {
-        guard let category else {
-            // Applying a restriction has to wait for the catalog. *Lifting* one
-            // has nothing to clear, so it is already satisfied — reporting it
-            // pending would keep the id alive in the shadow forever.
-            return value == nil
-        }
-        category.isRestricted = value != nil
-        return true
-    }
-
-    private func applyRestrictionToCloud(_ value: CategoryRestrictionValues?, id: String, mirror: SyncedCategoryRestriction?) {
-        guard value != nil else {
-            if let mirror { cloudContext.delete(mirror) }
-            return
-        }
+    /// A lift is written as a record saying so, not a deletion — see
+    /// `IntentMerge`.
+    private func applyRestrictionToCloud(_ value: CategoryRestrictionValues, id: String, mirror: SyncedCategoryRestriction?) {
         guard let mirror else {
-            cloudContext.insert(SyncedCategoryRestriction(categoryID: id))
+            cloudContext.insert(SyncedCategoryRestriction(categoryID: id, isRestricted: value.isRestricted))
             return
         }
-        guard !mirror.isRestricted else { return }
-        mirror.isRestricted = true
+        guard mirror.isRestricted != value.isRestricted else { return }
+        mirror.isRestricted = value.isRestricted
         mirror.updatedAt = Date()
     }
 

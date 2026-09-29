@@ -68,6 +68,13 @@ enum ContentOrganizer {
         if !item.isHidden { ContentClearLedger.shared.record(item.id) }
     }
 
+    /// Restricts a category, or lifts its restriction. A lift is the parent's
+    /// decision, which iCloud sync needs to know — see `ContentClearLedger`.
+    static func toggleRestricted(_ category: Category) {
+        category.isRestricted.toggle()
+        if !category.isRestricted { ContentClearLedger.restrictionLifts.record(category.id) }
+    }
+
     /// Un-hides every item in a group.
     static func showAll(_ items: [some ContentItem]) {
         ContentClearLedger.shared.record(items.map(\.id))

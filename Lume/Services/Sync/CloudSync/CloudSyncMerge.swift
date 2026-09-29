@@ -275,10 +275,11 @@ nonisolated struct ParentalPINValues: Codable, Equatable {
 nonisolated struct CategoryRestrictionValues: Codable, Equatable {
     var isRestricted: Bool = true
 
-    /// Both sides say `true` whenever both sides have a value, so a conflict can
-    /// only be "restricted vs restricted". Either input is the same answer.
-    static func mergeConflict(local: CategoryRestrictionValues, cloud _: CategoryRestrictionValues) -> CategoryRestrictionValues {
-        local
+    /// A lift is a record too (`IntentMerge`), so the two sides can disagree:
+    /// restricted on one device and lifted on another since they last agreed.
+    /// For parental controls the restriction stands.
+    static func mergeConflict(local: CategoryRestrictionValues, cloud: CategoryRestrictionValues) -> CategoryRestrictionValues {
+        CategoryRestrictionValues(isRestricted: local.isRestricted || cloud.isRestricted)
     }
 }
 

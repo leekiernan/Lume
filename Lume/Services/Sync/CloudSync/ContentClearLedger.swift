@@ -19,15 +19,19 @@ import Foundation
 
 final nonisolated class ContentClearLedger: @unchecked Sendable {
     static let shared = ContentClearLedger()
+    /// Parental category restrictions the parent lifted — kept apart from
+    /// `shared`, where a category id means it was shown again or reordered.
+    static let restrictionLifts = ContentClearLedger(key: "cloudsync.restrictionLifts.v1")
 
     private let defaults: UserDefaults
-    private let key = "cloudsync.contentClears.v1"
+    private let key: String
     /// The UI records and the sync removes, on different threads: every change
     /// is a read-modify-write of one key.
     private let lock = NSLock()
 
-    init(defaults: UserDefaults = .standard) {
+    init(defaults: UserDefaults = .standard, key: String = "cloudsync.contentClears.v1") {
         self.defaults = defaults
+        self.key = key
     }
 
     /// The viewer cleared state on these titles (catalog ids = content ids).
@@ -60,6 +64,7 @@ final nonisolated class ContentClearLedger: @unchecked Sendable {
     }
 
     /// A profile switch: the catalog now projects another profile's state.
+    /// (Not for restriction lifts: restrictions aren't per profile.)
     func reset() {
         lock.withLock { defaults.removeObject(forKey: key) }
     }

@@ -43,6 +43,10 @@ nonisolated struct CloudSyncReconcileResult: Equatable {
     var contentPending = 0
     /// The viewer's clears this pass read; removed from the ledger once saved.
     var contentClearsSeen: Set<String> = []
+    /// Likewise the parent's restriction lifts.
+    var restrictionLiftsSeen: Set<String> = []
+    /// Cleared records past `IntentMerge.clearedRecordLifetime`, deleted.
+    var clearedRecordsExpired = 0
     /// Set when the pass was aborted because the local catalog store was
     /// unreadable (a fetch threw — a transient `no such table` detach or a
     /// corrupt store). No stores or shadow were touched; a later pass retries.
@@ -98,8 +102,10 @@ actor CloudSyncEngine {
     /// The CloudKit-mirrored store (SyncedPlaylist, UserContentState, UserProfile).
     let cloudContext: ModelContext
     let shadow: CloudSyncShadow
-    /// The viewer's clears on this device — see `ContentIntentMerge`.
+    /// The viewer's clears on this device — see `IntentMerge`.
     let clears: ContentClearLedger
+    /// The parent's restriction lifts on this device.
+    let lifts: ContentClearLedger
 
     /// The profile whose state the catalog currently projects. Read from
     /// `ActiveProfileStore` at the start of each reconcile, so content state is
@@ -112,7 +118,8 @@ actor CloudSyncEngine {
         catalogContainer: ModelContainer,
         cloudContainer: ModelContainer,
         shadow: CloudSyncShadow = CloudSyncShadow(),
-        clears: ContentClearLedger = .shared
+        clears: ContentClearLedger = .shared,
+        lifts: ContentClearLedger = .restrictionLifts
     ) {
         catalogContext = ModelContext(catalogContainer)
         catalogContext.autosaveEnabled = false
@@ -120,6 +127,7 @@ actor CloudSyncEngine {
         cloudContext.autosaveEnabled = false
         self.shadow = shadow
         self.clears = clears
+        self.lifts = lifts
     }
 
     #if DEBUG
@@ -132,6 +140,7 @@ actor CloudSyncEngine {
             container: ModelContainer,
             shadow: CloudSyncShadow = CloudSyncShadow(),
             clears: ContentClearLedger = ContentClearLedger(defaults: UserDefaults(suiteName: "CloudSyncEngineTests.\(UUID())")!),
+            lifts: ContentClearLedger = ContentClearLedger(defaults: UserDefaults(suiteName: "CloudSyncEngineTests.\(UUID())")!),
             saveFailureInjector: SaveFailureInjector? = nil
         ) {
             let ctx = ModelContext(container)
@@ -140,6 +149,7 @@ actor CloudSyncEngine {
             cloudContext = ctx
             self.shadow = shadow
             self.clears = clears
+            self.lifts = lifts
             self.saveFailureInjector = saveFailureInjector
         }
     #endif
@@ -205,6 +215,7 @@ actor CloudSyncEngine {
                 CredentialLinkStateStore.apply(.deletionPushed, to: kind)
             }
             clears.remove(result.contentClearsSeen)
+            lifts.remove(result.restrictionLiftsSeen)
             Logger.sync.info("Reconcile pl +\(result.playlistsPushed) new \(result.playlistsCreatedLocally) ct +\(result.contentPushed)/\(result.contentPulled) pend \(result.contentPending) epg +\(result.epgSourcesPushed)/\(result.epgSourcesPulled) par +\(result.parentalPushed)/\(result.parentalPulled) pend \(result.parentalPending) trakt +\(result.traktPushed)/\(result.traktPulled) pend \(result.traktPending) simkl +\(result.simklPushed)/\(result.simklPulled) pend \(result.simklPending) sports \(result.sportsFollowsKept)-\(result.sportsFollowsDeduped)") // swiftlint:disable:this line_length
         } catch {
             catalogContext.rollback()
