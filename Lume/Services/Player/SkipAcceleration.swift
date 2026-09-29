@@ -10,7 +10,9 @@
 //  direction starts again at the finest step.
 //
 //  A small pure state machine: the overlay holds one and asks it for each
-//  press's step.
+//  press. It also keeps where the run started and its running total, so the
+//  indicator shows how far the whole run has gone — the last press's step
+//  alone reads "+5 min" after a run of nearly 10.
 //
 
 import Foundation
@@ -22,43 +24,78 @@ nonisolated struct SkipAcceleration: Equatable {
     /// How soon the next press must come to keep climbing.
     static let window: TimeInterval = 1
 
+    /// One press: its own step, and the run it belongs to so far.
+    struct Press: Equatable {
+        let step: TimeInterval
+        /// Where the run started and where it now lands, clamped to the
+        /// content — so near either end the total is the real distance.
+        let origin: TimeInterval
+        let target: TimeInterval
+
+        var total: TimeInterval {
+            target - origin
+        }
+    }
+
     private var forward: Bool?
     private var level = 0
     private var lastPress: Date?
+    private var origin: TimeInterval = 0
+    private var runTotal: TimeInterval = 0
 
     static func ladder(base: TimeInterval) -> [TimeInterval] {
         [base] + steps.filter { $0 > base }
     }
 
-    /// The signed step for a press, advancing the ladder when it continues a
-    /// quick run in the same direction.
-    mutating func step(forward: Bool, base: TimeInterval, at now: Date = Date()) -> TimeInterval {
+    /// A press from `position`: its signed step, advancing the ladder when it
+    /// continues a quick run in the same direction, and where the run lands
+    /// within `0 ... duration` (open-ended while the duration is unknown).
+    mutating func press(
+        forward: Bool, base: TimeInterval, from position: TimeInterval,
+        duration: TimeInterval, at now: Date = Date()
+    ) -> Press {
         let ladder = Self.ladder(base: base)
         let continuing = self.forward == forward
             && lastPress.map { now.timeIntervalSince($0) <= Self.window } == true
         level = continuing ? min(level + 1, ladder.count - 1) : 0
         self.forward = forward
         lastPress = now
-        return forward ? ladder[level] : -ladder[level]
+        let step = forward ? ladder[level] : -ladder[level]
+        if !continuing {
+            origin = position.isFinite ? position : 0
+            runTotal = 0
+        }
+        runTotal += step
+        let end = duration > 0 ? duration : .infinity
+        return Press(step: step, origin: origin, target: min(max(origin + runTotal, 0), end))
     }
 
-    /// How a step reads on screen: "+3 min", "−10 sec" (localised).
-    static func label(for step: TimeInterval) -> String {
-        let magnitude = Duration.seconds(abs(step))
-            .formatted(.units(allowed: [.minutes, .seconds], width: .abbreviated))
-        return (step < 0 ? "−" : "+") + magnitude
+    /// How a distance reads on screen: "+3 min", "−9 min, 40 sec" (localised).
+    static func label(for distance: TimeInterval) -> String {
+        let magnitude = Duration.seconds(abs(distance).rounded())
+            .formatted(.units(allowed: [.hours, .minutes, .seconds], width: .abbreviated))
+        return (distance < 0 ? "−" : "+") + magnitude
+    }
+
+    /// A position in the content, as the progress bar shows it: "12:34".
+    static func timeLabel(for position: TimeInterval) -> String {
+        let clamped = position.isFinite ? max(position, 0).rounded(.down) : 0
+        let pattern: Duration.TimeFormatStyle.Pattern = clamped >= 3600 ? .hourMinuteSecond : .minuteSecond
+        return Duration.seconds(clamped).formatted(.time(pattern: pattern))
     }
 }
 
-/// The step a skip press just took, shown on the button until the run ends.
-/// Its own identity, so the same step twice still refreshes the badge.
+/// How far the current skip run has gone and where it lands, shown until the
+/// run ends. Its own identity, so the same total twice still refreshes it.
 nonisolated struct SkipBadge: Equatable {
     let id = UUID()
-    let step: TimeInterval
+    let press: SkipAcceleration.Press
 
     /// Keeps one indicator on screen through a run in one direction, so its
     /// number climbs in place rather than the panel re-appearing each press.
+    /// From the step, not the total: a run held at the start still reads as
+    /// going backwards.
     var forward: Bool {
-        step > 0
+        press.step > 0
     }
 }

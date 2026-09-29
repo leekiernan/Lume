@@ -163,18 +163,24 @@
         func moveScrub(_ direction: MoveCommandDirection) {
             guard isScrubbing, clock.duration > 0,
                   direction == .left || direction == .right else { return }
-            let step = skipAcceleration.step(forward: direction == .right, base: skipStep.seconds)
-            scrubTarget = min(max(scrubTarget + step, 0), clock.duration)
-            skipBadge = SkipBadge(step: step)
+            let press = skipAcceleration.press(
+                forward: direction == .right, base: skipStep.seconds,
+                from: scrubTarget, duration: clock.duration
+            )
+            scrubTarget = press.target
+            skipBadge = SkipBadge(press: press)
             onResetHideTimer()
         }
 
         /// One skip press — a transport button, or left/right on the progress
         /// bar: the next step on the ladder, and the indicator for it.
         func skip(forward: Bool) {
-            let step = skipAcceleration.step(forward: forward, base: skipStep.seconds)
-            coordinator.skip(by: step)
-            skipBadge = SkipBadge(step: step)
+            let press = skipAcceleration.press(
+                forward: forward, base: skipStep.seconds,
+                from: clock.current, duration: clock.duration
+            )
+            coordinator.skip(by: press.step)
+            skipBadge = SkipBadge(press: press)
             onResetHideTimer()
         }
 
