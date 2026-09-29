@@ -324,14 +324,13 @@ private struct ContinueWatchingCard: View {
     }
 
     /// Across the card: the label keeps its full width, the bar takes the
-    /// rest. The glyph is a plain sized box, not text, so it centres on the
-    /// bar exactly rather than on a font's line.
+    /// rest. The glyph is drawn, not an SF Symbol: a symbol keeps room below
+    /// it for sitting on a text baseline, even resized, which left it half a
+    /// bar high of the bar's centre.
     private var progressRow: some View {
         HStack(alignment: .center, spacing: Metrics.inset / 2) {
-            Image(systemName: "play.fill")
-                .resizable()
-                .scaledToFit()
-                .frame(width: Metrics.glyphSize, height: Metrics.glyphSize)
+            PlayTriangle()
+                .frame(width: Metrics.glyphSize * 0.86, height: Metrics.glyphSize)
             ContinueWatchingBar(fraction: fraction)
             if let label {
                 Text(label)
@@ -341,6 +340,18 @@ private struct ContinueWatchingCard: View {
             }
         }
         .foregroundStyle(.white)
+    }
+}
+
+/// A play glyph whose box is the triangle, so centring the box centres it.
+private struct PlayTriangle: Shape {
+    func path(in rect: CGRect) -> Path {
+        Path { path in
+            path.move(to: CGPoint(x: rect.minX, y: rect.minY))
+            path.addLine(to: CGPoint(x: rect.maxX, y: rect.midY))
+            path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
+            path.closeSubpath()
+        }
     }
 }
 
