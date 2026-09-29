@@ -45,7 +45,9 @@ final class CastService {
     var castProvider: (any CastProvider)?
 
     /// Touched from the nonisolated `deinit`; `removeObserver` is thread-safe.
-    private nonisolated(unsafe) var routeObserver: (any NSObjectProtocol)?
+    /// Not observed: a notification token isn't UI state, and the observation
+    /// macro's rewrite is what made `nonisolated(unsafe)` a no-op.
+    @ObservationIgnored private nonisolated(unsafe) var routeObserver: (any NSObjectProtocol)?
 
     private init() {
         refreshAirPlayRoute()

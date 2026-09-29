@@ -131,7 +131,7 @@ final class Playlist {
     }
 }
 
-enum PlaylistSourceType: String, Codable {
+nonisolated enum PlaylistSourceType: String, Codable {
     case xtream
     case m3u
     case stalker

@@ -71,7 +71,7 @@ enum StorageManager {
 
     /// Rows mutated between intermediate saves during the clear operations, so
     /// one clear doesn't build a single giant transaction in memory.
-    private static let clearBatchSize = 1000
+    private nonisolated static let clearBatchSize = 1000
 
     /// Drops cached TMDB/MDBList enrichment (artwork paths, cast, trailers, ratings
     /// and collection info) from every enriched movie and series so it re-fetches

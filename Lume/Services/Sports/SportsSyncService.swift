@@ -83,23 +83,23 @@ final class SportsSyncService {
     private var liveClients = 0
 
     /// `@AppStorage` key for the Sports tab toggle.
-    static let baseTabEnabledKey = "sports.tabEnabled"
+    nonisolated static let baseTabEnabledKey = "sports.tabEnabled"
     static var tabEnabledKey: String {
         ProfileScopedPreferences.key(baseTabEnabledKey)
     }
 
     /// Sports is an optional Live TV feature. Its own switch gives a profile a
     /// way to hide the hub while retaining the rest of Live TV.
-    static let baseEnabledKey = "sports.enabled.v1"
+    nonisolated static let baseEnabledKey = "sports.enabled.v1"
     static var enabledKey: String {
         ProfileScopedPreferences.key(baseEnabledKey)
     }
 
-    static let enabledDefault = true
+    nonisolated static let enabledDefault = true
 
     /// `@AppStorage` key for spoiler-free fixture cards: no score, no winner
     /// emphasis. The game detail still shows the score once opened.
-    static let baseHideScoresKey = "sports.hideScores"
+    nonisolated static let baseHideScoresKey = "sports.hideScores"
     static var hideScoresKey: String {
         ProfileScopedPreferences.key(baseHideScoresKey)
     }
@@ -122,12 +122,12 @@ final class SportsSyncService {
     }
 
     /// Teams (crests, colours) change rarely; reuse the cached roster for a week.
-    private static let teamCacheLifetime: TimeInterval = 7 * 24 * 60 * 60
+    private nonisolated static let teamCacheLifetime: TimeInterval = 7 * 24 * 60 * 60
     /// How long a league's full refresh counts as current. Kickoff times move and
     /// fixtures get added through the day, and a refresh is a handful of small
     /// ESPN requests per league, so this is kept short: any surface appearing
     /// after it re-fetches.
-    static let freshness: TimeInterval = 5 * 60
+    nonisolated static let freshness: TimeInterval = 5 * 60
     /// How often live scores re-poll while a sports surface is visible.
     static let livePollInterval: TimeInterval = 60
     /// How soon a league whose last full refresh came back empty is asked again.
@@ -135,17 +135,19 @@ final class SportsSyncService {
     /// How far back a fixture still called "scheduled" or "live" past its kickoff
     /// keeps the poll going. Beyond this the month refresh owns it; the bound
     /// keeps a fixture the provider dropped from polling forever.
-    static let overdueLookback: TimeInterval = 3 * 24 * 60 * 60
+    nonisolated static let overdueLookback: TimeInterval = 3 * 24 * 60 * 60
     /// How many leagues refresh at once — ESPN, not the capped provider host.
     private static let maxConcurrentLeagueRefreshes = 4
 
     init(
-        store: SportsStore = .shared,
+        // Nil for the shared store: a default argument is evaluated outside
+        // the main actor, where `SportsStore.shared` can't be read.
+        store: SportsStore? = nil,
         followSource: any SportsFollowSource = EmptySportsFollowSource(),
         defaults: UserDefaults = .standard,
         crestTints: SportsCrestTintCache = .shared
     ) {
-        self.store = store
+        self.store = store ?? .shared
         self.followSource = followSource
         self.defaults = defaults
         self.crestTints = crestTints

@@ -24,7 +24,7 @@ extension TMDBClient {
     /// How many pages to walk. TMDB serves 20 per page, so this is 100 titles —
     /// comfortably more than a row shows, and enough that a sparse catalog
     /// still finds matches.
-    static let listPageLimit = 5
+    nonisolated static let listPageLimit = 5
 
     /// Fetches `apiPath` (e.g. `list/12345`, `movie/top_rated`), following
     /// pagination up to `TMDBClient.listPageLimit`.

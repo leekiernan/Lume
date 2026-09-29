@@ -120,7 +120,7 @@ nonisolated extension Series: GenreCarrying {}
 /// retry is another scan, so a genre whose next few hundred rows are all
 /// near-misses would otherwise chain scans until it found something. Five
 /// source pages is the bound; the caller resumes from the returned cursor.
-private let genreScanBudget = 500
+private nonisolated let genreScanBudget = 500
 
 /// What one page of a genre grid is fetched for. Plain value type so the
 /// off-main fetch takes a single `Sendable` value, mirroring `SearchRequest`.

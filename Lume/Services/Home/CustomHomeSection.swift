@@ -44,7 +44,7 @@ enum CustomHomeSections {
     }
 
     /// The unscoped form — see `HomeLayoutSettings.baseSectionOrderKey`.
-    static func baseStorageKey(_ surface: SectionSurface) -> String {
+    nonisolated static func baseStorageKey(_ surface: SectionSurface) -> String {
         "\(surface.storagePrefix).customSections.v1"
     }
 

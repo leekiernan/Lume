@@ -300,11 +300,18 @@ struct ScrobbleBackgroundTime {
         private let identifier: UIBackgroundTaskIdentifier
 
         static func begin() -> ScrobbleBackgroundTime {
-            var identifier = UIBackgroundTaskIdentifier.invalid
-            identifier = UIApplication.shared.beginBackgroundTask(withName: "Trakt scrobble") {
-                UIApplication.shared.endBackgroundTask(identifier)
+            // The expiry handler ends the task the call itself returns, so it
+            // reads the identifier through a box filled in afterwards.
+            let task = Identifier()
+            task.value = UIApplication.shared.beginBackgroundTask(withName: "Trakt scrobble") {
+                UIApplication.shared.endBackgroundTask(task.value)
             }
-            return ScrobbleBackgroundTime(identifier: identifier)
+            return ScrobbleBackgroundTime(identifier: task.value)
+        }
+
+        @MainActor
+        private final class Identifier {
+            var value = UIBackgroundTaskIdentifier.invalid
         }
 
         func end() {

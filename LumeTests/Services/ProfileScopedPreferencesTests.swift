@@ -4,6 +4,7 @@ import Testing
 
 /// These touch `UserDefaults.standard` through `ActiveProfileStore`, so they run
 /// serialized and restore whatever the host had set.
+@MainActor
 @Suite(.serialized, .globalState)
 struct ProfileScopedPreferencesTests {
     private static let profileA = UUID(uuidString: "00000000-0000-0000-0000-00000000A001")!
@@ -91,7 +92,7 @@ struct ProfileScopedPreferencesTests {
         ])
 
         let defaults = Dictionary(uniqueKeysWithValues: ProfileScopedPreferences.scopedKeys.compactMap { entry in
-            if case let .bool(value) = entry.kind { (entry.base, value) } else { nil }
+            if case let .bool(value) = entry.kind { (entry.base, value.value) } else { nil }
         })
         #expect(defaults == [
             RecommendationSettings.baseEnabledKey: RecommendationSettings.enabledDefault,

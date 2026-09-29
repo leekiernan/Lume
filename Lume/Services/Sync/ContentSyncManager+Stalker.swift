@@ -183,7 +183,7 @@ extension ContentSyncManager {
         if categories.contains(where: { $0.id == "*" }) {
             let walk = await (try? client.getAllOrderedItems(type: type, categoryId: "*", maxItems: .max) { count, total in
                 let target = total ?? count
-                await progress?.update(
+                progress?.update(
                     detail: "\(count) of \(target)",
                     fraction: target > 0 ? Double(count) / Double(target) : 0
                 )

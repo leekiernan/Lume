@@ -41,7 +41,23 @@ nonisolated enum ProfileScopedPreferences {
     /// value it reads as before anything is written.
     enum Kind: Equatable {
         case string
-        case bool(default: Bool)
+        case bool(default: BoolDefault)
+    }
+
+    /// A boolean key's value before anything is written. Most are fixed; the
+    /// Sports tab's depends on the device, which only UIKit on the main actor
+    /// can say — so it's described here and resolved in `snapshot`, keeping
+    /// the key list itself readable from anywhere.
+    enum BoolDefault: Equatable {
+        case fixed(Bool)
+        case sportsTab
+
+        @MainActor var value: Bool {
+            switch self {
+            case let .fixed(value): value
+            case .sportsTab: SportsSyncService.tabEnabledDefault
+            }
+        }
     }
 
     /// Every layout key that is scoped, with how it is stored — listed once so
@@ -50,10 +66,10 @@ nonisolated enum ProfileScopedPreferences {
     static var scopedKeys: [(base: String, kind: Kind)] {
         var keys: [(base: String, kind: Kind)] = [
             (AppAreaSettings.baseDisabledAreasKey, .string),
-            (RecommendationSettings.baseEnabledKey, .bool(default: RecommendationSettings.enabledDefault)),
-            (SportsSyncService.baseEnabledKey, .bool(default: SportsSyncService.enabledDefault)),
-            (SportsSyncService.baseTabEnabledKey, .bool(default: SportsSyncService.tabEnabledDefault)),
-            (SportsSyncService.baseHideScoresKey, .bool(default: false))
+            (RecommendationSettings.baseEnabledKey, .bool(default: .fixed(RecommendationSettings.enabledDefault))),
+            (SportsSyncService.baseEnabledKey, .bool(default: .fixed(SportsSyncService.enabledDefault))),
+            (SportsSyncService.baseTabEnabledKey, .bool(default: .sportsTab)),
+            (SportsSyncService.baseHideScoresKey, .bool(default: .fixed(false)))
         ]
         for surface in SectionSurface.allCases {
             keys.append((HomeLayoutSettings.baseSectionOrderKey(surface), .string))
@@ -80,7 +96,7 @@ nonisolated enum ProfileScopedPreferences {
     /// Captures every syncable value, including defaults. Explicit empty/false
     /// values are important: they represent a user re-enabling an area or row
     /// that another device still has disabled.
-    static func snapshot(
+    @MainActor static func snapshot(
         profileID: UUID,
         defaults: UserDefaults = .standard
     ) -> ProfilePreferencesSnapshot {
@@ -91,7 +107,7 @@ nonisolated enum ProfileScopedPreferences {
             switch kind {
             case let .bool(defaultValue):
                 booleans[base] = defaults.object(forKey: scoped) == nil
-                    ? defaultValue
+                    ? defaultValue.value
                     : defaults.bool(forKey: scoped)
             case .string:
                 strings[base] = defaults.string(forKey: scoped) ?? ""

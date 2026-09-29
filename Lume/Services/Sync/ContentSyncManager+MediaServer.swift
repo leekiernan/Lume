@@ -97,7 +97,7 @@ extension ContentSyncManager {
         }
 
         if areas.contains(.movies) {
-            try await syncJellyfinCategories(views: movieViews, type: .vod, playlistId: playlistId)
+            try syncJellyfinCategories(views: movieViews, type: .vod, playlistId: playlistId)
             await progress?.start(.movies)
             var seenMovies = Set<String>()
             for view in movieViews {
@@ -109,7 +109,7 @@ extension ContentSyncManager {
         }
 
         if areas.contains(.series) {
-            try await syncJellyfinCategories(views: showViews, type: .series, playlistId: playlistId)
+            try syncJellyfinCategories(views: showViews, type: .series, playlistId: playlistId)
             await progress?.start(.series)
             var seenSeries = Set<String>()
             var seenEpisodes = Set<String>()

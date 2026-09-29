@@ -373,28 +373,7 @@ final class LumeEngineCoordinator: NSObject, ObservableObject {
     private func handle(event: PlayerEvent) {
         switch event {
         case let .stateChanged(state):
-            Logger.player.info("LumeEngine state → \(String(describing: state), privacy: .public)")
-            isPlaying = state == .playing
-            isBuffering = state == .buffering || state == .opening
-            if isBuffering {
-                PlaybackQoE.shared.noteStallBegan()
-            } else {
-                PlaybackQoE.shared.noteStallEnded()
-            }
-            if state == .playing {
-                markPlaybackStarted(startTracker.noteEngineStarted())
-                onRecovered?()
-            }
-            if state == .failed {
-                // Local copy: os_log interpolation is an autoclosure; swiftformat strips `self.`
-                let started = hasStartedPlayback
-                Logger.player.error("LumeEngine failed (hasStartedPlayback: \(started))")
-                if hasStartedPlayback || retriesStartupErrors {
-                    onStalled?()
-                } else {
-                    reportFailure()
-                }
-            }
+            handle(state: state)
         case let .stalled(position):
             Logger.player.warning("LumeEngine stalled at \(position, format: .fixed(precision: 2))s")
             onStalled?()
@@ -406,6 +385,34 @@ final class LumeEngineCoordinator: NSObject, ObservableObject {
             Logger.player.warning("LumeEngine decoder downgraded: \(LogRedaction.scrubURLs(in: String(describing: error)), privacy: .public)")
         case .opened:
             break
+        @unknown default:
+            // A newer engine event this build doesn't know yet.
+            break
+        }
+    }
+
+    private func handle(state: PlayerSession.State) {
+        Logger.player.info("LumeEngine state → \(String(describing: state), privacy: .public)")
+        isPlaying = state == .playing
+        isBuffering = state == .buffering || state == .opening
+        if isBuffering {
+            PlaybackQoE.shared.noteStallBegan()
+        } else {
+            PlaybackQoE.shared.noteStallEnded()
+        }
+        if state == .playing {
+            markPlaybackStarted(startTracker.noteEngineStarted())
+            onRecovered?()
+        }
+        if state == .failed {
+            // Local copy: os_log interpolation is an autoclosure; swiftformat strips `self.`
+            let started = hasStartedPlayback
+            Logger.player.error("LumeEngine failed (hasStartedPlayback: \(started))")
+            if hasStartedPlayback || retriesStartupErrors {
+                onStalled?()
+            } else {
+                reportFailure()
+            }
         }
     }
 
