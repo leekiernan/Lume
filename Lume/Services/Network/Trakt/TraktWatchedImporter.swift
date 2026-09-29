@@ -32,12 +32,14 @@ struct TraktImportSummary: Equatable {
     /// Shows whose watched episodes were parked because the catalog has no
     /// episodes for them yet. They are applied on first open of the series.
     var showsQueued = 0
+    /// Titles paused part-way on Trakt (`TraktPlaybackImporter`).
+    var inProgress = 0
     var failed = false
 
     static let failure = TraktImportSummary(failed: true)
 
     var markedNothing: Bool {
-        !failed && moviesMarked == 0 && episodesMarked == 0 && showsQueued == 0
+        !failed && moviesMarked == 0 && episodesMarked == 0 && showsQueued == 0 && inProgress == 0
     }
 }
 
@@ -89,8 +91,16 @@ enum TraktWatchedImporter {
         let candidates = TrackerCatalogLookup.movies(tmdbIDs: watchedIDs, in: context)
 
         var count = 0
-        for movie in candidates where !movie.isWatched {
+        for movie in candidates {
             guard let tmdb = movie.tmdbId, watchedIDs.contains(tmdb) else { continue }
+            guard !movie.isWatched else {
+                // Watched again elsewhere since: move it up Recently Watched.
+                // Not counted — nothing about it was marked.
+                if let date = dates[tmdb], date > (movie.lastWatchedDate ?? .distantPast) {
+                    movie.lastWatchedDate = date
+                }
+                continue
+            }
             movie.isWatched = true
             movie.watchProgress = Double(movie.durationSecs ?? 0)
             if let date = dates[tmdb] {

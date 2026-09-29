@@ -15,6 +15,9 @@ import SwiftUI
 /// user's section order, so cases must not be renamed once shipped. Not every
 /// case applies to every surface — see `cases(for:)`.
 enum HomeSection: String, CaseIterable, Identifiable {
+    /// In-progress titles (and recently watched channels on Home).
+    case continueWatching
+    /// Finished titles, to watch again.
     case recentlyWatched
     case favorites
     case recentlyAdded
@@ -36,11 +39,11 @@ enum HomeSection: String, CaseIterable, Identifiable {
     static func cases(for surface: SectionSurface) -> [HomeSection] {
         switch surface {
         case .home:
-            [.recentlyWatched, .favorites, .forYou, .trendingMovies, .trendingSeries, .traktWatchlist, .simklWatchlist]
+            [.continueWatching, .recentlyWatched, .favorites, .forYou, .trendingMovies, .trendingSeries, .traktWatchlist, .simklWatchlist]
         case .movies:
-            [.recentlyWatched, .favorites, .recentlyAdded, .trendingMovies, .traktWatchlist, .simklWatchlist]
+            [.continueWatching, .recentlyWatched, .favorites, .recentlyAdded, .trendingMovies, .traktWatchlist, .simklWatchlist]
         case .series:
-            [.recentlyWatched, .favorites, .recentlyAdded, .trendingSeries, .traktWatchlist, .simklWatchlist]
+            [.continueWatching, .recentlyWatched, .favorites, .recentlyAdded, .trendingSeries, .traktWatchlist, .simklWatchlist]
         }
     }
 
@@ -49,6 +52,7 @@ enum HomeSection: String, CaseIterable, Identifiable {
     /// see `WatchlistProvider.rowTitle`).
     var title: LocalizedStringKey {
         switch self {
+        case .continueWatching: "Continue Watching"
         case .recentlyWatched: "Recently Watched"
         case .favorites: "Favorites"
         case .recentlyAdded: "Recently Added"
@@ -66,6 +70,7 @@ enum HomeSection: String, CaseIterable, Identifiable {
     /// References the same catalog keys as `title`.
     var displayName: String {
         switch self {
+        case .continueWatching: String(localized: "Continue Watching")
         case .recentlyWatched: String(localized: "Recently Watched")
         case .favorites: String(localized: "Favorites")
         case .recentlyAdded: String(localized: "Recently Added")
@@ -84,12 +89,20 @@ enum HomeSection: String, CaseIterable, Identifiable {
     var isPromotable: Bool {
         switch self {
         case .trendingMovies, .trendingSeries, .traktWatchlist, .simklWatchlist: true
-        case .recentlyWatched, .favorites, .recentlyAdded, .forYou, .sports: false
+        case .continueWatching, .recentlyWatched, .favorites, .recentlyAdded, .forYou, .sports: false
         }
+    }
+
+    /// A row added after people had saved their layouts arrives just before
+    /// this one, wherever they put it, rather than at the bottom of every
+    /// existing layout — see `HomeLayoutSettings.normalized`.
+    var arrivesBefore: HomeSection? {
+        self == .continueWatching ? .recentlyWatched : nil
     }
 
     var systemImage: String {
         switch self {
+        case .continueWatching: "play.circle"
         case .recentlyWatched: "clock.arrow.circlepath"
         case .favorites: "star"
         case .recentlyAdded: "plus.rectangle.on.rectangle"
@@ -269,10 +282,11 @@ enum HomeLayoutSettings {
     /// Keep the given order but ensure every row of `surface` appears exactly
     /// once: drop duplicates, custom refs with no matching section, and
     /// built-ins that don't belong to this surface, then append any row missing
-    /// from the list — built-ins in the surface's default order, then custom
-    /// sections in the order they were added. Guarantees the order is always
-    /// complete even after a new case is added to `HomeSection`, or a section
-    /// is added on another device, once the user has stored their order.
+    /// from the list — built-ins in the surface's default order, at the end
+    /// unless they name a row to arrive beside (`arrivesBefore`), then custom
+    /// sections in the order they were added. Guarantees the order is always complete even after a new case is
+    /// added to `HomeSection`, or a section is added on another device, once
+    /// the user has stored their order.
     /// `liveTVEnabled` drops Sports from the surfaced builtins (and from any
     /// stored order that still names it) when the active profile has Live TV
     /// switched off — Sports is fixture data matched against the EPG, so with
@@ -298,7 +312,8 @@ enum HomeLayoutSettings {
             }
         }
         for section in builtins where seen.insert(.builtin(section)).inserted {
-            result.append(.builtin(section))
+            let neighbour = section.arrivesBefore.flatMap { result.firstIndex(of: .builtin($0)) }
+            result.insert(.builtin(section), at: neighbour ?? result.count)
         }
         for section in custom where seen.insert(.custom(section.id)).inserted {
             result.append(.custom(section.id))

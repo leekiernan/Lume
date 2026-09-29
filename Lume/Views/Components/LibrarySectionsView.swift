@@ -121,6 +121,8 @@ struct LibrarySectionsView<CollectionRow: View>: View {
     @ViewBuilder
     private func builtinRow(for section: HomeSection) -> some View {
         switch section {
+        case .continueWatching:
+            collectionRow(.continueWatching)
         case .recentlyWatched:
             collectionRow(.recentlyWatched)
         case .favorites:

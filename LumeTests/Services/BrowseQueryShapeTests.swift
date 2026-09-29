@@ -59,7 +59,7 @@ struct BrowseQueryShapeTests {
         try context.save()
 
         let excluded = Set([locked])
-        #expect(try context.fetch(HomeQuery.watchedMovies(playlistPrefix: mine, excludedCategoryIDs: excluded)).map(\.id) == [movie.id])
+        #expect(try context.fetch(HomeQuery.watchedMovies(playlistPrefix: mine, excludedCategoryIDs: excluded, finished: false)).map(\.id) == [movie.id])
         #expect(try context.fetch(HomeQuery.favoriteMovies(playlistPrefix: mine, excludedCategoryIDs: excluded)).map(\.id) == [movie.id])
         #expect(try context.fetch(HomeQuery.watchedSeries(playlistPrefix: mine, excludedCategoryIDs: excluded)).map(\.id) == [series.id])
         #expect(try context.fetch(HomeQuery.favoriteSeries(playlistPrefix: mine, excludedCategoryIDs: excluded)).map(\.id) == [series.id])
@@ -208,7 +208,7 @@ struct BrowseQueryShapeTests {
         }
         try context.save()
 
-        for kind in [LibraryCollection.Kind.favorites, .recentlyWatched, .recentlyAdded] {
+        for kind in [LibraryCollection.Kind.favorites, .continueWatching, .recentlyAdded] {
             let rows = try context.fetch(MovieCollectionQuery.rowDescriptor(
                 for: kind, playlistPrefix: mine, excludedCategoryIDs: []
             ))
@@ -530,7 +530,7 @@ struct BrowseQueryShapeTests {
         try context.save()
 
         let page = MovieCollectionQuery.pageDescriptor(
-            for: .recentlyWatched, playlistPrefix: mine,
+            for: .continueWatching, playlistPrefix: mine,
             excludedCategoryIDs: [locked], offset: 0, limit: 100
         )
         #expect(try context.fetch(page).map(\.id) == [visible.id])
@@ -557,14 +557,14 @@ struct BrowseQueryShapeTests {
 
         let pages = try stride(from: 0, through: 200, by: 100).flatMap { offset in
             try context.fetch(MovieCollectionQuery.pageDescriptor(
-                for: .recentlyWatched, playlistPrefix: mine,
+                for: .continueWatching, playlistPrefix: mine,
                 excludedCategoryIDs: [], offset: offset, limit: 100
             ))
         }
         #expect(pages.count == 205)
         #expect(Set(pages.map(\.id)).count == 205)
         let complete = try context.fetch(MovieCollectionQuery.gridDescriptor(
-            for: .recentlyWatched, playlistPrefix: mine
+            for: .continueWatching, playlistPrefix: mine
         ))
         #expect(pages.map(\.id) == complete.map(\.id))
     }

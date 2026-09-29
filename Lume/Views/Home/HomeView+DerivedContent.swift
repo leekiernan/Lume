@@ -2,7 +2,7 @@
 //  HomeView+DerivedContent.swift
 //  Lume
 //
-//  Home's Recently Watched / Favorites rows and the empty-state check they
+//  Home's Continue Watching / Recently Watched / Favorites rows and the empty-state check they
 //  feed, split from HomeView.swift purely to keep that file under the
 //  line-length cap.
 //
@@ -23,11 +23,31 @@ extension HomeView {
         return streams.filter { belongsToActivePlaylist($0.id) }.excludingRestricted(restriction)
     }
 
+    /// In-progress movies and series, and channels watched lately.
+    var continueWatching: [HomeMediaItem] {
+        let series = visibleWatchedSeries.filter { !seriesProgress.finished.contains($0.id) }
+        return newestFirst(
+            watchedMovies.filter { belongsToActivePlaylist($0.id) }.excludingRestricted(restriction).map(HomeMediaItem.movie)
+                + series.map(HomeMediaItem.series)
+                + visibleChannels(watchedStreams).map(HomeMediaItem.live)
+        )
+    }
+
+    /// Finished movies and series, to watch again.
     var recentlyWatched: [HomeMediaItem] {
-        let items = watchedMovies.filter { belongsToActivePlaylist($0.id) }.excludingRestricted(restriction).map(HomeMediaItem.movie)
-            + watchedSeries.filter { belongsToActivePlaylist($0.id) }.excludingRestricted(restriction).map(HomeMediaItem.series)
-            + visibleChannels(watchedStreams).map(HomeMediaItem.live)
-        return items
+        let series = visibleWatchedSeries.filter { seriesProgress.finished.contains($0.id) }
+        return newestFirst(
+            finishedMovies.filter { belongsToActivePlaylist($0.id) }.excludingRestricted(restriction).map(HomeMediaItem.movie)
+                + series.map(HomeMediaItem.series)
+        )
+    }
+
+    private var visibleWatchedSeries: [Series] {
+        watchedSeries.filter { belongsToActivePlaylist($0.id) }.excludingRestricted(restriction)
+    }
+
+    private func newestFirst(_ items: [HomeMediaItem]) -> [HomeMediaItem] {
+        items
             .sorted { ($0.lastWatchedDate ?? .distantPast) > ($1.lastWatchedDate ?? .distantPast) }
             // After sorting, so the copy kept is the one watched most recently.
             .deduplicatedByTitle()
@@ -61,13 +81,17 @@ extension HomeView {
     /// dedupe (or a JSON decode) — so `body` derives them once and hands the
     /// result to both, rather than each reader recomputing them.
     struct DerivedContent {
+        let continueWatching: [HomeMediaItem]
         let recentlyWatched: [HomeMediaItem]
         let favorites: [HomeMediaItem]
         let customSections: [CustomHomeSection]
     }
 
     func derivedContent() -> DerivedContent {
-        DerivedContent(recentlyWatched: recentlyWatched, favorites: favorites, customSections: customSections)
+        DerivedContent(
+            continueWatching: continueWatching, recentlyWatched: recentlyWatched,
+            favorites: favorites, customSections: customSections
+        )
     }
 
     /// Everything Home's display decision rests on — see
@@ -84,6 +108,7 @@ extension HomeView {
         return SectionSurfaceSnapshot(
             hasPlaylists: !playlists.isEmpty,
             localRows: [
+                HomeSection.continueWatching.rawValue: content.continueWatching.count,
                 HomeSection.recentlyWatched.rawValue: content.recentlyWatched.count,
                 HomeSection.favorites.rawValue: content.favorites.count
             ],
@@ -125,5 +150,7 @@ extension HomeView {
         seriesResume = await Task.detached(priority: .userInitiated) {
             SeriesResumeLoader.load(container: container)
         }.value
+        // Same trigger: a series' watch stamp moving is what both depend on.
+        seriesProgress = await ContinueWatchingLoader.load(watchedSeries, in: modelContext)
     }
 }

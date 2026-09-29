@@ -14,15 +14,20 @@ nonisolated enum HomeQuery {
     static let watchedLimit = 20
     static let favoritesLimit = 30
 
+    /// Movies watched lately — in progress (Continue Watching) or `finished`
+    /// (Recently Watched). Split in the query so neither rail's limit is spent
+    /// on the other's titles.
     static func watchedMovies(
         playlistPrefix prefix: String,
-        excludedCategoryIDs: Set<String>
+        excludedCategoryIDs: Set<String>,
+        finished: Bool
     ) -> FetchDescriptor<Movie> {
         let excluded = Set(excludedCategoryIDs.map(String?.some))
         let filtersCategories = !excluded.isEmpty
         var descriptor = FetchDescriptor<Movie>(
             predicate: #Predicate { movie in
                 movie.lastWatchedDate != nil
+                    && movie.isWatched == finished
                     && movie.id.starts(with: prefix)
                     && (!filtersCategories || movie.categoryId == nil || !excluded.contains(movie.categoryId))
             },
