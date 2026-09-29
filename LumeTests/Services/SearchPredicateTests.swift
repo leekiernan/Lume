@@ -247,7 +247,11 @@ struct SearchPredicateTests {
         let context = container.mainContext
         let (big, small) = try insertTwoCatalogs(context, limit: 5)
 
-        let hits = SearchFetcher.fetch(container: container, request: movieRequest([big, small], limit: 20))
+        let hits = SearchFetcher.fetch(container: container, request: SearchRequest(
+            query: "matrix", playlistIDs: [big, small],
+            wantMovies: true, wantSeries: false, wantLive: false,
+            excludedCategoryIDs: [], limit: 20
+        ))
         let movies: [Movie] = hydrateSearchHits(hits.movies, in: context)
 
         #expect(hits.movies.count == 17)
