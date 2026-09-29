@@ -176,6 +176,7 @@ struct MovieCollectionRow: View {
                 animationNamespace: animationNamespace,
                 removeAction: kind == .recentlyWatched ? { movie in
                     movie.lastWatchedDate = nil
+                    ContentClearLedger.shared.record(movie.id)
                     try? modelContext.save()
                 } : nil,
                 onLeadingLeft: onLeadingLeft,
@@ -388,6 +389,7 @@ struct SeriesCollectionRow: View {
                 animationNamespace: animationNamespace,
                 removeAction: kind == .recentlyWatched ? { series in
                     series.lastWatchedDate = nil
+                    ContentClearLedger.shared.record(series.id)
                     try? modelContext.save()
                 } : nil,
                 onLeadingLeft: onLeadingLeft,

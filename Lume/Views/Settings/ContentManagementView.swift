@@ -329,7 +329,7 @@ struct ContentManagementView: View {
                     title: { $0.name },
                     isHidden: { $0.isHidden },
                     drillValue: categoryDrill,
-                    onToggleHidden: { $0.isHidden.toggle() },
+                    onToggleHidden: { ContentOrganizer.toggleHidden($0) },
                     onCommitOrder: commitReorder,
                     isReordering: $isReordering,
                     scrollProxy: proxy,
@@ -400,7 +400,7 @@ struct ContentManagementView: View {
                                 isHidden: category.isHidden,
                                 isRestricted: category.isRestricted,
                                 drillInValue: selectedType == .live ? category : nil,
-                                onToggleHidden: { category.isHidden.toggle() },
+                                onToggleHidden: { ContentOrganizer.toggleHidden(category) },
                                 onToggleRestricted: { category.isRestricted.toggle() },
                                 onDrillIn: { selectedCategory = $0 }
                             )

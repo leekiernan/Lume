@@ -25,8 +25,13 @@ extension CloudSyncEngine {
         }
     }
 
+    /// Writes `value` to the title's cloud record. An all-default value is a
+    /// clear, and is written as a record like any other — a deletion would
+    /// read, on another device, the same as a record not imported yet (see
+    /// `ContentIntentMerge`). Nil deletes the record: only for state that no
+    /// longer has an owner (its playlist deleted).
     func applyContentToCloud(_ value: ContentStateValues?, id: String, kind: SyncedContentKind?, mirror: UserContentState?) {
-        guard let value, !value.isEmpty else {
+        guard let value else {
             if let mirror { cloudContext.delete(mirror) }
             return
         }
@@ -67,7 +72,7 @@ extension CloudSyncEngine {
     /// device yet, so the change stays pending for a later pass.
     func applyContentToLocal(_ value: ContentStateValues?, id: String, kind: SyncedContentKind?, loaded: (any PersistentModel)?) throws -> Bool {
         guard let kind else { return true } // nothing to apply (shadow-only id)
-        let values = value ?? ContentStateValues(watchProgress: 0, isWatched: false, lastWatchedDate: nil, isFavorite: false, addedToWatchlistDate: nil, favoriteOrder: nil)
+        let values = value ?? .empty
 
         // Each helper returns false when its catalog item hasn't synced yet, so
         // the change stays pending for a later pass.

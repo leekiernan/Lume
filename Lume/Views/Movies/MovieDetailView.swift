@@ -337,6 +337,7 @@ struct MovieDetailView: View {
 
     private func toggleWatched() {
         movie.isWatched.toggle()
+        if !movie.isWatched { ContentClearLedger.shared.record(movie.id) }
         if movie.isWatched {
             movie.watchProgress = Double(movie.durationSecs ?? 0)
             #if !os(tvOS)
