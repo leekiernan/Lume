@@ -3,7 +3,7 @@
 //  Lume
 //
 //  The Continue Watching rail on Home, Movies and Series: landscape cards with
-//  the title's TMDB backdrop, its logo bottom-right, and under it a progress
+//  the title's TMDB backdrop, its logo bottom-left, and under it a progress
 //  bar between a play glyph and what's left — time for a movie, the episode
 //  for a series. Finished titles leave the rail (`ContinueWatching`).
 //
@@ -17,7 +17,7 @@ import SwiftUI
 enum ContinueWatchingMetrics {
     static let cardWidth: CGFloat = (PosterCardMetrics.posterWidth * 1.4).rounded()
     static let cardHeight: CGFloat = (cardWidth * 9 / 16).rounded()
-    /// The logo and the progress row under it share this width.
+    /// The most the logo may take.
     static let infoWidth: CGFloat = (cardWidth * 0.6).rounded()
     static let logoMaxHeight: CGFloat = (cardHeight * 0.3).rounded()
     static let rowHeight: CGFloat = cardHeight + 2 * PosterCardMetrics.railVerticalPadding
@@ -30,12 +30,14 @@ enum ContinueWatchingMetrics {
         static let inset: CGFloat = 16
         static let labelFont: Font = .system(size: 20, weight: .semibold)
         static let glyphFont: Font = .system(size: 16, weight: .bold)
+        static let glyphSize: CGFloat = 14
         static let barHeight: CGFloat = 6
         static let fallbackTitleFont: Font = .system(size: 26, weight: .bold)
     #else
         static let inset: CGFloat = 8
         static let labelFont: Font = .system(size: 10, weight: .semibold)
         static let glyphFont: Font = .system(size: 8, weight: .bold)
+        static let glyphSize: CGFloat = 7
         static let barHeight: CGFloat = 3
         static let fallbackTitleFont: Font = .system(size: 13, weight: .bold)
     #endif
@@ -272,7 +274,7 @@ private struct ContinueWatchingCard: View {
     private typealias Metrics = ContinueWatchingMetrics
 
     var body: some View {
-        ZStack(alignment: .bottomTrailing) {
+        ZStack(alignment: .bottomLeading) {
             CachedAsyncImage(url: backdropURL ?? posterURL, maxPixelSize: Metrics.cardWidth) { phase in
                 switch phase {
                 case let .success(image):
@@ -292,20 +294,20 @@ private struct ContinueWatchingCard: View {
                 endPoint: .bottom
             )
 
-            VStack(alignment: .trailing, spacing: Metrics.inset / 2) {
+            VStack(alignment: .leading, spacing: Metrics.inset / 2) {
                 TitleLogo(
                     url: logoURL,
                     title: title,
                     maxWidth: Metrics.infoWidth,
                     maxHeight: Metrics.logoMaxHeight,
-                    alignment: .trailing
+                    alignment: .leading
                 ) {
                     Text(title)
                         .font(Metrics.fallbackTitleFont)
                         .foregroundStyle(.white)
                         .lineLimit(2)
-                        .multilineTextAlignment(.trailing)
-                        .frame(maxWidth: Metrics.infoWidth, alignment: .trailing)
+                        .multilineTextAlignment(.leading)
+                        .frame(maxWidth: Metrics.infoWidth, alignment: .leading)
                 }
                 progressRow
             }
@@ -321,10 +323,15 @@ private struct ContinueWatchingCard: View {
             .accessibilityLabel(Text(label.map { "\(title), \($0)" } ?? title))
     }
 
+    /// Across the card: the label keeps its full width, the bar takes the
+    /// rest. The glyph is a plain sized box, not text, so it centres on the
+    /// bar exactly rather than on a font's line.
     private var progressRow: some View {
-        HStack(spacing: Metrics.inset / 2) {
+        HStack(alignment: .center, spacing: Metrics.inset / 2) {
             Image(systemName: "play.fill")
-                .font(Metrics.glyphFont)
+                .resizable()
+                .scaledToFit()
+                .frame(width: Metrics.glyphSize, height: Metrics.glyphSize)
             ContinueWatchingBar(fraction: fraction)
             if let label {
                 Text(label)
@@ -334,7 +341,6 @@ private struct ContinueWatchingCard: View {
             }
         }
         .foregroundStyle(.white)
-        .frame(width: Metrics.infoWidth)
     }
 }
 
@@ -362,7 +368,7 @@ private struct ContinueWatchingChannelCard: View {
     private typealias Metrics = ContinueWatchingMetrics
 
     var body: some View {
-        ZStack(alignment: .bottomTrailing) {
+        ZStack(alignment: .bottomLeading) {
             LinearGradient(colors: [Color(white: 0.30), Color(white: 0.14)], startPoint: .top, endPoint: .bottom)
             CachedAsyncImage(url: logoURL, maxPixelSize: Metrics.cardWidth) { phase in
                 if case let .success(image) = phase {
@@ -390,7 +396,7 @@ private struct ContinueWatchingChannelCard: View {
                     .background(.red, in: Capsule())
             }
             .foregroundStyle(.white)
-            .frame(maxWidth: Metrics.infoWidth, alignment: .trailing)
+            .frame(maxWidth: Metrics.cardWidth - 2 * Metrics.inset, alignment: .leading)
             .padding(Metrics.inset)
         }
         .frame(width: Metrics.cardWidth, height: Metrics.cardHeight)

@@ -109,11 +109,19 @@ nonisolated enum ContinueWatchingLoader {
         var finished: Set<String> = []
     }
 
-    /// Loads the split for `series`, off the main thread.
+    /// Loads the split for `series`, off the main thread. A series whose
+    /// episodes this device hasn't fetched yet — its page loads them lazily —
+    /// has them fetched first (`ContinueWatchingEpisodes`), so the rail can
+    /// say where it continues without the viewer opening it.
     @MainActor static func load(_ series: [Series], in context: ModelContext) async -> Result {
         let ids = series.map(\.persistentModelID)
         guard !ids.isEmpty else { return Result() }
         let container = context.container
+        let first = await Task.detached(priority: .userInitiated) {
+            load(container: container, series: ids)
+        }.value
+        let unknown = series.filter { first.continuations[$0.id] == nil && !first.finished.contains($0.id) }
+        guard !Task.isCancelled, await ContinueWatchingEpisodes.fetchMissing(unknown, in: context) else { return first }
         return await Task.detached(priority: .userInitiated) {
             load(container: container, series: ids)
         }.value
@@ -138,5 +146,42 @@ nonisolated enum ContinueWatchingLoader {
             }
         }
         return result
+    }
+}
+
+// MARK: - Missing episodes
+
+/// Fetches episodes for series in a watch rail that this device has none of,
+/// the way the series page does on open (`fetchEpisodes`, then
+/// `insertEpisodes` on the caller's context so its views see them).
+@MainActor
+enum ContinueWatchingEpisodes {
+    /// A few at a time: a rail shows about ten.
+    static let limit = 6
+    /// Once per series per launch: a provider that has none, or fails, isn't
+    /// asked again on every redraw.
+    private static var attempted: Set<String> = []
+
+    /// Whether any episodes were added.
+    static func fetchMissing(_ series: [Series], in context: ModelContext) async -> Bool {
+        let candidates = series.filter { $0.episodes.isEmpty && !attempted.contains($0.id) }.prefix(limit)
+        guard !candidates.isEmpty,
+              let playlists = try? context.fetch(FetchDescriptor<Playlist>())
+        else { return false }
+        let manager = ContentSyncManager(modelContainer: context.container)
+        var added = false
+        for show in candidates {
+            guard !Task.isCancelled else { break }
+            attempted.insert(show.id)
+            guard let playlist = playlists.owner(ofContentID: show.id), playlist.supportsPerSeriesEpisodeFetch,
+                  let parsed = try? await manager.fetchEpisodes(
+                      seriesId: show.seriesId, seriesElementId: show.id, playlist: playlist
+                  ),
+                  !parsed.isEmpty
+            else { continue }
+            show.insertEpisodes(parsed, into: context)
+            added = true
+        }
+        return added
     }
 }
