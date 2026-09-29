@@ -85,10 +85,26 @@ struct HomeLayoutSettingsTests {
             [.builtin(.forYou), .builtin(.recentlyWatched)], custom: [], surface: .home
         )
         #expect(result.first == .builtin(.forYou))
-        #expect(result[1] == .builtin(.recentlyWatched))
+        let forYou = try? #require(result.firstIndex(of: .builtin(.forYou)))
+        let recent = try? #require(result.firstIndex(of: .builtin(.recentlyWatched)))
+        #expect((forYou ?? 0) < (recent ?? 0))
         for section in HomeSection.cases(for: .home) {
             #expect(result.contains(.builtin(section)))
         }
+    }
+
+    /// A row added after the viewer saved their order lands where the default
+    /// order puts it — Continue Watching ahead of Recently Watched — rather
+    /// than at the bottom of every existing layout.
+    @Test func `normalized places a new built-in at its default position`() {
+        let saved: [HomeSectionRef] = [.builtin(.recentlyWatched), .builtin(.favorites), .builtin(.forYou)]
+        let result = HomeLayoutSettings.normalized(saved, custom: [], surface: .home)
+        #expect(Array(result.prefix(3)) == [.builtin(.continueWatching), .builtin(.recentlyWatched), .builtin(.favorites)])
+
+        // Moved by the viewer: it arrives before the next default row they have.
+        let moved: [HomeSectionRef] = [.builtin(.favorites), .builtin(.forYou), .builtin(.recentlyWatched)]
+        let placed = HomeLayoutSettings.normalized(moved, custom: [], surface: .home)
+        #expect(placed.firstIndex(of: .builtin(.continueWatching)) == placed.firstIndex(of: .builtin(.recentlyWatched)).map { $0 - 1 })
     }
 
     @Test func `normalized deduplicates`() {
@@ -308,7 +324,9 @@ struct HomeLayoutSettingsTests {
             surface: .movies, sections: [], heroRaw: "", orderRaw: existing, seeded: false
         ) else { Issue.record("expected a seed"); return }
         let order = HomeLayoutSettings.decode(orderRaw)
-        #expect(order.dropFirst().prefix(2) == [.builtin(.favorites), .builtin(.recentlyWatched)])
+        // Continue Watching, new since the order was saved, joins just ahead
+        // of Recently Watched.
+        #expect(order.dropFirst().prefix(3) == [.builtin(.favorites), .builtin(.continueWatching), .builtin(.recentlyWatched)])
     }
 
     /// Home mixes media and a section carries one URL, so its default is the

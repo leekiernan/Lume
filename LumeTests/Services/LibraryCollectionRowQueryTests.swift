@@ -46,7 +46,7 @@ struct LibraryCollectionRowQueryTests {
             context.insert(visibleSeries)
             try context.save()
 
-            for kind in [LibraryCollection.Kind.recentlyWatched, .favorites] {
+            for kind in [LibraryCollection.Kind.continueWatching, .favorites] {
                 let movies = try context.fetch(MovieCollectionQuery.rowDescriptor(
                     for: kind, playlistPrefix: mine, excludedCategoryIDs: [locked]
                 ))
@@ -97,6 +97,30 @@ struct LibraryCollectionRowQueryTests {
     }
 
     // MARK: - Helpers
+
+    /// Watched movies split by whether they're finished: in progress for
+    /// Continue Watching, finished for Recently Watched.
+    @Test func `the two watch collections split on finished`() throws {
+        try OnDiskCatalogStore.withContext { context in
+            let started = Movie(id: "\(mine)started", streamId: 1, name: "Started")
+            started.lastWatchedDate = Date()
+            let finished = Movie(id: "\(mine)finished", streamId: 2, name: "Finished")
+            finished.lastWatchedDate = Date()
+            finished.isWatched = true
+            context.insert(started)
+            context.insert(finished)
+            try context.save()
+
+            let continuing = try context.fetch(MovieCollectionQuery.rowDescriptor(
+                for: .continueWatching, playlistPrefix: mine, excludedCategoryIDs: []
+            ))
+            let recent = try context.fetch(MovieCollectionQuery.rowDescriptor(
+                for: .recentlyWatched, playlistPrefix: mine, excludedCategoryIDs: []
+            ))
+            #expect(continuing.map(\.id) == [started.id])
+            #expect(recent.map(\.id) == [finished.id])
+        }
+    }
 
     private func mark(_ movie: Movie, watchedAt date: Date) {
         movie.isFavorite = true

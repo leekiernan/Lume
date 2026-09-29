@@ -132,7 +132,7 @@ private struct HomeItemCell: View {
 /// action a card offers is built here, in a single menu: only the outermost
 /// `contextMenu` on a view survives, so a stacked second modifier would silently
 /// replace the first.
-private struct HomeItemMenu: ViewModifier {
+struct HomeItemMenu: ViewModifier {
     let item: HomeMediaItem
     let onRemove: ((HomeMediaItem) -> Void)?
     let onVote: ((HomeMediaItem, RecommendationVote) -> Void)?

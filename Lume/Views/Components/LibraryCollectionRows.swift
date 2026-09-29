@@ -28,12 +28,16 @@ import SwiftUI
 /// navigation value so Movies and Series can each register a destination for it.
 struct LibraryCollection: Hashable {
     enum Kind: String, Hashable {
+        /// In progress.
+        case continueWatching
+        /// Finished, to watch again.
         case recentlyWatched
         case favorites
         case recentlyAdded
 
         var title: LocalizedStringKey {
             switch self {
+            case .continueWatching: "Continue Watching"
             case .recentlyWatched: "Recently Watched"
             case .favorites: "Favorites"
             case .recentlyAdded: "Recently Added"
@@ -42,6 +46,7 @@ struct LibraryCollection: Hashable {
 
         var emptyIcon: String {
             switch self {
+            case .continueWatching: "play.circle"
             case .recentlyWatched: "clock.arrow.circlepath"
             case .favorites: "heart"
             case .recentlyAdded: "sparkles"
@@ -165,24 +170,41 @@ struct MovieCollectionRow: View {
 
     var body: some View {
         let items = Array(movies.deduplicatedByTitle().prefix(collectionPreviewLimit))
-        if !items.isEmpty {
+        let collection = LibraryCollection(kind: kind, type: .vod)
+        if kind == .continueWatching, !items.isEmpty {
+            ContinueWatchingRow(
+                items: items.map(HomeMediaItem.movie),
+                series: ContinueWatchingLoader.Result(),
+                onPlayLive: { _ in },
+                showAll: movies.count > items.count ? collection : nil,
+                onRemove: { item in
+                    guard case let .movie(movie) = item else { return }
+                    forget(movie)
+                },
+                onLeadingLeft: onLeadingLeft,
+                animationNamespace: animationNamespace
+            )
+        } else if !items.isEmpty {
             CollectionPreviewRow(
                 title: kind.title,
-                collection: LibraryCollection(kind: kind, type: .vod),
+                collection: collection,
                 items: items,
                 // Against the raw fetch: a title collapsed as a duplicate still
                 // means the full grid holds more than this row.
                 hasMore: movies.count > items.count,
                 animationNamespace: animationNamespace,
-                removeAction: kind == .recentlyWatched ? { movie in
-                    movie.lastWatchedDate = nil
-                    ContentClearLedger.shared.record(movie.id)
-                    try? modelContext.save()
-                } : nil,
+                removeAction: kind == .recentlyWatched ? { forget($0) } : nil,
                 onLeadingLeft: onLeadingLeft,
                 card: { MovieCardView(movie: $0) }
             )
         }
+    }
+
+    /// Takes a movie out of both watch rails.
+    private func forget(_ movie: Movie) {
+        movie.lastWatchedDate = nil
+        ContentClearLedger.shared.record(movie.id)
+        try? modelContext.save()
     }
 }
 
@@ -206,7 +228,7 @@ struct MovieCollectionView: View {
     var body: some View {
         let emptyDescription: LocalizedStringKey = switch kind {
         case .favorites: "Movies you mark as favorites will appear here"
-        case .recentlyWatched: "Movies you watch will appear here"
+        case .continueWatching, .recentlyWatched: "Movies you watch will appear here"
         case .recentlyAdded: "Movies recently added to your library will appear here"
         }
         CategoryContentGrid(
@@ -249,101 +271,6 @@ struct MovieCollectionView: View {
     }
 }
 
-/// Internal, not fileprivate, so the tests and benchmarks can build these
-/// descriptors and assert their shape — the `fetchLimit`, the playlist scope and
-/// the lexical `added` comparator are performance contracts a well-meaning
-/// refactor can undo without changing a single visible row. Same reasoning as
-/// the search predicates in `SearchFetching.swift`.
-enum MovieCollectionQuery {
-    /// The fetch behind a preview row — always bounded, see
-    /// `collectionRowFetchLimit`.
-    static func rowDescriptor(
-        for kind: LibraryCollection.Kind,
-        playlistPrefix: String,
-        excludedCategoryIDs: Set<String>
-    ) -> FetchDescriptor<Movie> {
-        var descriptor = base(for: kind, playlistPrefix: playlistPrefix, excludedCategoryIDs: excludedCategoryIDs)
-        descriptor.fetchLimit = collectionRowFetchLimit
-        return descriptor
-    }
-
-    /// Unbounded descriptor retained for benchmarks and callers that explicitly
-    /// need a complete result. The shipping full grid uses `pageDescriptor`.
-    static func gridDescriptor(for kind: LibraryCollection.Kind, playlistPrefix: String) -> FetchDescriptor<Movie> {
-        base(for: kind, playlistPrefix: playlistPrefix)
-    }
-
-    static func pageDescriptor(
-        for kind: LibraryCollection.Kind,
-        playlistPrefix: String,
-        excludedCategoryIDs: Set<String>,
-        offset: Int,
-        limit: Int
-    ) -> FetchDescriptor<Movie> {
-        var descriptor = base(
-            for: kind,
-            playlistPrefix: playlistPrefix,
-            excludedCategoryIDs: excludedCategoryIDs
-        )
-        descriptor.fetchOffset = offset
-        descriptor.fetchLimit = limit
-        return descriptor
-    }
-
-    private static func base(
-        for kind: LibraryCollection.Kind,
-        playlistPrefix prefix: String,
-        excludedCategoryIDs: Set<String> = []
-    ) -> FetchDescriptor<Movie> {
-        let excluded = Set(excludedCategoryIDs.map(String?.some))
-        let filtersCategories = !excluded.isEmpty
-        return switch kind {
-        case .recentlyWatched:
-            FetchDescriptor<Movie>(
-                predicate: #Predicate {
-                    $0.lastWatchedDate != nil
-                        && $0.id.starts(with: prefix)
-                        && (!filtersCategories || $0.categoryId == nil || !excluded.contains($0.categoryId))
-                },
-                sortBy: [
-                    SortDescriptor(\.lastWatchedDate, order: .reverse),
-                    SortDescriptor(\.name),
-                    SortDescriptor(\.id)
-                ]
-            )
-        case .favorites:
-            FetchDescriptor<Movie>(
-                predicate: #Predicate {
-                    $0.isFavorite
-                        && $0.id.starts(with: prefix)
-                        && (!filtersCategories || $0.categoryId == nil || !excluded.contains($0.categoryId))
-                },
-                // The user's arrangement from Content Management › Favorites,
-                // as on Home. Never-reordered favorites (nil) sort by name.
-                sortBy: [SortDescriptor(\.favoriteOrder), SortDescriptor(\.name), SortDescriptor(\.id)]
-            )
-        case .recentlyAdded:
-            // `comparator: .lexical`, not the `.localizedStandard` default:
-            // `added` is a Unix timestamp string, and the localized comparator
-            // emits `COLLATE NSCollateFinderlike`, which the `#Index` on
-            // `Movie.added` cannot serve. 222.4 ms → 92.6 ms on a 179k-title
-            // catalog, and that one query was 46% of a cold launch's SQL.
-            FetchDescriptor<Movie>(
-                predicate: #Predicate {
-                    $0.added != nil
-                        && $0.id.starts(with: prefix)
-                        && (!filtersCategories || $0.categoryId == nil || !excluded.contains($0.categoryId))
-                },
-                sortBy: [
-                    SortDescriptor(\.added, comparator: .lexical, order: .reverse),
-                    SortDescriptor(\.num),
-                    SortDescriptor(\.id)
-                ]
-            )
-        }
-    }
-}
-
 // MARK: - Series
 
 /// A Series-tab collection preview row (Recently Watched or Favorites). Renders
@@ -355,6 +282,9 @@ struct SeriesCollectionRow: View {
     var onLeadingLeft: (() -> Void)?
     @Environment(\.modelContext) private var modelContext
     @Query private var series: [Series]
+    /// Which watched series are finished — splits them between the two watch
+    /// rails (`ContinueWatchingLoader`).
+    @State private var progress = ContinueWatchingLoader.Result()
 
     /// `excludedCategoryIDs` is the viewer's `ContentRestriction`, passed in
     /// rather than read from the environment because the `@Query` is built
@@ -377,25 +307,73 @@ struct SeriesCollectionRow: View {
     }
 
     var body: some View {
-        let items = Array(series.deduplicatedByTitle().prefix(collectionPreviewLimit))
-        if !items.isEmpty {
-            CollectionPreviewRow(
-                title: kind.title,
-                collection: LibraryCollection(kind: kind, type: .series),
-                items: items,
-                // Against the raw fetch: a title collapsed as a duplicate still
-                // means the full grid holds more than this row.
-                hasMore: series.count > items.count,
-                animationNamespace: animationNamespace,
-                removeAction: kind == .recentlyWatched ? { series in
-                    series.lastWatchedDate = nil
-                    ContentClearLedger.shared.record(series.id)
-                    try? modelContext.save()
-                } : nil,
-                onLeadingLeft: onLeadingLeft,
-                card: { SeriesCardView(series: $0) }
-            )
+        let shown = SeriesWatchSplit.shown(series, for: kind, progress: progress)
+        let items = Array(shown.deduplicatedByTitle().prefix(collectionPreviewLimit))
+        let collection = LibraryCollection(kind: kind, type: .series)
+        Group {
+            if kind == .continueWatching, !items.isEmpty {
+                ContinueWatchingRow(
+                    items: items.map(HomeMediaItem.series),
+                    series: progress,
+                    onPlayLive: { _ in },
+                    showAll: shown.count > items.count ? collection : nil,
+                    onRemove: { item in
+                        guard case let .series(show) = item else { return }
+                        forget(show)
+                    },
+                    onLeadingLeft: onLeadingLeft,
+                    animationNamespace: animationNamespace
+                )
+            } else if !items.isEmpty {
+                CollectionPreviewRow(
+                    title: kind.title,
+                    collection: collection,
+                    items: items,
+                    // Against the raw fetch: a title collapsed as a duplicate still
+                    // means the full grid holds more than this row.
+                    hasMore: shown.count > items.count,
+                    animationNamespace: animationNamespace,
+                    removeAction: kind == .recentlyWatched ? { forget($0) } : nil,
+                    onLeadingLeft: onLeadingLeft,
+                    card: { SeriesCardView(series: $0) }
+                )
+            }
         }
+        .task(id: SeriesWatchSplit.key(series, for: kind)) {
+            guard SeriesWatchSplit.splits(kind) else { return }
+            progress = await ContinueWatchingLoader.load(series, in: modelContext)
+        }
+    }
+
+    /// Takes a series out of both watch rails.
+    private func forget(_ series: Series) {
+        series.lastWatchedDate = nil
+        ContentClearLedger.shared.record(series.id)
+        try? modelContext.save()
+    }
+}
+
+/// The two watch collections share one series query; this is where they part.
+enum SeriesWatchSplit {
+    static func splits(_ kind: LibraryCollection.Kind) -> Bool {
+        kind == .continueWatching || kind == .recentlyWatched
+    }
+
+    /// Finished series for Recently Watched, the rest for Continue Watching —
+    /// one whose episodes aren't loaded counts as in progress. Other kinds
+    /// pass through.
+    static func shown(_ series: [Series], for kind: LibraryCollection.Kind, progress: ContinueWatchingLoader.Result) -> [Series] {
+        switch kind {
+        case .continueWatching: series.filter { !progress.finished.contains($0.id) }
+        case .recentlyWatched: series.filter { progress.finished.contains($0.id) }
+        case .favorites, .recentlyAdded: series
+        }
+    }
+
+    /// Reloads when the list changes or any of it is watched again.
+    static func key(_ series: [Series], for kind: LibraryCollection.Kind) -> [String] {
+        guard splits(kind) else { return [] }
+        return series.map { "\($0.id)|\($0.lastWatchedDate?.timeIntervalSince1970 ?? 0)" }
     }
 }
 
@@ -407,6 +385,8 @@ struct SeriesCollectionView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.contentRestriction) private var restriction
     @State private var collection = PagedCollection<Series>()
+    /// Splits the loaded pages between the two watch collections.
+    @State private var progress = ContinueWatchingLoader.Result()
 
     private let pageSize = 100
 
@@ -419,12 +399,12 @@ struct SeriesCollectionView: View {
     var body: some View {
         let emptyDescription: LocalizedStringKey = switch kind {
         case .favorites: "Series you mark as favorites will appear here"
-        case .recentlyWatched: "Series you watch will appear here"
+        case .continueWatching, .recentlyWatched: "Series you watch will appear here"
         case .recentlyAdded: "Series recently added to your library will appear here"
         }
         CategoryContentGrid(
             title: kind.localizedTitleString,
-            items: collection.items,
+            items: SeriesWatchSplit.shown(collection.items, for: kind, progress: progress),
             animationNamespace: animationNamespace,
             emptyTitle: kind.title,
             emptyIcon: kind.emptyIcon,
@@ -437,6 +417,10 @@ struct SeriesCollectionView: View {
         .task(id: requestKey) {
             collection.prepare(for: requestKey)
             loadNextPage()
+        }
+        .task(id: SeriesWatchSplit.key(collection.items, for: kind)) {
+            guard SeriesWatchSplit.splits(kind) else { return }
+            progress = await ContinueWatchingLoader.load(collection.items, in: modelContext)
         }
     }
 
@@ -462,94 +446,6 @@ struct SeriesCollectionView: View {
     }
 }
 
-/// Internal for the same reason as `MovieCollectionQuery`.
-enum SeriesCollectionQuery {
-    /// The fetch behind a preview row — always bounded, see
-    /// `collectionRowFetchLimit`.
-    static func rowDescriptor(
-        for kind: LibraryCollection.Kind,
-        playlistPrefix: String,
-        excludedCategoryIDs: Set<String>
-    ) -> FetchDescriptor<Series> {
-        var descriptor = base(for: kind, playlistPrefix: playlistPrefix, excludedCategoryIDs: excludedCategoryIDs)
-        descriptor.fetchLimit = collectionRowFetchLimit
-        return descriptor
-    }
-
-    /// Unbounded descriptor retained for benchmarks and explicit complete reads.
-    static func gridDescriptor(for kind: LibraryCollection.Kind, playlistPrefix: String) -> FetchDescriptor<Series> {
-        base(for: kind, playlistPrefix: playlistPrefix)
-    }
-
-    static func pageDescriptor(
-        for kind: LibraryCollection.Kind,
-        playlistPrefix: String,
-        excludedCategoryIDs: Set<String>,
-        offset: Int,
-        limit: Int
-    ) -> FetchDescriptor<Series> {
-        var descriptor = base(
-            for: kind,
-            playlistPrefix: playlistPrefix,
-            excludedCategoryIDs: excludedCategoryIDs
-        )
-        descriptor.fetchOffset = offset
-        descriptor.fetchLimit = limit
-        return descriptor
-    }
-
-    private static func base(
-        for kind: LibraryCollection.Kind,
-        playlistPrefix prefix: String,
-        excludedCategoryIDs: Set<String> = []
-    ) -> FetchDescriptor<Series> {
-        let excluded = Set(excludedCategoryIDs.map(String?.some))
-        let filtersCategories = !excluded.isEmpty
-        return switch kind {
-        case .recentlyWatched:
-            FetchDescriptor<Series>(
-                predicate: #Predicate {
-                    $0.lastWatchedDate != nil
-                        && $0.id.starts(with: prefix)
-                        && (!filtersCategories || $0.categoryId == nil || !excluded.contains($0.categoryId))
-                },
-                sortBy: [
-                    SortDescriptor(\.lastWatchedDate, order: .reverse),
-                    SortDescriptor(\.name),
-                    SortDescriptor(\.id)
-                ]
-            )
-        case .favorites:
-            FetchDescriptor<Series>(
-                predicate: #Predicate {
-                    $0.isFavorite
-                        && $0.id.starts(with: prefix)
-                        && (!filtersCategories || $0.categoryId == nil || !excluded.contains($0.categoryId))
-                },
-                // The user's arrangement from Content Management › Favorites,
-                // as on Home. Never-reordered favorites (nil) sort by name.
-                sortBy: [SortDescriptor(\.favoriteOrder), SortDescriptor(\.name), SortDescriptor(\.id)]
-            )
-        case .recentlyAdded:
-            // `comparator: .lexical` for the same reason as the movie side:
-            // `lastModified` is a Unix timestamp string, and the default
-            // localized comparator forfeits the `#Index` to NSCollateFinderlike.
-            FetchDescriptor<Series>(
-                predicate: #Predicate {
-                    $0.lastModified != nil
-                        && $0.id.starts(with: prefix)
-                        && (!filtersCategories || $0.categoryId == nil || !excluded.contains($0.categoryId))
-                },
-                sortBy: [
-                    SortDescriptor(\.lastModified, comparator: .lexical, order: .reverse),
-                    SortDescriptor(\.num),
-                    SortDescriptor(\.id)
-                ]
-            )
-        }
-    }
-}
-
 // MARK: - Title bridging
 
 private extension LibraryCollection.Kind {
@@ -558,6 +454,7 @@ private extension LibraryCollection.Kind {
     /// fixed English name we localize at the call site for the grid heading.
     var localizedTitleString: String {
         switch self {
+        case .continueWatching: String(localized: "Continue Watching")
         case .recentlyWatched: String(localized: "Recently Watched")
         case .favorites: String(localized: "Favorites")
         case .recentlyAdded: String(localized: "Recently Added")

@@ -17,7 +17,7 @@ extension HomeView {
     /// re-validates each entry against live state) — the engine still throttles the actual re-ranking to
     /// its recalculation interval.
     var recommendationsKey: String {
-        let counts = "\(watchedMovies.count)-\(watchedSeries.count)-\(favoriteMovies.count)-\(favoriteSeries.count)"
+        let counts = "\(watchedMovies.count)-\(finishedMovies.count)-\(watchedSeries.count)-\(favoriteMovies.count)-\(favoriteSeries.count)"
         let visibility = restriction.visibilityToken
         return "rec-\(recommendationsEnabled)-\(premium.isPremium)-\(isSyncBusy)-\(recommendationsRecalcToken)-\(counts)-\(selectedPlaylistID)-\(visibility)"
     }

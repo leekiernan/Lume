@@ -30,8 +30,10 @@ struct HomeView: View {
     @AppStorage(SortStorageKey.movieCategories) private var categorySortRaw: String = CategorySortOption.playlist.rawValue
     @AppStorage(SortStorageKey.movieContent) private var contentSortRaw: String = ContentSortOption.playlist.rawValue
 
-    // Recently watched (capped — watch history is naturally bounded).
+    // Watch history (capped — naturally bounded): in-progress movies for
+    // Continue Watching, finished ones for Recently Watched; series split later.
     @Query var watchedMovies: [Movie]
+    @Query var finishedMovies: [Movie]
     @Query var watchedSeries: [Series]
     /// Not `private`: read by the HomeView+DerivedContent extension (separate file).
     @Query var watchedStreams: [LiveStream]
@@ -50,6 +52,9 @@ struct HomeView: View {
     /// resolved off the main thread — see `SeriesResumeLoader`. Not `private`:
     /// written by the HomeView+DerivedContent extension (separate file).
     @State var seriesResume: [String: Double] = [:]
+    /// Where each watched series continues, or that it's finished — splits the
+    /// series between Continue Watching and Recently Watched.
+    @State var seriesProgress = ContinueWatchingLoader.Result()
     @AppStorage(RecommendationSettings.enabledKey) var recommendationsEnabled = RecommendationSettings.enabledDefault
     /// The user's chosen Home row order (Settings › Layout › Home). Falls back to
     /// the surface's default order until they reorder.
@@ -122,8 +127,10 @@ struct HomeView: View {
         let prefix = playlistPrefix ?? ""
         let excludedCategoryIDs = queryRestriction.excludedCategoryIDs
         _watchedMovies = Query(HomeQuery.watchedMovies(
-            playlistPrefix: prefix,
-            excludedCategoryIDs: excludedCategoryIDs
+            playlistPrefix: prefix, excludedCategoryIDs: excludedCategoryIDs, finished: false
+        ))
+        _finishedMovies = Query(HomeQuery.watchedMovies(
+            playlistPrefix: prefix, excludedCategoryIDs: excludedCategoryIDs, finished: true
         ))
         _watchedSeries = Query(HomeQuery.watchedSeries(
             playlistPrefix: prefix,
@@ -330,8 +337,8 @@ struct HomeView: View {
     private func builtinRow(for section: HomeSection, content: DerivedContent) -> some View {
         if isSectionEnabled(section), .builtin(section) != heroRef {
             switch section {
-            case .recentlyWatched:
-                rail(Text("Recently Watched"), content.recentlyWatched, onRemove: removeFromRecentlyWatched)
+            case .continueWatching, .recentlyWatched:
+                watchRail(section, content: content)
             case .favorites:
                 rail(Text("Favorites"), content.favorites)
             case .forYou:
@@ -517,6 +524,23 @@ struct HomeView: View {
 }
 
 private extension HomeView {
+    /// The two watch-history rails: in progress, and finished.
+    @ViewBuilder
+    func watchRail(_ section: HomeSection, content: DerivedContent) -> some View {
+        if section == .continueWatching {
+            ContinueWatchingRow(
+                items: content.continueWatching,
+                series: seriesProgress,
+                onPlayLive: playChannel,
+                onRemove: removeFromRecentlyWatched,
+                onStartMultiView: startMultiView,
+                animationNamespace: animationNamespace
+            )
+        } else {
+            rail(Text("Recently Watched"), content.recentlyWatched, onRemove: removeFromRecentlyWatched)
+        }
+    }
+
     /// A standard Home rail that only renders when it has items. The Recently
     /// Watched rail passes `onRemove` to add its remove-from-history action.
     @ViewBuilder
