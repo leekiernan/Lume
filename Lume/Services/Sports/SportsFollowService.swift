@@ -266,9 +266,10 @@ final class SportsFollowService {
         withObservationTracking {
             _ = profileManager.activeProfileID
         } onChange: { [weak self] in
-            Task { @MainActor in
-                self?.reload()
-                self?.observeProfileSwitch()
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                reload()
+                observeProfileSwitch()
             }
         }
     }

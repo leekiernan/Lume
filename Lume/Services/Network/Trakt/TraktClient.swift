@@ -593,7 +593,7 @@ struct TraktWatchedMedia: Decodable {
 }
 
 /// Sentinel used to decode endpoints that legitimately return an empty body.
-private struct EmptyResponse: Decodable {
+private nonisolated struct EmptyResponse: Decodable {
     init() {}
     init(from _: Decoder) throws {}
 }

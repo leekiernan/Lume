@@ -13,7 +13,7 @@ import SwiftUI
 
 // MARK: - Sync Steps
 
-enum SyncStep: Int, CaseIterable, Identifiable {
+nonisolated enum SyncStep: Int, CaseIterable, Identifiable {
     case authenticating
     case movieCategories
     case seriesCategories
@@ -123,7 +123,7 @@ enum SyncStep: Int, CaseIterable, Identifiable {
     }
 }
 
-private extension AppArea {
+private nonisolated extension AppArea {
     var categorySyncStep: SyncStep? {
         switch self {
         case .movies: .movieCategories

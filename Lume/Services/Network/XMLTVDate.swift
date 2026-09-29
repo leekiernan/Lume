@@ -14,7 +14,7 @@
 
 import Foundation
 
-enum XMLTVDate {
+nonisolated enum XMLTVDate {
     private static let formatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyyMMddHHmmss Z"

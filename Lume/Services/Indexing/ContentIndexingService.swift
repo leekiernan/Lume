@@ -77,6 +77,13 @@ final class ContentIndexingService {
         return Date.now.timeIntervalSince(lastUserInteraction) < Self.browsingQuietWindow
     }
 
+    /// Whether indexing should hold off: playback, an iCloud sync or a browse
+    /// is under way. One read for `ContentIndexer`, which runs on its own
+    /// actor.
+    var isBusyForIndexing: Bool {
+        isPlaybackActive || isCloudSyncActive || isUserBrowsing
+    }
+
     /// Called by browse surfaces to hold indexing off for the next few seconds.
     /// One line at the call site with nothing to balance, and it costs a single
     /// `Date` write — cheap enough to sit on an `.onAppear`, a tab change or a

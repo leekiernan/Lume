@@ -153,10 +153,17 @@ actor ContentIndexer {
     /// save forward. Re-checked every `busyPause` rather than continuously —
     /// nobody is waiting on the index, so resuming 20 s late costs nothing.
     private func waitWhileBusy(status: ContentIndexingService) async throws {
-        while try await hasActiveSync() || status.isPlaybackActive || status.isCloudSyncActive || status.isUserBrowsing {
+        while try await isBusy(status) {
             await status.setWaiting()
             try await Task.sleep(for: busyPause)
         }
+    }
+
+    /// The service's flags are main-actor state: read them there, together,
+    /// rather than one by one from this actor's thread.
+    private func isBusy(_ status: ContentIndexingService) async throws -> Bool {
+        if try hasActiveSync() { return true }
+        return await status.isBusyForIndexing
     }
 
     /// Loads the embedding model, waiting and retrying when its assets fail to

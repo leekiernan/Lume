@@ -170,7 +170,7 @@ enum HomeLayoutSettings {
 
     /// The unscoped form, which is also the key installs used before layout
     /// became per-profile. Only the scoping layer and its migration read it.
-    static func baseSectionOrderKey(_ surface: SectionSurface) -> String {
+    nonisolated static func baseSectionOrderKey(_ surface: SectionSurface) -> String {
         "\(surface.storagePrefix).sectionOrder.v1"
     }
 
@@ -184,7 +184,7 @@ enum HomeLayoutSettings {
     }
 
     /// The unscoped form — see `baseSectionOrderKey`.
-    static func baseDisabledSectionsKey(_ surface: SectionSurface) -> String {
+    nonisolated static func baseDisabledSectionsKey(_ surface: SectionSurface) -> String {
         "\(surface.storagePrefix).disabledSections.v1"
     }
 
@@ -196,7 +196,7 @@ enum HomeLayoutSettings {
     }
 
     /// The unscoped form — see `baseSectionOrderKey`.
-    static func baseHeroSectionKey(_ surface: SectionSurface) -> String {
+    nonisolated static func baseHeroSectionKey(_ surface: SectionSurface) -> String {
         "\(surface.storagePrefix).heroSection.v1"
     }
 
@@ -207,7 +207,7 @@ enum HomeLayoutSettings {
     }
 
     /// The unscoped form — see `baseSectionOrderKey`.
-    static func baseHeroSeededKey(_ surface: SectionSurface) -> String {
+    nonisolated static func baseHeroSeededKey(_ surface: SectionSurface) -> String {
         "\(surface.storagePrefix).heroSeeded.v1"
     }
 

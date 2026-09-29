@@ -459,3 +459,39 @@ enum PlaybackResumeStore {
         return try? JSONDecoder().decode(PlayableMedia.self, from: data)
     }
 }
+
+// MARK: - Engine transports
+
+/// A player the remote and lock screen can drive.
+protocol NowPlayingControllable: AnyObject {
+    var isPlaying: Bool { get }
+    func togglePlay()
+    func seek(to seconds: TimeInterval)
+}
+
+extension NowPlayingService.Transport {
+    /// Drives `player` without keeping it alive: the service outlives an
+    /// engine, whose view detaches the transport as it goes.
+    static func driving(
+        _ player: some NowPlayingControllable,
+        advance: ((PlayerMediaSwapper.Step) -> Bool)?
+    ) -> Self {
+        Self(
+            isPlaying: { [weak player] in player?.isPlaying ?? false },
+            play: { [weak player] in
+                guard let player, !player.isPlaying else { return }
+                player.togglePlay()
+            },
+            pause: { [weak player] in
+                guard let player, player.isPlaying else { return }
+                player.togglePlay()
+            },
+            seek: { [weak player] in player?.seek(to: $0) },
+            advance: advance
+        )
+    }
+}
+
+extension AVPlayerCoordinator: NowPlayingControllable {}
+extension VLCPlayerCoordinator: NowPlayingControllable {}
+extension LumeEngineCoordinator: NowPlayingControllable {}

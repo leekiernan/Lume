@@ -72,7 +72,7 @@ struct LumeApp: App {
     /// `@Query` dozens of times per foreground and pinned the main thread on tvOS.
     /// Both stores keep their existing files and schemas, so there is no migration.
     private static func makeModelContainers() -> (catalog: ModelContainer, cloud: ModelContainer) {
-        let cloud = LaunchTimeline.measure("cloud store", makeCloudContainer)
+        let cloud = LaunchTimeline.measure("cloud store") { makeCloudContainer() }
         let catalogSchema = Schema([
             Playlist.self, Category.self, LiveStream.self, Movie.self,
             Series.self, Episode.self, CastMember.self, EPGListing.self, EPGSource.self

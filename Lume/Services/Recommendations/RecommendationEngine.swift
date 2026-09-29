@@ -20,14 +20,14 @@ import SwiftData
 
 /// Which catalog kind a recommendation points at. Live TV isn't indexed, so the
 /// engine only ever produces movies and series.
-enum RecommendedKind: String, Codable {
+nonisolated enum RecommendedKind: String, Codable {
     case movie
     case series
 }
 
 /// A single ranked recommendation — just enough for the view to fetch the model
 /// and present it.
-struct ScoredRecommendation: Equatable, Codable {
+nonisolated struct ScoredRecommendation: Equatable, Codable {
     let id: String
     let kind: RecommendedKind
 }

@@ -555,7 +555,7 @@ nonisolated enum ReconcileReason: Hashable {
 
 extension Notification.Name {
     /// Posted by `ContentSyncManager` after a playlist's catalog sync succeeds.
-    static let lumeContentSyncDidComplete = Notification.Name("LumeContentSyncDidComplete")
+    nonisolated static let lumeContentSyncDidComplete = Notification.Name("LumeContentSyncDidComplete")
     /// Posted when a series page adds episodes the catalog didn't have (Xtream
     /// and Stalker fetch them lazily), so pending cloud state for them applies.
     static let lumeEpisodesDidMaterialize = Notification.Name("LumeEpisodesDidMaterialize")

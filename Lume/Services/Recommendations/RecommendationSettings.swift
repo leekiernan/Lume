@@ -17,8 +17,8 @@ nonisolated enum RecommendationSettings {
     }
 
     /// The unscoped form used by the profile migration/cloud snapshot.
-    static let baseEnabledKey = "recommendations.enabled.v1"
-    static let enabledDefault = false
+    nonisolated static let baseEnabledKey = "recommendations.enabled.v1"
+    nonisolated static let enabledDefault = false
 
     /// A counter bumped by the DEBUG-only "Recalculate" action to force an
     /// immediate recompute. Part of Home's recommendations task id; dormant (0)

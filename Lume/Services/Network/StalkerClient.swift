@@ -71,7 +71,7 @@ class StalkerClient {
     /// Empirically portals serve ~8 parallel middleware requests fine and
     /// fast-reject with 503 above ~10; 6 leaves headroom, and a portal that
     /// still 503s gets the retry-with-backoff path.
-    private static let walkConcurrency = 6
+    private nonisolated static let walkConcurrency = 6
 
     /// Cache key isolating one portal+MAC session from another.
     private var sessionKey: String {
