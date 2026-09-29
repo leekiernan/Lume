@@ -45,7 +45,9 @@ extension Series {
     /// cache, which suppresses further refreshes until it goes stale again.
     func insertEpisodes(_ parsed: [ParsedEpisode], into context: ModelContext) {
         let existingIds = Set(episodes.map(\.id))
+        var inserted = false
         for parsed in parsed where !existingIds.contains(parsed.id) {
+            inserted = true
             let episode = Episode(
                 id: parsed.id,
                 episodeId: parsed.episodeId,
@@ -72,5 +74,12 @@ extension Series {
         episodesFetchedAt = Date()
         episodesFetchedLastModified = lastModified
         try? context.save()
+        // Watched state synced from another device (or kept in iCloud across a
+        // reinstall) waits as pending until its episode exists. Without a pass
+        // now, the page just opened showed those episodes unwatched until the
+        // next launch.
+        if inserted {
+            NotificationCenter.default.post(name: .lumeEpisodesDidMaterialize, object: self)
+        }
     }
 }

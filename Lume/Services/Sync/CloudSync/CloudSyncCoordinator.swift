@@ -487,19 +487,22 @@ final class CloudSyncCoordinator {
         observers.append(observer)
     }
 
-    /// After a playlist's catalog finishes syncing, run a reconcile so any cloud
-    /// user state that was waiting for that catalog gets applied.
+    /// After a playlist's catalog finishes syncing — or a series page adds its
+    /// episodes — run a reconcile so any cloud user state that was waiting for
+    /// those rows gets applied.
     private func observeContentSyncCompletion() {
-        let observer = NotificationCenter.default.addObserver(
-            forName: .lumeContentSyncDidComplete,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            MainActor.assumeIsolated {
-                self?.reconcile(reason: .contentSync)
+        for name in [Notification.Name.lumeContentSyncDidComplete, .lumeEpisodesDidMaterialize] {
+            let observer = NotificationCenter.default.addObserver(
+                forName: name,
+                object: nil,
+                queue: .main
+            ) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    self?.reconcile(reason: .contentSync)
+                }
             }
+            observers.append(observer)
         }
-        observers.append(observer)
     }
 
     /// A local Trakt connect, refresh, or disconnect changed the keychain. Push
@@ -561,6 +564,9 @@ enum ReconcileReason {
 extension Notification.Name {
     /// Posted by `ContentSyncManager` after a playlist's catalog sync succeeds.
     static let lumeContentSyncDidComplete = Notification.Name("LumeContentSyncDidComplete")
+    /// Posted when a series page adds episodes the catalog didn't have (Xtream
+    /// and Stalker fetch them lazily), so pending cloud state for them applies.
+    static let lumeEpisodesDidMaterialize = Notification.Name("LumeEpisodesDidMaterialize")
     /// Posted only after CloudKit reports a successful import event. Profile
     /// preference migration uses this as the point at which an empty cloud field
     /// is known not to be an as-yet-unimported value from another device.
