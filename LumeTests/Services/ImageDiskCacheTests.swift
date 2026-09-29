@@ -80,6 +80,18 @@ struct ImageDiskCacheTests {
         #expect(fixture.cache.data(for: "oversized") == nil)
     }
 
+    @Test func `one malformed image can be evicted without clearing the cache`() throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        fixture.cache.store(Data("not an image".utf8), for: "broken")
+        fixture.cache.store(Data(repeating: 0xA5, count: 32), for: "healthy")
+
+        fixture.cache.removeData(for: "broken")
+
+        #expect(fixture.cache.data(for: "broken") == nil)
+        #expect(fixture.cache.data(for: "healthy") != nil)
+    }
+
     @Test func `launch maintenance waits before sweeping the cache`() async throws {
         let clock = TestClock()
         let directory = FileManager.default.temporaryDirectory

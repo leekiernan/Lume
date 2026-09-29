@@ -22,6 +22,9 @@ struct FullScreenPlayerView: View {
     /// macOS opens the player in its own window and iPadOS can run several
     /// scenes, so two sessions can be in flight at once.
     @State var healthToken: PlaybackHealthTracker.Token?
+    /// Stable for this presented player. The process-wide audio session uses it
+    /// to reject a stale `onDisappear` after another player has already opened.
+    @State var audioSessionOwner = UUID()
     /// The in-flight progress write, so the review policy can wait for a
     /// finished title to be counted before it judges the session that
     /// finished it.

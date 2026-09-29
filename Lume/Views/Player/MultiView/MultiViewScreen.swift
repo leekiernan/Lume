@@ -13,7 +13,6 @@
 //  (see `MultiViewTilePlayer`).
 //
 
-import AVFoundation
 import SwiftUI
 
 /// `UUID` is not `Identifiable`, so the sheet needs this to carry which tile the
@@ -74,6 +73,9 @@ struct MultiViewScreen: View {
     #endif
 
     @State var session: MultiViewSession
+    /// The process-wide audio session is leased so dismissing this grid cannot
+    /// deactivate a full-screen player that was opened immediately afterwards.
+    @State private var audioSessionOwner = UUID()
     /// The tile whose channel picker is open.
     @State private var pickingSlot: MultiViewPickerTarget?
     /// Which tile holds focus. Hoisted out of the tiles so the screen can hand
@@ -217,7 +219,7 @@ struct MultiViewScreen: View {
                 // Background indexing merges periodic saves into the main context,
                 // which hitches every running decoder — more so with four of them.
                 ContentIndexingService.shared.isPlaybackActive = true
-                configureAudioSession()
+                await PlaybackAudioSession.shared.activate(owner: audioSessionOwner, configuration: .multiView)
                 adoptQueuedChannels()
                 landInitialFocus()
                 scheduleChromeHide()
@@ -503,21 +505,8 @@ struct MultiViewScreen: View {
         #endif
     }
 
-    /// Plain `.playback` / `.moviePlayback`, without the full-screen player's
-    /// request for the route's full channel width: only one tile is audible, and
-    /// asking for an HDMI surround layout for a muted 2×2 grid would negotiate a
-    /// wider route than anything here can fill.
-    private func configureAudioSession() {
-        #if os(iOS) || os(tvOS)
-            let session = AVAudioSession.sharedInstance()
-            try? session.setCategory(.playback, mode: .moviePlayback, options: [])
-            try? session.setActive(true, options: [])
-        #endif
-    }
-
     private func releaseAudioSession() {
-        #if os(iOS) || os(tvOS)
-            try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
-        #endif
+        let owner = audioSessionOwner
+        Task { await PlaybackAudioSession.shared.deactivate(owner: owner) }
     }
 }
