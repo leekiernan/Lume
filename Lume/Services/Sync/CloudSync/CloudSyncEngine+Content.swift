@@ -25,6 +25,17 @@ extension CloudSyncEngine {
         }
     }
 
+    /// Whether `mirror` already records `values` for `profileID` and `kind`, so
+    /// writing them would change nothing but `updatedAt`.
+    static func mirror(
+        _ mirror: UserContentState,
+        holds values: ContentStateValues,
+        profileID: UUID,
+        kind: SyncedContentKind
+    ) -> Bool {
+        mirror.profileID == profileID && mirror.kindRaw == kind.rawValue && Self.values(from: mirror) == values
+    }
+
     /// Writes `value` to the title's cloud record. An all-default value is a
     /// clear, and is written as a record like any other — a deletion would
     /// read, on another device, the same as a record not imported yet (see
@@ -37,6 +48,12 @@ extension CloudSyncEngine {
         }
         let kind = kind ?? mirror?.kind ?? .movie
         if let mirror {
+            // A push whose value the mirror already holds — the re-baseline
+            // after a profile switch, or both sides converging — only moves the
+            // shadow. Rewriting the record would export it for nothing.
+            if Self.mirror(mirror, holds: value, profileID: activeProfileID, kind: kind) {
+                return
+            }
             mirror.profileID = activeProfileID // heals a legacy nil record on first touch
             mirror.kindRaw = kind.rawValue
             mirror.watchProgress = value.watchProgress

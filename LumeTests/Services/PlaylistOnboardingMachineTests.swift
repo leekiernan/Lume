@@ -3,6 +3,7 @@
 //  LumeTests
 //
 
+import Foundation
 @testable import Lume
 import Testing
 
@@ -13,24 +14,29 @@ struct PlaylistOnboardingMachineTests {
 
         #expect(attempt != nil)
         #expect(machine.isValidating)
-        #expect(machine.begin(.m3u) == nil)
+        let second = machine.begin(.m3u)
+        #expect(second == nil)
     }
 
     @Test func `only the active attempt can complete the form`() throws {
         var machine = PlaylistOnboardingMachine()
-        let active = try #require(machine.begin(.stalker))
+        let begun = machine.begin(.stalker)
+        let active = try #require(begun)
         let stale = PlaylistOnboardingMachine.Attempt(id: UUID(), source: .stalker)
 
-        #expect(!machine.succeed(stale))
+        let staleSucceeded = machine.succeed(stale)
+        #expect(!staleSucceeded)
         #expect(machine.isValidating)
-        #expect(machine.succeed(active))
+        let activeSucceeded = machine.succeed(active)
+        #expect(activeSucceeded)
         #expect(!machine.isValidating)
         #expect(machine.errorMessage == nil)
     }
 
     @Test func `a failed attempt is retryable and clears its error on retry`() throws {
         var machine = PlaylistOnboardingMachine()
-        let failed = try #require(machine.begin(.m3u))
+        let begun = machine.begin(.m3u)
+        let failed = try #require(begun)
 
         machine.fail(failed, message: "Could not connect")
         #expect(machine.errorMessage == "Could not connect")
@@ -44,14 +50,17 @@ struct PlaylistOnboardingMachineTests {
 
     @Test func `late failures cannot replace a newer form state`() throws {
         var machine = PlaylistOnboardingMachine()
-        let first = try #require(machine.begin(.xtream))
+        let firstBegun = machine.begin(.xtream)
+        let first = try #require(firstBegun)
         machine.fail(first, message: "First failure")
-        let retry = try #require(machine.begin(.mediaServer))
+        let retryBegun = machine.begin(.mediaServer)
+        let retry = try #require(retryBegun)
 
         machine.fail(first, message: "Late failure")
 
         #expect(machine.isValidating)
-        #expect(machine.succeed(retry))
+        let retrySucceeded = machine.succeed(retry)
+        #expect(retrySucceeded)
         #expect(machine.errorMessage == nil)
     }
 

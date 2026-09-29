@@ -60,7 +60,8 @@ extension ContentSyncManager {
         playlist: Playlist,
         playlistId: UUID,
         progress: SyncProgress?,
-        areas: Set<AppArea>
+        areas: Set<AppArea>,
+        full: Bool = false
     ) async throws -> Set<AppArea> {
         await progress?.start(.authenticating)
         let authResponse = try await xtreamRequest { try await $0.getInfo(playlist: playlist) }
@@ -68,7 +69,9 @@ extension ContentSyncManager {
         await progress?.complete(.authenticating)
 
         try await syncCategories(for: playlist, playlistId: playlistId, progress: progress, areas: areas)
-        return try await syncEnabledContent(for: playlist, playlistId: playlistId, progress: progress, areas: areas)
+        return try await syncEnabledContent(
+            for: playlist, playlistId: playlistId, progress: progress, areas: areas, full: full
+        )
     }
 
     private func syncCategories(
@@ -102,13 +105,17 @@ extension ContentSyncManager {
     /// on. Serialized and spaced apart on purpose — see
     /// `spaceContentPhaseRequests` for the connection-cap reason. The spacing
     /// only happens *between* phases that actually run, so switching an area
-    /// off removes its delay along with its requests.
+    /// off removes its delay along with its requests. A scheduled sync skips a
+    /// phase whose payload is byte-identical to its last import
+    /// (`beginXtreamPhase`); a manual `full` one re-imports every phase.
     func syncEnabledContent(
         for playlist: Playlist,
         playlistId: UUID,
         progress: SyncProgress? = nil,
-        areas: Set<AppArea>? = nil
+        areas: Set<AppArea>? = nil,
+        full: Bool = false
     ) async throws -> Set<AppArea> {
+        let reuse = !full
         var ranAPhase = false
         var syncedAreas: Set<AppArea> = []
         func includes(_ area: AppArea) -> Bool {
@@ -116,21 +123,21 @@ extension ContentSyncManager {
         }
 
         if includes(.movies) {
-            try await syncMovies(for: playlist, playlistId: playlistId, progress: progress)
+            try await syncMovies(for: playlist, playlistId: playlistId, progress: progress, reuseUnchanged: reuse)
             ranAPhase = true
             syncedAreas.insert(.movies)
         }
 
         if includes(.series) {
             if ranAPhase { try await spaceContentPhaseRequests() }
-            try await syncSeries(for: playlist, playlistId: playlistId, progress: progress)
+            try await syncSeries(for: playlist, playlistId: playlistId, progress: progress, reuseUnchanged: reuse)
             ranAPhase = true
             syncedAreas.insert(.series)
         }
 
         if includes(.liveTV) {
             if ranAPhase { try await spaceContentPhaseRequests() }
-            try await syncLiveStreams(for: playlist, playlistId: playlistId, progress: progress)
+            try await syncLiveStreams(for: playlist, playlistId: playlistId, progress: progress, reuseUnchanged: reuse)
             syncedAreas.insert(.liveTV)
         }
 

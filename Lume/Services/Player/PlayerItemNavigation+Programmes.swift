@@ -41,7 +41,7 @@ extension PlayerItemNavigation {
     }
 
     /// Previous / next for a catch-up programme, resolved once per stream.
-    static func programmeNeighbours(for media: PlayableMedia, now: Date = Date(), in context: ModelContext) -> Neighbours {
+    nonisolated static func programmeNeighbours(for media: PlayableMedia, now: Date = Date(), in context: ModelContext) -> Neighbours {
         guard let timeline = media.catchup,
               let stream = PlayerContentLookup.liveStream(timeline.streamID, in: context),
               let playlist = LiveChannelNavigator.playlist(for: stream, in: context)
@@ -63,7 +63,7 @@ extension PlayerItemNavigation {
 
     /// The listings either side of the programme on screen: one indexed
     /// lookup each, on the channel's `end` / `start`.
-    private static func adjacentListings(
+    private nonisolated static func adjacentListings(
         channelId: String?,
         around timeline: CatchupTimeline,
         in context: ModelContext

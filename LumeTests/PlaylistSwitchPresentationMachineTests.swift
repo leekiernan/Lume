@@ -6,42 +6,57 @@
 @testable import Lume
 import Testing
 
+/// A mutating call can't sit inside `#expect`/`#require` — the macro captures
+/// its operands immutably — so each one runs first and its result is checked.
 struct PlaylistSwitchPresentationMachineTests {
     @Test func `a visible switch rejects a replacement request`() throws {
         var machine = PlaylistSwitchPresentationMachine()
-        let first = try #require(machine.begin(targetID: "first", targetName: "First", defersDueSync: false))
+        let begun = machine.begin(targetID: "first", targetName: "First", defersDueSync: false)
+        let first = try #require(begun)
 
         #expect(machine.isSwitching)
         #expect(machine.targetName == "First")
-        #expect(machine.begin(targetID: "second", targetName: "Second", defersDueSync: false) == nil)
+        let replacement = machine.begin(targetID: "second", targetName: "Second", defersDueSync: false)
+        #expect(replacement == nil)
 
-        #expect(machine.apply(first))
+        let applied = machine.apply(first)
+        #expect(applied)
         machine.finish(first)
         #expect(!machine.isSwitching)
     }
 
     @Test func `a stale request cannot apply or dismiss the active request`() throws {
         var machine = PlaylistSwitchPresentationMachine()
-        let first = try #require(machine.begin(targetID: "first", targetName: "First", defersDueSync: false))
-        #expect(machine.apply(first))
+        let firstBegun = machine.begin(targetID: "first", targetName: "First", defersDueSync: false)
+        let first = try #require(firstBegun)
+        let firstApplied = machine.apply(first)
+        #expect(firstApplied)
         machine.finish(first)
 
-        let second = try #require(machine.begin(targetID: "second", targetName: "Second", defersDueSync: false))
-        #expect(!machine.apply(first))
+        let secondBegun = machine.begin(targetID: "second", targetName: "Second", defersDueSync: false)
+        let second = try #require(secondBegun)
+        let staleApplied = machine.apply(first)
+        #expect(!staleApplied)
         machine.finish(first)
 
         #expect(machine.isSwitching)
         #expect(machine.targetName == "Second")
-        #expect(machine.apply(second))
+        let secondApplied = machine.apply(second)
+        #expect(secondApplied)
     }
 
     @Test func `due sync deferral belongs to its exact target and is one shot`() throws {
         var machine = PlaylistSwitchPresentationMachine()
-        let request = try #require(machine.begin(targetID: "cached", targetName: "Cached", defersDueSync: true))
+        let begun = machine.begin(targetID: "cached", targetName: "Cached", defersDueSync: true)
+        let request = try #require(begun)
 
-        #expect(machine.apply(request))
-        #expect(!machine.consumeDueSyncDeferral(for: "other"))
-        #expect(machine.consumeDueSyncDeferral(for: "cached"))
-        #expect(!machine.consumeDueSyncDeferral(for: "cached"))
+        let applied = machine.apply(request)
+        #expect(applied)
+        let other = machine.consumeDueSyncDeferral(for: "other")
+        #expect(!other)
+        let consumed = machine.consumeDueSyncDeferral(for: "cached")
+        #expect(consumed)
+        let again = machine.consumeDueSyncDeferral(for: "cached")
+        #expect(!again)
     }
 }

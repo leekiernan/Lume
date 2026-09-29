@@ -17,21 +17,29 @@
 //
 
 import Foundation
+import Synchronization
 
-enum RecentResumePoints {
-    private static var saved: [PlayableMedia.ContentRef: (position: TimeInterval, at: Date)] = [:]
+/// Read off the main thread too — the player resolves its neighbours'
+/// playable media on a context of its own — so the store sits behind a lock.
+nonisolated enum RecentResumePoints {
+    private struct Saved {
+        let position: TimeInterval
+        let savedAt: Date
+    }
+
+    private static let saved = Mutex<[PlayableMedia.ContentRef: Saved]>([:])
 
     /// Live channels have no position to resume.
     static func record(_ position: TimeInterval, for ref: PlayableMedia.ContentRef, at now: Date = Date()) {
         if case .live = ref { return }
-        saved[ref] = (position, now)
+        saved.withLock { $0[ref] = Saved(position: position, savedAt: now) }
     }
 
     /// Where `ref` should resume: the position saved here if it's newer than
     /// the model's, otherwise the model's.
     static func position(for ref: PlayableMedia.ContentRef, stored: TimeInterval, storedAt: Date?) -> TimeInterval {
-        guard let recent = saved[ref] else { return stored }
-        if let storedAt, storedAt > recent.at { return stored }
+        guard let recent = saved.withLock({ $0[ref] }) else { return stored }
+        if let storedAt, storedAt > recent.savedAt { return stored }
         return recent.position
     }
 }
