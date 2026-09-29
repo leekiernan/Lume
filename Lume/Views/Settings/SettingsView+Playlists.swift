@@ -122,7 +122,7 @@ import SwiftUI
             let id = playlist.id.uuidString
             guard id != effectivePlaylistID else { return }
             if let playlistSwitch {
-                playlistSwitch.switchTo(name: playlist.name) { selectedPlaylistID = id }
+                playlistSwitch.switchTo(id: id, name: playlist.name) { selectedPlaylistID = id }
             } else {
                 selectedPlaylistID = id
             }

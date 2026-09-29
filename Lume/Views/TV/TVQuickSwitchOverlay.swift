@@ -226,8 +226,7 @@
             if let playlistSwitch {
                 // The viewer asked to be somewhere else now: land in the cached
                 // catalog and leave the due sync to the next launch / foreground.
-                playlistSwitch.deferNextDueSync()
-                playlistSwitch.switchTo(name: name) { selectedPlaylistID = id }
+                playlistSwitch.switchTo(id: id, name: name, deferringDueSync: true) { selectedPlaylistID = id }
             } else {
                 selectedPlaylistID = id
             }

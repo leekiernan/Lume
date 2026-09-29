@@ -81,7 +81,7 @@ struct PlaylistSwitcher: View {
         let id = playlist.id.uuidString
         guard id != effectiveID else { return }
         if let switchModel {
-            switchModel.switchTo(name: playlist.name) { selectedPlaylistID = id }
+            switchModel.switchTo(id: id, name: playlist.name) { selectedPlaylistID = id }
         } else {
             selectedPlaylistID = id
         }
