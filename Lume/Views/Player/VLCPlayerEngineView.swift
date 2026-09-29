@@ -196,19 +196,9 @@ struct VLCPlayerEngineView: View {
             coordinator.startupTimeout = PlaybackPolicy.startupTimeout(quick: usesQuickStartupTimeout)
             coordinator.retriesStartupErrors = PlaybackPolicy.retriesStartupError(canFallBack: reportsStartupFailure)
             coordinator.configure(media: media)
-            NowPlayingService.shared.attachTransport(.init(
-                isPlaying: { [weak coordinator] in coordinator?.isPlaying ?? false },
-                play: { [weak coordinator] in
-                    guard let coordinator, !coordinator.isPlaying else { return }
-                    coordinator.togglePlay()
-                },
-                pause: { [weak coordinator] in
-                    guard let coordinator, coordinator.isPlaying else { return }
-                    coordinator.togglePlay()
-                },
-                seek: { [weak coordinator] in coordinator?.seek(to: $0) },
-                advance: onRemoteAdvance
-            ), owner: coordinator)
+            NowPlayingService.shared.attachTransport(
+                .driving(coordinator, advance: onRemoteAdvance), owner: coordinator
+            )
             scheduleHide()
         }
         .onDisappear {
