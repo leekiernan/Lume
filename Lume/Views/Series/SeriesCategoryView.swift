@@ -20,15 +20,10 @@ struct SeriesCategoryView: View {
     @AppStorage(SortStorageKey.seriesContent) private var contentSortRaw: String = ContentSortOption.playlist.rawValue
 
     @State private var series: [Series] = []
-    @State private var canLoadMore = true
-    @State private var isLoadingPage = false
+    @State private var pagination = PaginationMachine()
     /// True while a Stalker category's content is being fetched from the portal
     /// on first open — drives the loading overlay.
     @State private var isImporting = false
-    /// Sort the current pages were loaded for; reload only on change so a pop
-    /// back from a detail keeps the loaded pages and scroll position intact.
-    @State private var loadedSort: String?
-
     /// A category in a large IPTV playlist can hold thousands of titles; fetch a
     /// page at a time and load the next as the grid nears the end, rather than
     /// hydrating the whole category into memory at once.
@@ -53,10 +48,8 @@ struct SeriesCategoryView: View {
                 }
             }
             .task(id: contentSortRaw) {
-                guard loadedSort != contentSortRaw else { return }
-                loadedSort = contentSortRaw
+                guard pagination.prepare(for: contentSortRaw) else { return }
                 series = []
-                canLoadMore = true
                 await importStalkerContentIfNeeded()
                 loadNextPage()
                 await revalidateStalkerContentIfStale()
@@ -89,19 +82,23 @@ struct SeriesCategoryView: View {
     }
 
     private func loadNextPage() {
-        guard canLoadMore, !isLoadingPage else { return }
-        isLoadingPage = true
-        defer { isLoadingPage = false }
+        guard let request = pagination.beginLoading() else { return }
         let categoryId = category.id
         var descriptor = FetchDescriptor<Series>(
             predicate: #Predicate { $0.categoryId == categoryId },
             sortBy: contentSort.seriesDescriptors
         )
-        descriptor.fetchOffset = series.count
+        descriptor.fetchOffset = request.offset
         descriptor.fetchLimit = pageSize
-        let page = (try? modelContext.fetch(descriptor)) ?? []
+        let page: [Series]
+        do {
+            page = try modelContext.fetch(descriptor)
+        } catch {
+            pagination.abandon(request)
+            return
+        }
+        guard pagination.finish(request, scanned: page.count, hasMore: page.count == pageSize) else { return }
         series.append(contentsOf: page)
-        if page.count < pageSize { canLoadMore = false }
     }
 
     /// Imports the category from the portal the first time it's opened (Stalker
@@ -123,8 +120,8 @@ struct SeriesCategoryView: View {
     private func reimportStalkerContent() async {
         guard let playlist = stalkerPlaylist else { return }
         await runStalkerImport(playlist: playlist)
+        guard pagination.restart() else { return }
         series = []
-        canLoadMore = true
         loadNextPage()
     }
 
@@ -139,7 +136,7 @@ struct SeriesCategoryView: View {
         let window = max(series.count, pageSize)
         descriptor.fetchLimit = window
         let rows = (try? modelContext.fetch(descriptor)) ?? []
-        canLoadMore = rows.count == window
+        pagination.replaceWindow(scanned: rows.count, hasMore: rows.count == window)
         series = rows
     }
 
