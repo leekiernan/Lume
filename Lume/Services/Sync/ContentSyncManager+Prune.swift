@@ -279,7 +279,7 @@ extension ContentSyncManager {
         let removed = sweepPaged(after: prefix, isSeen: isSeen, idOf: { (movie: Movie) in movie.id }, page: { cursor, limit in
             var descriptor = FetchDescriptor<Movie>(
                 predicate: #Predicate { $0.id.starts(with: prefix) && $0.id > cursor },
-                sortBy: [SortDescriptor(\.id)]
+                sortBy: [SortDescriptor(\.id, comparator: .lexical)]
             )
             descriptor.fetchLimit = limit
             return descriptor
@@ -292,7 +292,7 @@ extension ContentSyncManager {
         let removed = sweepPaged(after: prefix, isSeen: isSeen, idOf: { (show: Series) in show.id }, page: { cursor, limit in
             var descriptor = FetchDescriptor<Series>(
                 predicate: #Predicate { $0.id.starts(with: prefix) && $0.id > cursor },
-                sortBy: [SortDescriptor(\.id)]
+                sortBy: [SortDescriptor(\.id, comparator: .lexical)]
             )
             descriptor.fetchLimit = limit
             return descriptor
@@ -305,7 +305,7 @@ extension ContentSyncManager {
         let removed = sweepPaged(after: prefix, isSeen: isSeen, idOf: { (stream: LiveStream) in stream.id }, page: { cursor, limit in
             var descriptor = FetchDescriptor<LiveStream>(
                 predicate: #Predicate { $0.id.starts(with: prefix) && $0.id > cursor },
-                sortBy: [SortDescriptor(\.id)]
+                sortBy: [SortDescriptor(\.id, comparator: .lexical)]
             )
             descriptor.fetchLimit = limit
             return descriptor
@@ -320,7 +320,7 @@ extension ContentSyncManager {
         let removed = sweepPaged(after: prefix, isSeen: isSeen, idOf: { (episode: Episode) in episode.id }, page: { cursor, limit in
             var descriptor = FetchDescriptor<Episode>(
                 predicate: #Predicate { $0.id.starts(with: prefix) && $0.id > cursor },
-                sortBy: [SortDescriptor(\.id)]
+                sortBy: [SortDescriptor(\.id, comparator: .lexical)]
             )
             descriptor.fetchLimit = limit
             return descriptor
@@ -371,7 +371,13 @@ extension ContentSyncManager {
     /// fetch). Seeking on `id` instead is also what makes deleting while paging
     /// sound — every row a page removes sorts at or before the cursor, so it
     /// cannot displace a row the next page has yet to see. `page` must therefore
-    /// ask for `id > cursor` ordered by `id`, and `after` must be a string that
+    /// ask for `id > cursor` ordered by `id` with `comparator: .lexical`: the
+    /// default String comparator is Finder-style and number-aware ("-9" before
+    /// "-10"), while `id > cursor` compares bytes, so with the default the two
+    /// orders disagree and every page skips the ids whose digit count changes —
+    /// a real 180,971-row Xtream VOD catalog swept only 31,951 of them. The
+    /// lexical order is also the one the unique `id` index already holds, so
+    /// each page is a range seek instead of a sort. `after` must be a string that
     /// sorts before every id in scope (the playlist prefix does: a prefix sorts
     /// before anything extending it). The cursor strictly increases each pass
     /// and a short page means the rows ran out, so the loop terminates. The
