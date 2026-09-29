@@ -22,6 +22,7 @@
     /// Focus targets on the hub, so Menu (exit) from a card can return focus to
     /// the filter row rather than dropping to the tab bar mid-browse.
     private enum TVSportsFocus: Hashable {
+        case scope
         case segment(SportsHubSegment)
         case manage
         case card(String)
@@ -87,24 +88,25 @@
             // rails, the default focus and the resolve key alike.
             let fixtures = grouping.visibleFixtures
             let groups = grouping.groups(for: fixtures)
-            return ScrollView {
-                LazyVStack(alignment: .leading, spacing: 36) {
-                    header
-                    if groups.isEmpty {
-                        noGamesState
-                    } else {
-                        ForEach(groups) { group in
-                            section(for: group)
+            return ScrollViewReader { scrollProxy in
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 36) {
+                        header
+                        if groups.isEmpty {
+                            noGamesState
+                        } else {
+                            ForEach(groups) { group in
+                                section(for: group, scrollProxy: scrollProxy)
+                            }
                         }
                     }
+                    .padding(.top, 20)
+                    .padding(.bottom, 40)
                 }
-                .padding(.top, 20)
-                .padding(.bottom, 40)
+                .scrollClipDisabled()
+                .defaultFocus($focus, groups.first?.fixtures.first.map { TVSportsFocus.card($0.id) })
+                .task(id: resolveKey(fixtures)) { await runResolve(fixtures) }
             }
-            .scrollClipDisabled()
-            .defaultFocus($focus, groups.first?.fixtures.first.map { TVSportsFocus.card($0.id) })
-            .onExitCommand { returnFocusToFilter() }
-            .task(id: resolveKey(fixtures)) { await runResolve(fixtures) }
         }
 
         // MARK: - Header
@@ -163,6 +165,9 @@
             }
             .buttonStyle(TVCardButtonStyle(focusScale: 1.03))
             .focused($focus, equals: .segment(value))
+            // `landTVFocus` scrolls by the focus target. The header may have
+            // been released by the lazy stack while a lower rail is focused.
+            .id(TVSportsFocus.segment(value))
             .animation(.easeOut(duration: 0.18), value: isItemFocused)
         }
 
@@ -187,6 +192,7 @@
                 }
             }
             .buttonStyle(TVCardButtonStyle(focusScale: 1.02))
+            .focused($focus, equals: .scope)
             .accessibilityLabel(Text(verbatim: scopeTitle))
         }
 
@@ -208,7 +214,7 @@
 
         /// The heading matches `HomeRow`'s — subheadline, bold, secondary — so
         /// the hub's rails read like every other rail on the tvOS Home.
-        private func section(for group: SportsFixtureGroup) -> some View {
+        private func section(for group: SportsFixtureGroup, scrollProxy: ScrollViewProxy) -> some View {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(spacing: 10) {
                     if let logoURL = group.logoURL {
@@ -236,6 +242,11 @@
                                 selectedFixture = fixture
                             }
                             .focused($focus, equals: .card(fixture.id))
+                            // A card owns the first Menu press: return to the
+                            // filters and make their lazy header visible again.
+                            // The filters deliberately have no exit handler, so
+                            // their next Menu press can bubble to the tab bar.
+                            .onExitCommand { returnFocusToFilter(using: scrollProxy) }
                         }
                     }
                     .padding(.horizontal, 60)
@@ -324,8 +335,10 @@
 
         // MARK: - Focus
 
-        private func returnFocusToFilter() {
-            Task { @MainActor in focus = .segment(segment) }
+        private func returnFocusToFilter(using scrollProxy: ScrollViewProxy) {
+            Task { @MainActor in
+                await landTVFocus($focus, on: .segment(segment), scrollingTo: scrollProxy)
+            }
         }
 
         // MARK: - Lifecycle
