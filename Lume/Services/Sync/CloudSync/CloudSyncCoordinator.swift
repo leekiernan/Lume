@@ -36,10 +36,12 @@ final class CloudSyncCoordinator {
         !cloudKitEnabled || status.lastSuccessfulImport != nil
     }
 
-    /// Coalescing guard: a reconcile requested while one is running sets
-    /// `pendingReconcile` instead of overlapping, then runs once afterwards.
-    private var isReconciling = false
-    private var pendingReconcile = false
+    /// When a reconcile runs: at most one pass at a time with the requests
+    /// that arrive meanwhile run straight after, a pass only on a foreground or
+    /// store change when CloudKit imported something (skipping the catalog
+    /// scan and `@Query` refresh that froze tvOS), a retry when the catalog
+    /// couldn't be read, and the launch gate. See `ReconcileScheduleMachine`.
+    private var schedule: ReconcileScheduleMachine
 
     /// Trailing-debounce for notification-driven reconciles. A large CloudKit
     /// import posts a remote-change notification per batch; without this each one
@@ -47,20 +49,8 @@ final class CloudSyncCoordinator {
     /// matters most now that every pass scans the user-data store.
     private var reconcileDebounceTask: Task<Void, Never>?
     private static let reconcileDebounceDelay: Duration = .milliseconds(600)
-
-    /// Set once the launch-time sync is judged settled; the initial-sync gate
-    /// (`status.hasCompletedInitialSync`) then opens after the next reconcile
-    /// finishes, so any imported cloud playlists are already materialised into
-    /// local `Playlist` records before the UI decides what to show.
-    private var shouldOpenInitialSyncGate = false
-
-    /// Set while CloudKit is importing remote data, so a foreground return or a
-    /// bare `.NSPersistentStoreRemoteChange` knows there is actually something new
-    /// to pull. Consumed (reset) when a reconcile pass starts. Export acks and
-    /// setup events don't set it, so pushing our own changes no longer
-    /// self-triggers an empty pass — and a foreground with nothing imported skips
-    /// the catalog scan and the `@Query` refresh that froze the UI on tvOS.
-    private var cloudImportPending = false
+    private var catalogRetryTask: Task<Void, Never>?
+    private static let catalogRetryDelay: Duration = .seconds(15)
 
     private var observers: [NSObjectProtocol] = []
 
@@ -80,6 +70,7 @@ final class CloudSyncCoordinator {
         // Nothing to sync under previews / tests: open the launch gate now so an
         // empty store shows the add-playlist form immediately, as before.
         status.hasCompletedInitialSync = !cloudKitEnabled
+        schedule = ReconcileScheduleMachine(gateOpen: !cloudKitEnabled)
         guard cloudKitEnabled else { return }
         observeCloudKitEvents()
         observeRemoteChanges()
@@ -144,80 +135,80 @@ final class CloudSyncCoordinator {
 
     /// Request a reconcile. Notification-driven callers debounce (the default) so
     /// a burst collapses into a single pass; callers that must run promptly (a
-    /// background flush before suspension) pass `debounced: false`. Either way
-    /// concurrent passes coalesce into at most one in-flight pass plus one queued
-    /// follow-up.
+    /// background flush before suspension) pass `debounced: false`.
     func reconcile(reason: ReconcileReason = .queued, debounced: Bool = true) {
-        guard shouldRun(reason) else {
-            Logger.sync.debug("Reconcile skipped (\(String(describing: reason), privacy: .public)) — no pending CloudKit import")
+        send(.requested(reason, debounced: debounced))
+    }
+
+    private func send(_ event: ReconcileScheduleMachine.Event) {
+        let before = schedule.state
+        guard let effects = schedule.handle(event) else {
+            if case let .requested(reason, _) = event {
+                Logger.sync.debug("Reconcile skipped (\(String(describing: reason), privacy: .public)) — no pending CloudKit import")
+            }
             return
         }
-        guard debounced else {
+        if schedule.state != before {
+            Logger.sync.info("sync schedule: \(before.logName, privacy: .public) → \(schedule.state.logName, privacy: .public)")
+        }
+        effects.forEach(perform)
+    }
+
+    private func perform(_ effect: ReconcileScheduleMachine.Effect) {
+        switch effect {
+        case .startDebounce:
+            reconcileDebounceTask?.cancel()
+            reconcileDebounceTask = Task { [weak self] in
+                try? await Task.sleep(for: Self.reconcileDebounceDelay)
+                guard !Task.isCancelled else { return }
+                self?.send(.debounceElapsed)
+            }
+        case .cancelDebounce:
             reconcileDebounceTask?.cancel()
             reconcileDebounceTask = nil
-            runReconcile()
-            return
-        }
-        reconcileDebounceTask?.cancel()
-        reconcileDebounceTask = Task { [weak self] in
-            try? await Task.sleep(for: Self.reconcileDebounceDelay)
-            guard !Task.isCancelled else { return }
-            self?.runReconcile()
-        }
-    }
-
-    /// A foreground return or a bare store-change notification only merits a pass
-    /// when CloudKit has imported remote data since the last one; everything else
-    /// always runs. Keeping the pre-suspension flush unconditional is what makes
-    /// skipping safe — a local edit still reaches the cloud when the app
-    /// backgrounds, even if every foreground / remote-change pass was skipped.
-    private func shouldRun(_ reason: ReconcileReason) -> Bool {
-        switch reason {
-        case .launch, .backgroundFlush, .contentSync, .queued:
-            true
-        case .foreground, .remoteChange:
-            cloudImportPending
+        case let .runPass(reasons):
+            runPass(for: reasons)
+        case .recordSync:
+            status.lastReconcile = Date()
+        case .scheduleCatalogRetry:
+            catalogRetryTask?.cancel()
+            catalogRetryTask = Task { [weak self] in
+                try? await Task.sleep(for: Self.catalogRetryDelay)
+                guard !Task.isCancelled else { return }
+                self?.send(.catalogRetryElapsed)
+            }
+        case .openGate:
+            // Only after the last queued pass, so imported playlists are fully
+            // materialised before the form decision.
+            status.hasCompletedInitialSync = true
         }
     }
 
-    private func runReconcile() {
-        guard !isReconciling else {
-            pendingReconcile = true
-            return
-        }
-        isReconciling = true
-        // This pass pulls whatever CloudKit imported, so consume the flag now; an
-        // import that lands mid-pass sets it again and queues a follow-up.
-        cloudImportPending = false
-
+    private func runPass(for reasons: Set<ReconcileReason>) {
+        Logger.sync.debug("Reconcile running (\(ReconcileReason.logList(reasons), privacy: .public))")
         Task {
             let result = await engine.reconcile()
             // Back on the main actor (this closure is main-actor isolated).
-            if !result.failed {
-                status.lastReconcile = Date()
-            }
             status.lastResult = result
 
             // The engine may have replaced (or removed) the keychain token from
             // CloudKit. Refresh TraktService's in-memory connection state; run it
             // independently because fetching the username is a network request
-            // and must not hold the reconcile coalescing gate closed.
+            // and must not hold the next pass back.
             if result.traktPulled > 0 {
                 Task { await TraktService.shared.restore() }
             }
             if result.simklPulled > 0 {
                 Task { await SimklService.shared.restore() }
             }
-
-            isReconciling = false
-            if pendingReconcile {
-                pendingReconcile = false
-                reconcile()
-            } else if shouldOpenInitialSyncGate, !status.hasCompletedInitialSync {
-                // Open the gate only after the last queued pass, so imported
-                // playlists are fully materialised before the form decision.
-                status.hasCompletedInitialSync = true
+            let outcome: ReconcileScheduleMachine.Outcome = if result.failed {
+                .failed
+            } else if result.skippedUntrustworthyLocalStore {
+                .catalogUnreadable
+            } else {
+                .completed
             }
+            send(.passFinished(outcome))
         }
     }
 
@@ -280,9 +271,8 @@ final class CloudSyncCoordinator {
     /// or fall back to the add-playlist form if not. Idempotent: only the first
     /// call has any effect.
     private func completeInitialSync() {
-        guard cloudKitEnabled, !status.hasCompletedInitialSync, !shouldOpenInitialSyncGate else { return }
-        shouldOpenInitialSyncGate = true
-        reconcile(reason: .launch)
+        guard cloudKitEnabled else { return }
+        send(.initialSyncSettled)
     }
 
     /// Safety net: open the gate after a bounded wait so a brand-new but empty
@@ -299,7 +289,7 @@ final class CloudSyncCoordinator {
     /// waiting and fall through to the add-playlist form. Sync keeps running in
     /// the background, so cloud playlists still appear if they arrive later.
     func skipInitialSyncWait() {
-        status.hasCompletedInitialSync = true
+        send(.gateSkipped)
     }
 
     // MARK: - Account status
@@ -398,7 +388,7 @@ final class CloudSyncCoordinator {
         // one when the import finishes. Export acks and `.setup` don't arm it, so
         // pushing our own edits no longer self-triggers an empty reconcile.
         if type == .import {
-            cloudImportPending = true
+            send(.importSeen)
             if !inProgress {
                 reconcile(reason: .remoteChange)
             }
@@ -541,10 +531,10 @@ final class CloudSyncCoordinator {
 
 /// Why a reconcile was requested — determines whether a pass with nothing to do
 /// can be skipped. A foreground return and a bare `.NSPersistentStoreRemoteChange`
-/// only run when CloudKit actually imported remote data (`cloudImportPending`);
+/// only run when CloudKit actually imported remote data (`ReconcileScheduleMachine`);
 /// launch, the pre-suspension flush, a finished catalog sync, and a queued
 /// follow-up always run.
-enum ReconcileReason {
+nonisolated enum ReconcileReason: Hashable {
     /// Cold-launch first pass — establishes the baseline and pulls anything
     /// CloudKit already imported.
     case launch
@@ -559,6 +549,8 @@ enum ReconcileReason {
     /// An internal follow-up pass (coalesced overlap, or a post-profile-switch
     /// re-baseline) — always runs.
     case queued
+    /// The last pass couldn't read the local catalog; trying again.
+    case catalogRetry
 }
 
 extension Notification.Name {
