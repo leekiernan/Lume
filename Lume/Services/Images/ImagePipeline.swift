@@ -269,15 +269,17 @@ actor ImagePipeline {
     private nonisolated static func load(url: URL, maxPixelSize: CGFloat?, key: String, retries: Int) async throws -> PlatformImage {
         // Disk holds the original bytes keyed by URL; reuse across target sizes.
         let diskKey = url.absoluteString
-        if let data = ImageDiskCache.shared.data(for: diskKey),
-           let image = ImageDecoder.decode(data, maxPixelSize: maxPixelSize)
-        {
-            ImageMemoryCache.shared.insert(image, for: key)
-            return image
+        if let data = ImageDiskCache.shared.data(for: diskKey) {
+            if let image = ImageDecoder.decode(data, maxPixelSize: maxPixelSize) {
+                ImageMemoryCache.shared.insert(image, for: key)
+                return image
+            }
+            // Do not repeatedly re-decode a poisoned cache entry before every
+            // retry. The replacement is only cached after it decodes below.
+            ImageDiskCache.shared.removeData(for: diskKey)
         }
 
         let data = try await fetch(url: url, retries: retries)
-        ImageDiskCache.shared.store(data, for: diskKey)
 
         // The decode below is the expensive part; skip it for a subscriber that has
         // already gone away rather than burning a core on pixels nobody will draw.
@@ -286,6 +288,10 @@ actor ImagePipeline {
         guard let image = ImageDecoder.decode(data, maxPixelSize: maxPixelSize) else {
             throw ImagePipelineError.decodingFailed
         }
+        // Only durable, successfully decoded artwork belongs on disk. In
+        // particular, an HTML error page returned with HTTP 200 must not become
+        // a persistent cache hit that fails again on every launch.
+        ImageDiskCache.shared.store(data, for: diskKey)
         ImageMemoryCache.shared.insert(image, for: key)
         return image
     }

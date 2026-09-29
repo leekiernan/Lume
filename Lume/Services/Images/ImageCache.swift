@@ -209,6 +209,15 @@ final nonisolated class ImageDiskCache: @unchecked Sendable {
         }
     }
 
+    /// Drops one known-bad cache entry. This is deliberately narrower than the
+    /// user-facing "clear image cache" action: a malformed response for one URL
+    /// must not make every otherwise-good poster cold again.
+    func removeData(for key: String) {
+        let url = fileURL(for: key)
+        guard let entry = entry(for: url), remove(entry) else { return }
+        recordRemoval(byteCount: entry.byteCount)
+    }
+
     func removeAll() {
         try? fileManager.removeItem(at: directory)
         try? fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -416,7 +425,7 @@ nonisolated enum ImageDecoder {
     static func decode(_ data: Data, maxPixelSize: CGFloat?) -> PlatformImage? {
         let sourceOptions = [kCGImageSourceShouldCache: false] as CFDictionary
         guard let source = CGImageSourceCreateWithData(data as CFData, sourceOptions) else {
-            return PlatformImage(data: data)
+            return nil
         }
 
         var thumbnailOptions: [CFString: Any] = [
@@ -428,8 +437,22 @@ nonisolated enum ImageDecoder {
             thumbnailOptions[kCGImageSourceThumbnailMaxPixelSize] = maxPixelSize
         }
 
-        guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, thumbnailOptions as CFDictionary) else {
-            return PlatformImage(data: data)
+        if let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, thumbnailOptions as CFDictionary) {
+            #if canImport(UIKit)
+                return UIImage(cgImage: cgImage)
+            #else
+                return NSImage(cgImage: cgImage, size: .zero)
+            #endif
+        }
+
+        // Some valid sources cannot produce an ImageIO thumbnail (the device
+        // log reports this as `CGImageSourceCreateThumbnailAtIndex … failed`).
+        // A full decode is still a useful fallback, but never return a lazy
+        // `PlatformImage(data:)`: that postpones the same failure to SwiftUI's
+        // render pass and makes every later appearance emit it again.
+        let fullImageOptions = [kCGImageSourceShouldCacheImmediately: true] as CFDictionary
+        guard let cgImage = CGImageSourceCreateImageAtIndex(source, 0, fullImageOptions) else {
+            return nil
         }
 
         #if canImport(UIKit)
