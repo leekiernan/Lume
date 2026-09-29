@@ -11,54 +11,18 @@
 //  through a fallback.
 //
 
-import AVFoundation
-import OSLog
-
 extension FullScreenPlayerView {
-    /// Off the main thread: activating the session can take a moment (HDMI
-    /// negotiating the route), and on the main thread that is the player's
-    /// first frames — the system warns about exactly this.
+    /// The shared owner actor both keeps the potentially-blocking platform call
+    /// off the main actor and prevents an old player from racing a successor's
+    /// activation during a quick stream switch.
     func configureAudioSessionForPlayback() async {
-        await Task.detached(priority: .userInitiated) {
-            Self.activateAudioSession()
-        }.value
+        await PlaybackAudioSession.shared.activate(owner: audioSessionOwner, configuration: .fullScreen)
     }
 
-    private nonisolated static func activateAudioSession() {
-        // tvOS needs this as much as iOS: LumeEngine renders PCM through
-        // AVSampleBufferAudioRenderer and sizes its downmix to the session's
-        // *negotiated* output channels — without an active .playback session
-        // the route stays at its default and multichannel audio has no path.
-        // (KSPlayer/VLC configure their own session; LumeEngine by design
-        // does not touch global audio state, so it is the app's job.)
-        #if os(iOS) || os(tvOS)
-            let session = AVAudioSession.sharedInstance()
-            try? session.setCategory(.playback, mode: .moviePlayback, options: [])
-            // Ask for the route's full width (HDMI LPCM surround); harmless
-            // when the route is stereo — the session clamps and LumeEngine
-            // downmixes to whatever was actually granted.
-            let maxChannels = session.maximumOutputNumberOfChannels
-            if maxChannels > 2 {
-                try? session.setPreferredOutputNumberOfChannels(maxChannels)
-            }
-            try? session.setActive(true, options: [])
-            let route = session.currentRoute.outputs
-                .map { "\($0.portType.rawValue)(\($0.channels?.count ?? 0)ch)" }
-                .joined(separator: "+")
-            Logger.player.info("""
-            Audio session active: route=\(route, privacy: .public) \
-            outputChannels=\(session.outputNumberOfChannels) \
-            maxChannels=\(maxChannels) sampleRate=\(session.sampleRate)
-            """)
-        #endif
-    }
-
-    /// Synchronous on purpose: it must finish before a player opened straight
-    /// after this one activates the session again, or it could switch that
-    /// player's session off.
+    /// The actor serialises this after every activation. If a successor acquired
+    /// the lease first, this becomes a safe no-op rather than deactivating it.
     func releaseAudioSession() {
-        #if os(iOS) || os(tvOS)
-            try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
-        #endif
+        let owner = audioSessionOwner
+        Task { await PlaybackAudioSession.shared.deactivate(owner: owner) }
     }
 }
