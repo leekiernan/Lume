@@ -8,6 +8,10 @@ nonisolated struct CloudSyncReconcileResult: Equatable {
     var playlistsPushed = 0
     var playlistsPulled = 0
     var playlistsCreatedLocally = 0
+    /// Existing playlists whose pull changed how they log in (address,
+    /// credentials, source type). One whose last catalog sync failed against
+    /// the old details deserves another try — see `PlaylistReconnection`.
+    var playlistsReconnected: Set<UUID> = []
     var contentPushed = 0
     var contentPulled = 0
     var epgSourcesPushed = 0
@@ -370,15 +374,29 @@ private extension CloudSyncEngine {
             if value != nil { result.playlistsPushed += 1 }
             shadow.setPlaylistShadow(key, value)
         case let .pullToLocal(value):
+            noteReconnection(to: value, id: id, local: local, into: &result)
             if applyPlaylistToLocal(value, id: id, local: local) { result.playlistsCreatedLocally += 1 }
             if value != nil { result.playlistsPulled += 1 }
             shadow.setPlaylistShadow(key, value)
         case let .writeBoth(value):
             applyPlaylistToCloud(value, id: id, mirror: mirror)
+            noteReconnection(to: value, id: id, local: local, into: &result)
             if applyPlaylistToLocal(value, id: id, local: local) { result.playlistsCreatedLocally += 1 }
             result.playlistsPushed += 1
             shadow.setPlaylistShadow(key, value)
         }
+    }
+
+    /// Records a pull that changes how an existing playlist logs in. Read
+    /// before the write, while `local` still holds the old details.
+    func noteReconnection(
+        to value: PlaylistConfigValues?,
+        id: UUID,
+        local: Playlist?,
+        into result: inout CloudSyncReconcileResult
+    ) {
+        guard let value, let local, value.connectsDifferently(from: Self.values(from: local)) else { return }
+        result.playlistsReconnected.insert(id)
     }
 
     /// Whether a verdict that writes the local catalog carries a source type

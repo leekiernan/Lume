@@ -64,11 +64,14 @@ struct SyncProgressView: View {
     }
 
     var body: some View {
-        #if os(tvOS)
-            tvBody
-        #else
-            standardBody
-        #endif
+        Group {
+            #if os(tvOS)
+                tvBody
+            #else
+                standardBody
+            #endif
+        }
+        .retryingSync(of: playlist.id, failed: phase == .failed, retry: startSync)
     }
 
     // MARK: - Shared header content

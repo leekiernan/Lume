@@ -171,6 +171,14 @@ nonisolated struct PlaylistConfigValues: Codable, Equatable {
         syncEnabled = try container.decode(Bool.self, forKey: .syncEnabled)
     }
 
+    /// Whether a sync would reach the provider differently: the fields it
+    /// logs in with. A rename or a new guide URL can't turn a failed sync
+    /// into a working one, so they don't count.
+    func connectsDifferently(from other: PlaylistConfigValues) -> Bool {
+        serverURL != other.serverURL || username != other.username || password != other.password
+            || macAddress != other.macAddress || sourceTypeRaw != other.sourceTypeRaw
+    }
+
     /// Conflict policy: cloud wins. Deterministic and adequate for config.
     static func mergeConflict(local _: PlaylistConfigValues, cloud: PlaylistConfigValues) -> PlaylistConfigValues {
         cloud
