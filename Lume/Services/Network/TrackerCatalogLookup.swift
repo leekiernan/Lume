@@ -14,7 +14,7 @@ import SwiftData
 ///
 /// The ids go into the predicate as chunked `IN` lists, kept comfortably under
 /// SQLite's bound-variable cap for a long history.
-enum TrackerCatalogLookup {
+nonisolated enum TrackerCatalogLookup {
     private static let idChunkSize = 500
 
     static func movies(tmdbIDs: Set<Int>, in context: ModelContext) -> [Movie] {

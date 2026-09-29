@@ -26,7 +26,7 @@ import Foundation
 import SwiftData
 
 /// The outcome of an import, surfaced in the settings UI.
-struct SimklImportSummary: Equatable {
+nonisolated struct SimklImportSummary: Equatable {
     var moviesMarked = 0
     var episodesMarked = 0
     /// Shows whose watched episodes were parked because the catalog has no
@@ -41,7 +41,7 @@ struct SimklImportSummary: Equatable {
     }
 }
 
-enum SimklWatchedImporter {
+nonisolated enum SimklWatchedImporter {
     /// Marks the local movies and episodes that Simkl reports as watched,
     /// writing through the given catalog context. Returns what changed.
     static func apply(items: SimklAllItems, in context: ModelContext) -> SimklImportSummary {

@@ -19,7 +19,7 @@ import Foundation
 import SwiftData
 
 /// One paused item from `GET /sync/playback`.
-struct TraktPlaybackItem: Decodable {
+nonisolated struct TraktPlaybackItem: Decodable {
     /// Percent watched, 0...100.
     let progress: Double
     let pausedAt: String?
@@ -45,7 +45,7 @@ extension TraktClient {
     }
 }
 
-enum TraktPlaybackImporter {
+nonisolated enum TraktPlaybackImporter {
     /// How long a parked pause waits for its episode. Long enough for a
     /// provider a few weeks behind Trakt; short enough that a pause for an
     /// episode it never lists doesn't sit on disk forever.

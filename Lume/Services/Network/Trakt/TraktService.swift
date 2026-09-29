@@ -292,20 +292,39 @@ final class TraktService {
             return
         }
         do {
-            let movies = try await client.watchedMovies(accessToken: accessToken)
-            let shows = try await client.watchedShows(accessToken: accessToken)
-            var summary = TraktWatchedImporter.apply(movies: movies, shows: shows, in: context)
-            // Then what's paused part-way, for Continue Watching. After the
-            // watched pass, so a title finished since isn't reopened. Best
-            // effort: the watched history above stands if this fails.
-            if !summary.failed, let paused = try? await client.playback(accessToken: accessToken) {
-                summary.inProgress = TraktPlaybackImporter.apply(paused, in: context)
-                if context.hasChanges { try? context.save() }
-            }
-            lastImport = summary
+            async let movies = client.watchedMovies(accessToken: accessToken)
+            async let shows = client.watchedShows(accessToken: accessToken)
+            let watched = try await (movies: movies, shows: shows)
+            // What's paused part-way, for Continue Watching. Best effort: the
+            // watched history stands if this fails.
+            let paused = try? await client.playback(accessToken: accessToken)
+            lastImport = await Self.applyImport(
+                movies: watched.movies, shows: watched.shows, paused: paused, container: context.container
+            )
         } catch {
             lastImport = .failure
         }
+    }
+
+    /// Matching the history against the catalog fetches and faults catalog
+    /// rows; on the view context that ran on the main thread. A context of its
+    /// own, off the main actor, instead — the UI's context picks the change up
+    /// on merge. The paused pass follows the watched one, so a title finished
+    /// since isn't reopened.
+    @concurrent
+    private static func applyImport(
+        movies: [TraktWatchedMovie],
+        shows: [TraktWatchedShow],
+        paused: [TraktPlaybackItem]?,
+        container: ModelContainer
+    ) async -> TraktImportSummary {
+        let context = ModelContext(container)
+        var summary = TraktWatchedImporter.apply(movies: movies, shows: shows, in: context)
+        if !summary.failed, let paused {
+            summary.inProgress = TraktPlaybackImporter.apply(paused, in: context)
+            if context.hasChanges { try? context.save() }
+        }
+        return summary
     }
 }
 

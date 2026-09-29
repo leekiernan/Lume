@@ -418,7 +418,7 @@ struct TraktUser: Decodable {
 
 /// External-id bag accepted by Trakt sync endpoints. We only ever have a TMDB
 /// id from the library, which Trakt resolves on its end.
-struct TraktIDs: Codable {
+nonisolated struct TraktIDs: Codable {
     var tmdb: Int?
     var trakt: Int?
 }
@@ -536,7 +536,7 @@ struct TraktWatchlistMedia: Decodable {
 
 /// One entry from `/sync/watched/movies`. `lastWatchedAt` is kept as the raw
 /// ISO-8601 string (Trakt includes fractional seconds); the importer parses it.
-struct TraktWatchedMovie: Decodable {
+nonisolated struct TraktWatchedMovie: Decodable {
     let movie: TraktWatchedMedia
     let lastWatchedAt: String?
 
@@ -548,7 +548,7 @@ struct TraktWatchedMovie: Decodable {
 
 /// One entry from `/sync/watched/shows`, with the watched seasons and episodes
 /// nested beneath it.
-struct TraktWatchedShow: Decodable {
+nonisolated struct TraktWatchedShow: Decodable {
     let show: TraktWatchedMedia
     let seasons: [TraktWatchedSeason]
 
@@ -571,12 +571,12 @@ struct TraktWatchedShow: Decodable {
     }
 }
 
-struct TraktWatchedSeason: Decodable {
+nonisolated struct TraktWatchedSeason: Decodable {
     let number: Int
     let episodes: [TraktWatchedEpisode]
 }
 
-struct TraktWatchedEpisode: Decodable {
+nonisolated struct TraktWatchedEpisode: Decodable {
     let number: Int
     let lastWatchedAt: String?
 
@@ -588,7 +588,7 @@ struct TraktWatchedEpisode: Decodable {
 
 /// The id bag shared by watched movies and shows. Only the TMDB id is used to
 /// match against the local library.
-struct TraktWatchedMedia: Decodable {
+nonisolated struct TraktWatchedMedia: Decodable {
     let ids: TraktIDs
 }
 

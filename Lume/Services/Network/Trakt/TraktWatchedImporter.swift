@@ -26,7 +26,7 @@ import Foundation
 import SwiftData
 
 /// The outcome of an import, surfaced in the settings UI.
-struct TraktImportSummary: Equatable {
+nonisolated struct TraktImportSummary: Equatable {
     var moviesMarked = 0
     var episodesMarked = 0
     /// Shows whose watched episodes were parked because the catalog has no
@@ -43,7 +43,7 @@ struct TraktImportSummary: Equatable {
     }
 }
 
-enum TraktWatchedImporter {
+nonisolated enum TraktWatchedImporter {
     /// Marks the local movies and episodes that Trakt reports as watched, writing
     /// through the given catalog context. Returns what changed.
     static func apply(
