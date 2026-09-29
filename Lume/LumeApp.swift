@@ -32,19 +32,24 @@ struct LumeApp: App {
     #endif
 
     init() {
+        LaunchTimeline.appCodeStarts()
         // First, so the launch marker precedes anything the setup below logs.
         DiagnosticSession.start()
         let (catalog, cloud) = Self.makeModelContainers()
         catalogContainer = catalog
         cloudContainer = cloud
-        let coordinator = CloudSyncCoordinator(
-            catalogContainer: catalog,
-            cloudContainer: cloud,
-            cloudKitContainerIdentifier: Self.cloudKitContainerIdentifier,
-            cloudKitEnabled: Self.isCloudKitEnvironment
-        )
+        let coordinator = LaunchTimeline.measure("sync coordinator") {
+            CloudSyncCoordinator(
+                catalogContainer: catalog,
+                cloudContainer: cloud,
+                cloudKitContainerIdentifier: Self.cloudKitContainerIdentifier,
+                cloudKitEnabled: Self.isCloudKitEnvironment
+            )
+        }
         _cloudSync = State(initialValue: coordinator)
-        let profiles = ProfileManager(catalogContainer: catalog, cloudContainer: cloud, coordinator: coordinator)
+        let profiles = LaunchTimeline.measure("profiles") {
+            ProfileManager(catalogContainer: catalog, cloudContainer: cloud, coordinator: coordinator)
+        }
         _profileManager = State(initialValue: profiles)
         _parentalControls = State(initialValue: ParentalControls(profileManager: profiles))
     }
@@ -67,7 +72,7 @@ struct LumeApp: App {
     /// `@Query` dozens of times per foreground and pinned the main thread on tvOS.
     /// Both stores keep their existing files and schemas, so there is no migration.
     private static func makeModelContainers() -> (catalog: ModelContainer, cloud: ModelContainer) {
-        let cloud = makeCloudContainer()
+        let cloud = LaunchTimeline.measure("cloud store", makeCloudContainer)
         let catalogSchema = Schema([
             Playlist.self, Category.self, LiveStream.self, Movie.self,
             Series.self, Episode.self, CastMember.self, EPGListing.self, EPGSource.self
@@ -90,18 +95,20 @@ struct LumeApp: App {
         // migration stage makes it revisit that — see `CatalogIndexBackfill`,
         // which was written after both were measured against a real store. Runs
         // before the container opens the file, on its own connection.
-        CatalogIndexBackfill.run(storeURL: catalogConfiguration.url)
+        LaunchTimeline.measure("index check") { CatalogIndexBackfill.run(storeURL: catalogConfiguration.url) }
         func buildCatalog() throws -> ModelContainer {
             try ModelContainer(for: catalogSchema, configurations: catalogConfiguration)
         }
         do {
-            let catalog = try buildCatalog()
+            let catalog = try LaunchTimeline.measure("catalog store", buildCatalog)
             // A `.syncing` status in the freshly opened store is stale by
             // definition — its owning task died with the previous process. Reset
             // it now, before MainTabView's auto-sync gate reads playlist status,
             // or the playlist stays wedged out of all future syncs.
-            ContentSyncManager.recoverInterruptedSyncs(in: ModelContext(catalog))
-            EPGSyncManager.recoverInterruptedSyncs(in: ModelContext(catalog))
+            LaunchTimeline.measure("sync recovery") {
+                ContentSyncManager.recoverInterruptedSyncs(in: ModelContext(catalog))
+                EPGSyncManager.recoverInterruptedSyncs(in: ModelContext(catalog))
+            }
             return (catalog, cloud)
         } catch {
             #if DEBUG
