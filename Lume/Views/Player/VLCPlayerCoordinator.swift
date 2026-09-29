@@ -49,7 +49,9 @@ final class VLCPlayerCoordinator: NSObject, ObservableObject {
     /// How long to wait for the first frame before declaring the stream dead.
     /// Set by the host before `configure` — shorter when a fallback engine is
     /// available so the hand-off is prompt.
-    var startupTimeout: TimeInterval = 40
+    var startupTimeout = PlaybackPolicy.startupTimeout
+    /// Whether an error before the first frame retries — see `PlaybackPolicy`.
+    var retriesStartupErrors = false
 
     /// Live technical characteristics of the current video track, surfaced in
     /// the tvOS overlay's right-hand caption. `nil` until the demuxer has
@@ -179,7 +181,7 @@ final class VLCPlayerCoordinator: NSObject, ObservableObject {
         startTracker.beginStream()
         setBuffering(true)
         didReportFailure = false
-        PlaybackQoE.shared.beginStartup(engine: .vlcKit, isLive: media.isLive)
+        PlaybackQoE.shared.beginStartup(engine: .vlcKit, isLive: media.isLive, owner: self)
         startStartupWatchdog()
         mediaPlayer.delegate = self
 
@@ -224,7 +226,7 @@ final class VLCPlayerCoordinator: NSObject, ObservableObject {
         startTracker.beginStream()
         setBuffering(true)
         didReportFailure = false
-        PlaybackQoE.shared.beginStartup(engine: .vlcKit, isLive: media.isLive)
+        PlaybackQoE.shared.beginStartup(engine: .vlcKit, isLive: media.isLive, owner: self)
         startStartupWatchdog()
 
         installMedia(media.url, isLive: media.isLive)
@@ -249,16 +251,20 @@ final class VLCPlayerCoordinator: NSObject, ObservableObject {
             isReloading = false
             if state == .playing {
                 retry.reset()
-                setBuffering(false)
-                markPlaybackStarted(startTracker.noteEngineStarted())
+                // VLC reports playing mid-buffer (after a resume seek, ~20 s
+                // before a frame); then the playhead proves the start instead.
+                if bufferingStartedAt == nil {
+                    setBuffering(false)
+                    markPlaybackStarted(startTracker.noteEngineStarted())
+                }
             }
         case .error:
             // A hard error before the first frame means this engine can't open
-            // the stream — report it straight away so the host can fall back
-            // (or raise the overlay) rather than retrying an engine that already
-            // gave a definitive failure. After playback has started, fall back
+            // the stream — report it straight away so the host can fall back,
+            // unless this is the last engine, where a bounded retry is all that
+            // is left (`PlaybackPolicy`). After playback has started, fall back
             // on the bounded reconnect and only report once it's exhausted.
-            if !hasStartedPlayback {
+            if !hasStartedPlayback, !retriesStartupErrors {
                 reportFailure()
             } else {
                 retry.scheduleRetry { [weak self] in self?.reconnect() }
@@ -384,7 +390,7 @@ final class VLCPlayerCoordinator: NSObject, ObservableObject {
         stopStatsLogging()
         retry.cancel()
         cancelStartupWatchdog()
-        PlaybackQoE.shared.endSession()
+        PlaybackQoE.shared.endSession(owner: self)
         Logger.player.log("tearDown")
         mediaPlayer.delegate = nil
         if mediaPlayer.isPlaying { mediaPlayer.stop() }
@@ -473,6 +479,8 @@ extension VLCPlayerCoordinator: VLCMediaPlayerDelegate {
             guard let self else { return }
             if progress >= 1.0 {
                 PlaybackQoE.shared.noteStallEnded()
+                // Before the first frame the spinner waits for the start proof.
+                if hasStartedPlayback { setBuffering(false) }
                 if let started = bufferingStartedAt {
                     let elapsed = Date().timeIntervalSince(started)
                     bufferingStartedAt = nil
@@ -482,6 +490,8 @@ extension VLCPlayerCoordinator: VLCMediaPlayerDelegate {
                 // Mid-stream only; `PlaybackQoE` ignores stalls before the first
                 // frame, which are join time rather than rebuffering.
                 PlaybackQoE.shared.noteStallBegan()
+                // VLC's only stall signal: drives the spinner, not just stats.
+                setBuffering(true)
                 bufferingStartedAt = Date()
                 Logger.player.log("buffering started")
             }

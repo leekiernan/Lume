@@ -116,6 +116,15 @@ struct KSPlayerEngineView: View {
     /// disarmed). See `handleState`.
     @State var stallWatchdog: Task<Void, Never>?
     @State var isControlsVisible = true
+
+    /// Whether the controls are on screen — see `PlayerChrome`.
+    var drawsControls: Bool {
+        PlayerChrome.drawsControls(
+            requested: isControlsVisible, started: hasStartedPlayback,
+            catchupSegmentLoading: isCatchupSegmentLoading, failed: loadFailed
+        )
+    }
+
     /// Presents the OpenSubtitles browser. Held here rather than in the controls
     /// overlay: the overlay is removed when the controls auto-hide, which would
     /// take a sheet anchored there down with it mid-search.
@@ -178,19 +187,18 @@ struct KSPlayerEngineView: View {
     let autoHideInterval: TimeInterval = 4
     /// How long to wait for the first frame before declaring a stream dead. The
     /// engine legitimately sits in `.preparing`/`.buffering` for ~10–20s on a
-    /// healthy open, so this is set well clear of that. The reconnect budget
-    /// (~31s of bounded backoff) usually trips first on a stream that *errors*;
-    /// this catches the one that simply never responds.
-    let startupTimeout: TimeInterval = 40
-    /// Shorter startup timeout used when a fallback engine is available: there's
-    /// no point waiting the full `startupTimeout` on a black screen when another
-    /// engine can be tried, so hand off after this if no frame has appeared.
-    let fallbackStartupTimeout: TimeInterval = 15
+    /// healthy open; the reconnect budget (~31s of bounded backoff) usually
+    /// trips first on a stream that *errors*, and this catches the one that
+    /// simply never responds. See `PlaybackPolicy`.
+    var startupTimeout: TimeInterval {
+        PlaybackPolicy.startupTimeout(quick: usesQuickStartupTimeout)
+    }
+
     /// How long a live stream may sit in `.buffering` mid-playback before the
-    /// stall watchdog rebuilds it. A healthy rebuffer only has to reach the
-    /// live-buffer target (a few seconds), so 30s of no recovery means the
-    /// pipeline is wedged, not catching up.
-    let stallTimeout: TimeInterval = 30
+    /// stall watchdog rebuilds it — see `PlaybackPolicy.liveStallTimeout`.
+    var stallTimeout: TimeInterval {
+        PlaybackPolicy.liveStallTimeout
+    }
 
     var body: some View {
         Group {
@@ -271,7 +279,7 @@ struct KSPlayerEngineView: View {
                 // Suppress the controls (and their Play button) until the stream
                 // has actually started, so viewers see a loading indicator
                 // instead of a player that looks paused.
-                if isControlsVisible, hasStartedPlayback || isCatchupSegmentLoading, !loadFailed {
+                if drawsControls {
                     TVPlayerControlsOverlay(
                         coordinator: engine,
                         media: media,
@@ -327,7 +335,7 @@ struct KSPlayerEngineView: View {
                 reconnector.cancel()
                 cancelStartupWatchdog()
                 cancelStallWatchdog()
-                PlaybackQoE.shared.endSession()
+                PlaybackQoE.shared.endSession(owner: coordinator)
                 NowPlayingService.shared.detachTransport(owner: coordinator)
                 coordinator.resetPlayer()
             }
@@ -373,7 +381,10 @@ struct KSPlayerEngineView: View {
             }
             .buttonStyle(KSInvisibleButtonStyle())
             // Yield focus to the failure overlay's buttons when a stream dies.
-            .disabled(isControlsVisible || isChannelBrowserOpen || loadFailed)
+            // Only while the controls are actually drawn (from the first frame):
+            // until then this is what hears the remote, so a second surf press
+            // lands while the channel is still starting.
+            .disabled(drawsControls || isChannelBrowserOpen || loadFailed)
             .focused($catcherFocused)
             .tvRemoteMoveCommand { direction in
                 // Watching live TV with the controls hidden, left opens the
@@ -465,7 +476,7 @@ struct KSPlayerEngineView: View {
                 // Hold the controls back until the stream starts, so the loading
                 // indicator stands in for a player that would otherwise look
                 // paused behind its Play button.
-                if isControlsVisible, hasStartedPlayback || isCatchupSegmentLoading, !loadFailed {
+                if drawsControls {
                     controlsOverlay
                         .transition(.opacity.animation(.easeInOut(duration: 0.2)))
                 }
@@ -505,7 +516,7 @@ struct KSPlayerEngineView: View {
                 reconnector.cancel()
                 cancelStartupWatchdog()
                 cancelStallWatchdog()
-                PlaybackQoE.shared.endSession()
+                PlaybackQoE.shared.endSession(owner: coordinator)
                 NowPlayingService.shared.detachTransport(owner: coordinator)
                 coordinator.resetPlayer()
             }

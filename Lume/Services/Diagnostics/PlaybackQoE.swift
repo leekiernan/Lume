@@ -119,11 +119,16 @@ final class PlaybackQoE {
     ///
     /// Safe to call again for a retry or a live-channel swap — the previous
     /// attempt is closed out first, so a zap counts as its own session.
-    func beginStartup(engine: PlayerEngineKind, isLive: Bool) {
+    ///
+    /// `owner` is the engine instance playing it: engine views overlap across a
+    /// fallback or rebuild (the next one appears before the last disappears),
+    /// and only the owner's `endSession(owner:)` may close the session.
+    func beginStartup(engine: PlayerEngineKind, isLive: Bool, owner: AnyObject) {
         guard !isSuspended else { return }
         if startupBegan != nil {
             endSession()
         }
+        self.owner = owner
         self.engine = engine
         self.isLive = isLive
         startupBegan = Date()
@@ -199,10 +204,21 @@ final class PlaybackQoE {
         persist()
     }
 
-    /// Playback ended (view torn down, channel closed, app backgrounded). Closes
-    /// any open interval and — if no frame ever arrived — counts an exit before
-    /// video start.
-    func endSession() {
+    /// The engine instance that opened the current session.
+    private weak var owner: AnyObject?
+
+    /// `owner`'s playback ended (view torn down, channel closed). Ignored when
+    /// another engine has since opened a session: the torn-down engine's
+    /// teardown would otherwise close the session of the one replacing it,
+    /// losing its join time and counting a false exit before video start.
+    func endSession(owner: AnyObject) {
+        guard owner === self.owner else { return }
+        endSession()
+    }
+
+    /// Closes any open interval and — if no frame ever arrived — counts an exit
+    /// before video start.
+    private func endSession() {
         guard !isSuspended, let engine, let startupBegan else { return }
         if let interval {
             Perf.end(interval)
@@ -227,6 +243,7 @@ final class PlaybackQoE {
             )
         }
         self.engine = nil
+        owner = nil
         self.startupBegan = nil
         firstFrameAt = nil
         stallBegan = nil

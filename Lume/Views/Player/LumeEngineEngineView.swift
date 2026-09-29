@@ -96,6 +96,15 @@ struct LumeEngineEngineView: View {
     /// the viewer can keep seeking instead of waiting out the load behind a
     /// spinner. Cleared by the first frame or a failure.
     @State private var isCatchupSegmentLoading = false
+
+    /// Whether the controls are on screen — see `PlayerChrome`.
+    private var drawsControls: Bool {
+        PlayerChrome.drawsControls(
+            requested: isControlsVisible, started: coordinator.hasStartedPlayback,
+            catchupSegmentLoading: isCatchupSegmentLoading, failed: loadFailed
+        )
+    }
+
     #if os(tvOS)
         /// The full channel browser (categories + channels) raised by a left
         /// press while watching live TV with the controls hidden.
@@ -146,7 +155,7 @@ struct LumeEngineEngineView: View {
             // Hold the controls back until the stream starts, so the loading
             // indicator stands in for a player that would otherwise look paused
             // behind its Play button.
-            if isControlsVisible, coordinator.hasStartedPlayback || isCatchupSegmentLoading, !loadFailed {
+            if drawsControls {
                 controlsOverlay
                     .transition(.opacity.animation(.easeInOut(duration: 0.2)))
             }
@@ -193,7 +202,8 @@ struct LumeEngineEngineView: View {
         .preferredColorScheme(.dark)
         .onAppear {
             wireCoordinator()
-            coordinator.startupTimeout = usesQuickStartupTimeout ? 15 : 40
+            coordinator.startupTimeout = PlaybackPolicy.startupTimeout(quick: usesQuickStartupTimeout)
+            coordinator.retriesStartupErrors = PlaybackPolicy.retriesStartupError(canFallBack: reportsStartupFailure)
             clock.reset(for: media)
             coordinator.configure(media: media)
             NowPlayingService.shared.attachTransport(.init(
@@ -309,13 +319,14 @@ struct LumeEngineEngineView: View {
         }
         coordinator.onStalled = {
             // Mid-stream drop: bounded exponential backoff, then give up loudly.
+            // Schedule first, then check, as KSPlayer and VLC do: the budget
+            // only reads as spent on the call after its last retry.
+            Logger.player.warning("LumeEngine stalled → scheduling engine reload")
+            reconnector.scheduleRetry { coordinator.reload() }
             if reconnector.hasGivenUp {
                 Logger.player.error("LumeEngine stall retries exhausted → failure overlay")
                 isCatchupSegmentLoading = false
                 withAnimation(.easeInOut(duration: 0.25)) { loadFailed = true }
-            } else {
-                Logger.player.warning("LumeEngine stalled → scheduling engine reload")
-                reconnector.scheduleRetry { coordinator.reload() }
             }
         }
         coordinator.onRecovered = { reconnector.reset() }
@@ -334,7 +345,8 @@ struct LumeEngineEngineView: View {
             }
             .buttonStyle(LumeEngineInvisibleButtonStyle())
             // Yield focus to the failure overlay's buttons when a stream dies.
-            .disabled(isControlsVisible || isChannelBrowserOpen || loadFailed)
+            // Only while the controls are actually drawn — see KSPlayerEngineView.
+            .disabled(drawsControls || isChannelBrowserOpen || loadFailed)
             .focused($catcherFocused)
             .tvRemoteMoveCommand { direction in
                 // Watching live TV with the controls hidden, left opens the

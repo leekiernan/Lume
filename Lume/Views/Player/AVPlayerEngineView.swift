@@ -107,12 +107,6 @@ struct AVPlayerEngineView: View {
     #endif
 
     private let autoHideInterval: TimeInterval = 4
-    /// How long to wait for playback before declaring a stream dead when this is
-    /// the last engine in the priority list.
-    private let startupTimeout: TimeInterval = 40
-    /// Shorter startup timeout used when a fallback engine is available, so a
-    /// hanging engine hands off promptly rather than stalling on a black screen.
-    private let fallbackStartupTimeout: TimeInterval = 15
 
     var engineBody: some View {
         ZStack {
@@ -129,7 +123,7 @@ struct AVPlayerEngineView: View {
             tapCatcher
                 .ignoresSafeArea()
 
-            if isControlsVisible, !loadFailed {
+            if PlayerChrome.drawsControls(requested: isControlsVisible, started: coordinator.hasStartedPlayback, failed: loadFailed) {
                 controlsOverlay
                     .transition(.opacity.animation(.easeInOut(duration: 0.2)))
             }
@@ -179,7 +173,8 @@ struct AVPlayerEngineView: View {
             coordinator.onDuration = { catchup.report(duration: $0, to: clock) }
             catchup.onSeek = onCatchupSeek
             coordinator.onPlaybackFailure = { reportFailure() }
-            coordinator.startupTimeout = usesQuickStartupTimeout ? fallbackStartupTimeout : startupTimeout
+            coordinator.startupTimeout = PlaybackPolicy.startupTimeout(quick: usesQuickStartupTimeout)
+            coordinator.retriesStartupErrors = PlaybackPolicy.retriesStartupError(canFallBack: reportsStartupFailure)
             coordinator.configure(media: media)
             NowPlayingService.shared.attachTransport(.init(
                 isPlaying: { [weak coordinator] in coordinator?.isPlaying ?? false },
@@ -267,7 +262,8 @@ struct AVPlayerEngineView: View {
             }
             .buttonStyle(AVInvisibleButtonStyle())
             // Yield focus to the failure overlay's buttons when a stream dies.
-            .disabled(isControlsVisible || isChannelBrowserOpen || loadFailed)
+            // Only while the controls are actually drawn — see `PlayerChrome`.
+            .disabled(PlayerChrome.drawsControls(requested: isControlsVisible, started: coordinator.hasStartedPlayback, failed: loadFailed) || isChannelBrowserOpen || loadFailed)
             .focused($catcherFocused)
             .tvRemoteMoveCommand { direction in
                 // Left opens the channel browser; up/down surf adjacent
