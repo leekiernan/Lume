@@ -119,13 +119,15 @@ struct SyncProgressView: View {
             defer { epgSync.contentSyncDidFinish(succeeded: succeeded, refreshedLiveTV: refreshedLiveTV) }
             do {
                 let syncManager = ContentSyncManager(modelContainer: modelContext.container)
-                try await syncManager.syncPlaylist(
-                    playlist,
-                    progress: progress,
-                    full: full,
-                    repairingAreas: repairingAreas,
-                    syncAreas: plan.syncAreas
-                )
+                try await BackgroundActivity.perform("Playlist sync") {
+                    try await syncManager.syncPlaylist(
+                        playlist,
+                        progress: progress,
+                        full: full,
+                        repairingAreas: repairingAreas,
+                        syncAreas: plan.syncAreas
+                    )
+                }
                 succeeded = true
                 refreshedLiveTV = plan.refreshesGuide
                 await MainActor.run {

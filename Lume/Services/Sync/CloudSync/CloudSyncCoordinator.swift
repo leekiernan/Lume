@@ -187,7 +187,9 @@ final class CloudSyncCoordinator {
     private func runPass(for reasons: Set<ReconcileReason>) {
         Logger.sync.debug("Reconcile running (\(ReconcileReason.logList(reasons), privacy: .public))")
         Task {
-            let result = await engine.reconcile()
+            let result = await BackgroundActivity.perform("iCloud reconcile") {
+                await engine.reconcile()
+            }
             // Back on the main actor (this closure is main-actor isolated).
             status.lastResult = result
 
