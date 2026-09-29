@@ -106,6 +106,24 @@ struct PlaybackSessionMachineTests {
         #expect(machine.state == .starting(.swap))
     }
 
+    /// KSPlayer marks the stream started and clears buffering in two writes.
+    @Test func `the first frame arriving in two writes is not a stall`() {
+        var machine = Machine()
+        _ = machine.handle(.starting(.ksPlayer, .open))
+        #expect(machine.handle(.reported(.ksPlayer, report(buffering: true, playing: false))) == [])
+        #expect(machine.state == .starting(.open))
+        #expect(machine.handle(.reported(.ksPlayer, report())) == [.scrobble(.start)])
+    }
+
+    /// A second surf while the first was still starting: the stream being left
+    /// reports its first frame after the leave.
+    @Test func `reports between streams are ignored`() {
+        var machine = playingOnKS()
+        _ = machine.handle(.leave(.swap))
+        #expect(machine.handle(.reported(.ksPlayer, report())) == nil)
+        #expect(machine.state == .idle)
+    }
+
     @Test func `backgrounding saves progress and carries on`() {
         var machine = playingOnKS()
         #expect(machine.handle(.leave(.background)) == [.persistProgress])

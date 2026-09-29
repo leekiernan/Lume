@@ -133,6 +133,7 @@ extension FullScreenPlayerView {
         let ref = activeMedia.contentRef
         let total = clock.duration
         completedRef = ref
+        RecentResumePoints.record(total, for: ref)
         let previous = pendingProgressWrite
         pendingProgressWrite = Task { @MainActor in
             // Ordered, not raced: whatever was already in flight for this
