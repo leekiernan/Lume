@@ -100,7 +100,12 @@
                             }
                         }
                     }
-                    .padding(.top, 20)
+                    // The native tab chrome is the next focus target above
+                    // this screen. Match Settings' top breathing room so an
+                    // exit from the filters has an unambiguous spatial route
+                    // to it; at 20pt the controls sat inside that region and
+                    // trapped focus inside the scroll view.
+                    .padding(.top, 72)
                     .padding(.bottom, 40)
                 }
                 .scrollClipDisabled()
