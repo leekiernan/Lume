@@ -16,6 +16,8 @@ import SwiftUI
 /// the spinner sits unobtrusively over the paused frame.
 struct PlayerLoadingIndicator: View {
     let title: String?
+    /// The skip indicator stands in for the spinner — see `SkipIndicatorHandoff`.
+    @Environment(\.skipIndicatorShowing) private var skipIndicatorShowing
 
     var body: some View {
         ZStack {
@@ -42,6 +44,7 @@ struct PlayerLoadingIndicator: View {
                 }
             }
         }
+        .opacity(skipIndicatorShowing ? 0 : 1)
         .allowsHitTesting(false)
     }
 

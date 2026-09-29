@@ -55,5 +55,6 @@ extension View {
                 failureOverlay.wrappedValue = true
             }
         }
+        .skipIndicatorHandoff(buffering: report.buffering)
     }
 }

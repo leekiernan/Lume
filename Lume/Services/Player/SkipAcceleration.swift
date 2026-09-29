@@ -88,8 +88,32 @@ nonisolated struct SkipAcceleration: Equatable {
 /// How far the current skip run has gone and where it lands, shown until the
 /// run ends. Its own identity, so the same total twice still refreshes it.
 nonisolated struct SkipBadge: Equatable {
+    /// How long it stays after the last press, or after the seek finished
+    /// loading: past the run's window, and long enough to read.
+    static let dwell: TimeInterval = 2
+    /// The most it stays through a buffer before the spinner takes over.
+    static let longest: TimeInterval = 8
+
+    /// What its dismissal waits on: the latest press, and the buffering.
+    struct Dwell: Equatable {
+        let badge: UUID?
+        let buffering: Bool
+    }
+
     let id = UUID()
     let press: SkipAcceleration.Press
+    let shownAt: Date
+
+    init(press: SkipAcceleration.Press, shownAt: Date = Date()) {
+        self.press = press
+        self.shownAt = shownAt
+    }
+
+    /// How much longer it stays: through a buffer up to `longest` from when it
+    /// appeared, otherwise `dwell` from now.
+    func remainingDwell(buffering: Bool, at now: Date = Date()) -> TimeInterval {
+        buffering ? max(Self.longest - now.timeIntervalSince(shownAt), 0) : Self.dwell
+    }
 
     /// Keeps one indicator on screen through a run in one direction, so its
     /// number climbs in place rather than the panel re-appearing each press.

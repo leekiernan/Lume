@@ -57,6 +57,7 @@
         /// TV lists do — a channel watched before its category was locked must
         /// not stay one tab away.
         @Environment(\.contentRestriction) var restriction
+        @Environment(\.playerBuffering) var isBuffering
 
         // Resolved SwiftData backing for the active stream.
         @State var episode: Episode?
@@ -109,8 +110,9 @@
                 .padding(.bottom, 56)
             }
             .overlay {
-                if let skipBadge { SkipBadgeLabel(badge: skipBadge).id(skipBadge.forward) }
+                if let skipBadge { SkipBadgeLabel(badge: skipBadge, buffering: isBuffering).id(skipBadge.forward) }
             }
+            .preference(key: SkipIndicatorShowingKey.self, value: skipBadge != nil)
             .defaultFocus($focus, .transport)
             .tvRemoteMoveCommand { direction in
                 // While scrubbing, left/right step the playhead; vertical moves
@@ -321,10 +323,8 @@
                     if hasItemButtons { trailingTransportButton }
                 }
             }
-            .task(id: skipBadge?.id) {
-                guard skipBadge != nil else { return }
-                try? await Task.sleep(for: .seconds(SkipAcceleration.window + 0.3))
-                withAnimation(.easeOut(duration: 0.2)) { skipBadge = nil }
+            .task(id: SkipBadge.Dwell(badge: skipBadge?.id, buffering: isBuffering)) {
+                await dismissSkipBadgeWhenSettled()
             }
         }
 

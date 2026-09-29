@@ -104,4 +104,14 @@ struct SkipAccelerationTests {
         #expect(SkipAcceleration.timeLabel(for: 3725).hasPrefix("1"))
         #expect(SkipAcceleration.timeLabel(for: -5) == SkipAcceleration.timeLabel(for: 0))
     }
+
+    /// The indicator stays through the seek's buffer — the spinner steps
+    /// aside for it — but not for ever.
+    @Test func `the indicator waits out a buffer, up to a limit`() {
+        var acceleration = SkipAcceleration()
+        let badge = SkipBadge(press: run(&acceleration, presses: 1)[0], shownAt: start)
+        #expect(badge.remainingDwell(buffering: false, at: start.addingTimeInterval(5)) == SkipBadge.dwell)
+        #expect(badge.remainingDwell(buffering: true, at: start.addingTimeInterval(3)) == SkipBadge.longest - 3)
+        #expect(badge.remainingDwell(buffering: true, at: start.addingTimeInterval(20)) == 0)
+    }
 }

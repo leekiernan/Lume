@@ -184,6 +184,16 @@
             onResetHideTimer()
         }
 
+        /// The indicator stays while the seek it stands for is loading — the
+        /// spinner steps aside for it — and then long enough to read. Re-run
+        /// on each press and each change of buffering; capped, so an engine
+        /// that never reports the end of a buffer can't leave it up.
+        func dismissSkipBadgeWhenSettled() async {
+            guard let wait = skipBadge?.remainingDwell(buffering: isBuffering) else { return }
+            do { try await Task.sleep(for: .seconds(wait)) } catch { return }
+            withAnimation(.easeOut(duration: 0.2)) { skipBadge = nil }
+        }
+
         // MARK: Actions
 
         func select(episode chosen: Episode) {
