@@ -18,6 +18,8 @@ struct HomeView: View {
     // row's loading in `HomeView+ForYou.swift` can drive them.
     @Environment(\.modelContext) var modelContext
     @Environment(\.contentRestriction) var restriction
+    /// tvOS's launch splash, waiting for Home to have something to show.
+    @Environment(LaunchSplashModel.self) private var launchSplash: LaunchSplashModel?
     #if os(macOS)
         /// Not `private`: read by the HomeView+Playback extension (separate file).
         @Environment(\.openWindow) var openWindow
@@ -204,6 +206,7 @@ struct HomeView: View {
             }
             .onChange(of: snapshot, initial: true) { _, snapshot in
                 Logger.home.info("home: \(snapshot.logDescription)")
+                launchSplash?.send(.homeShowed(snapshot.display, feedSettled: snapshot.feedSettled))
             }
             .profileMenuToolbar()
             .libraryToolbar(config: LibraryToolbarConfiguration(

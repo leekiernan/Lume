@@ -183,6 +183,7 @@ struct MainTabView: View {
             .fullScreenCover(item: $manualSyncRequest) { request in
                 SyncProgressView(playlist: request.playlist, repairingAreas: request.repairingAreas)
             }
+            .launchSplash(homeShown: router.selectedTab == .home)
         #endif
             .environment(router)
             .environment(\.contentRestriction, contentRestriction)
