@@ -73,11 +73,18 @@ struct LoginView: View {
     /// cannot silently list nothing because of a wrong assumption.
     @State var mediaServerURL = ""
 
-    @State var isLoading = false
-    @State var errorMessage: String?
+    @State var onboarding = PlaylistOnboardingMachine()
     /// The slim diagnostics screen — the only way to send a report before a
     /// playlist exists, since Settings isn't reachable until then.
     @State var showDiagnostics = false
+
+    var isLoading: Bool {
+        onboarding.isValidating
+    }
+
+    var errorMessage: String? {
+        onboarding.errorMessage
+    }
 
     private var isFormValid: Bool {
         switch sourceType {
@@ -359,8 +366,7 @@ struct LoginView: View {
     }
 
     private func loginXtream(serverURL: String, username: String, password: String) {
-        isLoading = true
-        errorMessage = nil
+        guard let attempt = onboarding.begin(.xtream) else { return }
         noteAddAttempt("xtream", address: serverURL)
 
         let playlistName = trimmedName.isEmpty ? "My Playlist" : trimmedName
@@ -382,19 +388,17 @@ struct LoginView: View {
                     playlist.maxConnections = String(info.userInfo.maxConnections ?? "0")
                     playlist.activeConnections = String(info.userInfo.activeCons ?? "0")
                     playlist.expDate = info.userInfo.expDate
-                    insertAndFinish(playlist)
+                    insertAndFinish(playlist, attempt: attempt)
                 }
             } catch {
-                errorMessage = error.localizedDescription
+                onboarding.fail(attempt, message: error.localizedDescription)
                 noteAddFailure(error)
-                isLoading = false
             }
         }
     }
 
     private func addM3UPlaylist() {
-        isLoading = true
-        errorMessage = nil
+        guard let attempt = onboarding.begin(.m3u) else { return }
 
         let playlistName = trimmedName.isEmpty ? "My Playlist" : trimmedName
         // Rewrite Xtream bouquet types (type=gigablue/dreambox → m3u_plus) up
@@ -411,19 +415,17 @@ struct LoginView: View {
                     // the full download happens during the first sync.
                     try await M3UClient().validatePlaylist(at: urlString)
                     let playlist = Playlist(name: playlistName, m3uURL: urlString, epgURL: epgURLString)
-                    insertAndFinish(playlist)
+                    insertAndFinish(playlist, attempt: attempt)
                 }
             } catch {
-                errorMessage = error.localizedDescription
+                onboarding.fail(attempt, message: error.localizedDescription)
                 noteAddFailure(error)
-                isLoading = false
             }
         }
     }
 
     private func addStalkerPlaylist() {
-        isLoading = true
-        errorMessage = nil
+        guard let attempt = onboarding.begin(.stalker) else { return }
 
         let playlistName = trimmedName.isEmpty ? "My Playlist" : trimmedName
         let portal = portalURL.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -446,17 +448,17 @@ struct LoginView: View {
                     let profile = try await client.authenticate()
                     playlist.userStatus = profile.status
                     playlist.expDate = profile.expDate
-                    insertAndFinish(playlist)
+                    insertAndFinish(playlist, attempt: attempt)
                 }
             } catch {
-                errorMessage = error.localizedDescription
+                onboarding.fail(attempt, message: error.localizedDescription)
                 noteAddFailure(error)
-                isLoading = false
             }
         }
     }
 
-    func insertAndFinish(_ playlist: Playlist) {
+    func insertAndFinish(_ playlist: Playlist, attempt: PlaylistOnboardingMachine.Attempt) {
+        guard onboarding.succeed(attempt) else { return }
         modelContext.insert(playlist)
         // Adding doesn't select it, so auto-sync needs telling that this one
         // syncs anyway — see `AutoSync.addedThisSession`.
@@ -470,7 +472,6 @@ struct LoginView: View {
         // fetches nil, silently completing without syncing.
         try? modelContext.save()
         noteAddSuccess(playlist)
-        isLoading = false
         // Only dismiss when presented modally (e.g. the Settings
         // sheet). On first launch LoginView is the window's root
         // content, where dismiss() closes the window on macOS and
@@ -521,13 +522,13 @@ struct LoginView: View {
                     if trimmedName.isEmpty {
                         name = pickedURL.deletingPathExtension().lastPathComponent
                     }
-                    errorMessage = nil
+                    onboarding.clearFailure()
                 } catch {
-                    errorMessage = error.localizedDescription
+                    onboarding.reportInputFailure(error.localizedDescription)
                     Logger.app.error("Add playlist: couldn't copy the picked m3u file — \(error)")
                 }
             case let .failure(error):
-                errorMessage = error.localizedDescription
+                onboarding.reportInputFailure(error.localizedDescription)
                 Logger.app.error("Add playlist: file picker failed — \(error)")
             }
         }
