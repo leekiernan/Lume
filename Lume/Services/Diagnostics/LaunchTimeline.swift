@@ -18,6 +18,14 @@ import OSLog
 enum LaunchTimeline {
     private static var steps: [(name: String, seconds: TimeInterval)] = []
     private static var reported = false
+    private static var appCodeStarted: Date?
+
+    /// Our code starts running (`LumeApp.init`). Before it: loading the
+    /// app's libraries — and, launched from Xcode, the debugger attaching
+    /// and loading their symbols, which can take many seconds over Wi-Fi.
+    static func appCodeStarts() {
+        appCodeStarted = Date()
+    }
 
     /// Times one launch step.
     static func measure<T>(_ name: String, _ work: () throws -> T) rethrows -> T {
@@ -34,10 +42,26 @@ enum LaunchTimeline {
             .map { "\($0.name) \(String(format: "%.2f", $0.seconds))s" }
             .joined(separator: ", ")
         let sinceStart = processStart.map { Date().timeIntervalSince($0) } ?? -1
+        let beforeCode: TimeInterval = if let processStart, let appCodeStarted {
+            appCodeStarted.timeIntervalSince(processStart)
+        } else {
+            -1
+        }
         Logger.app.info("""
         launch: first frame \(sinceStart, format: .fixed(precision: 2))s after process start — \
+        before app code \(beforeCode, format: .fixed(precision: 2))s \
+        (\(isDebuggerAttached ? "debugger attached" : "no debugger", privacy: .public)), \
         \(breakdown, privacy: .public)
         """)
+    }
+
+    /// Launched from Xcode: the time before app code includes the debugger's.
+    private static var isDebuggerAttached: Bool {
+        var info = kinfo_proc()
+        var size = MemoryLayout<kinfo_proc>.stride
+        var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PID, getpid()]
+        guard sysctl(&mib, u_int(mib.count), &info, &size, nil, 0) == 0 else { return false }
+        return info.kp_proc.p_flag & P_TRACED != 0
     }
 
     /// When the kernel started this process — before dyld and static

@@ -32,6 +32,7 @@ struct LumeApp: App {
     #endif
 
     init() {
+        LaunchTimeline.appCodeStarts()
         // First, so the launch marker precedes anything the setup below logs.
         DiagnosticSession.start()
         let (catalog, cloud) = Self.makeModelContainers()
