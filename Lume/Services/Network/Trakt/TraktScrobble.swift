@@ -60,4 +60,9 @@ nonisolated struct TraktScrobbleRequest: Encodable {
     }
 }
 
-nonisolated struct TraktScrobbleResponse: Decodable {}
+/// What Trakt recorded for a scrobble — logged, since the website is the
+/// only other place to see it and it lags.
+nonisolated struct TraktScrobbleResponse: Decodable {
+    let action: String?
+    let progress: Double?
+}

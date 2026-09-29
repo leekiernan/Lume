@@ -181,18 +181,39 @@ final class TraktService {
         action: TraktScrobbleAction,
         progress: Double
     ) {
-        guard isConnected else { return }
+        guard isConnected else {
+            Logger.network.info("Trakt scrobble \(action.rawValue, privacy: .public) skipped: not connected")
+            return
+        }
         let previous = scrobbleTask
+        // The last scrobble — the stop sent as the player closes — usually
+        // goes out as the app leaves the foreground (tvOS closes the player on
+        // Home). Without asking for background time the request is suspended
+        // mid-flight and Trakt shows the title as watching until its runtime
+        // runs out.
+        let backgroundTime = ScrobbleBackgroundTime.begin()
         scrobbleTask = Task { [weak self] in
+            defer { backgroundTime.end() }
             await previous?.value
-            guard !Task.isCancelled, let self,
-                  let accessToken = await session.validAccessToken()
-            else { return }
+            guard !Task.isCancelled, let self else { return }
+            guard let accessToken = await session.validAccessToken() else {
+                Logger.network.warning(
+                    "Trakt scrobble \(action.rawValue, privacy: .public) dropped: no valid access token"
+                )
+                return
+            }
 
             do {
-                try await client.scrobble(
+                let recorded = try await client.scrobble(
                     target, action: action, progress: progress, accessToken: accessToken
                 )
+                // Successes too: without them a log can't tell a scrobble
+                // Trakt took from one that was never sent.
+                Logger.network.info("""
+                Trakt scrobble \(action.rawValue, privacy: .public) at \(progress, format: .fixed(precision: 1))% → \
+                recorded \(recorded.action ?? "?", privacy: .public) \
+                at \(recorded.progress ?? -1, format: .fixed(precision: 1))%
+                """)
             } catch {
                 let detail = LogRedaction.describe(error)
                 Logger.network.warning(
@@ -269,4 +290,32 @@ extension Notification.Name {
     /// disconnect). CloudSyncCoordinator responds by exporting the keychain
     /// state; credentials pulled from CloudKit do not repost it and loop.
     static let lumeTraktCredentialsDidChange = Notification.Name("LumeTraktCredentialsDidChange")
+}
+
+/// Background time for one scrobble request, so a stop sent as the app leaves
+/// the foreground still reaches Trakt. A no-op where apps aren't suspended.
+@MainActor
+struct ScrobbleBackgroundTime {
+    #if canImport(UIKit)
+        private let identifier: UIBackgroundTaskIdentifier
+
+        static func begin() -> ScrobbleBackgroundTime {
+            var identifier = UIBackgroundTaskIdentifier.invalid
+            identifier = UIApplication.shared.beginBackgroundTask(withName: "Trakt scrobble") {
+                UIApplication.shared.endBackgroundTask(identifier)
+            }
+            return ScrobbleBackgroundTime(identifier: identifier)
+        }
+
+        func end() {
+            guard identifier != .invalid else { return }
+            UIApplication.shared.endBackgroundTask(identifier)
+        }
+    #else
+        static func begin() -> ScrobbleBackgroundTime {
+            ScrobbleBackgroundTime()
+        }
+
+        func end() {}
+    #endif
 }
