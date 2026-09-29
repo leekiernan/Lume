@@ -38,7 +38,7 @@ struct LibraryCollection: Hashable {
         var title: LocalizedStringKey {
             switch self {
             case .continueWatching: "Continue Watching"
-            case .recentlyWatched: "Recently Watched"
+            case .recentlyWatched: "Watch Again"
             case .favorites: "Favorites"
             case .recentlyAdded: "Recently Added"
             }
@@ -455,7 +455,7 @@ private extension LibraryCollection.Kind {
     var localizedTitleString: String {
         switch self {
         case .continueWatching: String(localized: "Continue Watching")
-        case .recentlyWatched: String(localized: "Recently Watched")
+        case .recentlyWatched: String(localized: "Watch Again")
         case .favorites: String(localized: "Favorites")
         case .recentlyAdded: String(localized: "Recently Added")
         }

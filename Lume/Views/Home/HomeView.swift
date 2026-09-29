@@ -537,7 +537,7 @@ private extension HomeView {
                 animationNamespace: animationNamespace
             )
         } else {
-            rail(Text("Recently Watched"), content.recentlyWatched, onRemove: removeFromRecentlyWatched)
+            rail(Text("Watch Again"), content.recentlyWatched, onRemove: removeFromRecentlyWatched)
         }
     }
 

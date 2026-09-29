@@ -17,7 +17,7 @@ import SwiftUI
 enum HomeSection: String, CaseIterable, Identifiable {
     /// In-progress titles (and recently watched channels on Home).
     case continueWatching
-    /// Finished titles, to watch again.
+    /// Finished titles: the "Watch Again" row. The key predates the name.
     case recentlyWatched
     case favorites
     case recentlyAdded
@@ -53,7 +53,7 @@ enum HomeSection: String, CaseIterable, Identifiable {
     var title: LocalizedStringKey {
         switch self {
         case .continueWatching: "Continue Watching"
-        case .recentlyWatched: "Recently Watched"
+        case .recentlyWatched: "Watch Again"
         case .favorites: "Favorites"
         case .recentlyAdded: "Recently Added"
         case .forYou: "For You"
@@ -71,7 +71,7 @@ enum HomeSection: String, CaseIterable, Identifiable {
     var displayName: String {
         switch self {
         case .continueWatching: String(localized: "Continue Watching")
-        case .recentlyWatched: String(localized: "Recently Watched")
+        case .recentlyWatched: String(localized: "Watch Again")
         case .favorites: String(localized: "Favorites")
         case .recentlyAdded: String(localized: "Recently Added")
         case .forYou: String(localized: "For You")
