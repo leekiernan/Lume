@@ -22,6 +22,8 @@ struct PlayerLoadingIndicator: View {
     private let channel: PlayableMedia?
 
     @Environment(\.modelContext) private var modelContext
+    /// The skip indicator stands in for the spinner — see `SkipIndicatorHandoff`.
+    @Environment(\.skipIndicatorShowing) private var skipIndicatorShowing
     @State private var nowShowing: String?
 
     init(title: String?) {
@@ -70,6 +72,7 @@ struct PlayerLoadingIndicator: View {
                 }
             }
         }
+        .opacity(skipIndicatorShowing ? 0 : 1)
         .allowsHitTesting(false)
         .task(id: channel?.id) {
             // Cleared first: a second surf must not show the last channel's
