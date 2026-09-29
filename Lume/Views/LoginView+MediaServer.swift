@@ -78,8 +78,7 @@ import SwiftUI
 
 extension LoginView {
     func addMediaServerPlaylist() {
-        isLoading = true
-        errorMessage = nil
+        guard let attempt = onboarding.begin(.mediaServer) else { return }
 
         let playlistName = trimmedName.isEmpty ? "My Playlist" : trimmedName
         let user = username.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -99,7 +98,7 @@ extension LoginView {
                             password: password,
                             accessToken: session.accessToken,
                             userId: session.userId
-                        ))
+                        ), attempt: attempt)
                     case let .plex(serverURL, token):
                         // Only the resolved token is stored: the plex.tv
                         // password bought it and has no further use, and a
@@ -110,7 +109,7 @@ extension LoginView {
                             plexURL: serverURL,
                             username: user,
                             accessToken: token
-                        ))
+                        ), attempt: attempt)
                     case let .webdav(url):
                         // An anonymous share stores no password: a stray one
                         // would be sent as a Basic header the server never
@@ -120,13 +119,15 @@ extension LoginView {
                             webdavURL: url,
                             username: user,
                             password: user.isEmpty ? "" : password
-                        ))
+                        ), attempt: attempt)
                     }
                 }
             } catch {
-                errorMessage = MediaServerAddCheck.message(for: error, input: input, timedOut: error is ConnectionTimeoutError)
+                onboarding.fail(
+                    attempt,
+                    message: MediaServerAddCheck.message(for: error, input: input, timedOut: error is ConnectionTimeoutError)
+                )
                 noteAddFailure(error)
-                isLoading = false
             }
         }
     }
