@@ -268,21 +268,7 @@ struct MovieGenreView: View {
 
     @AppStorage(SortStorageKey.movieContent) private var contentSortRaw: String = ContentSortOption.playlist.rawValue
     @State private var movies: [Movie] = []
-    @State private var canLoadMore = true
-    @State private var isLoadingPage = false
-    /// SQLite cursor position, distinct from `movies.count`. The exact-token and
-    /// visibility re-checks drop rows the substring fetch returned, so the
-    /// displayed count and the source offset diverge — the offset must track
-    /// rows pulled from SQLite, not rows shown.
-    @State private var fetchedCount = 0
-    /// The sort the current pages were loaded for. Pushing a detail cancels and
-    /// (on pop) re-runs `.task`; reloading page one there would discard the
-    /// loaded pages and reset the scroll position. Reload only when this differs.
-    @State private var loadedSort: String?
-    /// Bumped whenever the loaded pages are thrown away. A page fetch already in
-    /// flight resolves against the old cursor, so its rows have to be dropped
-    /// rather than appended to the fresh list.
-    @State private var loadGeneration = 0
+    @State private var pagination = PaginationMachine()
 
     /// A popular genre in a large IPTV playlist can span thousands of titles;
     /// fetch a page at a time and load the next as the grid nears the end,
@@ -306,40 +292,37 @@ struct MovieGenreView: View {
             onLoadMore: { loadNextPage() },
             card: { MovieCardView(movie: $0, fillsWidth: true) }
         )
-        .task(id: contentSortRaw) {
-            guard loadedSort != contentSortRaw else { return }
-            loadedSort = contentSortRaw
-            // A page fetched against the previous sort's cursor is now
-            // meaningless: bump the generation so it's discarded on arrival, and
-            // release the in-flight guard here, since that load no longer will.
-            loadGeneration += 1
-            isLoadingPage = false
+        .task(id: paginationKey) {
+            guard pagination.prepare(for: paginationKey) else { return }
             movies = []
-            fetchedCount = 0
-            canLoadMore = true
             loadNextPage()
         }
     }
 
+    private var paginationKey: String {
+        "\(genre)|\(playlistPrefix)|\(restriction.visibilityToken)|\(contentSortRaw)"
+    }
+
     private func loadNextPage() {
-        guard canLoadMore, !isLoadingPage else { return }
-        isLoadingPage = true
-        let generation = loadGeneration
-        let request = GenrePageRequest(
+        guard let paginationRequest = pagination.beginLoading() else { return }
+        let pageRequest = GenrePageRequest(
             genre: genre,
             playlistPrefix: playlistPrefix,
             excludedCategoryIDs: restriction.excludedCategoryIDs,
-            offset: fetchedCount,
+            offset: paginationRequest.offset,
             pageSize: pageSize
         )
         let sortBy = contentSort.movieDescriptors
         let container = modelContext.container
         Task {
             let page = await Task.detached(priority: .userInitiated) {
-                GenrePageFetcher.movies(container: container, request: request, sortBy: sortBy)
+                GenrePageFetcher.movies(container: container, request: pageRequest, sortBy: sortBy)
             }.value
-            guard generation == loadGeneration else { return }
-            apply(page)
+            guard !Task.isCancelled else {
+                pagination.abandon(paginationRequest)
+                return
+            }
+            apply(page, for: paginationRequest)
         }
     }
 
@@ -348,12 +331,10 @@ struct MovieGenreView: View {
     /// budget ran out before anything displayable turned up; resume from the new
     /// offset, because the grid can't ask again — nothing new appeared for it to
     /// fire `onLoadMore` from.
-    private func apply(_ page: GenrePage) {
-        isLoadingPage = false
-        fetchedCount += page.scanned
-        if page.reachedEnd { canLoadMore = false }
+    private func apply(_ page: GenrePage, for request: PaginationMachine.Request) {
+        guard pagination.finish(request, scanned: page.scanned, hasMore: !page.reachedEnd) else { return }
         movies.append(contentsOf: page.ids.compactMap { modelContext.model(for: $0) as? Movie })
-        if page.ids.isEmpty, canLoadMore { loadNextPage() }
+        if page.ids.isEmpty, pagination.canLoadMore { loadNextPage() }
     }
 }
 
@@ -368,16 +349,7 @@ struct SeriesGenreView: View {
 
     @AppStorage(SortStorageKey.seriesContent) private var contentSortRaw: String = ContentSortOption.playlist.rawValue
     @State private var series: [Series] = []
-    @State private var canLoadMore = true
-    @State private var isLoadingPage = false
-    /// SQLite cursor position, distinct from `series.count` — see `MovieGenreView`.
-    @State private var fetchedCount = 0
-    /// Sort the current pages were loaded for; reload only on change — see
-    /// `MovieGenreView`, which explains why reappearance must not reset.
-    @State private var loadedSort: String?
-    /// Discards a page fetched against a cursor that has since been reset — see
-    /// `MovieGenreView`.
-    @State private var loadGeneration = 0
+    @State private var pagination = PaginationMachine()
 
     /// Page a genre at a time rather than hydrating it whole; see `MovieGenreView`.
     private let pageSize = 100
@@ -398,47 +370,45 @@ struct SeriesGenreView: View {
             onLoadMore: { loadNextPage() },
             card: { SeriesCardView(series: $0, fillsWidth: true) }
         )
-        .task(id: contentSortRaw) {
-            guard loadedSort != contentSortRaw else { return }
-            loadedSort = contentSortRaw
-            loadGeneration += 1
-            isLoadingPage = false
+        .task(id: paginationKey) {
+            guard pagination.prepare(for: paginationKey) else { return }
             series = []
-            fetchedCount = 0
-            canLoadMore = true
             loadNextPage()
         }
     }
 
+    private var paginationKey: String {
+        "\(genre)|\(playlistPrefix)|\(restriction.visibilityToken)|\(contentSortRaw)"
+    }
+
     private func loadNextPage() {
-        guard canLoadMore, !isLoadingPage else { return }
-        isLoadingPage = true
-        let generation = loadGeneration
-        let request = GenrePageRequest(
+        guard let paginationRequest = pagination.beginLoading() else { return }
+        let pageRequest = GenrePageRequest(
             genre: genre,
             playlistPrefix: playlistPrefix,
             excludedCategoryIDs: restriction.excludedCategoryIDs,
-            offset: fetchedCount,
+            offset: paginationRequest.offset,
             pageSize: pageSize
         )
         let sortBy = contentSort.seriesDescriptors
         let container = modelContext.container
         Task {
             let page = await Task.detached(priority: .userInitiated) {
-                GenrePageFetcher.series(container: container, request: request, sortBy: sortBy)
+                GenrePageFetcher.series(container: container, request: pageRequest, sortBy: sortBy)
             }.value
-            guard generation == loadGeneration else { return }
-            apply(page)
+            guard !Task.isCancelled else {
+                pagination.abandon(paginationRequest)
+                return
+            }
+            apply(page, for: paginationRequest)
         }
     }
 
     /// Hydrates and advances the cursor, resuming when the scan budget ran out
     /// empty — see `MovieGenreView.apply`.
-    private func apply(_ page: GenrePage) {
-        isLoadingPage = false
-        fetchedCount += page.scanned
-        if page.reachedEnd { canLoadMore = false }
+    private func apply(_ page: GenrePage, for request: PaginationMachine.Request) {
+        guard pagination.finish(request, scanned: page.scanned, hasMore: !page.reachedEnd) else { return }
         series.append(contentsOf: page.ids.compactMap { modelContext.model(for: $0) as? Series })
-        if page.ids.isEmpty, canLoadMore { loadNextPage() }
+        if page.ids.isEmpty, pagination.canLoadMore { loadNextPage() }
     }
 }

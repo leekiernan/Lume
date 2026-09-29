@@ -23,11 +23,7 @@ struct SectionCollectionView: View {
     @Environment(\.modelContext) private var modelContext
     @State private var entries: [HomeListEntry] = []
     @State private var items: [HomeMediaItem] = []
-    @State private var cursor = 0
-    @State private var canLoadMore = false
-    @State private var isLoading = false
-    @State private var isPrepared = false
-    @State private var pageRequest = 0
+    @State private var pagination = PaginationMachine()
 
     private let pageSize = 100
     private let columns = [
@@ -45,7 +41,7 @@ struct SectionCollectionView: View {
                     .padding(.top, 40)
             #endif
 
-            if items.isEmpty, isPrepared, !isLoading {
+            if items.isEmpty, pagination.isPrepared, !pagination.isLoading {
                 ContentUnavailableView(
                     "Nothing Here Yet",
                     systemImage: "rectangle.stack"
@@ -60,7 +56,7 @@ struct SectionCollectionView: View {
                             }
                     }
 
-                    if isLoading {
+                    if pagination.isLoading {
                         ProgressView()
                             .frame(maxWidth: .infinity)
                     }
@@ -72,12 +68,8 @@ struct SectionCollectionView: View {
         #if !os(tvOS)
             .navigationTitle(selection.title)
         #endif
-            .task {
+            .task(id: selection.section.token) {
                 prepare()
-            }
-            .task(id: pageRequest) {
-                guard pageRequest > 0 else { return }
-                await loadNextPage()
             }
     }
 
@@ -110,36 +102,35 @@ struct SectionCollectionView: View {
     }
 
     private func prepare() {
-        guard !isPrepared else { return }
-        isPrepared = true
+        guard pagination.prepare(for: selection.section.token) else { return }
         guard let snapshot = feed.collection(for: selection.section) else { return }
         entries = snapshot.entries
         items = snapshot.preview
-        cursor = snapshot.nextOffset
-        canLoadMore = snapshot.hasMoreCandidates
-        if items.isEmpty, canLoadMore { requestNextPage() }
+        pagination.seed(nextOffset: snapshot.nextOffset, canLoadMore: snapshot.hasMoreCandidates)
+        if items.isEmpty, pagination.canLoadMore { requestNextPage() }
     }
 
     private func requestNextPage() {
-        guard canLoadMore, !isLoading else { return }
-        pageRequest &+= 1
+        guard pagination.canLoadMore, !pagination.isLoading else { return }
+        Task { await loadNextPage() }
     }
 
     private func loadNextPage() async {
-        guard canLoadMore, !isLoading else { return }
-        isLoading = true
+        guard let request = pagination.beginLoading() else { return }
 
-        let page = await feed.page(entries: entries, from: cursor, limit: pageSize)
+        let page = await feed.page(entries: entries, from: request.offset, limit: pageSize)
         guard !Task.isCancelled else {
-            isLoading = false
+            pagination.abandon(request)
             return
         }
-        cursor = page.nextOffset
-        canLoadMore = page.hasMoreCandidates
+        guard pagination.finish(
+            request,
+            scanned: page.nextOffset - request.offset,
+            hasMore: page.hasMoreCandidates
+        ) else { return }
 
         var existing = Set(items.map(\.id))
         items.append(contentsOf: page.items.filter { existing.insert($0.id).inserted })
-        isLoading = false
-        if page.items.isEmpty, canLoadMore { requestNextPage() }
+        if page.items.isEmpty, pagination.canLoadMore { requestNextPage() }
     }
 }

@@ -96,16 +96,10 @@ struct MovieCategoryView: View {
     @AppStorage(SortStorageKey.movieContent) private var contentSortRaw: String = ContentSortOption.playlist.rawValue
 
     @State private var movies: [Movie] = []
-    @State private var canLoadMore = true
-    @State private var isLoadingPage = false
+    @State private var pagination = PaginationMachine()
     /// True while a Stalker category's content is being fetched from the portal
     /// on first open — drives the loading overlay.
     @State private var isImporting = false
-    /// The sort the current pages were loaded for. Pushing a detail cancels and
-    /// (on pop) re-runs `.task`; reloading page one there would discard the
-    /// loaded pages and reset the scroll position. Reload only when this differs.
-    @State private var loadedSort: String?
-
     /// A category in a large IPTV playlist can hold thousands of titles; fetch a
     /// page at a time and load the next as the grid nears the end, rather than
     /// hydrating the whole category into memory at once.
@@ -130,10 +124,8 @@ struct MovieCategoryView: View {
                 }
             }
             .task(id: contentSortRaw) {
-                guard loadedSort != contentSortRaw else { return }
-                loadedSort = contentSortRaw
+                guard pagination.prepare(for: contentSortRaw) else { return }
                 movies = []
-                canLoadMore = true
                 await importStalkerContentIfNeeded()
                 loadNextPage()
                 await revalidateStalkerContentIfStale()
@@ -168,19 +160,23 @@ struct MovieCategoryView: View {
     }
 
     private func loadNextPage() {
-        guard canLoadMore, !isLoadingPage else { return }
-        isLoadingPage = true
-        defer { isLoadingPage = false }
+        guard let request = pagination.beginLoading() else { return }
         let categoryId = category.id
         var descriptor = FetchDescriptor<Movie>(
             predicate: #Predicate { $0.categoryId == categoryId },
             sortBy: contentSort.movieDescriptors
         )
-        descriptor.fetchOffset = movies.count
+        descriptor.fetchOffset = request.offset
         descriptor.fetchLimit = pageSize
-        let page = (try? modelContext.fetch(descriptor)) ?? []
+        let page: [Movie]
+        do {
+            page = try modelContext.fetch(descriptor)
+        } catch {
+            pagination.abandon(request)
+            return
+        }
+        guard pagination.finish(request, scanned: page.count, hasMore: page.count == pageSize) else { return }
         movies.append(contentsOf: page)
-        if page.count < pageSize { canLoadMore = false }
     }
 
     /// Imports the category from the portal the first time it's opened (Stalker
@@ -205,8 +201,8 @@ struct MovieCategoryView: View {
     private func reimportStalkerContent() async {
         guard let playlist = stalkerPlaylist else { return }
         await runStalkerImport(playlist: playlist)
+        guard pagination.restart() else { return }
         movies = []
-        canLoadMore = true
         loadNextPage()
     }
 
@@ -222,7 +218,7 @@ struct MovieCategoryView: View {
         let window = max(movies.count, pageSize)
         descriptor.fetchLimit = window
         let rows = (try? modelContext.fetch(descriptor)) ?? []
-        canLoadMore = rows.count == window
+        pagination.replaceWindow(scanned: rows.count, hasMore: rows.count == window)
         movies = rows
     }
 

@@ -14,23 +14,21 @@ import SwiftUI
 @Observable
 final class PagedCollection<Item: PersistentModel> {
     private(set) var items: [Item] = []
-    private(set) var canLoadMore = true
-    private(set) var isLoading = false
+    private(set) var pagination = PaginationMachine()
 
-    private var requestKey: String?
-    /// Source cursor is distinct from `items.count` when a fork-specific
-    /// presentation collapses duplicate catalog rows.
-    private var sourceOffset = 0
+    var canLoadMore: Bool {
+        pagination.canLoadMore
+    }
+
+    var isLoading: Bool {
+        pagination.isLoading
+    }
 
     /// Starts a new result set only when its query inputs changed. Returning to
     /// a grid from a detail screen keeps its loaded pages and scroll position.
     func prepare(for key: String) {
-        guard requestKey != key else { return }
-        requestKey = key
+        guard pagination.prepare(for: key) else { return }
         items = []
-        sourceOffset = 0
-        canLoadMore = true
-        isLoading = false
     }
 
     /// Loads one page and preserves model identity/order. The descriptor owns
@@ -42,14 +40,14 @@ final class PagedCollection<Item: PersistentModel> {
         deduplicateBy: ((Item) -> AnyHashable?)? = nil,
         descriptor: (_ offset: Int, _ limit: Int) -> FetchDescriptor<Item>
     ) {
-        guard canLoadMore, !isLoading else { return }
-        isLoading = true
-        defer { isLoading = false }
+        guard let request = pagination.beginLoading() else { return }
 
         do {
             var existingIDs = Set(items.map(\.persistentModelID))
             var existingKeys = Set(items.compactMap { deduplicateBy?($0) })
             var accepted: [Item] = []
+            var sourceOffset = request.offset
+            var hasMore = true
 
             // A whole source page can consist of alternate streams for titles
             // already shown. Keep walking until the UI gains a new trailing
@@ -57,18 +55,26 @@ final class PagedCollection<Item: PersistentModel> {
             repeat {
                 let page = try context.fetch(descriptor(sourceOffset, pageSize))
                 sourceOffset += page.count
-                canLoadMore = page.count == pageSize
+                hasMore = page.count == pageSize
                 accepted.append(contentsOf: page.filter { item in
                     guard existingIDs.insert(item.persistentModelID).inserted else { return false }
                     guard let key = deduplicateBy?(item) else { return true }
                     return existingKeys.insert(key).inserted
                 })
-            } while accepted.isEmpty && canLoadMore
+            } while accepted.isEmpty && hasMore
 
+            guard pagination.finish(
+                request,
+                scanned: sourceOffset - request.offset,
+                hasMore: hasMore
+            ) else {
+                return
+            }
             items.append(contentsOf: accepted)
         } catch {
             // Preserve the already loaded window. A later appearance can retry
             // instead of turning a transient store failure into a false end.
+            pagination.abandon(request)
         }
     }
 }
