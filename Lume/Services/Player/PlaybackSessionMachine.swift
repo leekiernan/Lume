@@ -101,6 +101,11 @@ struct PlaybackSessionMachine: Equatable {
     /// torn down after a fallback overlaps the next one's first frames — are
     /// ignored.
     private(set) var engine: PlayerEngineKind?
+    /// Playing or paused — what the viewer last had, and what a stall
+    /// interrupts. A stall is invisible to what follows from it: leaving
+    /// `rebuffering`, the change is measured from here, so a seek while
+    /// paused (paused → rebuffering → paused) is no new pause.
+    private var settled: State?
 
     /// Whether the engine should raise its failure overlay: the session failed
     /// with nothing left to try.
@@ -124,6 +129,7 @@ struct PlaybackSessionMachine: Equatable {
         case let .starting(engine, cause):
             self.engine = engine
             state = .starting(cause)
+            settled = nil
             return []
         case let .reported(engine, report):
             // Between streams, whatever the engine reports belongs to the one
@@ -153,6 +159,7 @@ struct PlaybackSessionMachine: Equatable {
             return [.persistProgress]
         case .swap:
             state = .idle
+            settled = nil
             return [.scrobble(.stop), .persistProgress]
         case .dismiss:
             state = .closed
@@ -166,7 +173,14 @@ struct PlaybackSessionMachine: Equatable {
         let next = Self.state(after: report, from: previous)
         guard next != previous else { return [] }
         state = next
-        return Self.effects(from: previous, to: next)
+        let from = previous == .rebuffering ? settled ?? previous : previous
+        switch next {
+        case .playing, .paused: settled = next
+        case .rebuffering: break
+        default: settled = nil
+        }
+        guard next != from else { return [] }
+        return Self.effects(from: from, to: next)
     }
 
     /// What an engine report means, given where the session was.
@@ -192,7 +206,7 @@ struct PlaybackSessionMachine: Equatable {
         switch (previous, next) {
         case (_, .playing):
             [.scrobble(.start)]
-        case (.playing, .paused), (.rebuffering, .paused):
+        case (.playing, .paused):
             // A pause is a natural boundary to save the position at, and it's
             // off the playback path: nothing is rendering.
             [.scrobble(.pause), .persistProgress]

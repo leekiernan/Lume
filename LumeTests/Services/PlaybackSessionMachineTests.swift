@@ -41,9 +41,48 @@ struct PlaybackSessionMachineTests {
         var machine = playingOnKS()
         #expect(machine.handle(.reported(.ksPlayer, report(buffering: true, playing: false))) == [])
         #expect(machine.state == .rebuffering)
-        // Recovering restarts nothing Trakt hasn't already heard; the
-        // scrobbler de-duplicates the repeated start.
+        // Recovering is where it was: nothing to tell Trakt.
+        #expect(machine.handle(.reported(.ksPlayer, report())) == [])
+        #expect(machine.state == .playing)
+    }
+
+    /// Seeking while paused: the engine buffers the new position and settles
+    /// paused again. That's no new pause — the log showed a pause scrobble and
+    /// a progress save for every press.
+    @Test func `a seek while paused says nothing`() {
+        var machine = playingOnKS()
+        _ = machine.handle(.reported(.ksPlayer, report(playing: false)))
+        for _ in 0 ..< 3 {
+            #expect(machine.handle(.reported(.ksPlayer, report(buffering: true, playing: false))) == [])
+            #expect(machine.state == .rebuffering)
+            #expect(machine.handle(.reported(.ksPlayer, report(playing: false))) == [])
+            #expect(machine.state == .paused)
+        }
         #expect(machine.handle(.reported(.ksPlayer, report())) == [.scrobble(.start)])
+    }
+
+    /// Both ways across a stall: it ends in the other state from the one it
+    /// interrupted, which is the viewer's change.
+    @Test func `a stall that ends in the other state is that change`() {
+        var playing = playingOnKS()
+        _ = playing.handle(.reported(.ksPlayer, report(buffering: true, playing: false)))
+        #expect(playing.handle(.reported(.ksPlayer, report(playing: false))) == [.scrobble(.pause), .persistProgress])
+
+        var paused = playingOnKS()
+        _ = paused.handle(.reported(.ksPlayer, report(playing: false)))
+        _ = paused.handle(.reported(.ksPlayer, report(buffering: true, playing: false)))
+        #expect(paused.handle(.reported(.ksPlayer, report())) == [.scrobble(.start)])
+    }
+
+    /// What was settled belongs to the stream: the next one starts afresh.
+    @Test func `a new stream forgets the last one's pause`() {
+        var machine = playingOnKS()
+        _ = machine.handle(.reported(.ksPlayer, report(playing: false)))
+        _ = machine.handle(.leave(.swap))
+        _ = machine.handle(.starting(.ksPlayer, .swap))
+        #expect(machine.handle(.reported(.ksPlayer, report())) == [.scrobble(.start)])
+        _ = machine.handle(.reported(.ksPlayer, report(buffering: true, playing: false)))
+        #expect(machine.handle(.reported(.ksPlayer, report(playing: false))) == [.scrobble(.pause), .persistProgress])
     }
 
     @Test func `a pause scrobbles a pause and saves progress`() {
