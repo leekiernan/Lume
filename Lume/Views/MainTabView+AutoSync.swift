@@ -50,6 +50,16 @@ extension MainTabView {
         promoteNextIfIdle()
     }
 
+    /// iCloud brought new connection details for these playlists. Any whose
+    /// sync this session failed against the old ones gets another automatic
+    /// attempt; one still on screen in the failed cover retries itself (see
+    /// `SyncProgressView`), so it's already queued and skipped here.
+    func retryFailedSyncs(_ ids: Set<UUID>) {
+        let failed = playlists.filter { ids.contains($0.id) && $0.syncStatus == .error }
+        autoSyncAttempted.subtract(failed.map(\.id))
+        enqueueDueSyncs(failed)
+    }
+
     func isQueued(_ playlist: Playlist) -> Bool {
         activeSyncRequest?.id == playlist.id || syncQueue.contains { $0.id == playlist.id }
     }

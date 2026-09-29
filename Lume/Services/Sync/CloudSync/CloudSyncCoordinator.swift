@@ -204,6 +204,10 @@ final class CloudSyncCoordinator {
             }
             // Back on the main actor (this closure is main-actor isolated).
             status.lastResult = result
+            // A failed pass rolled its writes back, so nothing was pulled.
+            if !result.failed, !result.playlistsReconnected.isEmpty {
+                status.lastPlaylistReconnection = PlaylistReconnection(ids: result.playlistsReconnected)
+            }
 
             // The engine may have replaced (or removed) the keychain token from
             // CloudKit. Refresh TraktService's in-memory connection state; run it

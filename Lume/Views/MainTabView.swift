@@ -14,6 +14,7 @@ struct MainTabView: View {
     // Optional so previews (which don't inject it) don't crash.
     @Environment(PlaylistSwitchModel.self) private var playlistSwitch: PlaylistSwitchModel?
     @Environment(ProfileManager.self) private var profileManager: ProfileManager?
+    @Environment(CloudSyncCoordinator.self) var cloudSync: CloudSyncCoordinator?
     @Query var playlists: [Playlist]
     /// Categories marked restricted, and categories hidden in Content
     /// Management. Fetched once here so a single source feeds the restriction
@@ -229,6 +230,9 @@ struct MainTabView: View {
                 }
                 // Coming back to `.active` also refreshes stale sports data.
                 SportsSyncService.shared.isForeground = phase == .active
+            }
+            .onChange(of: cloudSync?.status.lastPlaylistReconnection) { _, reconnection in
+                if let reconnection { retryFailedSyncs(reconnection.ids) }
             }
             .syncCover(item: $activeSyncRequest, onDismiss: promoteNextIfIdle)
             .onChange(of: isAutoSyncBusy, initial: true) { _, busy in

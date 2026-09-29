@@ -56,4 +56,19 @@ final class CloudSyncStatus {
 
     /// Counters from the last reconcile, for diagnostics.
     var lastResult: CloudSyncReconcileResult?
+
+    /// The last pass that pulled new connection details for a playlist.
+    var lastPlaylistReconnection: PlaylistReconnection?
+}
+
+/// Playlists a reconcile pulled new connection details for — typically a URL
+/// edited on another device. A launch sync races the CloudKit import that
+/// carries the edit, fails against the old address, and would otherwise sit
+/// on "Sync failed" until the viewer tapped Try Again. The sync cover and the
+/// auto-sync queue watch this to retry instead.
+struct PlaylistReconnection: Equatable {
+    let ids: Set<UUID>
+    /// Distinct per pass, so two in a row naming the same playlist still
+    /// read as a change.
+    let pass = UUID()
 }

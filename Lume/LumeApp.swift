@@ -77,6 +77,11 @@ struct LumeApp: App {
             Playlist.self, Category.self, LiveStream.self, Movie.self,
             Series.self, Episode.self, CastMember.self, EPGListing.self, EPGSource.self
         ])
+        if isUnitTestHost {
+            let catalog = makeTestHostContainer(catalogSchema)
+            ExampleProvider.seed(into: catalog)
+            return (catalog, cloud)
+        }
         // Unnamed → keeps the historical `default.store` path (preserves data).
         // `cloudKitDatabase: .none` is REQUIRED: the default is `.automatic`, which
         // mirrors the store to CloudKit whenever the binary is CloudKit-entitled. On
@@ -151,6 +156,9 @@ struct LumeApp: App {
             // counterpart (read through `SportsFollowService`).
             SyncedSportsFollow.self
         ])
+        if isUnitTestHost {
+            return makeTestHostContainer(cloudSchema)
+        }
         // Out of the app group for the same reason as the catalog store.
         let cloudConfiguration = ModelConfiguration(
             ContentSyncManager.cloudMirrorConfigurationName,
@@ -170,6 +178,26 @@ struct LumeApp: App {
             return try ModelContainer(for: cloudSchema, configurations: cloudConfiguration)
         } catch {
             fatalError("Could not create cloud ModelContainer: \(error)")
+        }
+    }
+
+    /// True when this process only hosts `LumeTests`. The app launches as
+    /// normal around the tests, but on in-memory stores holding just the
+    /// `ExampleProvider` playlist. On the real stores — on macOS the viewer's
+    /// own library — its auto-sync reached the real provider, and anything it
+    /// wrote to the user-data store would export to iCloud on the next real
+    /// launch. UI tests pass `-ui-testing` and keep their own launch and stub
+    /// playlist (`ContentView`).
+    static let isUnitTestHost: Bool = ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+        && !CommandLine.arguments.contains("-ui-testing")
+
+    /// An in-memory store for the unit-test host (see `isUnitTestHost`).
+    private static func makeTestHostContainer(_ schema: Schema) -> ModelContainer {
+        let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true, cloudKitDatabase: .none)
+        do {
+            return try ModelContainer(for: schema, configurations: configuration)
+        } catch {
+            fatalError("Could not create test-host ModelContainer: \(error)")
         }
     }
 
