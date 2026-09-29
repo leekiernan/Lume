@@ -48,7 +48,7 @@
             Section {
                 Button {
                     if premium.isPremium {
-                        trakt.connect()
+                        trakt.connect(into: modelContext)
                     } else {
                         showPaywall = true
                     }
@@ -198,6 +198,9 @@
             } else {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Imported \(summary.moviesMarked) movies and \(summary.episodesMarked) episodes.")
+                    if summary.inProgress > 0 {
+                        Text("\(summary.inProgress) titles in progress.")
+                    }
                     if summary.showsQueued > 0 {
                         Text("\(summary.showsQueued) shows will be marked the first time you open them.")
                     }

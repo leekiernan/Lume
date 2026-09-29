@@ -82,11 +82,22 @@ final class TraktService {
 
     private let client = TraktClient.shared
 
+    /// The catalog context the connect flow captured, so the history import can
+    /// run the moment the device code is approved.
+    private var importContext: ModelContext?
+
     private init() {
         mutations = TrackerMutationQueue(
             session: session,
             outbox: TrackerMutationOutbox(storageKey: TraktAccountBackend.outboxStorageKey)
         )
+        session.didConnect = { [weak self] in
+            // History imports on connect, as Simkl's does; the manual
+            // re-import stays available for later.
+            guard let self, let context = importContext else { return }
+            importContext = nil
+            await importWatched(into: context)
+        }
     }
 
     /// Whether the build has Trakt credentials at all. When false the whole
@@ -123,14 +134,18 @@ final class TraktService {
 
     // MARK: - Connect (device flow)
 
-    /// Begins the device-flow connect: requests a code and starts polling.
-    func connect() {
+    /// Begins the device-flow connect: requests a code, starts polling, and on
+    /// approval imports the account's history into the given catalog context.
+    /// Passing nil skips the automatic import.
+    func connect(into context: ModelContext? = nil) {
+        importContext = context
         session.connect()
     }
 
     /// Cancels an in-progress connect.
     func cancelConnect() {
         session.cancelConnect()
+        importContext = nil
     }
 
     // MARK: - Disconnect
@@ -145,6 +160,7 @@ final class TraktService {
         // Parked watched state belongs to the account that was just signed out.
         TraktPendingWatchedStore.clearAll()
         lastImport = nil
+        importContext = nil
     }
 
     // MARK: - Durable mutation sync
@@ -278,7 +294,15 @@ final class TraktService {
         do {
             let movies = try await client.watchedMovies(accessToken: accessToken)
             let shows = try await client.watchedShows(accessToken: accessToken)
-            lastImport = TraktWatchedImporter.apply(movies: movies, shows: shows, in: context)
+            var summary = TraktWatchedImporter.apply(movies: movies, shows: shows, in: context)
+            // Then what's paused part-way, for Continue Watching. After the
+            // watched pass, so a title finished since isn't reopened. Best
+            // effort: the watched history above stands if this fails.
+            if !summary.failed, let paused = try? await client.playback(accessToken: accessToken) {
+                summary.inProgress = TraktPlaybackImporter.apply(paused, in: context)
+                if context.hasChanges { try? context.save() }
+            }
+            lastImport = summary
         } catch {
             lastImport = .failure
         }
