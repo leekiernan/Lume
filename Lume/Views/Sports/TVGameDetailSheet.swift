@@ -38,8 +38,7 @@
         @Environment(\.contentRestriction) private var restriction
         @State private var follows = SportsFollowService.shared
         @State private var store = SportsStore.shared
-        @State private var eventDetail: SportsEventDetail?
-        @State private var isLoadingDetail = false
+        @State private var detailLoad = SportsEventDetailLoadMachine()
         @State private var fetchedStandings: [SportsStandingRow] = []
         @State private var tab: GameDetailTab = .timeline
         @State private var selfResolved: [ResolvedChannel] = []
@@ -347,12 +346,12 @@
 
         @ViewBuilder
         private var detailTabsSection: some View {
-            if let eventDetail, eventDetail.hasTabContent(hidingScores: hidesScores) {
+            if let eventDetail = detailLoad.detail, eventDetail.hasTabContent(hidingScores: hidesScores) {
                 VStack(spacing: 28) {
                     tabPills(for: eventDetail)
                     tabContent(eventDetail)
                 }
-            } else if isLoadingDetail {
+            } else if detailLoad.isLoading, expectsEventDetail {
                 ProgressView()
                     .controlSize(.large)
                     .tint(.white)
@@ -438,11 +437,7 @@
 
         private func loadDetail() async {
             guard let league = SportsCatalog.league(id: fixture.leagueId) else { return }
-            let expectsDetail = fixture.status.state == .inProgress || fixture.status.state == .final
-            if expectsDetail {
-                isLoadingDetail = true
-            }
-            defer { isLoadingDetail = false }
+            let detailRequest = detailLoad.begin()
 
             if resolved.isEmpty, fixture.status.state != .final {
                 selfResolved = await SportsChannelResolver.resolve(
@@ -454,7 +449,16 @@
             if store.snapshot(for: fixture.leagueId)?.standings.isEmpty ?? true, fetchedStandings.isEmpty {
                 fetchedStandings = await (try? provider.standings(league: league)) ?? []
             }
-            eventDetail = try? await provider.eventDetail(league: league, eventId: fixture.eventId)
+            do {
+                let detail = try await provider.eventDetail(league: league, eventId: fixture.eventId)
+                detailLoad.finish(detailRequest, detail: detail)
+            } catch {
+                detailLoad.fail(detailRequest)
+            }
+        }
+
+        private var expectsEventDetail: Bool {
+            fixture.status.state == .inProgress || fixture.status.state == .final
         }
 
         // MARK: - Derived

@@ -30,8 +30,7 @@ struct GameDetailSheet: View {
     @Environment(DeepLinkRouter.self) private var router: DeepLinkRouter?
     @State private var follows = SportsFollowService.shared
     @State private var store = SportsStore.shared
-    @State private var eventDetail: SportsEventDetail?
-    @State private var isLoadingDetail = false
+    @State private var detailLoad = SportsEventDetailLoadMachine()
     @State private var fetchedStandings: [SportsStandingRow] = []
     @State private var selfResolved: [ResolvedChannel] = []
     @AppStorage(SportsSyncService.hideScoresKey) private var hidesScores = false
@@ -366,7 +365,7 @@ struct GameDetailSheet: View {
 
     @ViewBuilder
     private var detailTabsSection: some View {
-        if let eventDetail, eventDetail.hasTabContent(hidingScores: hidesScores) {
+        if let eventDetail = detailLoad.detail, eventDetail.hasTabContent(hidingScores: hidesScores) {
             GameDetailTabs(
                 detail: eventDetail,
                 fixture: fixture,
@@ -374,7 +373,7 @@ struct GameDetailSheet: View {
                 awayPalette: fixture.awayPalette,
                 hidesScores: hidesScores
             )
-        } else if isLoadingDetail {
+        } else if detailLoad.isLoading, expectsEventDetail {
             GameDetailTabsSkeleton()
         }
     }
@@ -407,9 +406,7 @@ struct GameDetailSheet: View {
     /// live or finished fixture, where detail is expected.
     private func loadDetail() async {
         guard let league = SportsCatalog.league(id: fixture.leagueId) else { return }
-        let expectsDetail = fixture.status.state == .inProgress || fixture.status.state == .final
-        if expectsDetail { isLoadingDetail = true }
-        defer { isLoadingDetail = false }
+        let detailRequest = detailLoad.begin()
 
         if resolved.isEmpty, fixture.status.state != .final {
             selfResolved = await SportsChannelResolver.resolve(
@@ -421,7 +418,16 @@ struct GameDetailSheet: View {
         if store.snapshot(for: fixture.leagueId)?.standings.isEmpty ?? true, fetchedStandings.isEmpty {
             fetchedStandings = await (try? provider.standings(league: league)) ?? []
         }
-        eventDetail = try? await provider.eventDetail(league: league, eventId: fixture.eventId)
+        do {
+            let detail = try await provider.eventDetail(league: league, eventId: fixture.eventId)
+            detailLoad.finish(detailRequest, detail: detail)
+        } catch {
+            detailLoad.fail(detailRequest)
+        }
+    }
+
+    private var expectsEventDetail: Bool {
+        fixture.status.state == .inProgress || fixture.status.state == .final
     }
 
     private func selectLeague() {
