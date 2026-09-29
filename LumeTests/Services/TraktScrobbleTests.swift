@@ -191,3 +191,19 @@ struct TraktPlaybackScrobblerTests {
         #expect(clock.elapsed(fallback: 300) == 300)
     }
 }
+
+struct TraktScrobbleResponseTests {
+    /// Logged after every scrobble, so a diagnostic report shows what Trakt
+    /// took rather than only what was sent.
+    @Test func `the response carries what Trakt recorded`() throws {
+        let json = Data(#"{"id":0,"action":"pause","progress":11.5,"sharing":{"twitter":false}}"#.utf8)
+        let response = try JSONDecoder().decode(TraktScrobbleResponse.self, from: json)
+        #expect(response.action == "pause")
+        #expect(response.progress == 11.5)
+    }
+
+    @Test func `an empty response still decodes`() throws {
+        let response = try JSONDecoder().decode(TraktScrobbleResponse.self, from: Data("{}".utf8))
+        #expect(response.action == nil)
+    }
+}

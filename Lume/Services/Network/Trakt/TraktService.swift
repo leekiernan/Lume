@@ -181,7 +181,10 @@ final class TraktService {
         action: TraktScrobbleAction,
         progress: Double
     ) {
-        guard isConnected else { return }
+        guard isConnected else {
+            Logger.network.info("Trakt scrobble \(action.rawValue, privacy: .public) skipped: not connected")
+            return
+        }
         let previous = scrobbleTask
         // The last scrobble — the stop sent as the player closes — usually
         // goes out as the app leaves the foreground (tvOS closes the player on
@@ -192,14 +195,25 @@ final class TraktService {
         scrobbleTask = Task { [weak self] in
             defer { backgroundTime.end() }
             await previous?.value
-            guard !Task.isCancelled, let self,
-                  let accessToken = await session.validAccessToken()
-            else { return }
+            guard !Task.isCancelled, let self else { return }
+            guard let accessToken = await session.validAccessToken() else {
+                Logger.network.warning(
+                    "Trakt scrobble \(action.rawValue, privacy: .public) dropped: no valid access token"
+                )
+                return
+            }
 
             do {
-                try await client.scrobble(
+                let recorded = try await client.scrobble(
                     target, action: action, progress: progress, accessToken: accessToken
                 )
+                // Successes too: without them a log can't tell a scrobble
+                // Trakt took from one that was never sent.
+                Logger.network.info("""
+                Trakt scrobble \(action.rawValue, privacy: .public) at \(progress, format: .fixed(precision: 1))% → \
+                recorded \(recorded.action ?? "?", privacy: .public) \
+                at \(recorded.progress ?? -1, format: .fixed(precision: 1))%
+                """)
             } catch {
                 let detail = LogRedaction.describe(error)
                 Logger.network.warning(
