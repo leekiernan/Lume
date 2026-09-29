@@ -41,6 +41,9 @@ import SwiftUI
             case .episode:
                 button(step == .next ? "forward.end.fill" : "backward.end.fill")
                     .accessibilityLabel(step == .next ? "Next Episode" : "Previous Episode")
+            case .programme:
+                button(step == .next ? "forward.end.fill" : "backward.end.fill")
+                    .accessibilityLabel(step == .next ? "Next Programme" : "Previous Programme")
             case .channel:
                 // Deliberately not the seek glyphs' shape: these are the
                 // remote's channel up/down, not `gobackward.15`/`goforward.15`.

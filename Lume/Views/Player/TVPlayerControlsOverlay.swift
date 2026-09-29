@@ -82,16 +82,14 @@
         @State var isScrubbing = false
         @State var scrubTarget: TimeInterval = 0
         @State var wasPlayingBeforeScrub = false
-        /// Grows on sustained same-direction input so a held d-pad covers
-        /// ground quickly while a single tap still nudges precisely.
-        @State var scrubStepLevel = 0
-        @State var scrubLastDirection: MoveCommandDirection?
-        /// Decays `scrubStepLevel` back to zero after a pause in input.
-        @State var scrubResetTask: Task<Void, Never>?
 
         enum TabKind: Hashable { case episodes, recent, info }
         @State var openTab: TabKind?
         @FocusState var focus: TVPlayerFocus?
+        /// Quick-press skip steps — buttons, progress bar and scrub alike — and
+        /// the indicator for the last one. See `SkipAcceleration`.
+        @State var skipAcceleration = SkipAcceleration()
+        @State var skipBadge: SkipBadge?
 
         // MARK: - Body
 
@@ -110,6 +108,9 @@
                 .padding(.horizontal, 80)
                 .padding(.bottom, 56)
             }
+            .overlay {
+                if let skipBadge { SkipBadgeLabel(badge: skipBadge).id(skipBadge.forward) }
+            }
             .defaultFocus($focus, .transport)
             .tvRemoteMoveCommand { direction in
                 // While scrubbing, left/right step the playhead; vertical moves
@@ -118,6 +119,11 @@
                     if direction == .left || direction == .right {
                         moveScrub(direction)
                     }
+                    return
+                }
+                // On the bar itself, left/right seek straight away.
+                if focus == .scrubber, !media.isLive, direction == .left || direction == .right {
+                    skip(forward: direction == .right)
                     return
                 }
                 // With the controls up, up/down still surf channels — but only
@@ -299,11 +305,8 @@
         private var transportControls: some View {
             HStack(spacing: 26) {
                 if !media.isLive {
-                    leadingTransportButton
-                    circleButton(systemImage: skipStep.backSymbol, focus: .skipBackward) {
-                        coordinator.skip(by: -skipStep.seconds)
-                        onResetHideTimer()
-                    }
+                    if hasItemButtons { leadingTransportButton }
+                    skipButton(forward: false)
                 }
 
                 Button(action: onTogglePlay) {
@@ -314,47 +317,46 @@
                 .focused($focus, equals: .transport)
 
                 if !media.isLive {
-                    circleButton(systemImage: skipStep.forwardSymbol, focus: .skipForward) {
-                        coordinator.skip(by: skipStep.seconds)
-                        onResetHideTimer()
-                    }
-                    trailingTransportButton
+                    skipButton(forward: true)
+                    if hasItemButtons { trailingTransportButton }
                 }
+            }
+            .task(id: skipBadge?.id) {
+                guard skipBadge != nil else { return }
+                try? await Task.sleep(for: .seconds(SkipAcceleration.window + 0.3))
+                withAnimation(.easeOut(duration: 0.2)) { skipBadge = nil }
             }
         }
 
         /// ∓10 s, or a drop-in minute on catch-up.
-        private var skipStep: PlayerSkipStep {
+        var skipStep: PlayerSkipStep {
             PlayerSkipStep(seconds: media.skipInterval(default: 10))
         }
 
-        /// Leading outer button: previous episode for series, otherwise a longer
-        /// rewind for movies.
-        @ViewBuilder
+        /// The outer buttons step between items — episodes, catch-up programmes —
+        /// and only items: a movie covers the ground with the accelerating skip.
         private var leadingTransportButton: some View {
-            if isSeries {
-                circleButton(systemImage: "backward.fill", focus: .previousItem, enabled: episodeNav.previous != nil) {
-                    stepItem(.previous)
-                }
-            } else {
-                circleButton(systemImage: "backward.fill", focus: .previousItem) {
-                    coordinator.skip(by: -300)
-                    onResetHideTimer()
-                }
+            // `backward.end` (|<), as on iOS and macOS.
+            circleButton(systemImage: "backward.end.fill", focus: .previousItem, enabled: episodeNav.previous != nil) {
+                stepItem(.previous)
             }
         }
 
-        @ViewBuilder
         private var trailingTransportButton: some View {
-            if isSeries {
-                circleButton(systemImage: "forward.fill", focus: .nextItem, enabled: episodeNav.next != nil) {
-                    stepItem(.next)
-                }
-            } else {
-                circleButton(systemImage: "forward.fill", focus: .nextItem) {
-                    coordinator.skip(by: 300)
-                    onResetHideTimer()
-                }
+            circleButton(systemImage: "forward.end.fill", focus: .nextItem, enabled: episodeNav.next != nil) {
+                stepItem(.next)
+            }
+        }
+
+        /// A skip button that climbs `SkipAcceleration`'s ladder on quick
+        /// presses, badging the step it just took so the viewer can see how
+        /// far each press goes.
+        private func skipButton(forward: Bool) -> some View {
+            circleButton(
+                systemImage: forward ? skipStep.forwardSymbol : skipStep.backSymbol,
+                focus: forward ? .skipForward : .skipBackward
+            ) {
+                skip(forward: forward)
             }
         }
 

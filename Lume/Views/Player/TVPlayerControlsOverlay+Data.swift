@@ -19,11 +19,15 @@
             if case .episode = media.contentRef { true } else { false }
         }
 
+        /// Whether the outer transport buttons step between items: episodes,
+        /// and catch-up programmes (the next one live once it's still airing).
+        var hasItemButtons: Bool {
+            isSeries || media.catchup != nil
+        }
+
         func resolveContent() async {
             // A stream swap invalidates any in-flight scrub.
             isScrubbing = false
-            scrubResetTask?.cancel()
-            scrubResetTask = nil
             episode = nil
             seasonEpisodes = []
             episodeNav = .none
@@ -47,6 +51,9 @@
             case .live:
                 guard let stream = TVPlayerContent.liveStream(for: media.contentRef, in: modelContext) else { return }
                 liveStream = stream
+                if media.catchup != nil {
+                    episodeNav = PlayerItemNavigation.programmeNeighbours(for: media, in: modelContext)
+                }
                 let channels = LiveChannelHistory.recentChannels(current: stream, in: modelContext, restriction: restriction)
                 recentChannels = channels
                 // The guide reads run off the main actor while the stream
@@ -123,8 +130,6 @@
             wasPlayingBeforeScrub = coordinator.isPlaying
             if coordinator.isPlaying { onTogglePlay() }
             scrubTarget = clock.current.isFinite ? clock.current : 0
-            scrubStepLevel = 0
-            scrubLastDirection = nil
             onPanelOpenChange(true)
             withAnimation(.easeOut(duration: 0.15)) { isScrubbing = true }
         }
@@ -146,8 +151,6 @@
         }
 
         private func finishScrub(resume: Bool) {
-            scrubResetTask?.cancel()
-            scrubResetTask = nil
             withAnimation(.easeOut(duration: 0.15)) { isScrubbing = false }
             onPanelOpenChange(false)
             if resume, !coordinator.isPlaying { onTogglePlay() }
@@ -155,32 +158,30 @@
             onResetHideTimer()
         }
 
-        /// Step the scrub target on a left/right press. The step grows with
-        /// sustained input in one direction and decays after a brief pause.
+        /// Step the scrub target on a left/right press, on the same ladder as
+        /// every other skip (`SkipAcceleration`).
         func moveScrub(_ direction: MoveCommandDirection) {
-            guard isScrubbing, clock.duration > 0 else { return }
-            let sign: Double
-            switch direction {
-            case .left: sign = -1
-            case .right: sign = 1
-            default: return
-            }
-            if direction != scrubLastDirection { scrubStepLevel = 0 }
-            scrubLastDirection = direction
-            scrubStepLevel = min(scrubStepLevel + 1, 40)
-            // A single tap nudges ~30s; a held d-pad ramps to ~20 min/press, so
-            // even a long movie crosses in a second or two of sustained input.
-            let step = 30.0 * Double(scrubStepLevel)
-            scrubTarget = min(max(scrubTarget + sign * step, 0), clock.duration)
+            guard isScrubbing, clock.duration > 0,
+                  direction == .left || direction == .right else { return }
+            let press = skipAcceleration.press(
+                forward: direction == .right, base: skipStep.seconds,
+                from: scrubTarget, duration: clock.duration
+            )
+            scrubTarget = press.target
+            skipBadge = SkipBadge(press: press)
             onResetHideTimer()
+        }
 
-            scrubResetTask?.cancel()
-            scrubResetTask = Task { @MainActor in
-                try? await Task.sleep(nanoseconds: 450_000_000)
-                guard !Task.isCancelled else { return }
-                scrubStepLevel = 0
-                scrubLastDirection = nil
-            }
+        /// One skip press — a transport button, or left/right on the progress
+        /// bar: the next step on the ladder, and the indicator for it.
+        func skip(forward: Bool) {
+            let press = skipAcceleration.press(
+                forward: forward, base: skipStep.seconds,
+                from: clock.current, duration: clock.duration
+            )
+            coordinator.skip(by: press.step)
+            skipBadge = SkipBadge(press: press)
+            onResetHideTimer()
         }
 
         // MARK: Actions
