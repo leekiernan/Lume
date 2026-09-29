@@ -39,12 +39,15 @@
     /// Pass `scrollingTo` whenever the target sits in a lazy stack: a row below
     /// the fold has not been realised, so a focus request naming it is dropped
     /// exactly as if the surface weren't on screen yet — the surface opens
-    /// unfocused and whatever is behind it stays live.
+    /// unfocused and whatever is behind it stays live. If the target is a child
+    /// of a lazy container, use `scrollTarget` for that stable container ID.
     @MainActor
     func landTVFocus<Value: Hashable>(
         _ focus: FocusState<Value?>.Binding,
         on target: Value?,
         scrollingTo proxy: ScrollViewProxy? = nil,
+        scrollTarget: AnyHashable? = nil,
+        scrollAnchor: UnitPoint = .center,
         while stillPresented: () -> Bool = { true }
     ) async {
         guard let target else { return }
@@ -55,7 +58,7 @@
         // when the focus highlight arrives.
         var transaction = Transaction()
         transaction.disablesAnimations = true
-        withTransaction(transaction) { proxy?.scrollTo(target, anchor: .center) }
+        withTransaction(transaction) { proxy?.scrollTo(scrollTarget ?? AnyHashable(target), anchor: scrollAnchor) }
         try? await Task.sleep(for: tvFocusSettleDelay)
         guard stillPresented() else { return }
         focus.wrappedValue = target

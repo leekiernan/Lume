@@ -28,6 +28,13 @@
         case card(String)
     }
 
+    /// The filters are one lazy-stack child. Their individual buttons may be
+    /// released while a lower rail is focused, so return focus via this stable
+    /// container rather than an individual segment's identity.
+    private enum TVSportsScrollTarget: Hashable {
+        case filters
+    }
+
     struct TVSportsHubScreen: View {
         @Environment(\.modelContext) private var modelContext
         @Environment(\.contentRestriction) private var restriction
@@ -136,6 +143,7 @@
             }
             .padding(.horizontal, 60)
             .focusSection()
+            .id(TVSportsScrollTarget.filters)
         }
 
         // MARK: - Filter controls
@@ -170,9 +178,6 @@
             }
             .buttonStyle(TVCardButtonStyle(focusScale: 1.03))
             .focused($focus, equals: .segment(value))
-            // `landTVFocus` scrolls by the focus target. The header may have
-            // been released by the lazy stack while a lower rail is focused.
-            .id(TVSportsFocus.segment(value))
             .animation(.easeOut(duration: 0.18), value: isItemFocused)
         }
 
@@ -342,7 +347,13 @@
 
         private func returnFocusToFilter(using scrollProxy: ScrollViewProxy) {
             Task { @MainActor in
-                await landTVFocus($focus, on: .segment(segment), scrollingTo: scrollProxy)
+                await landTVFocus(
+                    $focus,
+                    on: .segment(segment),
+                    scrollingTo: scrollProxy,
+                    scrollTarget: TVSportsScrollTarget.filters,
+                    scrollAnchor: .top
+                )
             }
         }
 
