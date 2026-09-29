@@ -48,6 +48,7 @@ struct ContentView: View {
             }
         }
         .onAppear {
+            LaunchTimeline.firstFrame()
             // Put the chooser up immediately for opt-in users so the main UI
             // doesn't flash before bootstrap finishes; the resolve pass below
             // takes it back down if it turns out there's nothing to choose.
