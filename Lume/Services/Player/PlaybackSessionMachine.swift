@@ -92,7 +92,11 @@ struct PlaybackSessionMachine: Equatable {
 
     enum Effect: Equatable {
         case scrobble(ScrobbleAction)
-        case persistProgress
+        /// Save the position. `holdingLive`: a live channel's "last watched"
+        /// touch waits in memory for the next save that isn't held — a zap
+        /// saving at once merged into the main context just as the next stream
+        /// opened, re-running the Live TV queries under the player.
+        case persistProgress(holdingLive: Bool)
         case fallBackToNextEngine
     }
 
@@ -156,15 +160,15 @@ struct PlaybackSessionMachine: Equatable {
     private mutating func leave(_ reason: Leave) -> [Effect] {
         switch reason {
         case .background:
-            return [.persistProgress]
+            return [.persistProgress(holdingLive: false)]
         case .swap:
             state = .idle
             settled = nil
-            return [.scrobble(.stop), .persistProgress]
+            return [.scrobble(.stop), .persistProgress(holdingLive: true)]
         case .dismiss:
             state = .closed
             engine = nil
-            return [.scrobble(.stop), .persistProgress]
+            return [.scrobble(.stop), .persistProgress(holdingLive: false)]
         }
     }
 
@@ -209,7 +213,7 @@ struct PlaybackSessionMachine: Equatable {
         case (.playing, .paused):
             // A pause is a natural boundary to save the position at, and it's
             // off the playback path: nothing is rendering.
-            [.scrobble(.pause), .persistProgress]
+            [.scrobble(.pause), .persistProgress(holdingLive: false)]
         case (.playing, .failed), (.paused, .failed), (.rebuffering, .failed):
             [.scrobble(.stop)]
         default:

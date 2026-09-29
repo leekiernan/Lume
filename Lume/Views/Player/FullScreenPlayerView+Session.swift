@@ -27,8 +27,8 @@ extension FullScreenPlayerView {
                 case .pause: updateTraktScrobble(isPlaying: false)
                 case .stop: stopTraktScrobble()
                 }
-            case .persistProgress:
-                persistProgressDetached()
+            case let .persistProgress(holdingLive):
+                persistProgressDetached(holdingLive: holdingLive)
             case .fallBackToNextEngine:
                 fallBackToNextEngine()
             }
