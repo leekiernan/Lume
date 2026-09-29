@@ -97,10 +97,18 @@ actor CloudSyncEngine {
         private var saveFailureInjector: SaveFailureInjector?
     #endif
 
+    /// The contexts are made on first use, on this actor. One made in `init`
+    /// belongs to whichever thread called it — the main thread, inside
+    /// `CloudSyncCoordinator`'s init — and SwiftData warned it was "unbinding
+    /// from the main queue" the first time a reconcile used it.
+    private let catalogContainer: ModelContainer
+    /// Nil in the test initializer: one container, one context for both roles.
+    private let cloudContainer: ModelContainer?
+
     /// The local-only catalog store (Playlist, Movie, Series, Episode, LiveStream).
-    let catalogContext: ModelContext
+    lazy var catalogContext: ModelContext = Self.makeContext(catalogContainer)
     /// The CloudKit-mirrored store (SyncedPlaylist, UserContentState, UserProfile).
-    let cloudContext: ModelContext
+    lazy var cloudContext: ModelContext = cloudContainer.map(Self.makeContext) ?? catalogContext
     let shadow: CloudSyncShadow
     /// The viewer's clears on this device — see `IntentMerge`.
     let clears: ContentClearLedger
@@ -121,13 +129,17 @@ actor CloudSyncEngine {
         clears: ContentClearLedger = .shared,
         lifts: ContentClearLedger = .restrictionLifts
     ) {
-        catalogContext = ModelContext(catalogContainer)
-        catalogContext.autosaveEnabled = false
-        cloudContext = ModelContext(cloudContainer)
-        cloudContext.autosaveEnabled = false
+        self.catalogContainer = catalogContainer
+        self.cloudContainer = cloudContainer
         self.shadow = shadow
         self.clears = clears
         self.lifts = lifts
+    }
+
+    private static func makeContext(_ container: ModelContainer) -> ModelContext {
+        let context = ModelContext(container)
+        context.autosaveEnabled = false
+        return context
     }
 
     #if DEBUG
@@ -143,10 +155,8 @@ actor CloudSyncEngine {
             lifts: ContentClearLedger = ContentClearLedger(defaults: UserDefaults(suiteName: "CloudSyncEngineTests.\(UUID())")!),
             saveFailureInjector: SaveFailureInjector? = nil
         ) {
-            let ctx = ModelContext(container)
-            ctx.autosaveEnabled = false
-            catalogContext = ctx
-            cloudContext = ctx
+            catalogContainer = container
+            cloudContainer = nil
             self.shadow = shadow
             self.clears = clears
             self.lifts = lifts

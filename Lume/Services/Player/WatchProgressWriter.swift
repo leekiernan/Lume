@@ -22,7 +22,18 @@ nonisolated enum WatchCompletion {
 /// hand it a few `Sendable` values; the fetch and the disk write happen here,
 /// away from the render thread.
 actor WatchProgressWriter {
-    private let context: ModelContext
+    private let container: ModelContainer
+    /// Made on first use, on this actor. One made in `init` belonged to the
+    /// thread that built the writer — the main thread, in the player — and
+    /// SwiftData warned it was "unbinding from the main queue" on the first
+    /// save.
+    private lazy var context: ModelContext = {
+        let context = ModelContext(container)
+        // We flush explicitly after each mutation; autosave would add its own
+        // unscheduled saves on top.
+        context.autosaveEnabled = false
+        return context
+    }()
 
     /// Surfaced when an item crosses the "watched" line on this write, so the
     /// caller can fire a one-time Trakt sync back on the main actor.
@@ -31,10 +42,7 @@ actor WatchProgressWriter {
     }
 
     init(container: ModelContainer) {
-        context = ModelContext(container)
-        // We flush explicitly after each mutation; autosave would add its own
-        // unscheduled saves on top.
-        context.autosaveEnabled = false
+        self.container = container
     }
 
     /// Write `progress` for `ref` and return a `Completion` if the item just
