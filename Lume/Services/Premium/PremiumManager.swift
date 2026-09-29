@@ -66,14 +66,27 @@ final class PremiumManager {
     private(set) var purchasedProductIDs: Set<String> = []
     /// Renewal detail when Premium comes from the subscription, else nil.
     private(set) var subscriptionStatus: SubscriptionStatus?
+    /// Product discovery can overlap a purchase safely; checkout operations cannot
+    /// overlap each other. Their machines own those separate contracts.
+    private var productLoad = PremiumProductLoadMachine()
+    private var checkout = PremiumCheckoutMachine()
+
     /// True while a purchase or restore is in flight, for button spinners.
-    private(set) var isWorking = false
+    var isWorking: Bool {
+        checkout.isWorking
+    }
+
     /// True while `loadProducts()` is in flight, so a retry doesn't overlap it.
-    private(set) var isLoadingProducts = false
-    /// True when the last `loadProducts()` came back with nothing to sell (offline,
+    var isLoadingProducts: Bool {
+        productLoad.isLoading
+    }
+
+    /// True when the last product load came back with nothing to sell (offline,
     /// or the App Store didn't answer), so the paywall can offer a retry instead
     /// of a spinner that never resolves.
-    private(set) var productsLoadFailed = false
+    var productsLoadFailed: Bool {
+        productLoad.hasFailed
+    }
 
     #if SIDE_LOAD
         /// Sideloaded / self-compiled builds unlock everything. No StoreKit, no
@@ -147,9 +160,7 @@ final class PremiumManager {
     /// Loads the purchasable products. Runs at launch, and again from the paywall
     /// when that first attempt left nothing to show.
     func loadProducts() async {
-        guard !isLoadingProducts else { return }
-        isLoadingProducts = true
-        defer { isLoadingProducts = false }
+        guard productLoad.begin() else { return }
         do {
             let ids = Plan.purchasable.map(\.rawValue)
             let loaded = try await Product.products(for: ids)
@@ -158,18 +169,18 @@ final class PremiumManager {
                 let missing = Set(ids).subtracting(products.map(\.id))
                 Logger.premium.error("Missing products (not configured?): \(missing, privacy: .public)")
             }
-            productsLoadFailed = products.isEmpty
+            productLoad.finish(hasProducts: !products.isEmpty)
         } catch {
             Logger.premium.error("Failed to load products: \(error.localizedDescription, privacy: .public)")
-            productsLoadFailed = products.isEmpty
+            productLoad.finish(hasProducts: !products.isEmpty)
         }
     }
 
     /// Purchase a plan. Returns true once the entitlement is granted.
     @discardableResult
     func purchase(_ product: Product) async -> Bool {
-        isWorking = true
-        defer { isWorking = false }
+        guard let operation = checkout.beginPurchase(productID: product.id) else { return false }
+        defer { checkout.finish(operation) }
         do {
             let result = try await product.purchase()
             switch result {
@@ -195,8 +206,8 @@ final class PremiumManager {
     /// Restore purchases (App Store Review requires this for non-consumables and
     /// subscriptions). Syncs transactions, then re-reads entitlements.
     func restore() async {
-        isWorking = true
-        defer { isWorking = false }
+        guard let operation = checkout.beginRestore() else { return }
+        defer { checkout.finish(operation) }
         try? await AppStore.sync()
         await refreshEntitlements()
     }
