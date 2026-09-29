@@ -20,11 +20,10 @@
         @Query private var playlists: [Playlist]
 
         @State private var selectedSeason: Int = 1
-        /// The series' distinct season numbers, cached like `SeriesDetailView`'s
-        /// so the body (season chips, hero metadata, default season) doesn't
-        /// rebuild a Set over every episode on each render. Recomputed when the
-        /// episodes relationship changes (see `recomputeSeasons`).
+        /// Season numbers and per-season episodes, cached so the body doesn't
+        /// re-sort every episode on each render (see `recomputeSeasons`).
         @State private var availableSeasons: [Int] = []
+        @State private var episodesBySeason: [Int: [Episode]] = [:]
         @State private var isLoadingEpisodes = false
         @State private var playingMedia: PlayableMedia?
         @State private var similar: [HomeMediaItem] = []
@@ -357,8 +356,15 @@
                 .joined(separator: ", ")
         }
 
+        private var seasonCountLabel: String {
+            availableSeasons.count == 1 ? "1 Season" : "\(availableSeasons.count) Seasons"
+        }
+
+        /// Runs only when episodes are added or removed; their numbers never change.
         private func recomputeSeasons() {
             availableSeasons = Set(series.episodes.map(\.seasonNum)).sorted()
+            episodesBySeason = Dictionary(grouping: series.episodes, by: \.seasonNum)
+                .mapValues { $0.sorted { $0.episodeNum < $1.episodeNum } }
         }
 
         private func determineDefaultSeason() -> Int {
@@ -378,9 +384,7 @@
         }
 
         private var seasonEpisodes: [Episode] {
-            series.episodes
-                .filter { $0.seasonNum == selectedSeason }
-                .sorted { $0.episodeNum < $1.episodeNum }
+            episodesBySeason[selectedSeason] ?? []
         }
 
         /// Play button target — see `SeriesEpisodeProgress.nextEpisode`. Read
