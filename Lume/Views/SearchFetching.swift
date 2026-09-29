@@ -106,8 +106,21 @@ nonisolated enum SearchFetcher {
     ) -> [PersistentIdentifier] {
         var descriptor = FetchDescriptor<Model>(predicate: predicate)
         descriptor.fetchLimit = limit
-        return ((try? context.fetch(descriptor)) ?? []).map(\.persistentModelID)
+        // Identifiers only: `fetch` realises every matched row, and a realised
+        // row loads each to-many relationship with a query of its own — ~300
+        // extra statements per settled query for the rows the view context is
+        // about to load again anyway.
+        return (try? context.fetchIdentifiers(descriptor)) ?? []
     }
+}
+
+/// Loads the rows a `SearchFetcher` pass matched, in one query per type. A
+/// `model(for:)` per identifier faults each row in with a query of its own —
+/// on the main thread, once per settled keystroke. Unordered: the caller sorts.
+func hydrateSearchHits<Model: PersistentModel>(_ ids: [PersistentIdentifier], in context: ModelContext) -> [Model] {
+    guard !ids.isEmpty else { return [] }
+    let descriptor = FetchDescriptor<Model>(predicate: #Predicate { ids.contains($0.persistentModelID) })
+    return (try? context.fetch(descriptor)) ?? []
 }
 
 // MARK: - Search predicates

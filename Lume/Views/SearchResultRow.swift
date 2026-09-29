@@ -2,6 +2,8 @@
 //  SearchResultRow.swift
 //  Lume
 //
+//  One row of the global search results.
+//
 
 import SwiftUI
 
@@ -12,6 +14,7 @@ struct SearchResultRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
+            // Thumbnail
             CachedAsyncImage(url: thumbnailURL, maxPixelSize: 90) { phase in
                 switch phase {
                 case .empty:

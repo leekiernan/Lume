@@ -241,4 +241,21 @@ struct SearchPredicateTests {
         #expect(hits.movies.count == 15)
         #expect(names(hits.movies, in: context).allSatisfy { $0.hasPrefix("Aaa") })
     }
+
+    @Test func `search hits hydrate in one pass on the view context`() throws {
+        let container = try makeSQLiteContainer()
+        let context = container.mainContext
+        let (big, small) = try insertTwoCatalogs(context, limit: 5)
+
+        let hits = SearchFetcher.fetch(container: container, request: SearchRequest(
+            query: "matrix", playlistIDs: [big, small],
+            wantMovies: true, wantSeries: false, wantLive: false,
+            excludedCategoryIDs: [], limit: 20
+        ))
+        let movies: [Movie] = hydrateSearchHits(hits.movies, in: context)
+
+        #expect(hits.movies.count == 17)
+        #expect(Set(movies.map(\.persistentModelID)) == Set(hits.movies))
+        #expect((hydrateSearchHits([], in: context) as [Movie]).isEmpty)
+    }
 }
