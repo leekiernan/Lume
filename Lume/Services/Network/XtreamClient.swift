@@ -70,7 +70,7 @@ final nonisolated class XtreamClient: Sendable {
         return components?.url
     }
 
-    private func buildURL(serverURL: String, path: String, queryItems: [URLQueryItem]) -> URL? {
+    func buildURL(serverURL: String, path: String, queryItems: [URLQueryItem]) -> URL? {
         var components = URLComponents(string: serverURL)
         // Ensure the path is appended properly
         if !(components?.path.hasSuffix("/") ?? false), !path.hasPrefix("/") {
@@ -111,50 +111,53 @@ final nonisolated class XtreamClient: Sendable {
         retryAuthFailure: Bool = true,
         phases: RequestPhases? = nil
     ) async throws -> T {
-        var attempt = 0
+        try await withRetries(action: action, retryAuthFailure: retryAuthFailure) {
+            let (data, response) = try await fetchValidated(url, action: action, phases: phases)
+            return try await decodeResponse(T.self, data: data, response: response, action: action, phases: phases)
+        }
+    }
+
+    /// Runs `attempt` with retry-and-backoff for transient failures; see
+    /// `request(_:action:retryAuthFailure:phases:)` for the parameters.
+    func withRetries<R>(
+        action: String,
+        retryAuthFailure: Bool = true,
+        _ attempt: () async throws -> R
+    ) async throws -> R {
+        var attemptCount = 0
         while true {
-            attempt += 1
+            attemptCount += 1
             do {
-                return try await performRequest(url, action: action, phases: phases)
+                return try await attempt()
             } catch let error as XtreamError {
                 let retriable = error.isRetriable || (retryAuthFailure && error.isAuthFailure)
-                guard retriable, attempt < Self.maxAttempts else {
+                guard retriable, attemptCount < Self.maxAttempts else {
                     Logger.network.error(
-                        "Xtream \(action, privacy: .public) request failed permanently (\(error.logDescription, privacy: .public)) after \(attempt, privacy: .public) attempt(s)"
+                        "Xtream \(action, privacy: .public) request failed permanently (\(error.logDescription, privacy: .public)) after \(attemptCount, privacy: .public) attempt(s)"
                     )
                     throw error
                 }
 
                 // Exponential backoff: 2s, then 4s. Gives the provider time to
                 // release the connection slot / clear the rate-limit window.
-                let delay = pow(2.0, Double(attempt))
+                let delay = pow(2.0, Double(attemptCount))
                 let reason = error.logDescription
-                let retryLabel = "\(attempt)/\(Self.maxAttempts - 1)"
+                let retryLabel = "\(attemptCount)/\(Self.maxAttempts - 1)"
                 Logger.network.warning(
                     "Xtream \(action, privacy: .public) failed (\(reason, privacy: .public)); retry \(retryLabel, privacy: .public) after \(delay, privacy: .public)s"
                 )
                 try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
                 Logger.network.warning(
-                    "Xtream \(action, privacy: .public) backoff of \(delay, privacy: .public)s elapsed; retrying (attempt \(attempt + 1, privacy: .public))"
+                    "Xtream \(action, privacy: .public) backoff of \(delay, privacy: .public)s elapsed; retrying (attempt \(attemptCount + 1, privacy: .public))"
                 )
             }
         }
     }
 
-    /// A single request attempt. Network-level failures are wrapped into
-    /// `XtreamError.networkError` so callers see a consistent error type.
-    ///
-    /// `@concurrent` is load-bearing: `SWIFT_APPROACHABLE_CONCURRENCY` runs a
-    /// plain `nonisolated async` function on its caller's actor, so without it
-    /// a login from a view would decode on the main actor, and a sync would hold
-    /// `ContentSyncManager`'s executor through a multi-hundred-thousand-element
-    /// `decoder.decode`.
-    @concurrent
-    private func performRequest<T: Decodable & Sendable>(
-        _ url: URL,
-        action: String,
-        phases: RequestPhases? = nil
-    ) async throws -> T {
+    /// Downloads `url` and checks the HTTP status. Network-level failures are
+    /// wrapped into `XtreamError.networkError` so callers see a consistent
+    /// error type.
+    func fetchValidated(_ url: URL, action: String, phases: RequestPhases?) async throws -> (Data, URLResponse) {
         let data: Data
         let response: URLResponse
         let fetchInterval = phases.map { Perf.begin($0.fetch) }
@@ -183,7 +186,24 @@ final nonisolated class XtreamClient: Sendable {
             }
             throw XtreamError.serverError(httpResponse.statusCode)
         }
+        return (data, response)
+    }
 
+    /// Decodes a validated response, fingerprinting it for the log on failure.
+    ///
+    /// `@concurrent` is load-bearing: `SWIFT_APPROACHABLE_CONCURRENCY` runs a
+    /// plain `nonisolated async` function on its caller's actor, so without it
+    /// a login from a view would decode on the main actor, and a sync would hold
+    /// `ContentSyncManager`'s executor through a multi-hundred-thousand-element
+    /// `decoder.decode`.
+    @concurrent
+    func decodeResponse<T: Decodable & Sendable>(
+        _: T.Type,
+        data: Data,
+        response: URLResponse,
+        action: String,
+        phases: RequestPhases?
+    ) async throws -> T {
         let decodeInterval = phases.map { Perf.begin($0.decode) }
         defer { if let decodeInterval { Perf.end(decodeInterval) } }
         do {
@@ -192,7 +212,7 @@ final nonisolated class XtreamClient: Sendable {
         } catch {
             // Only fingerprint small bodies: a multi-hundred-MB catalog that
             // fails to decode would otherwise be re-parsed just for the log.
-            let fingerprint = byteCount <= 1_048_576
+            let fingerprint = data.count <= 1_048_576
                 ? NetworkDiagnostics.fingerprint(response: response, data: data)
                 : NetworkDiagnostics.fingerprint(response: response, data: nil)
             Logger.network.error("Xtream \(action) undecodable: \(fingerprint)")
