@@ -44,6 +44,67 @@ extension Image {
     }
 }
 
+// MARK: - Disk maintenance lifecycle
+
+/// Coalesces disk-cache maintenance without allowing overlapping directory
+/// sweeps. A request made while a sweep is running grants it exactly one
+/// successor pass; further requests fold into that same pass.
+///
+/// Pure and deliberately narrower than `ImageDiskCache`: it owns scheduling
+/// state only. File enumeration, eviction and the byte estimate remain cache
+/// concerns, so the lock protects one small transition contract rather than a
+/// second cache abstraction.
+nonisolated struct ImageDiskCacheMaintenanceMachine: Equatable {
+    private enum State: Equatable {
+        case idle
+        case running
+        case successorRequested
+    }
+
+    private var state: State = .idle
+
+    /// Records a maintenance request. Returns true only for the caller that
+    /// must launch the detached sweep.
+    mutating func request() -> Bool {
+        switch state {
+        case .idle:
+            state = .running
+            return true
+        case .running:
+            state = .successorRequested
+            return false
+        case .successorRequested:
+            return false
+        }
+    }
+
+    /// Invalidating cache accounting while a sweep is running requires one
+    /// more pass, but must not start otherwise-unneeded maintenance from idle.
+    mutating func requestSuccessorIfRunning() {
+        switch state {
+        case .idle, .successorRequested:
+            return
+        case .running:
+            state = .successorRequested
+        }
+    }
+
+    /// Finishes one pass. Returns true when the caller must immediately run the
+    /// coalesced successor; otherwise the machine returns to idle.
+    mutating func finishPass() -> Bool {
+        switch state {
+        case .successorRequested:
+            state = .running
+            return true
+        case .running:
+            state = .idle
+            return false
+        case .idle:
+            return false
+        }
+    }
+}
+
 // MARK: - Memory cache
 
 /// Thread-safe in-memory store of decoded images. `NSCache` evicts under memory
@@ -146,8 +207,7 @@ final nonisolated class ImageDiskCache: @unchecked Sendable {
     private let maintenanceLock = NSLock()
     private var estimatedByteCount: Int64?
     private var writesSinceReconciliation = 0
-    private var maintenanceRunning = false
-    private var maintenanceRequested = false
+    private var maintenance = ImageDiskCacheMaintenanceMachine()
     private let reconciliationWriteInterval = 128
 
     init(
@@ -224,7 +284,7 @@ final nonisolated class ImageDiskCache: @unchecked Sendable {
         maintenanceLock.lock()
         estimatedByteCount = 0
         writesSinceReconciliation = 0
-        if maintenanceRunning { maintenanceRequested = true }
+        maintenance.requestSuccessorIfRunning()
         maintenanceLock.unlock()
     }
 
@@ -358,13 +418,9 @@ final nonisolated class ImageDiskCache: @unchecked Sendable {
     private func requestMaintenance() {
         guard automaticallyMaintains else { return }
         maintenanceLock.lock()
-        if maintenanceRunning {
-            maintenanceRequested = true
-            maintenanceLock.unlock()
-            return
-        }
-        maintenanceRunning = true
+        let shouldStart = maintenance.request()
         maintenanceLock.unlock()
+        guard shouldStart else { return }
 
         Task.detached(priority: .utility) { [weak self] in
             self?.runMaintenanceLoop()
@@ -393,14 +449,9 @@ final nonisolated class ImageDiskCache: @unchecked Sendable {
             }
 
             maintenanceLock.lock()
-            if maintenanceRequested {
-                maintenanceRequested = false
-                maintenanceLock.unlock()
-            } else {
-                maintenanceRunning = false
-                maintenanceLock.unlock()
-                return
-            }
+            let shouldContinue = maintenance.finishPass()
+            maintenanceLock.unlock()
+            guard shouldContinue else { return }
         }
     }
 }
