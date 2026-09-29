@@ -6,13 +6,17 @@
 @testable import Lume
 import Testing
 
+/// A mutating call can't sit inside `#expect`/`#require` — the macro captures
+/// its operands immutably — so each one runs first and its result is checked.
 struct PremiumStoreKitMachinesTests {
     @Test func `product loading coalesces while in flight`() {
         var machine = PremiumProductLoadMachine()
 
-        #expect(machine.begin())
+        let first = machine.begin()
+        #expect(first)
         #expect(machine.isLoading)
-        #expect(!machine.begin())
+        let second = machine.begin()
+        #expect(!second)
 
         machine.finish(hasProducts: true)
         #expect(!machine.isLoading)
@@ -22,10 +26,12 @@ struct PremiumStoreKitMachinesTests {
     @Test func `an empty product result is retryable`() {
         var machine = PremiumProductLoadMachine()
 
-        #expect(machine.begin())
+        let first = machine.begin()
+        #expect(first)
         machine.finish(hasProducts: false)
         #expect(machine.hasFailed)
-        #expect(machine.begin())
+        let retry = machine.begin()
+        #expect(retry)
         #expect(machine.isLoading)
     }
 
@@ -34,19 +40,22 @@ struct PremiumStoreKitMachinesTests {
         let purchase = machine.beginPurchase(productID: "monthly")
 
         #expect(purchase == .purchase("monthly"))
-        #expect(machine.beginRestore() == nil)
+        let restore = machine.beginRestore()
+        #expect(restore == nil)
         #expect(machine.isWorking)
     }
 
     @Test func `only the active checkout completion clears the operation`() throws {
         var machine = PremiumCheckoutMachine()
-        let purchase = try #require(machine.beginPurchase(productID: "monthly"))
+        let begun = machine.beginPurchase(productID: "monthly")
+        let purchase = try #require(begun)
 
         machine.finish(.restore)
         #expect(machine.isWorking)
 
         machine.finish(purchase)
         #expect(!machine.isWorking)
-        #expect(machine.beginRestore() == .restore)
+        let restore = machine.beginRestore()
+        #expect(restore == .restore)
     }
 }

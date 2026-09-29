@@ -55,7 +55,7 @@ actor PlaybackAudioSession {
 
 /// Small, pure ownership state machine kept separate from the platform call so
 /// stale teardown is testable without touching the global `AVAudioSession`.
-struct PlaybackAudioSessionLease {
+nonisolated struct PlaybackAudioSessionLease {
     private(set) var activeOwner: UUID?
 
     /// Returns whether the caller acquired a new lease and must configure the
