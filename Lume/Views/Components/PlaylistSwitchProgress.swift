@@ -12,8 +12,15 @@ import SwiftUI
 @MainActor
 @Observable
 final class PlaylistSwitchModel {
-    private(set) var isSwitching = false
-    private(set) var targetName = ""
+    private var presentation = PlaylistSwitchPresentationMachine()
+
+    var isSwitching: Bool {
+        presentation.isSwitching
+    }
+
+    var targetName: String {
+        presentation.targetName
+    }
 
     /// Minimum time the overlay stays up after the selection is applied. There is
     /// no "content ready" signal to wait on (the per-playlist scope is a
@@ -21,40 +28,34 @@ final class PlaylistSwitchModel {
     /// wave of poster loads without flashing away instantly.
     private let settleDuration: Duration = .milliseconds(450)
 
-    /// One-shot: set immediately before a switch whose caller wants the app to
-    /// land in the cached catalog instead of handing the screen to the blocking
-    /// auto-sync cover (minutes on a large playlist) — the tvOS quick-switch
-    /// modal. The due sync is picked up by the next launch / foreground pass.
-    @ObservationIgnored private var deferredDueSync = false
-
-    /// Marks the next switch as one that skips the blocking auto-sync cover.
-    /// Scoped to that one switch — the next one from Settings or the iOS/macOS
-    /// switcher presents the cover again.
-    func deferNextDueSync() {
-        deferredDueSync = true
-    }
-
-    /// Reads and clears the deferral. Deliberately does not mark the playlist
-    /// attempted: skipping the cover for this switch must not skip it for the
-    /// rest of the session.
-    func consumeDeferredDueSync() -> Bool {
-        defer { deferredDueSync = false }
-        return deferredDueSync
+    /// Reads the exact request's one-shot deferral. Deliberately does not mark
+    /// the playlist attempted: skipping the cover for this switch must not skip
+    /// it for the rest of the session.
+    func consumeDeferredDueSync(for playlistID: String) -> Bool {
+        presentation.consumeDueSyncDeferral(for: playlistID)
     }
 
     /// Begins a switch to `name`, deferring the caller's `apply` (the actual
     /// `@AppStorage` write) until the overlay is on screen.
-    func switchTo(name: String, apply: @escaping () -> Void) {
-        guard !isSwitching else { return }
-        targetName = name
-        isSwitching = true
-        Task { @MainActor in
+    func switchTo(
+        id: String,
+        name: String,
+        deferringDueSync: Bool = false,
+        apply: @escaping () -> Void
+    ) {
+        guard let request = presentation.begin(
+            targetID: id,
+            targetName: name,
+            defersDueSync: deferringDueSync
+        ) else { return }
+        Task { @MainActor [weak self] in
             // Defer the selection write so the overlay is committed before the
             // heavy re-render it triggers (see type doc).
             await Task.yield()
+            guard let self, presentation.apply(request) else { return }
             apply()
             try? await Task.sleep(for: settleDuration)
-            isSwitching = false
+            presentation.finish(request)
         }
     }
 }

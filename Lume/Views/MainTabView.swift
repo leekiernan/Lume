@@ -216,7 +216,7 @@ struct MainTabView: View {
                 // unless the switch asked to land in the cached catalog instead.
                 // This is also where a playlist deferred at launch for not being
                 // on screen gets its turn.
-                guard playlistSwitch?.consumeDeferredDueSync() != true else { return }
+                guard playlistSwitch?.consumeDeferredDueSync(for: selectedPlaylistID) != true else { return }
                 if let playlist = playlists.active(for: selectedPlaylistID) {
                     enqueueDueSyncs([playlist])
                 }
