@@ -118,7 +118,7 @@ struct ContentSyncManagerLogicTests {
     @Test func `history purge refuses the CloudKit mirror configuration`() throws {
         let schema = Schema([
             SyncedPlaylist.self, UserContentState.self, UserProfile.self, SyncedEPGSource.self,
-            SyncedParentalPIN.self, SyncedCategoryRestriction.self, SyncedTraktAccount.self, SyncedSimklAccount.self
+            SyncedParentalPIN.self, SyncedCategoryRestriction.self, SyncedTraktAccount.self, SyncedSimklAccount.self, SyncedAccountSettings.self
         ])
         let mirror = ModelConfiguration(
             ContentSyncManager.cloudMirrorConfigurationName,

@@ -25,6 +25,7 @@ final nonisolated class CloudSyncShadow {
         fileprivate let parentalPIN: ParentalPINValues?
         fileprivate let categoryRestrictions: [String: CategoryRestrictionValues]
         fileprivate let traktCredentials: TraktCredentialValues?
+        fileprivate let accountSettings: AccountSettingsValues?
         fileprivate let isDirty: Bool
     }
 
@@ -36,6 +37,7 @@ final nonisolated class CloudSyncShadow {
     private let categoryRestrictionsKey = "cloudsync.shadow.categoryrestrictions.v1"
     private let traktCredentialsKey = "cloudsync.shadow.traktCredentials.v1"
     private let simklCredentialsKey = "cloudsync.shadow.simklCredentials.v1"
+    private let accountSettingsKey = "cloudsync.shadow.accountSettings.v1"
 
     private var playlists: [String: PlaylistConfigValues]
     private var content: [String: ContentStateValues]
@@ -48,6 +50,9 @@ final nonisolated class CloudSyncShadow {
     private var traktCredentials: TraktCredentialValues?
     /// Fingerprint-only baseline; OAuth secrets are never persisted here.
     private var simklCredentials: SimklCredentialValues?
+    /// The account-wide settings last agreed (`AccountSettingsSync`); nil
+    /// before the first pass.
+    private var accountSettings: AccountSettingsValues?
 
     /// Set whenever a setter actually changes the baseline; cleared on `persist()`.
     /// A steady-state reconcile (every verdict `.noChange`) mutates nothing, so
@@ -63,6 +68,7 @@ final nonisolated class CloudSyncShadow {
         categoryRestrictions = Self.decode(defaults.data(forKey: categoryRestrictionsKey)) ?? [:]
         traktCredentials = Self.decode(defaults.data(forKey: traktCredentialsKey))
         simklCredentials = Self.decode(defaults.data(forKey: simklCredentialsKey))
+        accountSettings = Self.decode(defaults.data(forKey: accountSettingsKey))
     }
 
     // MARK: Playlists (keyed by UUID string)
@@ -122,6 +128,18 @@ final nonisolated class CloudSyncShadow {
     func setParentalPINShadow(_ value: ParentalPINValues?) {
         guard parentalPIN != value else { return }
         parentalPIN = value
+        isDirty = true
+    }
+
+    // MARK: Account settings
+
+    func accountSettingsShadow() -> AccountSettingsValues? {
+        accountSettings
+    }
+
+    func setAccountSettingsShadow(_ value: AccountSettingsValues) {
+        guard accountSettings != value else { return }
+        accountSettings = value
         isDirty = true
     }
 
@@ -204,6 +222,8 @@ final nonisolated class CloudSyncShadow {
         // The Trakt baseline is likewise kept: its local side is the keychain,
         // not the catalog store, and forgetting it could resurrect credentials
         // that another device deliberately disconnected.
+        // So is the account-settings baseline: its local side is
+        // `UserDefaults`, which a lost catalog store doesn't touch.
         isDirty = true
     }
 
@@ -217,6 +237,7 @@ final nonisolated class CloudSyncShadow {
             parentalPIN: parentalPIN,
             categoryRestrictions: categoryRestrictions,
             traktCredentials: traktCredentials,
+            accountSettings: accountSettings,
             isDirty: isDirty
         )
     }
@@ -228,6 +249,7 @@ final nonisolated class CloudSyncShadow {
         parentalPIN = checkpoint.parentalPIN
         categoryRestrictions = checkpoint.categoryRestrictions
         traktCredentials = checkpoint.traktCredentials
+        accountSettings = checkpoint.accountSettings
         isDirty = checkpoint.isDirty
     }
 
@@ -260,6 +282,9 @@ final nonisolated class CloudSyncShadow {
             defaults.set(Self.encode(simklCredentials), forKey: simklCredentialsKey)
         } else {
             defaults.removeObject(forKey: simklCredentialsKey)
+        }
+        if let accountSettings {
+            defaults.set(Self.encode(accountSettings), forKey: accountSettingsKey)
         }
         isDirty = false
     }
