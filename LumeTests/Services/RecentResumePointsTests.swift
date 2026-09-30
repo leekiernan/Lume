@@ -38,4 +38,41 @@ struct RecentResumePointsTests {
         RecentResumePoints.record(120, for: live, at: then)
         #expect(RecentResumePoints.position(for: live, stored: 0, storedAt: nil) == 0)
     }
+
+    // MARK: - Where a title opens
+
+    /// Resuming a finished episode landed in its last seconds, where
+    /// auto-advance played the next one: Previous Episode bounced straight back.
+    @Test func `a finished title starts over`() {
+        let start = RecentResumePoints.start(for: episode, stored: 2580, storedAt: then, isWatched: true, duration: 2600)
+        #expect(start == 0)
+    }
+
+    @Test func `past the watched line counts as finished, watched or not`() {
+        let start = RecentResumePoints.start(for: episode, stored: 2400, storedAt: then, isWatched: false, duration: 2600)
+        #expect(start == 0)
+    }
+
+    @Test func `a title partway through resumes`() {
+        let start = RecentResumePoints.start(for: episode, stored: 1200, storedAt: then, isWatched: false, duration: 2600)
+        #expect(start == 1200)
+    }
+
+    /// A watched episode being rewatched this run resumes the rewatch.
+    @Test func `a rewatch in progress resumes`() {
+        RecentResumePoints.record(600, for: episode, at: then)
+        let start = RecentResumePoints.start(
+            for: episode, stored: 2580, storedAt: then.addingTimeInterval(-600), isWatched: true, duration: 2600
+        )
+        #expect(start == 600)
+    }
+
+    @Test func `without a duration, a watched title starts over unless a rewatch is underway`() {
+        #expect(RecentResumePoints.start(for: episode, stored: 2580, storedAt: then, isWatched: true, duration: nil) == 0)
+        RecentResumePoints.record(600, for: episode, at: then)
+        let rewatch = RecentResumePoints.start(
+            for: episode, stored: 2580, storedAt: then.addingTimeInterval(-600), isWatched: true, duration: nil
+        )
+        #expect(rewatch == 600)
+    }
 }

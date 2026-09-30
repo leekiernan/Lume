@@ -553,10 +553,8 @@ struct FullScreenPlayerView: View {
         let previous = pendingProgressWrite
         pendingProgressWrite = Task { @MainActor in
             await previous?.value
-            let completion = await writer.record(ref: ref, progress: now, duration: total)
-            if let completion {
-                syncWatchedServices(ref: completion.ref)
-                AppStoreReviewPrompt.shared.noteCompletedTitle()
+            if let change = await writer.record(ref: ref, progress: now, duration: total) {
+                applyWatchedChange(change)
             }
         }
     }

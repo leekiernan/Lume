@@ -8,6 +8,17 @@ import SwiftData
 nonisolated enum WatchCompletion {
     static let threshold = 0.9
 
+    /// How far into a rewatch the viewer must get before the title goes back
+    /// to in progress. Opening a watched episode by mistake and backing out
+    /// shouldn't take its tick away.
+    static let rewatchFloor: TimeInterval = 60
+
+    /// Whether a save of `progress` short of the watched line turns a watched
+    /// title back into one in progress: a rewatch under way.
+    static func reopensWatched(progress: TimeInterval, completed: Bool) -> Bool {
+        !completed && progress >= rewatchFloor
+    }
+
     static func isComplete(progress: TimeInterval, duration: TimeInterval) -> Bool {
         duration > 0 && progress / duration >= threshold
     }
@@ -35,24 +46,27 @@ actor WatchProgressWriter {
         return context
     }()
 
-    /// Surfaced when an item crosses the "watched" line on this write, so the
-    /// caller can fire a one-time Trakt sync back on the main actor.
-    struct Completion {
+    /// Surfaced when a write flips an item's watched state — it crossed the
+    /// watched line, or a rewatch put it back in progress — so the caller can
+    /// mirror it onto the screens' model (which lags this context's save) and,
+    /// for a completion, fire a one-time tracker sync, on the main actor.
+    struct WatchedChange {
         let ref: PlayableMedia.ContentRef
+        let isWatched: Bool
     }
 
     init(container: ModelContainer) {
         self.container = container
     }
 
-    /// Write `progress` for `ref` and return a `Completion` if the item just
-    /// became watched (`WatchCompletion.threshold`).
+    /// Write `progress` for `ref` and return a `WatchedChange` if the item just
+    /// became watched (`WatchCompletion.threshold`) or a rewatch reopened it.
     @discardableResult
     func record(
         ref: PlayableMedia.ContentRef,
         progress: TimeInterval,
         duration: TimeInterval
-    ) -> Completion? {
+    ) -> WatchedChange? {
         guard progress > 0 else { return nil }
 
         let completed = WatchCompletion.isComplete(progress: progress, duration: duration)
@@ -75,14 +89,14 @@ actor WatchProgressWriter {
     }
 
     /// Mark `ref` watched outright, whatever the clock reads, returning a
-    /// `Completion` if this is the write that finished it.
+    /// `WatchedChange` if this is the write that finished it.
     ///
     /// The viewer asking for the next episode is the one case that completes an
     /// item below the 90% line `record` measures: the transport button is live
     /// from the first frame, and without this the episode left behind would keep
     /// its place in Continue Watching and never reach Trakt.
     @discardableResult
-    func markWatched(ref: PlayableMedia.ContentRef, duration: TimeInterval) -> Completion? {
+    func markWatched(ref: PlayableMedia.ContentRef, duration: TimeInterval) -> WatchedChange? {
         do {
             switch ref {
             case let .movie(id):
@@ -102,20 +116,25 @@ actor WatchProgressWriter {
         progress: TimeInterval,
         completed: Bool,
         ref: PlayableMedia.ContentRef
-    ) throws -> Completion? {
+    ) throws -> WatchedChange? {
         guard let movie = PlayerContentLookup.movie(id, in: context) else { return nil }
 
         movie.watchProgress = progress
         movie.lastWatchedDate = Date()
 
-        var completion: Completion?
+        var change: WatchedChange?
         if completed, !movie.isWatched {
             movie.isWatched = true
-            completion = Completion(ref: ref)
+            change = WatchedChange(ref: ref, isWatched: true)
+        } else if movie.isWatched, WatchCompletion.reopensWatched(progress: progress, completed: completed) {
+            // A rewatch: in progress again until it crosses the line, which
+            // counts it — and scrobbles it — as a second play.
+            movie.isWatched = false
+            change = WatchedChange(ref: ref, isWatched: false)
         }
 
         try context.save()
-        return completion
+        return change
     }
 
     private func writeEpisode(
@@ -123,7 +142,7 @@ actor WatchProgressWriter {
         progress: TimeInterval,
         completed: Bool,
         ref: PlayableMedia.ContentRef
-    ) throws -> Completion? {
+    ) throws -> WatchedChange? {
         guard let episode = PlayerContentLookup.episode(id, in: context) else { return nil }
 
         episode.watchProgress = progress
@@ -132,14 +151,18 @@ actor WatchProgressWriter {
             series.lastWatchedDate = Date()
         }
 
-        var completion: Completion?
+        var change: WatchedChange?
         if completed, !episode.isWatched {
             episode.isWatched = true
-            completion = Completion(ref: ref)
+            change = WatchedChange(ref: ref, isWatched: true)
+        } else if episode.isWatched, WatchCompletion.reopensWatched(progress: progress, completed: completed) {
+            // A rewatch: in progress again until it crosses the line.
+            episode.isWatched = false
+            change = WatchedChange(ref: ref, isWatched: false)
         }
 
         try context.save()
-        return completion
+        return change
     }
 
     private func touchLive(id: String) throws {

@@ -195,10 +195,8 @@ extension FullScreenPlayerView {
             // Ordered, not raced: whatever was already in flight for this
             // stream settles first, so the completion is the last word.
             await previous?.value
-            let completion = await writer.markWatched(ref: ref, duration: total)
-            if let completion {
-                syncWatchedServices(ref: completion.ref)
-                AppStoreReviewPrompt.shared.noteCompletedTitle()
+            if let change = await writer.markWatched(ref: ref, duration: total) {
+                applyWatchedChange(change)
             }
         }
     }
