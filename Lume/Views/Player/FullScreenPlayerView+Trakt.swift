@@ -12,6 +12,21 @@ import Foundation
 import SwiftData
 
 extension FullScreenPlayerView {
+    /// Carries a watched-state flip from the progress writer's context to the
+    /// one the screens read, so a tick appears — or a rewatch shows in progress
+    /// — without reopening the view. Once per flip, at a playback boundary; a
+    /// completion also syncs the trackers and counts toward the review prompt.
+    func applyWatchedChange(_ change: WatchProgressWriter.WatchedChange) {
+        switch change.ref {
+        case let .movie(id): PlayerContentLookup.movie(id, in: modelContext)?.isWatched = change.isWatched
+        case let .episode(id): PlayerContentLookup.episode(id, in: modelContext)?.isWatched = change.isWatched
+        case .live: break
+        }
+        guard change.isWatched else { return }
+        syncWatchedServices(ref: change.ref)
+        AppStoreReviewPrompt.shared.noteCompletedTitle()
+    }
+
     /// The Trakt identity and catalog duration for a playable item. This is
     /// resolved only at transport boundaries, never on the playback tick path.
     private func traktPlaybackDetails(

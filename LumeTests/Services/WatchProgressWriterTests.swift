@@ -44,8 +44,10 @@ struct WatchProgressWriterTests {
         let container = try makeTestContainer()
         let movie = try movie(in: container, watched: true)
 
-        await WatchProgressWriter(container: container).record(ref: .movie(movie.id), progress: 900, duration: 6000)
+        let change = await WatchProgressWriter(container: container).record(ref: .movie(movie.id), progress: 900, duration: 6000)
 
+        // Reported, so the player can show it on the screens' model too.
+        #expect(change?.isWatched == false)
         let saved = try stored(movie.id, in: container)
         #expect(!saved.isWatched)
         #expect(saved.watchProgress == 900)
@@ -55,8 +57,9 @@ struct WatchProgressWriterTests {
         let container = try makeTestContainer()
         let movie = try movie(in: container, watched: true)
 
-        await WatchProgressWriter(container: container).record(ref: .movie(movie.id), progress: 20, duration: 6000)
+        let change = await WatchProgressWriter(container: container).record(ref: .movie(movie.id), progress: 20, duration: 6000)
 
+        #expect(change == nil)
         #expect(try stored(movie.id, in: container).isWatched)
     }
 
@@ -69,7 +72,7 @@ struct WatchProgressWriterTests {
         await writer.record(ref: .movie(movie.id), progress: 900, duration: 6000)
         let completion = await writer.record(ref: .movie(movie.id), progress: 5700, duration: 6000)
 
-        #expect(completion != nil)
+        #expect(completion?.isWatched == true)
         #expect(try stored(movie.id, in: container).isWatched)
     }
 }
