@@ -121,8 +121,17 @@ struct EPGGuideView: View {
 
     /// Zips each scoped stream with its pre-tiled cells.
     /// Runs only when the streams or loaded cells change — not on scroll.
+    ///
+    /// Recently Watched and Favorites label each channel with its category.
+    /// The names are looked up here, with the rows, rather than landing later:
+    /// the frozen channel column only redraws when its rows change shape, so a
+    /// late arrival would never show. Both collections are small, so this is
+    /// one short fetch.
     private func buildRows(for channels: [LiveStream]) -> [EPGChannelRow] {
-        EPGGridBuilder.rows(streams: channels, cellsByChannel: cellsByChannel, timeline: timeline)
+        let categoryNames = scope.showsCategoryLabels ? LiveCategoryNames.names(for: channels, in: modelContext) : [:]
+        return EPGGridBuilder.rows(
+            streams: channels, cellsByChannel: cellsByChannel, timeline: timeline, categoryNames: categoryNames
+        )
     }
 
     /// Loads the window's listings in two chunks: a few hours around "now"

@@ -147,10 +147,20 @@ struct EPGChannelCell: View {
     var body: some View {
         HStack(spacing: 10) {
             logo
-            Text(row.name)
-                .font(nameFont)
-                .lineLimit(2)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            VStack(alignment: .leading, spacing: 2) {
+                if let category = row.category {
+                    #if os(tvOS)
+                        LiveCategoryLabel(name: category, onLight: isFocused)
+                    #else
+                        LiveCategoryLabel(name: category)
+                    #endif
+                }
+                Text(row.name)
+                    .font(nameFont)
+                    // One line under a category label, so the pair fits the row.
+                    .lineLimit(row.category == nil ? 2 : 1)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
             // Flag channels with an archive so the viewer knows the row
             // offers replays — same idiom as the player's channel overlay.
             if row.catchupCapable {

@@ -168,6 +168,9 @@ struct EPGChannelRow: Identifiable {
     let id: String
     let stream: LiveStream
     let name: String
+    /// The channel's category, in the Recently Watched and Favorites guides;
+    /// nil inside a category.
+    let category: String?
     let logoURL: URL?
     /// Whether the channel can serve catch-up at all — a snapshot of
     /// `LiveStream.supportsCatchup`.
@@ -193,7 +196,8 @@ enum EPGGridBuilder {
     static func rows(
         streams: [LiveStream],
         cellsByChannel: [String: [EPGProgramCell]],
-        timeline: EPGTimeline
+        timeline: EPGTimeline,
+        categoryNames: [String: String] = [:]
     ) -> [EPGChannelRow] {
         // One shared full-window gap row for channels without guide data.
         let gapRow = cells(for: [], timeline: timeline)
@@ -203,6 +207,7 @@ enum EPGGridBuilder {
                 id: stream.id,
                 stream: stream,
                 name: stream.name,
+                category: stream.categoryId.flatMap { categoryNames[$0] },
                 logoURL: URL(string: stream.streamIcon ?? ""),
                 catchupCapable: stream.supportsCatchup,
                 archiveDays: stream.catchupArchiveDays,

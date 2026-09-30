@@ -43,6 +43,9 @@
         @State private var visibleCount = LiveChannelQuery.pageSize
         /// Drives the "Clear Recently Watched" confirmation alert.
         @State private var confirmingClear = false
+        /// Category names for Recently Watched and Favorites (`showsCategoryLabels`),
+        /// keyed by category id; empty inside a category.
+        @State private var categoryNames: [String: String] = [:]
 
         /// Non-zero asks the list to take focus on its first channel — see
         /// `LiveTVView.contentFocusToken`. `onDidClaimFocus` resets it.
@@ -111,6 +114,7 @@
                                 TVChannelRow(
                                     stream: stream,
                                     epg: epgByChannel[stream.epgChannelId ?? ""],
+                                    categoryName: stream.categoryId.flatMap { categoryNames[$0] },
                                     onRemove: scope == .recentlyWatched ? { removeFromRecentlyWatched(stream) } : nil,
                                     onStartMultiView: { onStartMultiView(stream) },
                                     onWatchFromStart: { onWatchFromStart(stream, $0) },
@@ -144,6 +148,10 @@
             }
             // Reload when the visible window or channel set changes, or a guide
             // import settles — EPG is resolved only for the channels on screen.
+            .task(id: Set(channels.compactMap(\.categoryId))) {
+                guard scope.showsCategoryLabels else { return }
+                categoryNames = LiveCategoryNames.names(for: channels, in: modelContext)
+            }
             .task(id: "\(channels.count)-\(visible.count)-\(epgSync.isSyncing)") {
                 await loadEPG(for: visible)
             }
@@ -203,6 +211,8 @@
         /// The channel's now/next programmes, resolved once by the parent list
         /// (see `ChannelEPGSnapshot`) rather than by a per-row `@Query`.
         var epg: ChannelEPG?
+        /// Shown above the name in lists that mix categories.
+        var categoryName: String?
         var onRemove: (() -> Void)?
         var onStartMultiView: (() -> Void)?
         var onWatchFromStart: ((EPGSlot) -> Void)?
@@ -225,6 +235,9 @@
                     logo
 
                     VStack(alignment: .leading, spacing: 6) {
+                        if let categoryName {
+                            LiveCategoryLabel(name: categoryName)
+                        }
                         Text(stream.name)
                             .font(.system(size: 30, weight: .semibold))
                             .foregroundStyle(primaryColor)

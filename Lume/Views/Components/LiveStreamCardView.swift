@@ -12,6 +12,9 @@ struct LiveStreamCardView: View {
     /// The channel's now/next programmes, resolved once by the parent list (see
     /// `ChannelEPGSnapshot`) rather than by a per-card `@Query`.
     var epg: ChannelEPG?
+    /// Shown above the name where channels from different categories share a
+    /// list: Recently Watched, Favorites and search.
+    var categoryName: String?
 
     private var currentEPG: EPGSlot? {
         epg?.current
@@ -51,6 +54,9 @@ struct LiveStreamCardView: View {
             .clipShape(RoundedRectangle(cornerRadius: 8))
 
             VStack(alignment: .leading, spacing: 4) {
+                if let categoryName {
+                    LiveCategoryLabel(name: categoryName)
+                }
                 Text(stream.name)
                     .font(.headline)
                     .lineLimit(1)
