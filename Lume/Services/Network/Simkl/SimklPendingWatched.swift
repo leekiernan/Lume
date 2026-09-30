@@ -61,13 +61,17 @@ enum SimklPendingWatchedStore {
     private nonisolated(unsafe) static var cached: SimklPendingWatched?
     private static let lock = NSLock()
 
+    /// The directory the parked state is kept in. The unit tests run inside
+    /// the installed app, so the test bundle points this at a temporary
+    /// directory before any test runs (`PendingStoreIsolation`).
+    nonisolated(unsafe) static var directory: URL? = FileManager.default.urls(
+        for: .applicationSupportDirectory, in: .userDomainMask
+    ).first
+
     /// Where the parked state lives. Excluded from backup — the next import
     /// rebuilds it from Simkl.
     static var fileURL: URL? {
-        guard let support = FileManager.default.urls(
-            for: .applicationSupportDirectory, in: .userDomainMask
-        ).first else { return nil }
-        return support.appendingPathComponent("SimklPendingWatched.json")
+        directory?.appendingPathComponent("SimklPendingWatched.json")
     }
 
     static func load() -> SimklPendingWatched {
