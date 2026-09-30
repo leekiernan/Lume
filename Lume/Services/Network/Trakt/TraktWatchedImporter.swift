@@ -152,15 +152,19 @@ enum TraktWatchedImporter {
             if series.episodes.isEmpty {
                 // Nothing to mark yet. Park it for `Series.insertEpisodes`, which
                 // runs when the detail screen fetches the episodes anyway.
-                pending[tmdb] = progress.parked
+                // Replaces the watched half only: pauses parked by an earlier
+                // playback import still wait for the same episodes.
+                pending[tmdb] = TraktPendingShow(episodes: progress.parked.episodes, paused: pending[tmdb]?.paused)
                 pendingChanged = true
                 queued += 1
             } else {
                 marked += markEpisodes(of: series, using: progress)
-                // Episodes are present, so anything parked by an earlier import
-                // has just been superseded.
-                if pending[tmdb] != nil {
-                    pending[tmdb] = nil
+                // Episodes are present, so watched state parked by an earlier
+                // import has just been superseded. Parked pauses stay: theirs is
+                // an episode the provider may not list yet.
+                if let parked = pending[tmdb], !parked.episodes.isEmpty {
+                    let rest = TraktPendingShow(paused: parked.paused)
+                    pending[tmdb] = rest.isEmpty ? nil : rest
                     pendingChanged = true
                 }
             }
@@ -216,12 +220,15 @@ enum TraktWatchedImporter {
     }
 
     /// Applies parked Trakt progress to episodes that have just been fetched from
-    /// the provider, and drops the entry once it has been used. Called from
+    /// the provider, and drops what has been used. Called from
     /// `Series.insertEpisodes`, the single place episodes ever materialize.
+    /// Watched state goes first, so a pause never reopens an episode finished
+    /// since; a pause whose episode is still missing stays parked
+    /// (`TraktPlaybackImporter.applyParked`).
     @discardableResult
-    static func applyPending(to series: Series) -> Int {
+    static func applyPending(to series: Series, now: Date = .now) -> Int {
         guard let tmdb = series.tmdbId, !series.episodes.isEmpty else { return 0 }
-        let pending = TraktPendingWatchedStore.load()
+        var pending = TraktPendingWatchedStore.load()
         guard let parked = pending[tmdb] else { return 0 }
 
         let progress = Progress(parked: parked)
@@ -229,7 +236,9 @@ enum TraktWatchedImporter {
         if let newest = progress.newest, newest > (series.lastWatchedDate ?? .distantPast) {
             series.lastWatchedDate = newest
         }
-        TraktPendingWatchedStore.clear(tmdbID: tmdb)
+        let waiting = TraktPlaybackImporter.applyParked(parked.paused ?? [:], to: series, now: now)
+        pending[tmdb] = waiting.isEmpty ? nil : TraktPendingShow(paused: waiting)
+        TraktPendingWatchedStore.save(pending)
         return marked
     }
 

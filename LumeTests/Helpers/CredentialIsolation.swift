@@ -100,6 +100,7 @@ nonisolated enum CredentialIsolation {
 @_cdecl("lumeTestsInstallCredentialIsolation")
 nonisolated func lumeTestsInstallCredentialIsolation() {
     CredentialIsolation.installProcessBackend()
+    PendingStoreIsolation.install()
 }
 
 /// Runs `body` against fresh, empty credential storage and defaults of its own,

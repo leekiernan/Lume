@@ -15,6 +15,13 @@ import Testing
 @MainActor
 @Suite(.serialized, .globalState)
 struct TraktPlaybackImporterTests {
+    init() {
+        // Unfetched episodes park their pause in this store; start each test
+        // from empty.
+        TraktPendingWatchedStore.clearAll()
+        TraktPendingWatchedStore.resetCacheForTesting()
+    }
+
     private let paused = "2026-09-20T20:00:00.000Z"
     private var pausedDate: Date {
         TraktWatchedImporter.parse(paused)!
@@ -135,5 +142,102 @@ struct TraktPlaybackImporterTests {
         let summary = TraktWatchedImporter.apply(movies: [watched], shows: [], in: context)
         #expect(summary.moviesMarked == 0)
         #expect(local.lastWatchedDate == pausedDate)
+    }
+
+    // MARK: - Episodes not fetched yet
+
+    private func unfetchedSeries(in context: ModelContext) -> Series {
+        let series = Series(id: "s1", seriesId: 1, name: "Show")
+        series.tmdbId = 9
+        context.insert(series)
+        return series
+    }
+
+    private func parsedEpisode(season: Int, number: Int) -> ParsedEpisode {
+        ParsedEpisode(
+            id: "s\(season)-\(number)", episodeId: "\(season)\(number)", title: "E\(number)",
+            containerExtension: "mkv", seasonNum: season, episodeNum: number,
+            added: nil, directSource: nil, durationSecs: 1200,
+            movieImage: nil, rating: nil, airDate: nil, plot: nil
+        )
+    }
+
+    private func episode(_ series: Series, season: Int, number: Int) -> Episode? {
+        series.episodes.first { $0.seasonNum == season && $0.episodeNum == number }
+    }
+
+    @Test func `a pause waits for its episode and lands when the episodes arrive`() throws {
+        let context = try makeContext()
+        let series = unfetchedSeries(in: context)
+        _ = TraktPlaybackImporter.apply([pausedEpisode(show: 9, season: 7, number: 12, progress: 40)], in: context)
+        #expect(TraktPendingWatchedStore.load()[9]?.paused?["7x12"] != nil)
+
+        // What the Continue Watching fetch or the detail screen does.
+        series.insertEpisodes([parsedEpisode(season: 7, number: 11), parsedEpisode(season: 7, number: 12)], into: context)
+
+        #expect(episode(series, season: 7, number: 12)?.watchProgress == 480)
+        #expect(episode(series, season: 7, number: 12)?.lastWatchedDate == pausedDate)
+        #expect(episode(series, season: 7, number: 11)?.watchProgress == 0)
+        #expect(TraktPendingWatchedStore.load()[9] == nil)
+    }
+
+    /// Finished since it was paused: the watched import parked the same episode,
+    /// and applies first.
+    @Test func `parked watched state wins over a parked pause`() throws {
+        let context = try makeContext()
+        let series = unfetchedSeries(in: context)
+        let watched = TraktWatchedShow(
+            show: TraktWatchedMedia(ids: TraktIDs(tmdb: 9, trakt: nil)),
+            seasons: [TraktWatchedSeason(
+                number: 1, episodes: [TraktWatchedEpisode(number: 2, lastWatchedAt: "2026-09-21T20:00:00.000Z")]
+            )]
+        )
+        _ = TraktWatchedImporter.apply(movies: [], shows: [watched], in: context)
+        _ = TraktPlaybackImporter.apply([pausedEpisode(show: 9, season: 1, number: 2)], in: context)
+
+        series.insertEpisodes([parsedEpisode(season: 1, number: 2)], into: context)
+
+        #expect(episode(series, season: 1, number: 2)?.isWatched == true)
+        #expect(episode(series, season: 1, number: 2)?.watchProgress == 1200)
+    }
+
+    /// A re-import re-parks the watched half of a show; its pauses survive.
+    @Test func `the watched import keeps parked pauses`() throws {
+        let context = try makeContext()
+        _ = unfetchedSeries(in: context)
+        _ = TraktPlaybackImporter.apply([pausedEpisode(show: 9, season: 3, number: 1)], in: context)
+        let watched = TraktWatchedShow(
+            show: TraktWatchedMedia(ids: TraktIDs(tmdb: 9, trakt: nil)),
+            seasons: [TraktWatchedSeason(number: 1, episodes: [TraktWatchedEpisode(number: 1, lastWatchedAt: paused)])]
+        )
+
+        _ = TraktWatchedImporter.apply(movies: [], shows: [watched], in: context)
+
+        #expect(TraktPendingWatchedStore.load()[9]?.paused?["3x1"] != nil)
+        #expect(TraktPendingWatchedStore.load()[9]?.episodes["1x1"] != nil)
+    }
+
+    /// The provider may be a season behind Trakt: the pause keeps waiting through
+    /// a fetch that doesn't list its episode, then expires.
+    @Test func `a pause for an episode the provider lacks waits, then expires`() throws {
+        let context = try makeContext()
+        let series = unfetchedSeries(in: context)
+        let parkedAt = Date(timeIntervalSince1970: 1_800_000_000)
+        _ = TraktPlaybackImporter.apply([pausedEpisode(show: 9, season: 8, number: 1)], in: context, now: parkedAt)
+        series.insertEpisodes([parsedEpisode(season: 7, number: 1)], into: context)
+
+        TraktWatchedImporter.applyPending(to: series, now: parkedAt.addingTimeInterval(29 * 86400))
+        #expect(TraktPendingWatchedStore.load()[9]?.paused?["8x1"] != nil)
+
+        TraktWatchedImporter.applyPending(to: series, now: parkedAt.addingTimeInterval(31 * 86400))
+        #expect(TraktPendingWatchedStore.load()[9] == nil)
+    }
+
+    /// Written before pauses were parked: no `paused` key.
+    @Test func `a pending file without pauses still decodes`() throws {
+        let json = Data(#"{"shows":{"9":{"episodes":{"1x2":1413046854}}}}"#.utf8)
+        let decoded = try JSONDecoder().decode(TraktPendingWatched.self, from: json)
+        #expect(decoded[9]?.episodes["1x2"] == 1_413_046_854)
+        #expect(decoded[9]?.paused == nil)
     }
 }
