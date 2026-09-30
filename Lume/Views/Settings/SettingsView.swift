@@ -92,14 +92,21 @@ struct SettingsView: View {
         /// The category whose content is shown in the right pane. Follows focus
         /// in the sidebar (Apple TV Settings behaviour) and persists once focus
         /// moves into the detail pane.
-        @State private var selectedCategory: SettingsCategory = .premium
-        @FocusState private var focusedCategory: SettingsCategory?
+        /// Not `private`: read by the SettingsView+TVTabBarEntry extension
+        /// (separate file), as are `focusedCategory` and the two below.
+        @State var selectedCategory: SettingsCategory = .premium
+        @FocusState var focusedCategory: SettingsCategory?
         /// The playlist drilled into within the Playlists category. When set, its
         /// settings replace the playlist list *in the detail pane* rather than
         /// pushing a full-screen view — a push hides the header tab bar and
         /// strands remote focus once the content scrolls. Not `private`: read by
         /// the SettingsView+Playlists extension (separate file).
         @State var selectedPlaylist: Playlist?
+        /// Whether focus is anywhere in the detail pane. Together with
+        /// `focusedCategory` it tells whether focus is outside Settings — up in
+        /// the tab bar — which is when `tvTabBarEntryCatcher` takes it.
+        @FocusState var detailFocused: Bool
+        @FocusState var tabBarEntryFocused: Bool
         /// The engine whose options are drilled into within the Player category,
         /// replacing the player detail in place (same reasoning as `selectedPlaylist`).
         /// Not `private`: read by the SettingsView+TVPlayer extension (separate file).
@@ -417,7 +424,9 @@ struct SettingsView: View {
                 HStack(spacing: 0) {
                     tvSidebar
                     tvDetail
+                        .focused($detailFocused)
                 }
+                .overlay(alignment: .top) { tvTabBarEntryCatcher }
                 .tvSettingsBackground()
                 .paywall(isPresented: $showPaywall, highlight: paywallHighlight)
                 .defaultFocus($focusedCategory, .premium)
