@@ -108,6 +108,7 @@
                 }
                 .padding(.horizontal, 80)
                 .padding(.bottom, 56)
+                .reportsControlsHeight()
             }
             .overlay {
                 if let skipBadge { SkipBadgeLabel(badge: skipBadge, buffering: isBuffering).id(skipBadge.forward) }

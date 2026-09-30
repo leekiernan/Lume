@@ -18,13 +18,15 @@ struct PlayerEpisodeOverlays: View {
     /// The shared playback clock. Only `EpisodeZoneReporter` reads it, so a
     /// tick re-renders that leaf and nothing here.
     let clock: PlaybackClock
-    /// Whether the engine's own controls overlay is currently showing.
+    /// Whether the engine's own controls overlay is currently showing. The
+    /// button stays up either way, lifted above the controls while they show.
     let controlsVisible: Bool
     /// Seeks the underlying player to an absolute time, in seconds.
     let onSeek: (TimeInterval) -> Void
     let onSelectMedia: (PlayableMedia) -> Void
 
     @State private var machine = EpisodeOverlayMachine()
+    @Environment(PlayerControlsLayout.self) private var controlsLayout: PlayerControlsLayout?
 
     @AppStorage(PlayerSettings.Playback.showSkipIntroButtonKey)
     private var showSkipIntroButton = PlayerSettings.Playback.showSkipIntroButtonDefault
@@ -41,28 +43,37 @@ struct PlayerEpisodeOverlays: View {
     #endif
 
     var body: some View {
-        ZStack {
-            EpisodeZoneReporter(clock: clock, segments: segments) { send(.zone($0)) }
-
-            if let offer = machine.visibleOffer {
+        Group {
+            if let offer = machine.activeOffer {
                 button(for: offer)
+                    .padding(.bottom, controlsVisible ? controlsLayout?.height ?? 0 : 0)
                     .transition(.opacity.combined(with: .move(edge: .trailing)))
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
-        .allowsHitTesting(machine.visibleOffer != nil)
-        .animation(.easeInOut(duration: 0.25), value: machine.visibleOffer)
+        // A background, not a sibling: a full-size sibling would size the stack
+        // to the screen and centre the button in it.
+        .background { EpisodeZoneReporter(clock: clock, segments: segments) { send(.zone($0)) } }
+        .allowsHitTesting(machine.activeOffer != nil)
+        .animation(.easeInOut(duration: 0.25), value: machine.activeOffer)
+        .animation(.easeInOut(duration: 0.2), value: controlsVisible)
         .onChange(of: config, initial: true) { _, config in send(.configure(config)) }
-        .onChange(of: controlsVisible, initial: true) { _, visible in send(.controls(visible: visible)) }
         .onChange(of: episodeKey) { _, _ in send(.reset) }
         #if os(tvOS)
-            .onChange(of: machine.visibleOffer) { _, offer in
-                // Pull focus onto the button the moment it appears, so one
-                // Select acts on it.
-                if offer != nil { Task { @MainActor in buttonFocused = true } }
+            .onChange(of: takesFocus) { _, takes in
+                // Pull focus onto the button when it appears on a bare picture,
+                // so one Select acts on it. Never while the controls show:
+                // focus belongs to them then.
+                if takes { Task { @MainActor in buttonFocused = true } }
             }
         #endif
     }
+
+    #if os(tvOS)
+        private var takesFocus: Bool {
+            machine.activeOffer != nil && !controlsVisible
+        }
+    #endif
 
     private var config: EpisodeOverlayMachine.Config {
         #if os(tvOS)
@@ -121,7 +132,9 @@ struct PlayerEpisodeOverlays: View {
                 PlayerSkipIntroOverlay(label: "Skip Intro") { send(.activate) }
             case .nextEpisode:
                 if let nextUpMedia {
-                    PlayerNextUpOverlay(nextMedia: nextUpMedia) { send(.activate) }
+                    PlayerNextUpOverlay(nextMedia: nextUpMedia, clock: clock, outro: segments?.outro) {
+                        send(.activate)
+                    }
                 }
             }
         }
@@ -144,7 +157,6 @@ private struct EpisodeZoneReporter: View {
 
     var body: some View {
         Color.clear
-            .allowsHitTesting(false)
             .onChange(of: zone, initial: true) { _, zone in onChange(zone) }
     }
 

@@ -54,19 +54,9 @@ struct EpisodeOverlayMachineTests {
     @Test func `entering the intro offers the skip, leaving withdraws it`() {
         var machine = machine()
         _ = machine.handle(.zone(.intro(intro)))
-        #expect(machine.visibleOffer == .skipIntro(intro))
+        #expect(machine.activeOffer == .skipIntro(intro))
         _ = machine.handle(.zone(.content))
-        #expect(machine.visibleOffer == nil)
-    }
-
-    @Test func `the controls hide the offer without withdrawing it`() {
-        var machine = machine()
-        _ = machine.handle(.zone(.intro(intro)))
-        _ = machine.handle(.controls(visible: true))
-        #expect(machine.visibleOffer == nil)
-        #expect(machine.state == .offering(.skipIntro(intro)))
-        _ = machine.handle(.controls(visible: false))
-        #expect(machine.visibleOffer == .skipIntro(intro))
+        #expect(machine.activeOffer == nil)
     }
 
     @Test func `skipping seeks to the end of the window`() {
@@ -77,21 +67,11 @@ struct EpisodeOverlayMachineTests {
         #expect(machine.state == .none)
     }
 
-    @Test func `a press behind the controls does nothing`() {
-        var machine = machine()
-        _ = machine.handle(.zone(.intro(intro)))
-        _ = machine.handle(.controls(visible: true))
-        let effects = machine.handle(.activate)
-        #expect(effects.isEmpty)
-    }
-
     @Test func `a dismissed skip stays down for its window`() {
         var machine = machine()
         _ = machine.handle(.zone(.intro(intro)))
         _ = machine.handle(.dismiss)
-        _ = machine.handle(.controls(visible: true))
-        _ = machine.handle(.controls(visible: false))
-        #expect(machine.visibleOffer == nil)
+        #expect(machine.activeOffer == nil)
         #expect(machine.state == .dismissed(.skipIntro(intro)))
     }
 
@@ -117,7 +97,7 @@ struct EpisodeOverlayMachineTests {
     @Test func `the outro offers the next episode`() {
         var machine = machine()
         _ = machine.handle(.zone(.outro))
-        #expect(machine.visibleOffer == .nextEpisode)
+        #expect(machine.activeOffer == .nextEpisode)
         let played = machine.handle(.activate)
         #expect(played == [.playNext])
     }
@@ -146,7 +126,7 @@ struct EpisodeOverlayMachineTests {
         _ = machine.handle(.reset)
         _ = machine.handle(.zone(.content))
         _ = machine.handle(.zone(.outro))
-        #expect(machine.visibleOffer == .nextEpisode)
+        #expect(machine.activeOffer == .nextEpisode)
     }
 
     // MARK: - Auto-advance
@@ -172,12 +152,5 @@ struct EpisodeOverlayMachineTests {
         machine = self.machine(noNext)
         let withNothingNext = machine.handle(.zone(.ending))
         #expect(withNothingNext.isEmpty)
-    }
-
-    @Test func `auto-advance ignores the controls`() {
-        var machine = machine()
-        _ = machine.handle(.controls(visible: true))
-        let advanced = machine.handle(.zone(.ending))
-        #expect(advanced == [.playNext])
     }
 }

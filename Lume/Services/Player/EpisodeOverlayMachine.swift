@@ -11,10 +11,11 @@
 //  changes nothing. `zone(at:…)` reduces it to where the playhead is relative
 //  to the episode's windows, and the host sends only a change of zone — a
 //  window boundary crossed by playback or jumped by a seek. Everything else is
-//  a discrete event: settings, the controls showing, a dismissal, a press.
+//  a discrete event: settings, a dismissal, a press, a new episode.
 //
-//  Pausing is deliberately not an event. It brings the controls up, which
-//  hides the button until they go again; the offer itself stands.
+//  Neither pausing nor the controls are events: an offer stands through both.
+//  Where the button sits while the controls show is layout, not state
+//  (`PlayerEpisodeOverlays` lifts it above them).
 //
 //  Pure: `PlayerEpisodeOverlays` feeds events in and performs the effects.
 //
@@ -65,7 +66,6 @@ struct EpisodeOverlayMachine: Equatable {
     enum Event: Equatable {
         case configure(Config)
         case zone(Zone)
-        case controls(visible: Bool)
         case dismiss
         case activate
         /// A different episode: dismissals and the auto-advance latch belong to
@@ -82,16 +82,15 @@ struct EpisodeOverlayMachine: Equatable {
     private(set) var state: State = .none
     private(set) var config = Config()
     private(set) var zone: Zone = .unknown
-    private(set) var controlsVisible = false
     /// Auto-advance fires once per episode, however many ending ticks follow.
     private var didAdvance = false
     /// A dismissed Next Episode stays dismissed for the rest of the episode;
     /// a dismissed skip only for its own window.
     private var nextDismissed = false
 
-    /// The offer on screen: offered, and the controls aren't covering it.
-    var visibleOffer: Offer? {
-        guard case let .offering(offer) = state, !controlsVisible else { return nil }
+    /// What is on offer right now, if anything.
+    var activeOffer: Offer? {
+        guard case let .offering(offer) = state else { return nil }
         return offer
     }
 
@@ -102,9 +101,6 @@ struct EpisodeOverlayMachine: Equatable {
             self.config = config
         case let .zone(zone):
             return enter(zone)
-        case let .controls(visible):
-            controlsVisible = visible
-            return []
         case .dismiss:
             guard case let .offering(offer) = state else { return [] }
             if offer == .nextEpisode { nextDismissed = true }
@@ -130,7 +126,7 @@ struct EpisodeOverlayMachine: Equatable {
     }
 
     private mutating func activate() -> [Effect] {
-        guard let offer = visibleOffer else { return [] }
+        guard let offer = activeOffer else { return [] }
         state = .none
         switch offer {
         case let .skipRecap(segment), let .skipIntro(segment): return [.seek(segment.end)]
