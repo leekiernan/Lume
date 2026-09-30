@@ -77,7 +77,7 @@ struct FullScreenPlayerView: View {
     /// `PlaybackClock`.
     @State var clock = PlaybackClock()
     /// Where the engine's controls sit, so the episode overlays clear them.
-    @State private var controlsLayout = PlayerControlsLayout()
+    @State private var controlsBridge = PlayerControlsBridge()
 
     /// What the session is doing, and what follows from it (Trakt, progress,
     /// engine fallback) — see `FullScreenPlayerView+Session`. `startCause` is
@@ -274,7 +274,7 @@ struct FullScreenPlayerView: View {
         #if os(iOS)
         .statusBarHidden(true)
         #endif
-        .environment(controlsLayout)
+        .environment(controlsBridge)
         .persistentSystemOverlays(.hidden)
         .preferredColorScheme(.dark)
         .macPlayerWindow(activeMedia: activeMedia, launchMedia: media) { switchMedia(to: $0) }

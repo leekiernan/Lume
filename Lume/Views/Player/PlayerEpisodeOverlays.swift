@@ -26,7 +26,7 @@ struct PlayerEpisodeOverlays: View {
     let onSelectMedia: (PlayableMedia) -> Void
 
     @State private var machine = EpisodeOverlayMachine()
-    @Environment(PlayerControlsLayout.self) private var controlsLayout: PlayerControlsLayout?
+    @Environment(PlayerControlsBridge.self) private var controlsBridge: PlayerControlsBridge?
 
     @AppStorage(PlayerSettings.Playback.showSkipIntroButtonKey)
     private var showSkipIntroButton = PlayerSettings.Playback.showSkipIntroButtonDefault
@@ -59,19 +59,38 @@ struct PlayerEpisodeOverlays: View {
         .animation(.easeInOut(duration: 0.2), value: controlsVisible)
         .onChange(of: config, initial: true) { _, config in send(.configure(config)) }
         .onChange(of: episodeKey) { _, _ in send(.reset) }
+        .onChange(of: machine.activeOffer != nil, initial: true) { _, showing in
+            controlsBridge?.episodeButtonShowing = showing
+        }
+        .onDisappear { controlsBridge?.episodeButtonShowing = false }
         #if os(tvOS)
-            .onChange(of: takesFocus) { _, takes in
-                // Pull focus onto the button when it appears on a bare picture,
-                // so one Select acts on it. Never while the controls show:
-                // focus belongs to them then.
+            .onChange(of: takesFocus, initial: true) { _, takes in
+                // Over a bare picture the button holds the remote: when it
+                // appears, and again whenever the controls go (the engine
+                // leaves its tap-catcher alone while it shows). With the
+                // controls up it is one more stop in their navigation.
                 if takes { Task { @MainActor in buttonFocused = true } }
             }
         #endif
     }
 
+    /// How the button answers the remote: focus, Menu dismisses it, and a
+    /// direction over a bare picture raises the controls.
+    private var remote: EpisodeButtonRemote {
+        #if os(tvOS)
+            EpisodeButtonRemote(
+                focus: $buttonFocused,
+                onDismiss: { send(.dismiss) },
+                onMove: { if !controlsVisible { controlsBridge?.requestControls() } }
+            )
+        #else
+            EpisodeButtonRemote()
+        #endif
+    }
+
     /// How far the button rises to clear the controls while they show.
     private var lift: CGFloat {
-        controlsVisible ? controlsLayout?.height ?? 0 : 0
+        controlsVisible ? controlsBridge?.height ?? 0 : 0
     }
 
     #if os(tvOS)
@@ -132,26 +151,18 @@ struct PlayerEpisodeOverlays: View {
 
     @ViewBuilder
     private func button(for offer: EpisodeOverlayMachine.Offer) -> some View {
-        Group {
-            switch offer {
-            case .skipRecap:
-                PlayerSkipIntroOverlay(label: "Skip Recap") { send(.activate) }
-            case .skipIntro:
-                PlayerSkipIntroOverlay(label: "Skip Intro") { send(.activate) }
-            case .nextEpisode:
-                if let nextUpMedia {
-                    PlayerNextUpOverlay(nextMedia: nextUpMedia, clock: clock, outro: segments?.outro) {
-                        send(.activate)
-                    }
+        switch offer {
+        case .skipRecap:
+            PlayerSkipIntroOverlay(label: "Skip Recap", remote: remote) { send(.activate) }
+        case .skipIntro:
+            PlayerSkipIntroOverlay(label: "Skip Intro", remote: remote) { send(.activate) }
+        case .nextEpisode:
+            if let nextUpMedia {
+                PlayerNextUpOverlay(nextMedia: nextUpMedia, clock: clock, outro: segments?.outro, remote: remote) {
+                    send(.activate)
                 }
             }
         }
-        #if os(tvOS)
-        .focused($buttonFocused)
-        // Menu on the button dismisses it (focus falls back to the player)
-        // rather than closing the player outright.
-        .onExitCommand { send(.dismiss) }
-        #endif
     }
 }
 
@@ -171,5 +182,30 @@ private struct EpisodeZoneReporter: View {
 
     private var zone: EpisodeOverlayMachine.Zone {
         EpisodeOverlayMachine.zone(current: clock.current, duration: clock.duration, segments: segments)
+    }
+}
+
+/// How an episode button answers the Siri Remote. Applied to the `Button`
+/// itself, not its container, so a non-focusable part beside it (the Next
+/// Episode countdown) stays out of focus. Empty off tvOS.
+struct EpisodeButtonRemote {
+    #if os(tvOS)
+        let focus: FocusState<Bool>.Binding
+        let onDismiss: () -> Void
+        let onMove: () -> Void
+    #endif
+}
+
+extension View {
+    @ViewBuilder
+    func episodeButtonRemote(_ remote: EpisodeButtonRemote) -> some View {
+        #if os(tvOS)
+            focused(remote.focus)
+                // Menu dismisses the button rather than closing the player.
+                .onExitCommand(perform: remote.onDismiss)
+                .tvRemoteMoveCommand { _ in remote.onMove() }
+        #else
+            self
+        #endif
     }
 }

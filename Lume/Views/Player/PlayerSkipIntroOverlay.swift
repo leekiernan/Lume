@@ -9,6 +9,7 @@ import SwiftUI
 /// outro window still sets when Next Episode arms (`OutroTrigger`).
 struct PlayerSkipIntroOverlay: View {
     let label: LocalizedStringKey
+    let remote: EpisodeButtonRemote
     let onSkip: () -> Void
 
     var body: some View {
@@ -27,6 +28,7 @@ struct PlayerSkipIntroOverlay: View {
                 .padding(.horizontal, 26)
             }
             .buttonStyle(TVGlassButtonStyle())
+            .episodeButtonRemote(remote)
             .frame(width: 460)
             .padding(.trailing, 80)
             .padding(.bottom, 60)
