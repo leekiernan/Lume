@@ -25,6 +25,7 @@ final nonisolated class CloudSyncShadow {
         fileprivate let parentalPIN: ParentalPINValues?
         fileprivate let categoryRestrictions: [String: CategoryRestrictionValues]
         fileprivate let traktCredentials: TraktCredentialValues?
+        fileprivate let simklCredentials: SimklCredentialValues?
         fileprivate let accountSettings: AccountSettingsValues?
         fileprivate let isDirty: Bool
     }
@@ -237,6 +238,7 @@ final nonisolated class CloudSyncShadow {
             parentalPIN: parentalPIN,
             categoryRestrictions: categoryRestrictions,
             traktCredentials: traktCredentials,
+            simklCredentials: simklCredentials,
             accountSettings: accountSettings,
             isDirty: isDirty
         )
@@ -249,6 +251,7 @@ final nonisolated class CloudSyncShadow {
         parentalPIN = checkpoint.parentalPIN
         categoryRestrictions = checkpoint.categoryRestrictions
         traktCredentials = checkpoint.traktCredentials
+        simklCredentials = checkpoint.simklCredentials
         accountSettings = checkpoint.accountSettings
         isDirty = checkpoint.isDirty
     }

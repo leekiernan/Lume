@@ -122,6 +122,27 @@ struct AccountSettingsSyncTests {
         #expect(try container.mainContext.fetch(FetchDescriptor<SyncedAccountSettings>()).count == 1)
     }
 
+    /// A failed pass restores its checkpoint: every baseline has to be in it,
+    /// or a failure leaves that one half-advanced. Simkl's once wasn't.
+    @Test func `a checkpoint restores the Simkl and settings baselines`() {
+        let shadow = shadow()
+        let simkl = SimklCredentialValues(tokens: SimklTokens(
+            accessToken: "a", refreshToken: "r", issuedAt: 1_700_000_000,
+            expiresIn: 604_800, scope: nil, tokenType: "Bearer"
+        ))
+        let settings = values([autoPlay: .bool(false)])
+        shadow.setSimklCredentialShadow(simkl)
+        shadow.setAccountSettingsShadow(settings)
+        let checkpoint = shadow.checkpoint()
+
+        shadow.setSimklCredentialShadow(nil)
+        shadow.setAccountSettingsShadow(values([:]))
+        shadow.restore(checkpoint)
+
+        #expect(shadow.simklCredentialShadow() == simkl)
+        #expect(shadow.accountSettingsShadow() == settings)
+    }
+
     private func shadow() -> CloudSyncShadow {
         CloudSyncShadow(defaults: scratchDefaults())
     }
