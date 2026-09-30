@@ -67,6 +67,9 @@ nonisolated struct IntroDBClient {
         guard let url = components?.url else { throw IntroDBError.invalidURL }
 
         var request = URLRequest(url: url)
+        // The answer only matters while its window is ahead of the playhead;
+        // a minute-long default wait could land after the intro it describes.
+        request.timeoutInterval = 10
         request.setValue("application/json", forHTTPHeaderField: "accept")
         if let key { request.setValue(key, forHTTPHeaderField: "X-API-Key") }
 

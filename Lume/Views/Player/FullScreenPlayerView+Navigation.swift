@@ -37,6 +37,59 @@ extension FullScreenPlayerView {
         )
     }
 
+    /// Resolves the neighbours and the IntroDB segments for `media` side by
+    /// side, handing each over as it lands. The segments describe what is on
+    /// screen now and don't depend on what comes next, so they never wait on
+    /// the neighbour walk. Stops handing over once the stream swaps (the
+    /// host's task is cancelled).
+    struct StreamExtrasRequest {
+        let media: PlayableMedia
+        let lookup: IntroSkipResolver.Lookup?
+        let sortRaw: String
+        let restriction: ContentRestriction
+        let container: ModelContainer
+    }
+
+    static func loadStreamExtras(
+        _ request: StreamExtrasRequest,
+        playhead: @escaping @MainActor () -> TimeInterval,
+        onNeighbours: (PlayerItemNavigation.Neighbours) -> Void,
+        onSegments: (IntroSegments?) -> Void
+    ) async {
+        let media = request.media, sortRaw = request.sortRaw
+        let restriction = request.restriction, container = request.container
+        enum Arrival {
+            case neighbours(PlayerItemNavigation.Neighbours)
+            case segments(IntroSegments?)
+        }
+        await withTaskGroup(of: Arrival.self) { group in
+            group.addTask {
+                await .neighbours(resolveNeighbours(for: media, sortRaw: sortRaw, restriction: restriction, container: container))
+            }
+            if let lookup = request.lookup {
+                group.addTask { await .segments(IntroSkipResolver.segments(for: lookup, playhead: playhead)) }
+            }
+            for await arrival in group {
+                guard !Task.isCancelled else { return }
+                switch arrival {
+                case let .neighbours(neighbours): onNeighbours(neighbours)
+                case let .segments(segments): onSegments(segments)
+                }
+            }
+        }
+    }
+
+    /// The IntroDB key for `media`, when anything would use its segments: the
+    /// skip button (intro/recap) or the Next Episode arm time (outro). Premium
+    /// only, and never for live streams.
+    func segmentLookup(for media: PlayableMedia) -> IntroSkipResolver.Lookup? {
+        guard PremiumManager.shared.isPremium,
+              PlayerSettings.Playback.showSkipIntroButton || PlayerSettings.Playback.showNextEpisodeButton,
+              !media.isLive
+        else { return nil }
+        return IntroSkipResolver.lookup(for: media.contentRef, in: modelContext)
+    }
+
     /// The episode auto-advance and `PlayerNextUpOverlay` queue after the active
     /// stream, taken from the neighbours already resolved rather than re-walking
     /// the series: `NextEpisodeResolver` faults the playing episode and its

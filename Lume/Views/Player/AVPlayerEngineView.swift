@@ -206,11 +206,13 @@ struct AVPlayerEngineView: View {
             coordinator.reload(media: newMedia)
             resetHideTimer()
         }
-        .onChange(of: isControlsVisible) { _, visible in
-            #if os(tvOS)
-                if !visible { Task { @MainActor in catcherFocused = true } }
-            #endif
-        }
+        #if os(tvOS)
+        // Focus returns to the tap-catcher as the controls vanish, unless an
+        // episode button is up to take it.
+        .episodeButtonFocusHandoff(
+            controlsVisible: isControlsVisible, catcherFocused: $catcherFocused, showControls: showControls
+        )
+        #endif
         .onMenuPress { handleMenuPress() }
         .onPlayPausePress { togglePlay() }
         #if os(macOS)

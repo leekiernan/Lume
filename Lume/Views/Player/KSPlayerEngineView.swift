@@ -355,13 +355,11 @@ struct KSPlayerEngineView: View {
                 // automatically). Reset local scrubbing / panel state.
                 resetForNewStream(newMedia)
             }
-            .onChange(of: isControlsVisible) { _, visible in
-                // Hand focus to the tap-catcher once the controls vanish so the
-                // remote can bring them back.
-                if !visible {
-                    Task { @MainActor in catcherFocused = true }
-                }
-            }
+            // Focus returns to the tap-catcher as the controls vanish, unless
+            // an episode button is up to take it.
+            .episodeButtonFocusHandoff(
+                controlsVisible: isControlsVisible, catcherFocused: $catcherFocused, showControls: showControls
+            )
             // Handle Menu/back at the player root so it reliably overrides the
             // cover's default dismiss-on-Menu.
             .onExitCommand { handleMenuPress() }

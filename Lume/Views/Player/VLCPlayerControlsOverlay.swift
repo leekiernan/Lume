@@ -203,6 +203,7 @@ import VLCKit
             }
             .padding(.horizontal, 20)
             .padding(.bottom, 28)
+            .reportsControlsHeight()
         }
 
         private var titleBlock: some View {

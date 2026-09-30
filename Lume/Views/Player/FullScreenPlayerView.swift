@@ -76,6 +76,8 @@ struct FullScreenPlayerView: View {
     /// scrubber/time labels rather than re-rendering the whole player tree. See
     /// `PlaybackClock`.
     @State var clock = PlaybackClock()
+    /// Where the engine's controls sit, so the episode overlays clear them.
+    @State private var controlsBridge = PlayerControlsBridge()
 
     /// What the session is doing, and what follows from it (Trakt, progress,
     /// engine fallback) — see `FullScreenPlayerView+Session`. `startCause` is
@@ -272,6 +274,7 @@ struct FullScreenPlayerView: View {
         #if os(iOS)
         .statusBarHidden(true)
         #endif
+        .environment(controlsBridge)
         .persistentSystemOverlays(.hidden)
         .preferredColorScheme(.dark)
         .macPlayerWindow(activeMedia: activeMedia, launchMedia: media) { switchMedia(to: $0) }
@@ -314,37 +317,29 @@ struct FullScreenPlayerView: View {
         }
         .task(id: activeMedia.playbackSessionID) {
             // Resolve the transport neighbours (previous/next episode or channel)
-            // and the IntroDB segments for the active stream. Runs on appear and
-            // whenever the stream swaps, so what the controls play always trails
-            // what is on screen. The segments feed two affordances — the
-            // skip-intro button (intro/recap windows) and the next-up arm time
-            // (outro window) — so the fetch needs one of them to be both enabled
-            // and reachable; the outro is dead weight with no next episode to
-            // advance to. The neighbours resolve off the main actor; until they
-            // land, the transport pair shows disabled in place rather than acting
-            // on the previous stream's answer. The IntroDB lookup key is one
-            // indexed fetch on the main context; the fetch itself is off it.
+            // and the IntroDB segments for the active stream, side by side, each
+            // applied as it lands (`loadStreamExtras`). Runs on appear and
+            // whenever the stream swaps. Until the neighbours land the transport
+            // pair shows disabled in place rather than acting on the previous
+            // stream's answer.
             let media = activeMedia
             itemNeighbours = PlayerItemNavigation.Neighbours(
                 axis: PlayerItemNavigation.axis(for: media), neighboursUnknown: true
             )
             nextUpMedia = nil
-            let resolved = await Self.resolveNeighbours(
-                for: media, sortRaw: liveContentSortRaw, restriction: contentRestriction,
-                container: modelContext.container
-            )
-            guard !Task.isCancelled else { return }
-            itemNeighbours = resolved
-            nextUpMedia = Self.queuedEpisode(from: itemNeighbours)
             skipSegments = nil
-            guard PremiumManager.shared.isPremium,
-                  PlayerSettings.Playback.showSkipIntroButton
-                  || (PlayerSettings.Playback.showNextEpisodeButton && nextUpMedia != nil),
-                  !activeMedia.isLive,
-                  let lookup = IntroSkipResolver.lookup(for: activeMedia.contentRef, in: modelContext)
-            else { return }
-            skipSegments = try? await IntroDBClient.shared.segments(
-                imdbId: lookup.imdbId, season: lookup.season, episode: lookup.episode
+            let request = StreamExtrasRequest(
+                media: media, lookup: segmentLookup(for: media), sortRaw: liveContentSortRaw,
+                restriction: contentRestriction, container: modelContext.container
+            )
+            await Self.loadStreamExtras(
+                request,
+                playhead: { [clock] in clock.current },
+                onNeighbours: { resolved in
+                    itemNeighbours = resolved
+                    nextUpMedia = Self.queuedEpisode(from: resolved)
+                },
+                onSegments: { skipSegments = $0 }
             )
         }
         .task {

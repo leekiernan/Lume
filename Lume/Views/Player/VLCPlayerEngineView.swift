@@ -226,13 +226,13 @@ struct VLCPlayerEngineView: View {
             coordinator.reload(media: newMedia)
             resetHideTimer()
         }
-        .onChange(of: isControlsVisible) { _, visible in
-            #if os(tvOS)
-                // Hand focus to the tap-catcher once the controls vanish so the
-                // remote can bring them back.
-                if !visible { Task { @MainActor in catcherFocused = true } }
-            #endif
-        }
+        #if os(tvOS)
+        // Focus returns to the tap-catcher as the controls vanish, unless an
+        // episode button is up to take it.
+        .episodeButtonFocusHandoff(
+            controlsVisible: isControlsVisible, catcherFocused: $catcherFocused, showControls: showControls
+        )
+        #endif
         // Handle the Menu/back button at the player root — the always-present
         // ancestor of both the tap-catcher and the controls overlay — so it
         // reliably overrides the fullScreenCover's default dismiss-on-Menu.
