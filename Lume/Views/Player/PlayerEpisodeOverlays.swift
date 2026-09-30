@@ -43,17 +43,17 @@ struct PlayerEpisodeOverlays: View {
     #endif
 
     var body: some View {
-        Group {
+        // Bottom-trailing: the reporter fills the stack, so a centred stack
+        // would put the button in the middle of the picture.
+        ZStack(alignment: .bottomTrailing) {
+            EpisodeZoneReporter(clock: clock, segments: segments) { send(.zone($0)) }
+
             if let offer = machine.activeOffer {
                 button(for: offer)
-                    .padding(.bottom, controlsVisible ? controlsLayout?.height ?? 0 : 0)
+                    .padding(.bottom, lift)
                     .transition(.opacity.combined(with: .move(edge: .trailing)))
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
-        // A background, not a sibling: a full-size sibling would size the stack
-        // to the screen and centre the button in it.
-        .background { EpisodeZoneReporter(clock: clock, segments: segments) { send(.zone($0)) } }
         .allowsHitTesting(machine.activeOffer != nil)
         .animation(.easeInOut(duration: 0.25), value: machine.activeOffer)
         .animation(.easeInOut(duration: 0.2), value: controlsVisible)
@@ -67,6 +67,11 @@ struct PlayerEpisodeOverlays: View {
                 if takes { Task { @MainActor in buttonFocused = true } }
             }
         #endif
+    }
+
+    /// How far the button rises to clear the controls while they show.
+    private var lift: CGFloat {
+        controlsVisible ? controlsLayout?.height ?? 0 : 0
     }
 
     #if os(tvOS)
@@ -110,7 +115,10 @@ struct PlayerEpisodeOverlays: View {
             // Read here, not in `body`, so the journal line records no clock
             // dependency.
             let playhead = Int(clock.current)
-            Logger.player.info("overlays: \(before.logName) → \(machine.state.logName) at \(playhead) s")
+            let controls = controlsVisible ? "controls up, lift \(Int(lift)) pt" : "controls hidden"
+            Logger.player.info(
+                "overlays: \(before.logName) → \(machine.state.logName) at \(playhead) s (\(controls, privacy: .public))"
+            )
         }
         for effect in effects {
             switch effect {
@@ -157,6 +165,7 @@ private struct EpisodeZoneReporter: View {
 
     var body: some View {
         Color.clear
+            .allowsHitTesting(false)
             .onChange(of: zone, initial: true) { _, zone in onChange(zone) }
     }
 
