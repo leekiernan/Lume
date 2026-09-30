@@ -38,12 +38,14 @@ nonisolated enum AccountSettingsSync {
     }
 
     /// The synced settings: the player and search *choices*. Engine tuning
-    /// (buffers, hardware decode, deinterlacing), the external player and the
-    /// Siri Remote's swipe setting stay on each device on purpose.
+    /// (buffers, hardware decode, deinterlacing) and the external player stay
+    /// on each device on purpose. Remote swipes sync: a device without a Siri
+    /// Remote simply never reads it.
     static let keys: [(key: String, kind: Kind)] = [
         (PlayerSettings.engineKey, .string),
         (PlayerSettings.enginePriorityKey, .string),
         (PlayerSettings.liveSurfModeKey, .string),
+        (PlayerSettings.tvRemoteSwipesKey, .bool),
         (PlayerSettings.Playback.autoPlayNextKey, .bool),
         (PlayerSettings.Playback.showNextEpisodeButtonKey, .bool),
         (PlayerSettings.Playback.showSkipIntroButtonKey, .bool),
