@@ -2,7 +2,8 @@
 //  SkipAccelerationTests.swift
 //  LumeTests
 //
-//  Quick repeated skip presses take bigger steps, and the run adds up.
+//  Quick repeated skip presses go further: the run lands on the ladder's
+//  rungs, and each press moves only the difference.
 //
 
 import Foundation
@@ -24,20 +25,22 @@ struct SkipAccelerationTests {
         }
     }
 
-    @Test func `quick presses climb 10, 30, 60, 180, then 300 a press`() {
+    /// The nth press lands on the nth rung — not on the sum of the rungs —
+    /// and past the top each press adds the top step.
+    @Test func `quick presses land on 10 s, 30 s, 1, 3, 5, 10, 15 min`() {
         var acceleration = SkipAcceleration()
-        let steps = run(&acceleration, presses: 7).map(\.step)
-        #expect(steps == [10, 30, 60, 180, 300, 300, 300])
+        let presses = run(&acceleration, presses: 7, from: 600)
+        #expect(presses.map(\.total) == [10, 30, 60, 180, 300, 600, 900])
+        #expect(presses.last?.origin == 600)
+        #expect(presses.last?.target == 1500)
     }
 
-    /// The indicator shows this, not the last step: five presses are nearly
-    /// ten minutes, where the last step alone reads five.
-    @Test func `the run keeps a running total from where it started`() {
+    /// A relative seek per press has to arrive at the same place.
+    @Test func `each press moves only the difference`() {
         var acceleration = SkipAcceleration()
-        let presses = run(&acceleration, presses: 5, from: 600)
-        #expect(presses.map(\.total) == [10, 40, 100, 280, 580])
-        #expect(presses.last?.origin == 600)
-        #expect(presses.last?.target == 1180)
+        let steps = run(&acceleration, presses: 7).map(\.step)
+        #expect(steps == [10, 20, 30, 120, 120, 300, 300])
+        #expect(steps.reduce(0, +) == 900)
     }
 
     @Test func `the run stops at either end of the content`() {
@@ -55,7 +58,7 @@ struct SkipAccelerationTests {
 
     @Test func `an unknown duration leaves the run open-ended`() {
         var acceleration = SkipAcceleration()
-        #expect(run(&acceleration, presses: 2, from: 0, duration: 0).last?.target == 40)
+        #expect(run(&acceleration, presses: 2, from: 0, duration: 0).last?.target == 30)
     }
 
     @Test func `a pause starts a new run at the base step`() {
@@ -78,8 +81,8 @@ struct SkipAccelerationTests {
                 at: start.addingTimeInterval(0.6 + Double(press) * 0.3)
             )
         }
-        #expect(back.map(\.step) == [-10, -30])
-        #expect(back.last?.total == -40)
+        #expect(back.map(\.step) == [-10, -20])
+        #expect(back.last?.total == -30)
         #expect(back.last?.origin == 640)
     }
 
@@ -90,7 +93,7 @@ struct SkipAccelerationTests {
         #expect(SkipAcceleration.ladder(base: 60) == [60, 180, 300])
         #expect(SkipAcceleration.ladder(base: 15) == [15, 30, 60, 180, 300])
         var acceleration = SkipAcceleration()
-        #expect(run(&acceleration, presses: 4, base: 60).map(\.step) == [60, 180, 300, 300])
+        #expect(run(&acceleration, presses: 4, base: 60).map(\.total) == [60, 180, 300, 600])
     }
 
     @Test func `the badge reads the distance with its direction`() {
