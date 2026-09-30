@@ -2,17 +2,17 @@
 //  SkipAcceleration.swift
 //  Lume
 //
-//  Repeated presses of a skip button in one direction take bigger steps, so
-//  crossing an episode doesn't take a hundred presses of 10 s. The steps are
-//  the same everywhere — 10 s, 30 s, 1 min, 3 min, then 5 min a press — from
-//  the content's own finest step up: catch-up archives are split by the
-//  minute, so they start at 1 min and climb 1, 3, 5. A pause or a change of
-//  direction starts again at the finest step.
+//  Repeated presses of a skip button in one direction go further, so crossing
+//  an episode doesn't take a hundred presses of 10 s. The run's distance reads
+//  off one ladder, the same everywhere: 10 s, 30 s, 1 min, 3 min, 5 min, then
+//  5 min more a press — the nth press lands on the nth rung, not the sum of
+//  them all. Each ladder starts at the content's own finest step: catch-up
+//  archives are split by the minute, so they go 1, 3, 5, 10 min. A pause or a
+//  change of direction starts again at the first rung.
 //
 //  A small pure state machine: the overlay holds one and asks it for each
-//  press. It also keeps where the run started and its running total, so the
-//  indicator shows how far the whole run has gone — the last press's step
-//  alone reads "+5 min" after a run of nearly 10.
+//  press. It keeps where the run started and how far it has gone, so the
+//  indicator shows the whole run and each press moves only the difference.
 //
 
 import Foundation
@@ -24,8 +24,10 @@ nonisolated struct SkipAcceleration: Equatable {
     /// How soon the next press must come to keep climbing.
     static let window: TimeInterval = 1
 
-    /// One press: its own step, and the run it belongs to so far.
+    /// One press: how far it moves, and the run it belongs to so far.
     struct Press: Equatable {
+        /// This press's own move, signed: the gap between the run's distance
+        /// before it and after — what a relative seek applies.
         let step: TimeInterval
         /// Where the run started and where it now lands, clamped to the
         /// content — so near either end the total is the real distance.
@@ -38,7 +40,8 @@ nonisolated struct SkipAcceleration: Equatable {
     }
 
     private var forward: Bool?
-    private var level = 0
+    /// Presses so far in this run.
+    private var count = 0
     private var lastPress: Date?
     private var origin: TimeInterval = 0
     private var runTotal: TimeInterval = 0
@@ -47,7 +50,15 @@ nonisolated struct SkipAcceleration: Equatable {
         [base] + steps.filter { $0 > base }
     }
 
-    /// A press from `position`: its signed step, advancing the ladder when it
+    /// How far a run of `presses` goes on `ladder`: its rung, and past the
+    /// top a further top step per press — 10 s, 30 s, 1, 3, 5, 10, 15 min.
+    static func distance(after presses: Int, on ladder: [TimeInterval]) -> TimeInterval {
+        guard presses > 0, let top = ladder.last else { return 0 }
+        guard presses > ladder.count else { return ladder[presses - 1] }
+        return top * TimeInterval(presses - ladder.count + 1)
+    }
+
+    /// A press from `position`: its signed move, climbing the ladder when it
     /// continues a quick run in the same direction, and where the run lands
     /// within `0 ... duration` (open-ended while the duration is unknown).
     mutating func press(
@@ -57,15 +68,18 @@ nonisolated struct SkipAcceleration: Equatable {
         let ladder = Self.ladder(base: base)
         let continuing = self.forward == forward
             && lastPress.map { now.timeIntervalSince($0) <= Self.window } == true
-        level = continuing ? min(level + 1, ladder.count - 1) : 0
         self.forward = forward
         lastPress = now
-        let step = forward ? ladder[level] : -ladder[level]
         if !continuing {
+            count = 0
             origin = position.isFinite ? position : 0
             runTotal = 0
         }
-        runTotal += step
+        count += 1
+        let distance = Self.distance(after: count, on: ladder)
+        let newTotal = forward ? distance : -distance
+        let step = newTotal - runTotal
+        runTotal = newTotal
         let end = duration > 0 ? duration : .infinity
         return Press(step: step, origin: origin, target: min(max(origin + runTotal, 0), end))
     }
