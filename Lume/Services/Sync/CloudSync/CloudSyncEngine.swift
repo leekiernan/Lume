@@ -38,6 +38,9 @@ nonisolated struct CloudSyncReconcileResult: Equatable {
     var simklPushed = 0
     var simklPulled = 0
     var simklPending = 0
+    /// Account-wide settings (player and search choices) moved this pass.
+    var settingsPushed = 0
+    var settingsPulled = 0
     /// Credentials whose shared cloud copy this pass deleted. Their
     /// `CredentialLinkState` advances only once the pass has saved, so a failed
     /// save leaves an explicit disconnect pending for the retry.
@@ -118,6 +121,9 @@ actor CloudSyncEngine {
     let clears: ContentClearLedger
     /// The parent's restriction lifts on this device.
     let lifts: ContentClearLedger
+    /// Where the account-wide settings live on this device
+    /// (`AccountSettingsSync`): the app's own defaults, a scratch suite in tests.
+    let settingsDefaults: UserDefaults
 
     /// The profile whose state the catalog currently projects. Read from
     /// `ActiveProfileStore` at the start of each reconcile, so content state is
@@ -131,13 +137,15 @@ actor CloudSyncEngine {
         cloudContainer: ModelContainer,
         shadow: CloudSyncShadow = CloudSyncShadow(),
         clears: ContentClearLedger = .shared,
-        lifts: ContentClearLedger = .restrictionLifts
+        lifts: ContentClearLedger = .restrictionLifts,
+        settingsDefaults: UserDefaults = .standard
     ) {
         self.catalogContainer = catalogContainer
         self.cloudContainer = cloudContainer
         self.shadow = shadow
         self.clears = clears
         self.lifts = lifts
+        self.settingsDefaults = settingsDefaults
     }
 
     private static func makeContext(_ container: ModelContainer) -> ModelContext {
@@ -157,6 +165,7 @@ actor CloudSyncEngine {
             shadow: CloudSyncShadow = CloudSyncShadow(),
             clears: ContentClearLedger = ContentClearLedger(defaults: UserDefaults(suiteName: "CloudSyncEngineTests.\(UUID())")!),
             lifts: ContentClearLedger = ContentClearLedger(defaults: UserDefaults(suiteName: "CloudSyncEngineTests.\(UUID())")!),
+            settingsDefaults: UserDefaults = UserDefaults(suiteName: "CloudSyncEngineTests.\(UUID())")!,
             saveFailureInjector: SaveFailureInjector? = nil
         ) {
             catalogContainer = container
@@ -164,6 +173,7 @@ actor CloudSyncEngine {
             self.shadow = shadow
             self.clears = clears
             self.lifts = lifts
+            self.settingsDefaults = settingsDefaults
             self.saveFailureInjector = saveFailureInjector
         }
     #endif
@@ -210,6 +220,8 @@ actor CloudSyncEngine {
             // are used only to transport the latest rotating token pair.
             try reconcileTraktCredentials(into: &result)
             try reconcileSimklCredentials(into: &result)
+            // Player and search choices: account-wide, like the credentials.
+            try reconcileAccountSettings(into: &result)
             // Manual EPG sources sync as their own lightweight mirror; each
             // playlist's derived (linked) source is regenerated locally so it
             // appears on every device that has the playlist.
@@ -230,7 +242,7 @@ actor CloudSyncEngine {
             }
             clears.remove(result.contentClearsSeen)
             lifts.remove(result.restrictionLiftsSeen)
-            Logger.sync.info("Reconcile pl +\(result.playlistsPushed) new \(result.playlistsCreatedLocally) ct +\(result.contentPushed)/\(result.contentPulled) pend \(result.contentPending) epg +\(result.epgSourcesPushed)/\(result.epgSourcesPulled) par +\(result.parentalPushed)/\(result.parentalPulled) pend \(result.parentalPending) trakt +\(result.traktPushed)/\(result.traktPulled) pend \(result.traktPending) simkl +\(result.simklPushed)/\(result.simklPulled) pend \(result.simklPending) sports \(result.sportsFollowsKept)-\(result.sportsFollowsDeduped)") // swiftlint:disable:this line_length
+            Logger.sync.info("Reconcile pl +\(result.playlistsPushed) new \(result.playlistsCreatedLocally) ct +\(result.contentPushed)/\(result.contentPulled) pend \(result.contentPending) epg +\(result.epgSourcesPushed)/\(result.epgSourcesPulled) par +\(result.parentalPushed)/\(result.parentalPulled) pend \(result.parentalPending) trakt +\(result.traktPushed)/\(result.traktPulled) pend \(result.traktPending) simkl +\(result.simklPushed)/\(result.simklPulled) pend \(result.simklPending) settings +\(result.settingsPushed)/\(result.settingsPulled) sports \(result.sportsFollowsKept)-\(result.sportsFollowsDeduped)") // swiftlint:disable:this line_length
         } catch {
             catalogContext.rollback()
             if cloudContext !== catalogContext {
