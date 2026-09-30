@@ -170,8 +170,9 @@ nonisolated extension PlayableMedia {
                 subtitle: movie.releaseDate,
                 posterURL: URL(string: movie.streamIcon ?? ""),
                 kind: .vod,
-                startTime: RecentResumePoints.position(
-                    for: .movie(movie.id), stored: movie.watchProgress, storedAt: movie.lastWatchedDate
+                startTime: RecentResumePoints.start(
+                    for: .movie(movie.id), stored: movie.watchProgress, storedAt: movie.lastWatchedDate,
+                    isWatched: movie.isWatched, duration: movie.durationSecs
                 ),
                 contentRef: .movie(movie.id)
             )
@@ -185,8 +186,9 @@ nonisolated extension PlayableMedia {
             subtitle: movie.releaseDate,
             posterURL: URL(string: movie.streamIcon ?? ""),
             kind: .vod,
-            startTime: RecentResumePoints.position(
-                for: .movie(movie.id), stored: movie.watchProgress, storedAt: movie.lastWatchedDate
+            startTime: RecentResumePoints.start(
+                for: .movie(movie.id), stored: movie.watchProgress, storedAt: movie.lastWatchedDate,
+                isWatched: movie.isWatched, duration: movie.durationSecs
             ),
             contentRef: .movie(movie.id),
             httpHeaders: authHeaders(for: playlist)
@@ -223,8 +225,9 @@ nonisolated extension PlayableMedia {
                 subtitle: "S\(episode.seasonNum) E\(episode.episodeNum) · \(episode.title)",
                 posterURL: URL(string: episode.movieImage ?? ""),
                 kind: .vod,
-                startTime: RecentResumePoints.position(
-                    for: .episode(episode.id), stored: episode.watchProgress, storedAt: episode.lastWatchedDate
+                startTime: RecentResumePoints.start(
+                    for: .episode(episode.id), stored: episode.watchProgress, storedAt: episode.lastWatchedDate,
+                    isWatched: episode.isWatched, duration: episode.durationSecs
                 ),
                 contentRef: .episode(episode.id)
             )
@@ -250,8 +253,9 @@ nonisolated extension PlayableMedia {
             subtitle: subtitle,
             posterURL: URL(string: episode.movieImage ?? ""),
             kind: .vod,
-            startTime: RecentResumePoints.position(
-                for: .episode(episode.id), stored: episode.watchProgress, storedAt: episode.lastWatchedDate
+            startTime: RecentResumePoints.start(
+                for: .episode(episode.id), stored: episode.watchProgress, storedAt: episode.lastWatchedDate,
+                isWatched: episode.isWatched, duration: episode.durationSecs
             ),
             contentRef: .episode(episode.id),
             httpHeaders: authHeaders(for: playlist)

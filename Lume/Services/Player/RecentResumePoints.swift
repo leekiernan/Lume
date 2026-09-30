@@ -42,4 +42,27 @@ nonisolated enum RecentResumePoints {
         if let storedAt, storedAt > recent.savedAt { return stored }
         return recent.position
     }
+
+    /// Where `ref` should open: its resume point (`position(for:…)`), or the
+    /// start when that point is the end of a finished title. Resuming there
+    /// lands in the last seconds, where auto-advance plays the next episode
+    /// straight away — pressing Previous Episode bounced back to the one just
+    /// left, and a watched movie ended as it opened.
+    ///
+    /// With a known duration, finished means past the watched line
+    /// (`WatchCompletion`). Without one, a watched title starts over unless a
+    /// newer save this run says the viewer is partway through a rewatch.
+    static func start(
+        for ref: PlayableMedia.ContentRef,
+        stored: TimeInterval,
+        storedAt: Date?,
+        isWatched: Bool,
+        duration: Int?
+    ) -> TimeInterval {
+        let resume = position(for: ref, stored: stored, storedAt: storedAt)
+        if let duration, duration > 0 {
+            return WatchCompletion.isComplete(progress: resume, duration: TimeInterval(duration)) ? 0 : resume
+        }
+        return isWatched && resume == stored ? 0 : resume
+    }
 }
