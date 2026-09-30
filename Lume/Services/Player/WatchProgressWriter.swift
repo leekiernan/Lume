@@ -8,6 +8,17 @@ import SwiftData
 nonisolated enum WatchCompletion {
     static let threshold = 0.9
 
+    /// How far into a rewatch the viewer must get before the title goes back
+    /// to in progress. Opening a watched episode by mistake and backing out
+    /// shouldn't take its tick away.
+    static let rewatchFloor: TimeInterval = 60
+
+    /// Whether a save of `progress` short of the watched line turns a watched
+    /// title back into one in progress: a rewatch under way.
+    static func reopensWatched(progress: TimeInterval, completed: Bool) -> Bool {
+        !completed && progress >= rewatchFloor
+    }
+
     static func isComplete(progress: TimeInterval, duration: TimeInterval) -> Bool {
         duration > 0 && progress / duration >= threshold
     }
@@ -112,6 +123,10 @@ actor WatchProgressWriter {
         if completed, !movie.isWatched {
             movie.isWatched = true
             completion = Completion(ref: ref)
+        } else if movie.isWatched, WatchCompletion.reopensWatched(progress: progress, completed: completed) {
+            // A rewatch: in progress again until it crosses the line, which
+            // counts it — and scrobbles it — as a second play.
+            movie.isWatched = false
         }
 
         try context.save()
@@ -136,6 +151,9 @@ actor WatchProgressWriter {
         if completed, !episode.isWatched {
             episode.isWatched = true
             completion = Completion(ref: ref)
+        } else if episode.isWatched, WatchCompletion.reopensWatched(progress: progress, completed: completed) {
+            // A rewatch: in progress again until it crosses the line.
+            episode.isWatched = false
         }
 
         try context.save()
