@@ -498,7 +498,7 @@ struct SearchKey: Equatable {
 enum SearchSettings {
     /// When enabled, search spans every configured playlist. Off by default, so
     /// results stay scoped to the active playlist unless the user opts in.
-    static let searchAllPlaylistsKey = "search.allPlaylists"
+    nonisolated static let searchAllPlaylistsKey = "search.allPlaylists"
     static let searchAllPlaylistsDefault = false
 }
 
