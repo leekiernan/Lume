@@ -89,62 +89,47 @@ struct SearchView: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
-                // Up before the first letter too, so a type can be chosen
-                // before searching — and the first letter doesn't restructure
-                // the screen under the keyboard.
-                if !filters.isEmpty {
-                    Picker("Filter", selection: $selectedFilter) {
-                        ForEach(filters) { filter in
-                            Text(filter.label).tag(filter)
-                        }
+            content
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .searchField(text: $searchText, prompt: SearchPrompt.field(for: searchableAreas))
+                .navigationDestination(for: SearchSection.self) { section in
+                    sectionDestination(section)
+                }
+                .onChange(of: filters) { _, filters in
+                    // A filter for an area just switched off falls back to All.
+                    if !filters.contains(selectedFilter) { selectedFilter = .all }
+                }
+                .navigationDestination(for: Movie.self) { movie in
+                    MovieDetailView(movie: movie, animationNamespace: animationNamespace)
+                    #if os(iOS)
+                        .navigationTransition(.zoom(sourceID: movie.id, in: animationNamespace))
+                    #endif
+                }
+                .navigationDestination(for: Series.self) { series in
+                    SeriesDetailView(series: series, animationNamespace: animationNamespace)
+                    #if os(iOS)
+                        .navigationTransition(.zoom(sourceID: series.id, in: animationNamespace))
+                    #endif
+                }
+                .task(id: searchText) {
+                    // Debounce raw keystrokes. .task(id:) cancels the in-flight task
+                    // (including this sleep) the instant searchText changes, so the
+                    // fetch below only fires once typing actually pauses.
+                    let trimmed = trimmedQuery
+                    guard !trimmed.isEmpty else {
+                        debouncedSearchText = ""
+                        return
                     }
-                    .pickerStyle(.segmented)
-                    .padding(.horizontal)
-                    .padding(.vertical, 8)
+                    try? await Task.sleep(for: Self.debounce)
+                    guard !Task.isCancelled else { return }
+                    debouncedSearchText = trimmed
                 }
-                content
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
-            .searchField(text: $searchText, prompt: SearchPrompt.field(for: searchableAreas))
-            .navigationDestination(for: SearchSection.self) { section in
-                sectionDestination(section)
-            }
-            .onChange(of: filters) { _, filters in
-                // A filter for an area just switched off falls back to All.
-                if !filters.contains(selectedFilter) { selectedFilter = .all }
-            }
-            .navigationDestination(for: Movie.self) { movie in
-                MovieDetailView(movie: movie, animationNamespace: animationNamespace)
-                #if os(iOS)
-                    .navigationTransition(.zoom(sourceID: movie.id, in: animationNamespace))
-                #endif
-            }
-            .navigationDestination(for: Series.self) { series in
-                SeriesDetailView(series: series, animationNamespace: animationNamespace)
-                #if os(iOS)
-                    .navigationTransition(.zoom(sourceID: series.id, in: animationNamespace))
-                #endif
-            }
-            .task(id: searchText) {
-                // Debounce raw keystrokes. .task(id:) cancels the in-flight task
-                // (including this sleep) the instant searchText changes, so the
-                // fetch below only fires once typing actually pauses.
-                let trimmed = trimmedQuery
-                guard !trimmed.isEmpty else {
-                    debouncedSearchText = ""
-                    return
+                .task(id: currentSearchKey) {
+                    // Re-run whenever the settled query, filter, provider or
+                    // viewer visibility changes. Filter and scope changes are
+                    // instant; only text input is debounced.
+                    await updateResults()
                 }
-                try? await Task.sleep(for: Self.debounce)
-                guard !Task.isCancelled else { return }
-                debouncedSearchText = trimmed
-            }
-            .task(id: currentSearchKey) {
-                // Re-run whenever the settled query, filter, provider or
-                // viewer visibility changes. Filter and scope changes are
-                // instant; only text input is debounced.
-                await updateResults()
-            }
         }
         #if os(iOS) || os(tvOS)
         .fullScreenCover(item: $playingMedia) { media in
@@ -153,33 +138,63 @@ struct SearchView: View {
         #endif
     }
 
+    /// The filter bar is up before the first letter too, so a type can be
+    /// chosen before searching. With results it scrolls with them; otherwise
+    /// it sits above the centred message.
     @ViewBuilder
     private var content: some View {
         if trimmedQuery.isEmpty {
-            ContentUnavailableView(
-                "Search",
-                systemImage: "magnifyingglass",
-                description: Text(SearchPrompt.description(for: searchableAreas))
-            )
+            withFilterBar {
+                ContentUnavailableView(
+                    "Search",
+                    systemImage: "magnifyingglass",
+                    description: Text(SearchPrompt.description(for: searchableAreas))
+                )
+            }
         } else if isSearchPending {
             // Only once a query has actually run does "No Results" show, so it
             // doesn't flash while the input is debouncing.
-            ProgressView()
+            withFilterBar { ProgressView() }
         } else if results.isEmpty {
-            ContentUnavailableView.search
+            withFilterBar { ContentUnavailableView.search }
         } else {
-            resultsView(selectedFilter == .all ? .overview : .filtered(selectedFilter))
+            resultsView(selectedFilter == .all ? .overview : .filtered(selectedFilter)) { filterBar }
         }
     }
 
-    private func resultsView(_ layout: SearchResultsView.Layout) -> some View {
+    private func withFilterBar(@ViewBuilder _ message: () -> some View) -> some View {
+        VStack(spacing: 0) {
+            filterBar
+            message().frame(maxHeight: .infinity)
+        }
+    }
+
+    @ViewBuilder
+    private var filterBar: some View {
+        if !filters.isEmpty {
+            Picker("Filter", selection: $selectedFilter) {
+                ForEach(filters) { filter in
+                    Text(filter.label).tag(filter)
+                }
+            }
+            .pickerStyle(.segmented)
+            .padding(.horizontal)
+            .padding(.vertical, 8)
+        }
+    }
+
+    private func resultsView(
+        _ layout: SearchResultsLayout,
+        @ViewBuilder header: @escaping () -> some View = { EmptyView() }
+    ) -> some View {
         SearchResultsView(
             results: results,
             layout: layout,
             epgByChannel: epgByChannel,
             channelLabels: channelLabels,
             animationNamespace: animationNamespace,
-            onPlay: playChannel
+            onPlay: playChannel,
+            header: header
         )
     }
 

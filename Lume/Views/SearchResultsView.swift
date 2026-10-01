@@ -17,30 +17,38 @@
 import SwiftData
 import SwiftUI
 
-struct SearchResultsView: View {
-    enum Layout: Equatable {
-        case overview
-        case filtered(ContentFilter)
-        case section(SearchSection)
-    }
+/// Which of the layouts above to show.
+enum SearchResultsLayout: Equatable {
+    case overview
+    case filtered(ContentFilter)
+    case section(SearchSection)
+}
 
+struct SearchResultsView<Header: View>: View {
     let results: SearchResults
-    let layout: Layout
+    let layout: SearchResultsLayout
     /// Now/next for the Now Playing channels, by guide channel id.
     let epgByChannel: [String: ChannelEPG]
     /// What each channel's category label reads, by stream id.
     let channelLabels: [String: String]
     let animationNamespace: Namespace.ID
     let onPlay: (LiveStream) -> Void
+    /// Scrolls with the results — the filter bar. Pinned outside the scroll
+    /// view, it stayed mid-screen once tvOS scrolled the search field away,
+    /// and the results were squeezed into what was left below it.
+    @ViewBuilder var header: () -> Header
 
     @Environment(\.modelContext) private var modelContext
 
     /// How many channels a list shows before "Show All", with no filter.
-    static let channelPreviewCount = 5
+    static var channelPreviewCount: Int {
+        5
+    }
 
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 32) {
+                header()
                 switch layout {
                 case .overview:
                     nowPlaying(limit: Self.channelPreviewCount)
