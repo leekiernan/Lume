@@ -374,7 +374,7 @@
                 resolved = [:]
                 return
             }
-            resolved = await SportsChannelResolver.resolveSoonestFirst(
+            await SportsChannelResolver.resolveSoonestFirst(
                 container: modelContext.container,
                 fixtures: fixtures,
                 restriction: restriction,

@@ -37,6 +37,37 @@ struct SportsQueryShapeTests {
         #expect(!props.contains(\EPGListing.category))
     }
 
+    /// No SQL sort: each window's rows would go through a temp B-tree no index
+    /// serves. The resolver orders each channel's few rows in Swift.
+    @Test func `sports resolver EPG fetch leaves ordering to Swift`() {
+        let descriptor = SportsChannelResolver.epgCandidateDescriptor(
+            channelIds: ["ch1"], windowStart: .now, windowEnd: .now.addingTimeInterval(3600)
+        )
+        #expect(descriptor.sortBy.isEmpty)
+    }
+
+    /// The guide is read around each kickoff, not across the whole span from
+    /// the first to the last: games a day apart read two windows, and games
+    /// close enough to overlap read one.
+    @Test func `kickoff windows merge only where they overlap`() {
+        let base = Date(timeIntervalSince1970: 1_800_000_000)
+        func fixture(_ id: String, at offset: TimeInterval) -> SportsFixture {
+            SportsFixture(
+                id: id, leagueId: "l", leagueName: "L", leagueAbbreviation: "L",
+                startDate: base.addingTimeInterval(offset), status: SportsFixtureStatus(state: .scheduled),
+                home: SportsCompetitor(team: SportsTeam(leagueId: "l", teamId: "h", name: "H", shortName: "H", abbreviation: "")),
+                away: SportsCompetitor(team: SportsTeam(leagueId: "l", teamId: "a", name: "A", shortName: "A", abbreviation: ""))
+            )
+        }
+        let windows = SportsChannelResolver.guideWindows(for: [
+            fixture("late", at: 86400), fixture("early", at: 0), fixture("alongside", at: 1800)
+        ])
+        #expect(windows.count == 2)
+        #expect(windows[0].lowerBound == base.addingTimeInterval(-SportsMatcher.leadTime))
+        #expect(windows[0].upperBound == base.addingTimeInterval(1800 + SportsMatcher.lateStart))
+        #expect(windows[1].lowerBound == base.addingTimeInterval(86400 - SportsMatcher.leadTime))
+    }
+
     /// The candidate-channel fetch must run its exclusion (hidden channels and
     /// restricted categories) as a `#Predicate` in SQLite, not by fetching every
     /// channel and filtering in Swift afterwards.
