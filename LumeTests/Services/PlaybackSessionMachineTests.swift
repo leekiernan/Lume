@@ -66,7 +66,7 @@ struct PlaybackSessionMachineTests {
     @Test func `a stall that ends in the other state is that change`() {
         var playing = playingOnKS()
         _ = playing.handle(.reported(.ksPlayer, report(buffering: true, playing: false)))
-        #expect(playing.handle(.reported(.ksPlayer, report(playing: false))) == [.scrobble(.pause), .persistProgress])
+        #expect(playing.handle(.reported(.ksPlayer, report(playing: false))) == [.scrobble(.pause), .persistProgress(holdingLive: false)])
 
         var paused = playingOnKS()
         _ = paused.handle(.reported(.ksPlayer, report(playing: false)))
@@ -82,12 +82,12 @@ struct PlaybackSessionMachineTests {
         _ = machine.handle(.starting(.ksPlayer, .swap))
         #expect(machine.handle(.reported(.ksPlayer, report())) == [.scrobble(.start)])
         _ = machine.handle(.reported(.ksPlayer, report(buffering: true, playing: false)))
-        #expect(machine.handle(.reported(.ksPlayer, report(playing: false))) == [.scrobble(.pause), .persistProgress])
+        #expect(machine.handle(.reported(.ksPlayer, report(playing: false))) == [.scrobble(.pause), .persistProgress(holdingLive: false)])
     }
 
     @Test func `a pause scrobbles a pause and saves progress`() {
         var machine = playingOnKS()
-        #expect(machine.handle(.reported(.ksPlayer, report(playing: false))) == [.scrobble(.pause), .persistProgress])
+        #expect(machine.handle(.reported(.ksPlayer, report(playing: false))) == [.scrobble(.pause), .persistProgress(holdingLive: false)])
         #expect(machine.state == .paused)
         #expect(machine.handle(.reported(.ksPlayer, report())) == [.scrobble(.start)])
     }
@@ -139,7 +139,7 @@ struct PlaybackSessionMachineTests {
 
     @Test func `leaving a stream stops the scrobble and saves progress`() {
         var machine = playingOnKS()
-        #expect(machine.handle(.leave(.swap)) == [.scrobble(.stop), .persistProgress])
+        #expect(machine.handle(.leave(.swap)) == [.scrobble(.stop), .persistProgress(holdingLive: true)])
         #expect(machine.state == .idle)
         _ = machine.handle(.starting(.ksPlayer, .swap))
         #expect(machine.state == .starting(.swap))
@@ -165,13 +165,13 @@ struct PlaybackSessionMachineTests {
 
     @Test func `backgrounding saves progress and carries on`() {
         var machine = playingOnKS()
-        #expect(machine.handle(.leave(.background)) == [.persistProgress])
+        #expect(machine.handle(.leave(.background)) == [.persistProgress(holdingLive: false)])
         #expect(machine.state == .playing)
     }
 
     @Test func `nothing happens after dismissal`() {
         var machine = playingOnKS()
-        #expect(machine.handle(.leave(.dismiss)) == [.scrobble(.stop), .persistProgress])
+        #expect(machine.handle(.leave(.dismiss)) == [.scrobble(.stop), .persistProgress(holdingLive: false)])
         #expect(machine.state == .closed)
         #expect(machine.handle(.reported(.ksPlayer, report(playing: false))) == nil)
         #expect(machine.handle(.leave(.background)) == nil)

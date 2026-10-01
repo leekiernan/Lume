@@ -531,7 +531,7 @@ struct FullScreenPlayerView: View {
     /// last boundary; that is by design, to keep CPU off the playback path.
     /// Captures the clock synchronously *before* awaiting, so a subsequent
     /// `clock.reset()` can't race the read.
-    func persistProgressDetached() {
+    func persistProgressDetached(holdingLive: Bool = false) {
         guard let writer = progressWriter else { return }
         let ref = activeMedia.contentRef
         // An explicit "next episode" already settled this stream at its full
@@ -553,7 +553,7 @@ struct FullScreenPlayerView: View {
         let previous = pendingProgressWrite
         pendingProgressWrite = Task { @MainActor in
             await previous?.value
-            if let change = await writer.record(ref: ref, progress: now, duration: total) {
+            if let change = await writer.record(ref: ref, progress: now, duration: total, holdLive: holdingLive) {
                 applyWatchedChange(change)
             }
         }

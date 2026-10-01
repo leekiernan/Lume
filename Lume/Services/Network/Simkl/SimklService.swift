@@ -263,10 +263,16 @@ final class SimklService {
         }
         do {
             let items = try await client.watchedItems(accessToken: accessToken)
-            lastImport = SimklWatchedImporter.apply(items: items, in: context)
+            lastImport = await Self.applyImport(items: items, container: context.container)
         } catch {
             lastImport = .failure
         }
+    }
+
+    /// Off the main actor, on a context of its own — see `TraktService`.
+    @concurrent
+    private static func applyImport(items: SimklAllItems, container: ModelContainer) async -> SimklImportSummary {
+        SimklWatchedImporter.apply(items: items, in: ModelContext(container))
     }
 }
 
