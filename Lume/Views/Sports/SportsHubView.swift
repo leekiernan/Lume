@@ -225,10 +225,11 @@ struct SportsHubView: View {
             resolved = [:]
             return
         }
-        resolved = await SportsChannelResolver.resolve(
+        resolved = await SportsChannelResolver.resolveSoonestFirst(
             container: modelContext.container,
             fixtures: fixtures,
-            restriction: restriction
+            restriction: restriction,
+            publish: { resolved = $0 }
         )
     }
 

@@ -163,8 +163,7 @@ nonisolated enum SportsChannelResolver {
     ) async -> [String: [ResolvedChannel]] {
         // A finished game has nothing left to watch; skip it before the guide scan.
         let fixtures = fixtures.filter { $0.status.state != .final }
-        guard let firstKickoff = fixtures.map(\.startDate).min(),
-              let lastKickoff = fixtures.map(\.startDate).max() else { return [:] }
+        guard !fixtures.isEmpty else { return [:] }
         let pickIndex = picks.snapshot()
 
         return await Task.detached(priority: .utility) {
@@ -173,9 +172,21 @@ nonisolated enum SportsChannelResolver {
 
             let context = ModelContext(container)
 
+            // Answers already worked out under the same catalog, guide and
+            // viewer (`ResolveCache`): only the rest are resolved, against a
+            // guide window narrowed to them.
+            let generation = CacheGeneration(
+                container: container, context: context, restriction: restriction, picks: pickIndex
+            )
+            let cached = ResolveCache.shared.lookup(fixtures, generation: generation)
+            let missing = fixtures.filter { cached[$0.id] == nil }
+            guard let firstKickoff = missing.map(\.startDate).min(),
+                  let lastKickoff = missing.map(\.startDate).max() else { return cached }
+            let fixtures = missing
+
             // Pass 1 — candidate channels across all playlists.
             let streams = (try? context.fetch(candidateStreamDescriptor(restriction: restriction))) ?? []
-            guard !streams.isEmpty else { return [:] }
+            guard !streams.isEmpty else { return cached }
             let (channels, channelIds) = buildChannels(from: streams)
 
             // Pass 2 — one bounded EPG fetch over the union kickoff window.
@@ -198,7 +209,8 @@ nonisolated enum SportsChannelResolver {
                     index: index
                 )
             }
-            return result
+            ResolveCache.shared.store(result, for: fixtures, generation: generation)
+            return cached.merging(result) { _, fresh in fresh }
         }.value
     }
 
