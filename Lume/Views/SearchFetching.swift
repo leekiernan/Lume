@@ -19,6 +19,16 @@ nonisolated struct SearchHits {
     var movies: [PersistentIdentifier] = []
     var series: [PersistentIdentifier] = []
     var streams: [PersistentIdentifier] = []
+    /// Guide programmes whose title matches, on a channel in scope.
+    var programmes: [ProgrammeHit] = []
+}
+
+/// A matching programme and the channel it airs on.
+nonisolated struct ProgrammeHit {
+    let stream: PersistentIdentifier
+    let slot: EPGSlot
+    /// On air now, rather than still to come.
+    let isCurrent: Bool
 }
 
 /// The settled query and the per-type toggles, bundled so the off-main fetch
@@ -35,6 +45,8 @@ nonisolated struct SearchRequest {
     let excludedCategoryIDs: Set<String>
     /// Max rows per content type, across every playlist searched.
     let limit: Int
+    /// When "now" is, for splitting programmes on air from those to come.
+    var now = Date()
 
     /// The fetches one type is split into: one per playlist, so a single
     /// catalog can't spend the whole budget. The id-prefix scope matches a row
@@ -96,8 +108,50 @@ nonisolated enum SearchFetcher {
             hits.streams = interleaved(scopes.map {
                 ids(in: context, predicate: searchLiveStreamPredicate(scope: $0), limit: limit)
             }, limit: limit)
+            guard !Task.isCancelled else { return hits }
+            hits.programmes = programmes(in: context, request: request, scopes: scopes)
         }
 
+        return hits
+    }
+
+    /// Guide programmes matching the query that haven't ended, each on the
+    /// first in-scope channel carrying its guide id — hidden channels and
+    /// restricted categories excluded, as channel search does. Soonest first.
+    private static func programmes(
+        in context: ModelContext, request: SearchRequest, scopes: [SearchScope]
+    ) -> [ProgrammeHit] {
+        var listingDescriptor = FetchDescriptor<EPGListing>(
+            predicate: searchProgrammePredicate(query: request.query, now: request.now),
+            sortBy: [SortDescriptor(\.start)]
+        )
+        // Headroom over `limit`: some listings belong to channels outside the
+        // scope, and a channel's repeats are dropped below.
+        listingDescriptor.fetchLimit = request.limit * 4
+        guard let listings = try? context.fetch(listingDescriptor), !listings.isEmpty else { return [] }
+
+        let channelIDs = Set(listings.map(\.channelId))
+        var streamForChannel: [String: PersistentIdentifier] = [:]
+        for scope in scopes {
+            guard !Task.isCancelled else { return [] }
+            let streams = (try? context.fetch(FetchDescriptor<LiveStream>(
+                predicate: programmeChannelPredicate(channelIDs: channelIDs, scope: scope)
+            ))) ?? []
+            for stream in streams {
+                guard let channelID = stream.epgChannelId, streamForChannel[channelID] == nil else { continue }
+                streamForChannel[channelID] = stream.persistentModelID
+            }
+        }
+
+        var hits: [ProgrammeHit] = []
+        var seen = Set<String>()
+        for listing in listings {
+            guard let stream = streamForChannel[listing.channelId],
+                  seen.insert("\(listing.channelId)|\(listing.start.timeIntervalSince1970)").inserted
+            else { continue }
+            hits.append(ProgrammeHit(stream: stream, slot: EPGSlot(listing), isCurrent: listing.start <= request.now))
+            if hits.count == request.limit * 2 { break }
+        }
         return hits
     }
 
@@ -212,6 +266,36 @@ nonisolated func searchLiveStreamPredicate(scope: SearchScope) -> Predicate<Live
     let prefix = scope.playlistIDPrefix
     return #Predicate { stream in
         stream.name.localizedStandardContains(query)
+            && stream.isHidden == false
+            && stream.id.starts(with: prefix)
+            && (!filtersCategories || stream.categoryId == nil || !excluded.contains(stream.categoryId))
+    }
+}
+
+/// Guide listings whose title matches `query` and that haven't ended by `now`
+/// — nothing already aired.
+nonisolated func searchProgrammePredicate(query: String, now: Date) -> Predicate<EPGListing> {
+    #Predicate { listing in
+        listing.end > now && listing.title.localizedStandardContains(query)
+    }
+}
+
+/// The channels in `scope` carrying one of `channelIDs` as their guide id,
+/// under the same visibility rules as channel search.
+nonisolated func programmeChannelPredicate(channelIDs: Set<String>, scope: SearchScope) -> Predicate<LiveStream> {
+    let ids = Set(channelIDs.map(String?.some))
+    let excluded = scope.excludedOptional
+    let filtersCategories = !excluded.isEmpty
+    guard scope.restrictToPlaylist else {
+        return #Predicate { stream in
+            ids.contains(stream.epgChannelId)
+                && stream.isHidden == false
+                && (!filtersCategories || stream.categoryId == nil || !excluded.contains(stream.categoryId))
+        }
+    }
+    let prefix = scope.playlistIDPrefix
+    return #Predicate { stream in
+        ids.contains(stream.epgChannelId)
             && stream.isHidden == false
             && stream.id.starts(with: prefix)
             && (!filtersCategories || stream.categoryId == nil || !excluded.contains(stream.categoryId))

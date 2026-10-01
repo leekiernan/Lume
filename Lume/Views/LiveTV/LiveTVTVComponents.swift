@@ -206,13 +206,18 @@
         }
     }
 
-    private struct TVChannelRow: View {
+    /// One channel in the tvOS Live TV list — and in search results, which
+    /// show channels the same way.
+    struct TVChannelRow: View {
         let stream: LiveStream
         /// The channel's now/next programmes, resolved once by the parent list
         /// (see `ChannelEPGSnapshot`) rather than by a per-row `@Query`.
         var epg: ChannelEPG?
         /// Shown above the name in lists that mix categories.
         var categoryName: String?
+        /// A programme still to come, shown in place of now/next — a search
+        /// result for something on later.
+        var upcoming: EPGSlot?
         var onRemove: (() -> Void)?
         var onStartMultiView: (() -> Void)?
         var onWatchFromStart: ((EPGSlot) -> Void)?
@@ -243,7 +248,15 @@
                             .foregroundStyle(primaryColor)
                             .lineLimit(1)
 
-                        if let current = currentEPG {
+                        if let upcoming {
+                            Text(upcoming.title)
+                                .font(.system(size: 25))
+                                .foregroundStyle(secondaryColor)
+                                .lineLimit(1)
+                            Text(upcoming.start, format: .dateTime.weekday(.abbreviated).hour().minute())
+                                .font(.system(size: 22, weight: .semibold))
+                                .foregroundStyle(Color.lumeAccent)
+                        } else if let current = currentEPG {
                             Text(current.title)
                                 .font(.system(size: 25))
                                 .foregroundStyle(secondaryColor)
