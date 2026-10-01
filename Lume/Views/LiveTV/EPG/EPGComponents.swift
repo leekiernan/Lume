@@ -228,11 +228,11 @@ struct EPGChannelCell: View {
 
     private var catchupColor: Color {
         #if os(tvOS)
-            // The focused cell's white fill would swallow blue-on-white; the
-            // black foreground keeps the glyph legible in both states.
-            isFocused ? .black : .blue
+            // On the focused cell's white fill the glyph goes black, like the
+            // rest of the focused cell's content.
+            isFocused ? .black : .lumeAccent
         #else
-            .blue
+            .lumeAccent
         #endif
     }
 }
@@ -360,11 +360,11 @@ struct EPGProgramBlockView: View {
                 }
             #else
                 if isFocused {
-                    shape.fill(Color.accentColor)
+                    shape.fill(Color.lumeAccent)
                 } else if isLive {
-                    shape.fill(Color.accentColor.opacity(0.18))
+                    shape.fill(Color.lumeAccent.opacity(0.18))
                         .overlay {
-                            shape.strokeBorder(Color.accentColor.opacity(0.45), lineWidth: 1)
+                            shape.strokeBorder(Color.lumeAccent.opacity(0.45), lineWidth: 1)
                         }
                 } else {
                     shape.fill(.fill.tertiary)
@@ -391,7 +391,7 @@ struct EPGProgramBlockView: View {
             // focused (white) fill; a white bar would vanish on the latter.
             return EPGColors.live
         #else
-            return isFocused ? .white : .accentColor
+            return isFocused ? .white : .lumeAccent
         #endif
     }
 

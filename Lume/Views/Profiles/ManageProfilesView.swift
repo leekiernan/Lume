@@ -193,7 +193,7 @@ struct ManageProfilesView: View {
         if isActive {
             Image(systemName: "checkmark")
                 .font(.body.weight(.semibold))
-                .foregroundStyle(.tint)
+                .foregroundStyle(.lumeAccent)
         }
     }
 }

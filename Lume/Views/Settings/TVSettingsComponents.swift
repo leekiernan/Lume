@@ -214,6 +214,7 @@
                         // Filled while this row *is* the hero, so the state is
                         // readable without moving focus onto it.
                         Image(systemName: isPromoted ? "star.fill" : "star")
+                            .foregroundStyle(isPromoted ? AnyShapeStyle(Color.lumeAccent) : AnyShapeStyle(.foreground))
                     }
                     .buttonStyle(TVContentIconButtonStyle())
                     .accessibilityAddTraits(isPromoted ? .isSelected : [])
