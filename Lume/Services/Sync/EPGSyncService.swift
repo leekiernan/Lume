@@ -86,6 +86,14 @@ final class EPGSyncService {
     @ObservationIgnored private var isBackgroundRefresh = false
     @ObservationIgnored private var gate = EPGRefreshGate()
 
+    /// Whether the app is in the foreground, set from the scene phase. The
+    /// periodic check only runs then.
+    @ObservationIgnored var isForeground = true
+    @ObservationIgnored private var periodicTask: Task<Void, Never>?
+    /// How often the schedule is re-checked while the app stays open. Cheap —
+    /// a date comparison — and only an actual due refresh does any work.
+    static let periodicCheckInterval: Duration = .seconds(30 * 60)
+
     private init() {}
 
     func configure(container: ModelContainer) {
@@ -98,12 +106,44 @@ final class EPGSyncService {
         kick()
     }
 
-    /// Background trigger (launch): refreshes only if the guide is stale per
-    /// the EPG frequency setting — and never alongside a pending playlist sync
-    /// (see `EPGRefreshGate`). A deferred refresh runs once the sync is done.
-    func syncIfDue() {
-        guard isDue, gate.request() else { return }
+    /// Background trigger: refreshes only if the guide is stale per the EPG
+    /// frequency setting — and never alongside a pending playlist sync (see
+    /// `EPGRefreshGate`). A deferred refresh runs once the sync is done.
+    ///
+    /// Called at launch, on every return to the foreground, when the profile
+    /// or its areas change, and periodically while the app stays open. Launch
+    /// alone wasn't enough: an Apple TV resumes Lume for days without a cold
+    /// launch, so the guide ran out of listings and went empty — and a launch
+    /// under a profile with Live TV off skipped it with nothing to try again.
+    func syncIfDue(reason: String) {
+        guard isDue else {
+            Logger.database.debug("EPG refresh not due (\(reason, privacy: .public))")
+            return
+        }
+        guard gate.request() else {
+            Logger.database.info("EPG refresh due (\(reason, privacy: .public)) — waiting for a playlist sync")
+            return
+        }
+        Logger.database.info("EPG refresh due (\(reason, privacy: .public))")
         kick(background: true)
+    }
+
+    /// Re-checks the schedule every `periodicCheckInterval` while the app is
+    /// open in the foreground — for a TV left on Lume for hours. Never during
+    /// playback: a guide import's saves merge into the main context and
+    /// hitch the player, which is why indexing pauses then too. The next
+    /// check after playback catches up. Idempotent.
+    func startPeriodicChecks() {
+        guard periodicTask == nil else { return }
+        periodicTask = Task(priority: .utility) { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: Self.periodicCheckInterval)
+                guard let self, !Task.isCancelled else { return }
+                if isForeground, !ContentIndexingService.shared.isPlaybackActive {
+                    syncIfDue(reason: "periodic")
+                }
+            }
+        }
     }
 
     // MARK: - Content sync reports

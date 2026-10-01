@@ -211,6 +211,10 @@ struct MainTabView: View {
                 // was just added), and repair catalog phases the active profile
                 // enables but that playlist's most recent successful sync skipped.
                 enqueueDueSyncs(playlists)
+                // The guide is checked here too: a profile with Live TV off
+                // skips it, so switching to one with Live TV on — or turning it
+                // on — is when a stale guide needs refreshing.
+                EPGSyncService.shared.syncIfDue(reason: "profile or areas")
             }
             .onChange(of: selectedPlaylistID) {
                 // On playlist switch, sync the newly selected one if it's due —
@@ -227,6 +231,7 @@ struct MainTabView: View {
                 // app this is the practical equivalent of "on launch".
                 if phase == .active {
                     enqueueDueSyncs(playlists)
+                    EPGSyncService.shared.syncIfDue(reason: "foreground")
                 }
                 // Coming back to `.active` also refreshes stale sports data.
                 SportsSyncService.shared.isForeground = phase == .active
