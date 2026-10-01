@@ -42,6 +42,9 @@ struct ChannelsList: View {
     @State private var visibleCount = LiveChannelQuery.pageSize
     /// Drives the "Clear Recently Watched" confirmation alert.
     @State private var confirmingClear = false
+    /// Category names for Recently Watched and Favorites (`showsCategoryLabels`),
+    /// keyed by category id; empty inside a category.
+    @State private var categoryNames: [String: String] = [:]
 
     init(
         scope: LiveChannelScope,
@@ -119,9 +122,12 @@ struct ChannelsList: View {
                             Button {
                                 onPlay(stream)
                             } label: {
-                                LiveStreamCardView(stream: stream, epg: epg)
-                                    .padding(.horizontal)
-                                    .contentShape(Rectangle())
+                                LiveStreamCardView(
+                                    stream: stream, epg: epg,
+                                    categoryName: stream.categoryId.flatMap { categoryNames[$0] }
+                                )
+                                .padding(.horizontal)
+                                .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
                             .liveChannelMenu(
@@ -150,6 +156,10 @@ struct ChannelsList: View {
             // import settles — EPG is resolved only for the channels on screen.
             .task(id: "\(generation)-\(visible.count)") {
                 await loadEPG(for: visible, generation: generation)
+            }
+            .task(id: Set(channels.compactMap(\.categoryId))) {
+                guard scope.showsCategoryLabels else { return }
+                categoryNames = LiveCategoryNames.names(for: channels, in: modelContext)
             }
         }
         .alert("Clear Recently Watched", isPresented: $confirmingClear) {

@@ -12,6 +12,12 @@ struct LiveStreamCardView: View {
     /// The channel's now/next programmes, resolved once by the parent list (see
     /// `ChannelEPGSnapshot`) rather than by a per-card `@Query`.
     var epg: ChannelEPG?
+    /// Shown above the name where channels from different categories share a
+    /// list: Recently Watched, Favorites and search.
+    var categoryName: String?
+    /// A programme still to come, shown in place of now/next — a search result
+    /// for something on later.
+    var upcoming: EPGSlot?
 
     private var currentEPG: EPGSlot? {
         epg?.current
@@ -51,11 +57,22 @@ struct LiveStreamCardView: View {
             .clipShape(RoundedRectangle(cornerRadius: 8))
 
             VStack(alignment: .leading, spacing: 4) {
+                if let categoryName {
+                    LiveCategoryLabel(name: categoryName)
+                }
                 Text(stream.name)
                     .font(.headline)
                     .lineLimit(1)
 
-                if let current = currentEPG {
+                if let upcoming {
+                    Text(upcoming.title)
+                        .font(.subheadline)
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                    Text(upcoming.start, format: .dateTime.weekday(.abbreviated).hour().minute())
+                        .font(.caption2)
+                        .foregroundStyle(.lumeAccent)
+                } else if let current = currentEPG {
                     Text(current.title)
                         .font(.subheadline)
                         .foregroundStyle(.primary)
@@ -98,7 +115,7 @@ struct LiveStreamCardView: View {
                         Text("Catchup: \(stream.catchupArchiveDays)d")
                     }
                     .font(.caption2)
-                    .foregroundStyle(.blue)
+                    .foregroundStyle(.lumeAccent)
                 }
             }
 

@@ -71,10 +71,11 @@ let collectionRowFetchLimit = collectionPreviewLimit + 1
 // MARK: - Shared preview row
 
 /// A titled horizontal rail with a trailing "Show All" link into the full
-/// collection grid, keyed by a `LibraryCollection` destination.
-private struct CollectionPreviewRow<Item: Identifiable & Hashable & WatchlistFavoritable, Card: View>: View {
+/// grid. `showAll` is the navigation value the link pushes: a
+/// `LibraryCollection` here, a search section in `SearchView`.
+struct CollectionPreviewRow<Item: Identifiable & Hashable & WatchlistFavoritable, Destination: Hashable, Card: View>: View {
     let title: LocalizedStringKey
-    let collection: LibraryCollection
+    let showAll: Destination
     let items: [Item]
     /// Whether the full collection holds more items than this preview shows.
     /// When false, the "Show All" link is hidden — there's nothing more to see.
@@ -100,7 +101,7 @@ private struct CollectionPreviewRow<Item: Identifiable & Hashable & WatchlistFav
                 Spacer()
 
                 if hasMore {
-                    NavigationLink(value: collection) {
+                    NavigationLink(value: showAll) {
                         Text("Show All")
                             .font(.subheadline)
                     }
@@ -187,7 +188,7 @@ struct MovieCollectionRow: View {
         } else if !items.isEmpty {
             CollectionPreviewRow(
                 title: kind.title,
-                collection: collection,
+                showAll: collection,
                 items: items,
                 // Against the raw fetch: a title collapsed as a duplicate still
                 // means the full grid holds more than this row.
@@ -327,7 +328,7 @@ struct SeriesCollectionRow: View {
             } else if !items.isEmpty {
                 CollectionPreviewRow(
                     title: kind.title,
-                    collection: collection,
+                    showAll: collection,
                     items: items,
                     // Against the raw fetch: a title collapsed as a duplicate still
                     // means the full grid holds more than this row.

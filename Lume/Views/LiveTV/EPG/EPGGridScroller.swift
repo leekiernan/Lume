@@ -262,7 +262,7 @@ struct EPGGridScroller: View {
                 Label("Now", systemImage: "smallcircle.filled.circle")
                     .font(.subheadline.weight(.semibold))
                     .labelStyle(.titleAndIcon)
-                    .foregroundStyle(Color.accentColor)
+                    .foregroundStyle(Color.lumeAccent)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .contentShape(Rectangle())
             }
