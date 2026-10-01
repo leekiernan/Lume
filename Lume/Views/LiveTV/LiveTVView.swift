@@ -46,9 +46,28 @@ struct LiveTVView: View {
     @State private var categoryMemo = LiveTVCategoryMemo()
 
     @AppStorage(PlaylistSelectionStore.key) private var selectedPlaylistID: String = ""
-    @State private var selectedSection: LiveTVSection?
+    /// The selection lives in `DeepLinkRouter`, so it survives the tab being
+    /// unmounted (`IdleUnmountingTab`, or a tvOS tab switch); these local copies
+    /// stand in only without a router (previews).
+    @Environment(DeepLinkRouter.self) private var selectionRouter: DeepLinkRouter?
+    @State private var localSection: LiveTVSection?
+    @State private var localSeededPrefix: String?
+
+    private var selectedSection: LiveTVSection? {
+        get { selectionRouter?.liveTVSection ?? localSection }
+        nonmutating set {
+            if let selectionRouter { selectionRouter.liveTVSection = newValue } else { localSection = newValue }
+        }
+    }
+
     /// The playlist `selectedSection` was last seeded for — see `seedSelection`.
-    @State private var seededPrefix: String?
+    private var seededPrefix: String? {
+        get { selectionRouter?.liveTVSeededPrefix ?? localSeededPrefix }
+        nonmutating set {
+            if let selectionRouter { selectionRouter.liveTVSeededPrefix = newValue } else { localSeededPrefix = newValue }
+        }
+    }
+
     @State private var showingSync = false
     @State private var playingMedia: PlayableMedia?
     @State private var showingSettings = false

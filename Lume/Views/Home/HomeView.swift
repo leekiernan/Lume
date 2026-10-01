@@ -103,6 +103,9 @@ struct HomeView: View {
     /// Shown when a channel's "Start Multi-View" is picked without Lume Pro.
     /// Not `private`: read by the HomeView+Playback extension (separate file).
     @State var showingPaywall = false
+    /// Holds Home's navigation path, so it survives the tab being unmounted —
+    /// see `homePath`. Optional: previews have no router.
+    @Environment(DeepLinkRouter.self) var pathRouter: DeepLinkRouter?
     #if os(tvOS)
         /// Not `private`: read by the HomeView+Playback extension (separate file).
         @Environment(DeepLinkRouter.self) var router
@@ -158,7 +161,7 @@ struct HomeView: View {
         // Derived once per pass — see `DerivedContent`.
         let content = derivedContent()
         let snapshot = surfaceSnapshot(content)
-        NavigationStack {
+        NavigationStack(path: homePath) {
             Group {
                 switch snapshot.display {
                 case .noPlaylists:

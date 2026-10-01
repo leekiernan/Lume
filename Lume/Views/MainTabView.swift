@@ -411,35 +411,44 @@ struct MainTabView: View {
             }
         }
     #else
+        /// Search stays mounted: it holds only the query the viewer typed and a
+        /// playlist lookup. The content tabs unmount after sitting unshown — see
+        /// `IdleUnmountingTab`.
         private func tabView(selection: Binding<AppTab>) -> some View {
             TabView(selection: selection) {
                 if isOn(.home) {
                     Tab("Home", systemImage: "house", value: AppTab.home) {
-                        HomeView(playlistPrefix: activePlaylistPrefix, restriction: contentRestriction)
+                        IdleUnmountingTab(isSelected: selection.wrappedValue == .home) {
+                            HomeView(playlistPrefix: activePlaylistPrefix, restriction: contentRestriction)
+                        }
                     }
                 }
 
                 if isOn(.movies) {
                     Tab("Movies", systemImage: "film", value: AppTab.movies) {
-                        MoviesView(playlistPrefix: activePlaylistPrefix, restriction: contentRestriction)
+                        IdleUnmountingTab(isSelected: selection.wrappedValue == .movies) {
+                            MoviesView(playlistPrefix: activePlaylistPrefix, restriction: contentRestriction)
+                        }
                     }
                 }
 
                 if isOn(.series) {
                     Tab("Series", systemImage: "tv", value: AppTab.series) {
-                        SeriesView(playlistPrefix: activePlaylistPrefix, restriction: contentRestriction)
+                        IdleUnmountingTab(isSelected: selection.wrappedValue == .series) {
+                            SeriesView(playlistPrefix: activePlaylistPrefix, restriction: contentRestriction)
+                        }
                     }
                 }
 
                 if isOn(.liveTV) {
                     Tab("Live TV", systemImage: "antenna.radiowaves.left.and.right", value: AppTab.liveTV) {
-                        LiveTVView()
+                        IdleUnmountingTab(isSelected: selection.wrappedValue == .liveTV) { LiveTVView() }
                     }
                 }
 
                 if showsSportsTab {
                     Tab("Sports", systemImage: "sportscourt", value: AppTab.sports) {
-                        SportsHubView()
+                        IdleUnmountingTab(isSelected: selection.wrappedValue == .sports) { SportsHubView() }
                     }
                 }
 
