@@ -91,6 +91,11 @@ enum MovieCollectionQuery {
             // emits `COLLATE NSCollateFinderlike`, which the `#Index` on
             // `Movie.added` cannot serve. 222.4 ms → 92.6 ms on a 179k-title
             // catalog, and that one query was 46% of a cold launch's SQL.
+            //
+            // Exactly two sort keys. The unique `id` makes the order total, so
+            // pages never overlap; a third key (`num` between them, as this
+            // once had) tips SQLite's planner from the index to `SCAN ZMOVIE`
+            // plus a sort of every row — 0.6 → 10.5 ms per fetch on 40k titles.
             FetchDescriptor<Movie>(
                 predicate: #Predicate {
                     $0.added != nil
@@ -99,8 +104,7 @@ enum MovieCollectionQuery {
                 },
                 sortBy: [
                     SortDescriptor(\.added, comparator: .lexical, order: .reverse),
-                    SortDescriptor(\.num),
-                    SortDescriptor(\.id)
+                    SortDescriptor(\.id, comparator: .lexical)
                 ]
             )
         }
@@ -187,10 +191,10 @@ enum SeriesCollectionQuery {
                         && $0.id.starts(with: prefix)
                         && (!filtersCategories || $0.categoryId == nil || !excluded.contains($0.categoryId))
                 },
+                // Two keys only, as on the movie side: a third forfeits the index.
                 sortBy: [
                     SortDescriptor(\.lastModified, comparator: .lexical, order: .reverse),
-                    SortDescriptor(\.num),
-                    SortDescriptor(\.id)
+                    SortDescriptor(\.id, comparator: .lexical)
                 ]
             )
         }

@@ -113,7 +113,7 @@ final class BrowseQueryBenchmarks: XCTestCase {
     /// back: the `#Index<Movie>([\.added])` entry, and `comparator: .lexical` on
     /// the sort. A binary index cannot serve a localized collation.
     func testRecentlyAddedMovieRail() {
-        let descriptor = MovieCollectionQuery.rowDescriptor(for: .recentlyAdded, playlistPrefix: prefix)
+        let descriptor = MovieCollectionQuery.rowDescriptor(for: .recentlyAdded, playlistPrefix: prefix, excludedCategoryIDs: [])
         let context = ModelContext(store.container)
 
         measure(metrics: [XCTClockMetric(), XCTMemoryMetric()]) {
@@ -122,10 +122,24 @@ final class BrowseQueryBenchmarks: XCTestCase {
         }
     }
 
+    /// The same rail for a viewer with hidden categories: the restriction is in
+    /// the predicate, so it must not cost the index either.
+    func testRecentlyAddedMovieRailWithHiddenCategories() {
+        let hidden = Set((0 ..< 10).map { "\(prefix)vod-cat\($0 * 7)" })
+        let descriptor = MovieCollectionQuery.rowDescriptor(for: .recentlyAdded, playlistPrefix: prefix, excludedCategoryIDs: hidden)
+        let context = ModelContext(store.container)
+
+        measure(metrics: [XCTClockMetric()]) {
+            let rows = (try? context.fetch(descriptor)) ?? []
+            XCTAssertFalse(rows.isEmpty)
+            XCTAssertFalse(rows.contains { hidden.contains($0.categoryId ?? "") })
+        }
+    }
+
     /// The Series equivalent, sorting on `lastModified` — same index and same
     /// comparator dependency.
     func testRecentlyAddedSeriesRail() {
-        let descriptor = SeriesCollectionQuery.rowDescriptor(for: .recentlyAdded, playlistPrefix: prefix)
+        let descriptor = SeriesCollectionQuery.rowDescriptor(for: .recentlyAdded, playlistPrefix: prefix, excludedCategoryIDs: [])
         let context = ModelContext(store.container)
 
         measure(metrics: [XCTClockMetric()]) {
@@ -139,7 +153,7 @@ final class BrowseQueryBenchmarks: XCTestCase {
     /// 59 ms with a few thousand, re-run on every write anywhere in the app.
     /// Guards the `fetchLimit` and the in-SQL playlist scope together.
     func testFavoritesMovieRail() {
-        let descriptor = MovieCollectionQuery.rowDescriptor(for: .favorites, playlistPrefix: prefix)
+        let descriptor = MovieCollectionQuery.rowDescriptor(for: .favorites, playlistPrefix: prefix, excludedCategoryIDs: [])
         let context = ModelContext(store.container)
 
         measure(metrics: [XCTClockMetric(), XCTMemoryMetric()]) {
@@ -151,7 +165,7 @@ final class BrowseQueryBenchmarks: XCTestCase {
 
     /// Recently Watched, same shape as Favorites but ordered by a date index.
     func testRecentlyWatchedMovieRail() {
-        let descriptor = MovieCollectionQuery.rowDescriptor(for: .recentlyWatched, playlistPrefix: prefix)
+        let descriptor = MovieCollectionQuery.rowDescriptor(for: .recentlyWatched, playlistPrefix: prefix, excludedCategoryIDs: [])
         let context = ModelContext(store.container)
 
         measure(metrics: [XCTClockMetric()]) {
@@ -390,6 +404,9 @@ final class BrowseQueryBenchmarks: XCTestCase {
                     if isActive, index.isMultiple(of: watchedEvery) {
                         movie.lastWatchedDate = Date(timeIntervalSince1970: 1_800_000_000 - Double(index))
                         movie.watchProgress = 300
+                        // Half finished: Recently Watched lists finished titles,
+                        // Continue Watching the rest (`WatchCompletion`).
+                        movie.isWatched = (index / watchedEvery).isMultiple(of: 2)
                     }
                     context.insert(movie)
                 }

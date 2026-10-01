@@ -38,19 +38,25 @@ nonisolated extension SportsChannelResolver {
     /// go to `publish` before the rest of the week's guide is read, and the
     /// full pass then only computes what the cache doesn't already hold. The
     /// hub, league and tvOS hub lists use it.
+    ///
+    /// Both passes reach the caller only through `publish`, and only while the
+    /// calling task is live: a pass superseded by a newer `.task(id:)` run
+    /// must not overwrite the newer one's answer.
     static func resolveSoonestFirst(
         container: ModelContainer,
         fixtures: [SportsFixture],
         restriction: ContentRestriction,
         now: Date = Date(),
         publish: @MainActor ([String: [ResolvedChannel]]) -> Void
-    ) async -> [String: [ResolvedChannel]] {
+    ) async {
         if let soon = nearTermSubset(of: fixtures, now: now) {
             let first = await resolve(container: container, fixtures: soon, restriction: restriction)
-            guard !Task.isCancelled else { return first }
+            guard !Task.isCancelled else { return }
             await publish(first)
         }
-        return await resolve(container: container, fixtures: fixtures, restriction: restriction)
+        let all = await resolve(container: container, fixtures: fixtures, restriction: restriction)
+        guard !Task.isCancelled else { return }
+        await publish(all)
     }
 
     /// What a resolved answer depends on.
