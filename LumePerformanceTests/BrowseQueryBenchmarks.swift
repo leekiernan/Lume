@@ -122,6 +122,20 @@ final class BrowseQueryBenchmarks: XCTestCase {
         }
     }
 
+    /// The same rail for a viewer with hidden categories: the restriction is in
+    /// the predicate, so it must not cost the index either.
+    func testRecentlyAddedMovieRailWithHiddenCategories() {
+        let hidden = Set((0 ..< 10).map { "\(prefix)vod-cat\($0 * 7)" })
+        let descriptor = MovieCollectionQuery.rowDescriptor(for: .recentlyAdded, playlistPrefix: prefix, excludedCategoryIDs: hidden)
+        let context = ModelContext(store.container)
+
+        measure(metrics: [XCTClockMetric()]) {
+            let rows = (try? context.fetch(descriptor)) ?? []
+            XCTAssertFalse(rows.isEmpty)
+            XCTAssertFalse(rows.contains { hidden.contains($0.categoryId ?? "") })
+        }
+    }
+
     /// The Series equivalent, sorting on `lastModified` — same index and same
     /// comparator dependency.
     func testRecentlyAddedSeriesRail() {
