@@ -362,7 +362,8 @@ struct LumeApp: App {
                     // is queued or running — the deferred refresh runs once
                     // nothing is pending (see `EPGRefreshGate`).
                     EPGSyncService.shared.configure(container: catalogContainer)
-                    EPGSyncService.shared.syncIfDue()
+                    EPGSyncService.shared.syncIfDue(reason: "launch")
+                    EPGSyncService.shared.startPeriodicChecks()
                 }
                 .onChange(of: cloudSync.status.lastReconcile) {
                     // A reconcile may have pulled a PIN this device didn't have
@@ -377,6 +378,7 @@ struct LumeApp: App {
                 .onChange(of: scenePhase) { _, phase in
                     DiagnosticSession.scenePhaseChanged(to: phase)
                     cloudSync.handleScenePhaseChange(to: phase)
+                    EPGSyncService.shared.isForeground = phase == .active
                     if phase == .active {
                         // Durable Trakt history changes survive termination and
                         // retry whenever the app returns to the foreground.
