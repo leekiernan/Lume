@@ -52,7 +52,9 @@ nonisolated enum AccountSettingsSync {
         (PlayerSettings.StreamInfo.enabledKey, .bool),
         (PlayerSettings.StreamInfo.detailLevelKey, .string),
         (PlayerSettings.Language.preferredAudioLanguagesKey, .string),
-        (SearchSettings.searchAllPlaylistsKey, .bool)
+        (SearchSettings.searchAllPlaylistsKey, .bool),
+        // Which profile the account last chose — read only at launch.
+        (LastActiveProfile.key, .string)
     ]
 
     /// The synced settings this device has set.
