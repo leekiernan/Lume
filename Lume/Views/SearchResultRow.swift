@@ -55,7 +55,7 @@ struct SearchResultRow: View {
                         Image(systemName: categoryIcon)
                         Text(LocalizedStringKey(categoryName))
                     }
-                    .foregroundStyle(.blue)
+                    .foregroundStyle(.lumeAccent)
                     // Only present while searching across playlists, where the
                     // category alone doesn't say which provider a row is from.
                     if let playlistName {
