@@ -38,7 +38,7 @@ final class UserProfile {
         id: UUID = UUID(),
         name: String,
         symbolName: String = UserProfile.defaultSymbol,
-        colorRaw: String = ProfileColor.blue.rawValue,
+        colorRaw: String = ProfileColor.lume.rawValue,
         sortOrder: Int = 0,
         isChild: Bool = false,
         pinHash: String = "",
@@ -84,6 +84,8 @@ extension UserProfile {
 /// Curated avatar tints. Stored by raw key so the value round-trips through
 /// CloudKit and stays stable regardless of system color changes.
 enum ProfileColor: String, CaseIterable, Identifiable {
+    /// The brand accent — first, and what a new profile starts with.
+    case lume
     case blue, purple, pink, red, orange, yellow, green, teal, indigo, brown
 
     var id: String {
@@ -92,6 +94,7 @@ enum ProfileColor: String, CaseIterable, Identifiable {
 
     var color: Color {
         switch self {
+        case .lume: .lumeAccent
         case .blue: .blue
         case .purple: .purple
         case .pink: .pink

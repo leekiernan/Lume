@@ -40,7 +40,7 @@ import SwiftUI
                         if let progress = resumeFraction {
                             ProgressView(value: progress)
                                 .progressViewStyle(.linear)
-                                .tint(.accentColor)
+                                .tint(.lumeAccent)
                                 .padding(.top, 2)
                         }
                     }

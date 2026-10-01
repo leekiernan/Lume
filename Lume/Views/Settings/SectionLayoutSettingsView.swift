@@ -223,7 +223,7 @@
                     togglePromoted(ref)
                 } label: {
                     Image(systemName: isHero(ref) ? "star.fill" : "star")
-                        .foregroundStyle(isHero(ref) ? Color.yellow : Color.secondary)
+                        .foregroundStyle(isHero(ref) ? Color.lumeAccent : Color.secondary)
                 }
                 .buttonStyle(.borderless)
                 .accessibilityLabel(isHero(ref) ? "Stop showing \(name) as the hero" : "Show \(name) as the hero")

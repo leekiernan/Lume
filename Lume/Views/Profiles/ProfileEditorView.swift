@@ -28,7 +28,7 @@ struct ProfileEditorView: View {
         self.profile = profile
         _name = State(initialValue: profile?.name ?? "")
         _symbolName = State(initialValue: profile?.symbolName ?? UserProfile.defaultSymbol)
-        _color = State(initialValue: profile?.color ?? .blue)
+        _color = State(initialValue: profile?.color ?? .lume)
         _isChild = State(initialValue: profile?.isChild ?? false)
         _pinHash = State(initialValue: profile?.pinHash ?? "")
     }
