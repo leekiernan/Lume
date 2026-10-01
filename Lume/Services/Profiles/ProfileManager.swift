@@ -151,8 +151,24 @@ final class ProfileManager {
             for: result.activeProfileID,
             allowCloudSeed: coordinator.canSeedProfilePreferences
         )
+        await followLastActiveProfile()
         isReady = true
         refreshProfiles()
+    }
+
+    /// Starts this launch on the profile last chosen on any of the account's
+    /// devices (`LastActiveProfile`), through the ordinary switch so the
+    /// catalog is re-projected rather than relabelled. Skipped when that
+    /// profile isn't on this device yet, and when this device is on a child
+    /// profile: following a parent's choice there would leave the child's
+    /// profile without the PIN.
+    private func followLastActiveProfile() async {
+        guard let target = LastActiveProfile.id, target != activeProfileID,
+              profile(with: target) != nil,
+              profile(with: activeProfileID)?.isChild != true
+        else { return }
+        Logger.sync.info("Starting on the account's last-used profile")
+        await switchProfile(to: target)
     }
 
     // MARK: - Queries
@@ -243,6 +259,8 @@ final class ProfileManager {
             return false
         }
         activeProfileID = id
+        // Every device starts on this profile at its next launch.
+        LastActiveProfile.id = id
         lastPreferencesSnapshot = nil
         lastPreferencesJSON = nil
         synchronizePreferences(for: id, allowCloudSeed: coordinator.canSeedProfilePreferences)

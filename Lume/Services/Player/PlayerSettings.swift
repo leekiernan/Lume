@@ -151,11 +151,11 @@ nonisolated enum PreferredLanguageList {
 }
 
 enum PlayerSettings {
-    static let engineKey = "player.engine"
+    nonisolated static let engineKey = "player.engine"
 
     /// Ordered engine fallback list — see `PlayerEnginePriority`. Stored as a
     /// comma-separated list of `PlayerEngineKind` raw values.
-    static let enginePriorityKey = "player.enginePriority"
+    nonisolated static let enginePriorityKey = "player.enginePriority"
 
     /// Raw value of the `ExternalPlayer` streams are handed off to; any value
     /// that doesn't name a player (including the empty default) keeps playback
@@ -170,7 +170,7 @@ enum PlayerSettings {
     /// Raw value of the `LiveSurfMode` up and down on the remote follow while a
     /// live channel is playing. Unset (or unrecognised) means the channel
     /// rocker; see `LiveSurfMode.default`.
-    static let liveSurfModeKey = "player.liveSurfMode"
+    nonisolated static let liveSurfModeKey = "player.liveSurfMode"
 
     /// Whether swipes across the Siri Remote's touch surface drive the player's
     /// directional actions — channel surfing, the channel browser, the last
@@ -179,7 +179,7 @@ enum PlayerSettings {
     /// those actions to a click on the remote's direction buttons, for viewers
     /// who change channel by brushing the surface. tvOS only — see
     /// `RemoteDirectionGate` for how the two are told apart.
-    static let tvRemoteSwipesKey = "player.tvRemoteSwipes"
+    nonisolated static let tvRemoteSwipesKey = "player.tvRemoteSwipes"
 
     static let tvRemoteSwipesDefault = true
 
@@ -196,17 +196,17 @@ enum PlayerSettings {
     /// on, matching the behaviour viewers expect from a binge-friendly player.
     enum Playback {
         /// Automatically start the next episode once the current one finishes.
-        static let autoPlayNextKey = "player.autoPlayNext"
+        nonisolated static let autoPlayNextKey = "player.autoPlayNext"
         /// Surface a focused "Next Episode" button once the current episode is
         /// near its end — IntroDB's outro window when one is known and plausible,
         /// otherwise the ≥90% "watched" line, and never before it.
-        static let showNextEpisodeButtonKey = "player.showNextEpisodeButton"
+        nonisolated static let showNextEpisodeButtonKey = "player.showNextEpisodeButton"
         /// Surface a "Skip Intro" / "Skip Recap" button while the playhead sits
         /// inside an intro or recap window known to IntroDB (TV episodes only).
         /// The IntroDB fetch this gates is shared with `showNextEpisodeButton`:
         /// the same response also carries the outro window that sets when the
         /// Next Episode button arms, so either toggle being on triggers it.
-        static let showSkipIntroButtonKey = "player.showSkipIntroButton"
+        nonisolated static let showSkipIntroButtonKey = "player.showSkipIntroButton"
 
         static let autoPlayNextDefault = true
         static let showNextEpisodeButtonDefault = true
@@ -233,8 +233,8 @@ enum PlayerSettings {
     /// tvOS the caption is part of the always-on player chrome and `enabled` is
     /// never consulted.
     enum StreamInfo {
-        static let enabledKey = "player.streamInfo.enabled"
-        static let detailLevelKey = "player.streamInfo.detailLevel"
+        nonisolated static let enabledKey = "player.streamInfo.enabled"
+        nonisolated static let detailLevelKey = "player.streamInfo.detailLevel"
 
         /// On: the caption only appears with the controls, which are already a
         /// deliberate tap away, so it costs nothing to a viewer who never wants

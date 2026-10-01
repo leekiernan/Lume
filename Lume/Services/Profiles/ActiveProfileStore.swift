@@ -23,3 +23,21 @@ nonisolated enum ActiveProfileStore {
         }
     }
 }
+
+/// The profile last chosen on any of the account's devices, which every device
+/// starts on at its next launch (`ProfileManager.followLastActiveProfile`).
+/// Synced through the account settings (`AccountSettingsSync`).
+///
+/// A key of its own rather than `ActiveProfileStore`'s: switching a profile
+/// re-projects the catalog, so a value arriving from iCloud must never change
+/// the active profile under a running device — it is only read at launch.
+/// Written only when someone picks a profile, never by the launch bootstrap,
+/// so a launch can't overwrite the choice it is about to follow.
+nonisolated enum LastActiveProfile {
+    static let key = "profiles.lastActiveProfileID.v1"
+
+    static var id: UUID? {
+        get { UserDefaults.standard.string(forKey: key).flatMap(UUID.init(uuidString:)) }
+        set { UserDefaults.standard.set(newValue?.uuidString, forKey: key) }
+    }
+}
