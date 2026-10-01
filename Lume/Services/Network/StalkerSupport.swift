@@ -302,7 +302,9 @@ extension StalkerClient {
 // MARK: - Session
 
 /// Split from StalkerClient.swift, which sits at SwiftLint's file-length limit.
-extension StalkerClient {
+/// `nonisolated` like the client itself, which builds its session from a
+/// nonisolated init and reads `walkConcurrency` off the main actor.
+nonisolated extension StalkerClient {
     /// One session for every client with the default timeout, as in
     /// `XtreamClient`: a client is built per search, category import and stream
     /// resolve, and each used to pay its own TCP and TLS handshake — on the zap
