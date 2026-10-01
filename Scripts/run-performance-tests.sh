@@ -14,7 +14,9 @@
 #
 # Environment:
 #   LUME_PERF_SIM   simulator name or UDID (default: newest available iPhone
-#                   running iOS 26.4 or later — 26.2 fails the deployment target)
+#                   running iOS 26.4 or later — 26.2 fails the deployment target),
+#                   or `macos` to run natively on this Mac — no simulator needed.
+#                   Mac numbers are only comparable with other Mac runs.
 #   LUME_PERF_DD    derived data path (default: /tmp/lume-perf-dd)
 #   LUME_PERF_SPM   shared SwiftPM clone dir (default:
 #                   ~/Library/Developer/Lume-SharedSPM). A private
@@ -37,7 +39,9 @@ mkdir -p "$LOG_DIR"
 LOG_FILE="${LOG_DIR}/perf-$(date +%Y%m%d-%H%M%S).log"
 
 # --- Pick a simulator ------------------------------------------------------
-if [[ -n "${LUME_PERF_SIM:-}" ]]; then
+if [[ "${LUME_PERF_SIM:-}" == "macos" ]]; then
+    DESTINATION="platform=macOS"
+elif [[ -n "${LUME_PERF_SIM:-}" ]]; then
     DESTINATION="platform=iOS Simulator,name=${LUME_PERF_SIM}"
     # A UDID works in the `id=` form; detect one by shape.
     if [[ "$LUME_PERF_SIM" =~ ^[0-9A-Fa-f-]{36}$ ]]; then

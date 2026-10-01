@@ -64,6 +64,7 @@ enum PerfStore {
     /// `@Attribute(.unique)` models crash container load when CloudKit mirroring
     /// is left at `.automatic` on an entitled host.
     static func makeOnDiskContainer() throws -> (container: ModelContainer, directory: URL) {
+        PerfProfileBaseline.enter()
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("LumePerf-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
