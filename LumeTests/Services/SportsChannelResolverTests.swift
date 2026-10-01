@@ -17,6 +17,7 @@ import SwiftData
 import Testing
 
 @MainActor
+@Suite(.readsGlobalState) // Resolving resets `ResolveCache.shared`; see `SportsResolveCacheTests`.
 struct SportsChannelResolverTests {
     private let leagueId = "espn:soccer/ger.1"
     private let playlistID = UUID()
