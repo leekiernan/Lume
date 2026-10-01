@@ -283,7 +283,7 @@ private struct HomePosterCard: View {
                 if let progress {
                     ProgressView(value: progress)
                         .progressViewStyle(.linear)
-                        .tint(.blue)
+                        .tint(.lumeAccent)
                         .padding(.horizontal, 6)
                         .padding(.bottom, 6)
                 }

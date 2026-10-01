@@ -87,7 +87,7 @@ struct SyncProgressView: View {
 
     private var headerTint: Color {
         switch phase {
-        case .ready, .syncing: .accentColor
+        case .ready, .syncing: .lumeAccent
         case .finished: .green
         case .failed: .red
         }
@@ -256,7 +256,7 @@ struct SyncProgressView: View {
                 if phase == .syncing || phase == .finished {
                     ProgressView(value: progress.overallFraction)
                         .progressViewStyle(.linear)
-                        .tint(.accentColor)
+                        .tint(.lumeAccent)
                 }
             }
             .padding()
@@ -358,7 +358,7 @@ struct SyncProgressView: View {
                     if state == .active, fraction > 0 {
                         ProgressView(value: fraction)
                             .progressViewStyle(.linear)
-                            .tint(.accentColor)
+                            .tint(.lumeAccent)
                     }
                 }
             }
@@ -375,7 +375,7 @@ struct SyncProgressView: View {
             case .active:
                 ZStack {
                     Circle()
-                        .stroke(Color.accentColor.opacity(0.25), lineWidth: 2)
+                        .stroke(Color.lumeAccent.opacity(0.25), lineWidth: 2)
                     ProgressView()
                         .controlSize(.small)
                 }

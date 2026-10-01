@@ -50,7 +50,7 @@ struct EPGProgramDetailView: View {
                             } else if cell.isPast(at: now) {
                                 statusBadge("Earlier", color: .secondary)
                             } else {
-                                statusBadge("Upcoming", color: .accentColor)
+                                statusBadge("Upcoming", color: .lumeAccent)
                             }
 
                             Text(cell.title)

@@ -279,7 +279,7 @@
                         if stream.supportsCatchup {
                             Label("Catchup: \(stream.catchupArchiveDays)d", systemImage: "clock.arrow.circlepath")
                                 .font(.system(size: 22))
-                                .foregroundStyle(Color.blue)
+                                .foregroundStyle(Color.lumeAccent)
                         }
                     }
 
