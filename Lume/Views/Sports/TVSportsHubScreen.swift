@@ -59,6 +59,8 @@
         /// The headlined game from its first minute, when Hide Scores is on and
         /// the channel can replay it — worked out once per game, not per render.
         @State private var heroFromStart: PlayableMedia?
+        /// A team page's season, for its games beyond the followed competition.
+        @State var pageSeason: SportsTeamSeason?
         /// "Big this week", and the channels its near-term games resolved to.
         @State var highlightsLoad = SportsHighlightsLoadMachine()
 
@@ -477,45 +479,70 @@
         /// heading, every game it has live or coming in a grid — no hero, no
         /// title button, no rows — and a club's season below. Menu goes back.
         var followPage: some View {
-            let fixtures = grouping.visibleFixtures
+            let fixtures = grouping.pageFixtures(season: pageSeason)
             let preference = SportsChannelPreference.Context.current
-            return CategoryPage(title: scopeTitle) {
-                if fixtures.isEmpty {
-                    noGamesState
-                } else {
-                    // Four across: the width the hub's rows show, where Movies'
-                    // narrower posters fit six.
-                    LazyVGrid(
-                        columns: Array(repeating: GridItem(.flexible(), spacing: PosterCardMetrics.gridSpacing), count: 4),
-                        alignment: .leading,
-                        spacing: PosterCardMetrics.gridSpacing
-                    ) {
-                        ForEach(fixtures) { fixture in
-                            TVFixtureCard(
-                                fixture: fixture,
-                                availability: SportsChannelAvailability(
-                                    resolved[fixture.id], startDate: fixture.headlineDate, preference: preference
-                                ),
-                                showsLeagueName: grouping.scopedFollow?.kind == .team,
-                                fillsWidth: true
-                            ) {
-                                selectedFixture = fixture
+            return ScrollViewReader { proxy in
+                CategoryPage(title: scopeTitle) {
+                    Color.clear.frame(height: 0).id(Self.pageTop)
+                    if fixtures.isEmpty {
+                        // A line, not a screenful: the season sits just below.
+                        Text("No games")
+                            .font(.title3)
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal)
+                            .padding(.vertical, 24)
+                    } else {
+                        // Four across: the width the hub's rows show, where Movies'
+                        // narrower posters fit six.
+                        LazyVGrid(
+                            columns: Array(repeating: GridItem(.flexible(), spacing: PosterCardMetrics.gridSpacing), count: 4),
+                            alignment: .leading,
+                            spacing: PosterCardMetrics.gridSpacing
+                        ) {
+                            ForEach(fixtures) { fixture in
+                                TVFixtureCard(
+                                    fixture: fixture,
+                                    availability: SportsChannelAvailability(
+                                        resolved[fixture.id], startDate: fixture.headlineDate, preference: preference
+                                    ),
+                                    showsLeagueName: grouping.scopedFollow?.kind == .team,
+                                    fillsWidth: true
+                                ) {
+                                    selectedFixture = fixture
+                                }
                             }
                         }
+                        .padding(.horizontal)
+                        .padding(.vertical, 24)
                     }
-                    .padding(.horizontal)
-                    .padding(.vertical, 24)
-                }
-                if let team = seasonTeam {
-                    // On the page's own inset, so it lines up with the heading
-                    // and grid above.
-                    TVTeamSeasonSection(teams: [team], horizontalInset: nil)
+                    if let team = seasonTeam {
+                        // On the page's own inset, so it lines up with the heading
+                        // and grid above.
+                        TVTeamSeasonSection(
+                            teams: [team],
+                            horizontalInset: nil,
+                            // With games above, up reaches them; without, the
+                            // season's first row is the page's top.
+                            onMoveUpFromTop: fixtures.isEmpty
+                                ? { withAnimation { proxy.scrollTo(Self.pageTop, anchor: .top) } }
+                                : nil
+                        )
                         .padding(.top, 24)
                         .padding(.bottom, 60)
+                    }
                 }
             }
             .task(id: resolveKey(fixtures)) { await runResolve(fixtures) }
+            // The team's games across all its competitions, not only the one
+            // it was followed from.
+            .task(id: seasonTeam?.id) {
+                guard let team = seasonTeam else { return }
+                pageSeason = await SportsTeamSeasonLoader.load(team: team)
+            }
         }
+
+        static let pageTop = "followPage.top"
 
         /// The team the page is narrowed to, when its season can be shown.
         var seasonTeam: SportsTeam? {

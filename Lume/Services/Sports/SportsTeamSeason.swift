@@ -17,6 +17,9 @@ nonisolated struct SportsTeamSeason: Equatable {
     let leaders: [SportsLeaderBoard]
     /// The competition the leader numbers cover (the domestic league).
     let leadersCompetitionName: String?
+    /// Every game the team has live or still to play, across all its
+    /// competitions — whichever one it was followed from.
+    var upcoming: [SportsFixture] = []
 }
 
 nonisolated struct SportsSeasonCompetition: Identifiable, Equatable {

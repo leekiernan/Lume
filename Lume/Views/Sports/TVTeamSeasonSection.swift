@@ -17,6 +17,11 @@
         /// The section's side inset: the hub's 60 pt rails, or `nil` for the
         /// system inset a `CategoryPage` uses for its heading and grid.
         var horizontalInset: CGFloat? = 60
+        /// Up from the competition cards, when nothing above them takes focus:
+        /// the page scrolls to its top, where the tab bar can be reached.
+        var onMoveUpFromTop: (() -> Void)?
+
+        private static let rowVerticalInset: CGFloat = 36
         @State private var selectedId: String?
         @State private var season: SportsTeamSeason?
         @State private var isLoading = false
@@ -115,9 +120,17 @@
                                 TVSeasonCompetitionCard(competition: competition)
                             }
                             .buttonStyle(TVCardButtonStyle(focusScale: 1.04))
+                            .onMoveCommand { direction in
+                                // Deferred out of the focus engine's update, as
+                                // every move handler here is.
+                                guard direction == .up, let onMoveUpFromTop else { return }
+                                Task { onMoveUpFromTop() }
+                            }
                         }
                     }
-                    .padding(.vertical, 12)
+                    // Room for a focused card's lift and its shadow, which
+                    // reach about 30 pt below it.
+                    .padding(.vertical, Self.rowVerticalInset)
                 }
                 .scrollClipDisabled()
                 .clippedAtLeadingEdge()
@@ -152,7 +165,9 @@
                             .buttonStyle(TVCardButtonStyle(focusScale: 1.04))
                         }
                     }
-                    .padding(.vertical, 12)
+                    // Room for a focused card's lift and its shadow, which
+                    // reach about 30 pt below it.
+                    .padding(.vertical, Self.rowVerticalInset)
                 }
                 .scrollClipDisabled()
                 .clippedAtLeadingEdge()

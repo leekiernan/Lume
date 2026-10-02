@@ -38,7 +38,11 @@ nonisolated enum SportsEventChannelName {
             let isLive = words.contains { $0.uppercased() == "LIVE" }
             return Parsed(title: title, start: isLive ? nil : start(in: words, now: now, calendar: calendar), isLive: isLive)
         }
-        let segments = name
+        // A full date in the name — "… UCF Fri 2 Oct 7:00 PM EDT" — comes out
+        // before splitting, or its "7:00" would split the title in two.
+        let dated = datedStart(in: name, now: now, calendar: calendar)
+        let rest = dated.map { name.replacingCharacters(in: $0.range, with: " ") } ?? name
+        let segments = rest
             .split(whereSeparator: { "|:()[]".contains($0) })
             .map { $0.trimmingCharacters(in: .whitespaces) }
         let candidates = segments.filter { segment in
@@ -48,7 +52,74 @@ nonisolated enum SportsEventChannelName {
                 && !SportsPayPerView.isPlaceholder(segment, channelName: name)
                 && !endsInPlaceholder(haystack)
         }
-        return candidates.max { $0.count < $1.count }.map { Parsed(title: $0, start: nil, isLive: false) }
+        // A matchup names the event better than whatever else is longest.
+        let best = candidates.filter(isMatchup).max { $0.count < $1.count } ?? candidates.max { $0.count < $1.count }
+        return best.map { Parsed(title: $0, start: dated?.date, isLive: false) }
+    }
+
+    // MARK: - Dates
+
+    /// Zone abbreviations a provider writes, by what they mean. Only these
+    /// are trusted: a date with no zone, or one not listed, is read in the
+    /// device's own zone, as the "Tue 12:00" form is.
+    static let zones: [String: String] = [
+        "ET": "America/New_York", "EST": "America/New_York", "EDT": "America/New_York",
+        "CT": "America/Chicago", "CST": "America/Chicago", "CDT": "America/Chicago",
+        "MT": "America/Denver", "MST": "America/Denver", "MDT": "America/Denver",
+        "PT": "America/Los_Angeles", "PST": "America/Los_Angeles", "PDT": "America/Los_Angeles",
+        "UK": "Europe/London", "GMT": "Europe/London", "BST": "Europe/London",
+        "CET": "Europe/Paris", "CEST": "Europe/Paris", "UTC": "UTC",
+        "AEST": "Australia/Sydney", "AEDT": "Australia/Sydney"
+    ]
+
+    private static let months = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"]
+    private static let monthPattern = "(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\\.?"
+    /// Only a listed zone is consumed, so a word after the time ("… 8PM UFC")
+    /// stays in the title.
+    private static let timePattern = "(\\d{1,2})(?::(\\d{2}))?\\s*([AaPp][Mm])?(?:\\s+("
+        + zones.keys.sorted { $0.count > $1.count }.joined(separator: "|") + ")\\b)?"
+    /// "Fri 2 Oct 7:00 PM EDT", "2nd Oct 19:30", and "Oct 2, 7:00PM ET".
+    private static let dayFirst = try? NSRegularExpression(
+        pattern: "(?:(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)[a-z]*\\.?,?\\s+)?(\\d{1,2})(?:st|nd|rd|th)?\\s+" + monthPattern + ",?\\s+" + timePattern
+    )
+    private static let monthFirst = try? NSRegularExpression(
+        pattern: "(?:(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)[a-z]*\\.?,?\\s+)?" + monthPattern + "\\s+(\\d{1,2})(?:st|nd|rd|th)?,?\\s+" + timePattern
+    )
+
+    /// A dated start in `name`, and where it sits. A time needs minutes or
+    /// AM/PM, so a bare number is never read as one.
+    static func datedStart(in name: String, now: Date, calendar: Calendar = .current) -> (date: Date, range: Range<String.Index>)? {
+        let whole = NSRange(name.startIndex..., in: name)
+        for (regex, dayFirstOrder) in [(dayFirst, true), (monthFirst, false)] {
+            guard let regex, let match = regex.firstMatch(in: name, range: whole),
+                  let range = Range(match.range, in: name)
+            else { continue }
+            func group(_ index: Int) -> String? {
+                Range(match.range(at: index), in: name).map { String(name[$0]) }
+            }
+            let dayText = group(dayFirstOrder ? 1 : 2), monthText = group(dayFirstOrder ? 2 : 1)
+            guard let dayText, let day = Int(dayText), let monthText,
+                  let month = months.firstIndex(of: String(monthText.lowercased().prefix(3))),
+                  let hourText = group(3), var hour = Int(hourText)
+            else { continue }
+            let minute = group(4).flatMap(Int.init)
+            let meridiem = group(5)?.lowercased()
+            guard minute != nil || meridiem != nil else { continue }
+            if meridiem == "pm", hour < 12 { hour += 12 }
+            if meridiem == "am", hour == 12 { hour = 0 }
+            var zoned = calendar
+            if let zone = group(6).flatMap({ zones[$0] }).flatMap(TimeZone.init(identifier:)) { zoned.timeZone = zone }
+            // The year isn't written: the nearest one that puts the date no more
+            // than a month behind.
+            let year = zoned.component(.year, from: now)
+            for candidate in [year, year + 1] {
+                let components = DateComponents(year: candidate, month: month + 1, day: day, hour: hour, minute: minute ?? 0)
+                if let date = zoned.date(from: components), date > now.addingTimeInterval(-30 * 86400) {
+                    return (date, range)
+                }
+            }
+        }
+        return nil
     }
 
     /// The event a category is named for: "UFC Fight Night | Rosas Jr vs

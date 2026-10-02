@@ -64,6 +64,8 @@ struct SportsHubView: View {
     @State private var showingBrowse = false
     @State private var showPaywall = false
     @State private var pendingEvent: SportsPayPerView.Event?
+    /// A team page's season, for its games beyond the followed competition.
+    @State private var pageSeason: SportsTeamSeason?
     // The library toolbar every area carries: playlist, sort, sync, settings.
     @Query private var playlists: [Playlist]
     @AppStorage(PlaylistSelectionStore.key) private var selectedPlaylistID: String = ""
@@ -175,7 +177,7 @@ struct SportsHubView: View {
                     .padding()
                 }
             } else if pageKey != nil {
-                followPage(fixtures)
+                followPage(grouping.pageFixtures(season: pageSeason))
             } else {
                 followedContent(fixtures)
             }
@@ -568,5 +570,11 @@ private extension SportsHubView {
             }
         }
         .task(id: resolveKey(fixtures)) { await runResolve(fixtures) }
+        // The team's games across all its competitions, not only the one it
+        // was followed from.
+        .task(id: grouping.scopedTeam?.id) {
+            guard let team = grouping.scopedTeam, SportsTeamSeasonLoader.supports(team) else { return }
+            pageSeason = await SportsTeamSeasonLoader.load(team: team)
+        }
     }
 }

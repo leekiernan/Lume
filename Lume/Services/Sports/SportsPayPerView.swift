@@ -281,11 +281,11 @@ private actor SportsPayPerViewEventCache {
 }
 
 nonisolated extension SportsPayPerView.Event {
-    /// "Live now", the start ("20:00", "Sat 22:00"), or — for an event read
-    /// from the channel's name — that it's on the channel.
+    /// "Live now", the start in the viewer's time ("20:00", "Sat 22:00"), or
+    /// "Time TBC" when neither the guide nor the channel's name gives one.
     func whenText(now: Date, calendar: Calendar = .current) -> String {
         if isLive(at: now) { return String(localized: "Live now") }
-        guard let start else { return String(localized: "Listed on the channel") }
+        guard let start else { return String(localized: "Time TBC") }
         return calendar.isDate(start, inSameDayAs: now)
             ? start.formatted(.dateTime.hour().minute())
             : start.formatted(.dateTime.weekday(.abbreviated).hour().minute())

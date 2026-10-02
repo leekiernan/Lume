@@ -152,6 +152,17 @@ struct SportsHubGrouping {
         }
     }
 
+    /// A follow's page: its synced games, plus — for a team — every game its
+    /// season knows of, since a team followed from one competition plays in
+    /// others the hub doesn't sync.
+    func pageFixtures(season: SportsTeamSeason?) -> [SportsFixture] {
+        var byID = Dictionary(visibleFixtures.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        for fixture in season?.upcoming ?? [] where isCurrent(fixture) && byID[fixture.id] == nil {
+            byID[fixture.id] = fixture
+        }
+        return byID.values.sorted(by: SportsFixture.displayOrder)
+    }
+
     // MARK: - Rows
 
     /// The hub's rows for the `visibleFixtures` the caller computed once per

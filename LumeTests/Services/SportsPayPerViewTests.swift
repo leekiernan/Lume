@@ -201,3 +201,30 @@ struct SportsMainCardTests {
         #expect(ESPNClient.mainCardDate(event, startDate: Date(timeIntervalSince1970: 1_791_057_600)) == nil)
     }
 }
+
+struct SportsEventChannelDateTests {
+    /// Thu 1 Oct 2026, 12:00 UTC.
+    private let now = Date(timeIntervalSince1970: 1_790_856_000)
+
+    @Test func `a dated name in Eastern time is read in Eastern time, and leaves the title whole`() throws {
+        let parsed = try #require(SportsEventChannelName.parse(
+            "US|ESPN+ PPV 125 | #17 Colorado vs. UCF Fri 2 Oct 7:00 PM EDT", now: now
+        ))
+        #expect(parsed.title == "#17 Colorado vs. UCF")
+        // 7 pm EDT is 23:00 UTC.
+        #expect(parsed.start == Date(timeIntervalSince1970: 1_790_982_000))
+    }
+
+    @Test func `month-first and twenty-four-hour forms`() throws {
+        let first = try #require(SportsEventChannelName.datedStart(in: "Oct 3, 8:30PM ET", now: now))
+        #expect(first.date == Date(timeIntervalSince1970: 1_791_073_800))
+        let second = try #require(SportsEventChannelName.datedStart(in: "Sat 3rd Oct 19:30 BST", now: now))
+        #expect(second.date == Date(timeIntervalSince1970: 1_791_052_200))
+    }
+
+    @Test func `a bare number isn't a time, and a word after the time stays in the title`() {
+        #expect(SportsEventChannelName.datedStart(in: "PPV 2 Oct 125", now: now) == nil)
+        let dated = SportsEventChannelName.datedStart(in: "Sat 3 Oct 8PM UFC 310", now: now)
+        #expect(dated.map { "Sat 3 Oct 8PM UFC 310".replacingCharacters(in: $0.range, with: "") } == " UFC 310")
+    }
+}

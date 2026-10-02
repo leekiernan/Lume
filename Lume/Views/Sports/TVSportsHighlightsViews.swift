@@ -85,6 +85,7 @@
                         .padding(.vertical, 6)
                         .background(Capsule().fill(.white))
                         .foregroundStyle(.black)
+                        .fixedSize()
                     Spacer(minLength: 8)
                     // When, on the top line: a long title or channel name
                     // can't push it off the card.
@@ -92,7 +93,7 @@
                         .font(.system(size: 21, weight: .bold))
                         .monospacedDigit()
                         .lineLimit(1)
-                        .layoutPriority(1)
+                        .minimumScaleFactor(0.8)
                 }
                 Spacer(minLength: 16)
                 if let home = fixture.home, let away = fixture.away {
@@ -154,12 +155,13 @@
                         .padding(.vertical, 6)
                         .background(Capsule().fill(.white))
                         .foregroundStyle(.black)
+                        .fixedSize()
                     Spacer(minLength: 8)
                     Text(verbatim: event.whenText(now: Date()))
                         .font(.system(size: 21, weight: .bold))
                         .monospacedDigit()
                         .lineLimit(1)
-                        .layoutPriority(1)
+                        .minimumScaleFactor(0.8)
                 }
                 Spacer(minLength: 16)
                 if let logoURL = event.logoURL {
