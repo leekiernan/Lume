@@ -133,6 +133,26 @@ struct SportsHubGrouping {
         return groups
     }
 
+    /// How soon a followed team's next game must start to headline the hub.
+    static let heroLeadTime: TimeInterval = 12 * 3600
+
+    /// The game the hub headlines on Today: a live game with a followed team,
+    /// else a live game in a followed league, else a followed team's game
+    /// starting within `heroLeadTime`. `nil` on other segments, and when
+    /// nothing qualifies — the rails then lead.
+    func heroFixture(in fixtures: [SportsFixture]) -> SportsFixture? {
+        guard segment == .today else { return nil }
+        let live = fixtures.filter(\.isInProgress)
+        if let mine = live.first(where: involvesFollowedTeam) { return mine }
+        if let first = live.first { return first }
+        return fixtures
+            .filter { fixture in
+                fixture.status.state == .scheduled && involvesFollowedTeam(fixture)
+                    && fixture.startDate >= now && fixture.startDate.timeIntervalSince(now) <= Self.heroLeadTime
+            }
+            .min { $0.startDate < $1.startDate }
+    }
+
     var scopeTitle: String {
         switch scope {
         case .myTeams:

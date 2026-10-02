@@ -21,10 +21,12 @@
 
     /// Focus targets on the hub, so Menu (exit) from a card can return focus to
     /// the filter row rather than dropping to the tab bar mid-browse.
-    private enum TVSportsFocus: Hashable {
+    enum TVSportsFocus: Hashable {
         case scope
         case segment(SportsHubSegment)
         case manage
+        case heroWatch
+        case heroDetail
         case card(String)
     }
 
@@ -53,6 +55,7 @@
         @State private var playingMedia: PlayableMedia?
         /// Playback queued behind the dismissing detail cover; see `watch`.
         @State private var pendingMedia: PlayableMedia?
+        @AppStorage(SportsSyncService.hideScoresKey) private var hidesScores = false
 
         @FocusState private var focus: TVSportsFocus?
 
@@ -94,29 +97,48 @@
             // One grouping pass per render: the fixtures and groups feed the
             // rails, the default focus and the resolve key alike.
             let fixtures = grouping.visibleFixtures
-            let groups = grouping.groups(for: fixtures)
+            let hero = grouping.heroFixture(in: fixtures)
+            // The headlined game leads the page on its own, not again in a rail.
+            let groups = grouping.groups(for: fixtures.filter { $0.id != hero?.id })
+            let heroAvailability = hero.map { SportsChannelAvailability(resolved[$0.id], startDate: $0.headlineDate) }
             return ScrollViewReader { scrollProxy in
                 ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 36) {
-                        header
-                        if groups.isEmpty {
-                            noGamesState
-                        } else {
-                            ForEach(groups) { group in
-                                section(for: group, scrollProxy: scrollProxy)
+                    ZStack(alignment: .top) {
+                        if let hero {
+                            TVSportsHubHeroBackdrop(fixture: hero)
+                        }
+                        LazyVStack(alignment: .leading, spacing: 36) {
+                            header
+                            if let hero, let heroAvailability {
+                                TVSportsHubHero(
+                                    fixture: hero,
+                                    availability: heroAvailability,
+                                    showsScore: !hidesScores,
+                                    watchFocus: $focus,
+                                    onWatch: watch,
+                                    onOpen: { selectedFixture = hero }
+                                )
+                                .padding(.vertical, 24)
+                            }
+                            if groups.isEmpty, hero == nil {
+                                noGamesState
+                            } else {
+                                ForEach(groups) { group in
+                                    section(for: group, scrollProxy: scrollProxy)
+                                }
                             }
                         }
+                        // The native tab chrome is the next focus target above
+                        // this screen. Match Settings' top breathing room so an
+                        // exit from the filters has an unambiguous spatial route
+                        // to it; at 20pt the controls sat inside that region and
+                        // trapped focus inside the scroll view.
+                        .padding(.top, 72)
+                        .padding(.bottom, 40)
                     }
-                    // The native tab chrome is the next focus target above
-                    // this screen. Match Settings' top breathing room so an
-                    // exit from the filters has an unambiguous spatial route
-                    // to it; at 20pt the controls sat inside that region and
-                    // trapped focus inside the scroll view.
-                    .padding(.top, 72)
-                    .padding(.bottom, 40)
                 }
                 .scrollClipDisabled()
-                .defaultFocus($focus, groups.first?.fixtures.first.map { TVSportsFocus.card($0.id) })
+                .defaultFocus($focus, defaultFocus(hero: hero, availability: heroAvailability, groups: groups))
                 .task(id: resolveKey(fixtures)) { await runResolve(fixtures) }
             }
         }
@@ -248,7 +270,11 @@
                 ScrollView(.horizontal, showsIndicators: false) {
                     LazyHStack(spacing: 24) {
                         ForEach(group.fixtures) { fixture in
-                            TVFixtureLogoCard(fixture: fixture, showsLeagueMark: !group.isSingleLeague) {
+                            TVFixtureCard(
+                                fixture: fixture,
+                                availability: SportsChannelAvailability(resolved[fixture.id], startDate: fixture.headlineDate),
+                                showsLeagueName: !group.isSingleLeague
+                            ) {
                                 selectedFixture = fixture
                             }
                             .focused($focus, equals: .card(fixture.id))
@@ -344,6 +370,19 @@
         }
 
         // MARK: - Focus
+
+        /// Watch on the headlined game when there is a channel for it, else its
+        /// Match Centre, else the first card.
+        private func defaultFocus(
+            hero: SportsFixture?,
+            availability: SportsChannelAvailability?,
+            groups: [SportsFixtureGroup]
+        ) -> TVSportsFocus? {
+            if hero != nil {
+                return availability?.isAvailable == true ? .heroWatch : .heroDetail
+            }
+            return groups.first?.fixtures.first.map { TVSportsFocus.card($0.id) }
+        }
 
         private func returnFocusToFilter(using scrollProxy: ScrollViewProxy) {
             Task { @MainActor in
