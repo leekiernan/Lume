@@ -126,15 +126,35 @@ struct SportsHubView: View {
     @ToolbarContentBuilder
     private var hubToolbar: some ToolbarContent {
         // The scope is picked from the browse panel Movies and Live TV use;
-        // the title names it and opens it too.
+        // the title names it and opens it too. The bar draws above the panel,
+        // so the title steps aside while the panel (with its own) is open.
         ToolbarItem(placement: .principal) {
-            Button {
-                showingBrowse.toggle()
-            } label: {
-                Text(scopeTitle).font(.headline)
+            if !showingBrowse {
+                Button {
+                    showingBrowse.toggle()
+                } label: {
+                    Text(scopeTitle).font(.headline)
+                }
+                .buttonStyle(.plain)
+                .accessibilityHint(Text("Browse"))
             }
-            .buttonStyle(.plain)
-            .accessibilityHint(Text("Browse"))
+        }
+        // Narrowed to one follow, the way back to everything.
+        if scope != .all, !showingBrowse {
+            #if os(macOS)
+                ToolbarItem(placement: .navigation) { allSportsButton }
+            #else
+                ToolbarItem(placement: .topBarLeading) { allSportsButton }
+            #endif
+        }
+    }
+
+    private var allSportsButton: some View {
+        Button {
+            withAnimation(.snappy) { scope = .all }
+        } label: {
+            Label("My Sports", systemImage: "chevron.backward")
+                .labelStyle(.titleAndIcon)
         }
     }
 

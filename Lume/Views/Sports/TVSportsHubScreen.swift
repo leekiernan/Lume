@@ -266,6 +266,9 @@
             .buttonStyle(TVCardButtonStyle(focusScale: 1.02))
             .focused($focus, equals: .scope)
             .onLeadingEdgeLeft(openBrowse)
+            // Narrowed to one follow, Menu on the title goes back to everything
+            // first; on My Sports it passes through to the tab bar.
+            .onExitCommand(perform: scope == .all ? nil : { selectScope(.all) })
             .accessibilityLabel(Text(verbatim: scopeTitle))
             .accessibilityHint(Text("Browse"))
         }
