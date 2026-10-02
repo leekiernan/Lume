@@ -175,14 +175,16 @@ struct SportsHubView: View {
     private func loadHighlights() async {
         let followedTeams = Set(follows.follows.filter { $0.kind == .team }.map(\.key))
         let result = await SportsHighlightsPipeline.run(
-            container: modelContext.container, restriction: restriction, followedTeamIds: followedTeams
+            container: modelContext.container, restriction: restriction, followedTeamIds: followedTeams,
+            overrides: SportsFlagshipOverrides.shared.marks
         )
         guard !Task.isCancelled else { return }
         highlights = result
     }
 
     private func followedContent(_ fixtures: [SportsFixture]) -> some View {
-        VStack(spacing: 0) {
+        let hero = grouping.heroFixture(in: fixtures)
+        return VStack(spacing: 0) {
             Picker("Range", selection: $segment) {
                 ForEach(SportsHubSegment.allCases) { segment in
                     Text(segment.title).tag(segment)
@@ -200,8 +202,17 @@ struct SportsHubView: View {
                     if store.refreshError {
                         hint("Scores unavailable — showing your saved data.", icon: "wifi.slash")
                     }
+                    if let hero {
+                        SportsHubHeroCard(
+                            fixture: hero,
+                            availability: SportsChannelAvailability(resolved[hero.id], startDate: hero.headlineDate, preference: .current),
+                            onWatch: watch,
+                            onOpen: { selectedFixture = hero }
+                        )
+                    }
                     SportsSectionsView(
-                        groups: grouping.groups(for: fixtures),
+                        // The headlined game leads on its own, not again below.
+                        groups: grouping.groups(for: fixtures.filter { $0.id != hero?.id }),
                         resolved: resolved,
                         isFollowed: isFollowed,
                         onOpenDetail: { selectedFixture = $0 },

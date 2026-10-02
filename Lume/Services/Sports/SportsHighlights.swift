@@ -22,6 +22,8 @@ nonisolated struct SportsHighlight: Identifiable, Equatable {
         case tableClash(Int, Int)
         case derby
         case raceDay
+        /// Listed on a broadcaster's flagship channel in the viewer's guide.
+        case mainChannel(String)
         case headline
     }
 
@@ -65,11 +67,14 @@ nonisolated enum SportsHighlights {
     /// - Parameters:
     ///   - standings: league id → table, for top-of-the-table clashes.
     ///   - availableIds: fixtures the viewer's channels carry.
+    ///   - mainChannels: fixtures a flagship channel in the viewer's guide
+    ///     lists, with that channel's name (`SportsFlagshipChannels`).
     static func rank(
         _ fixtures: [SportsFixture],
         standings: [String: [SportsStandingRow]],
         followedTeamIds: Set<String>,
         availableIds: Set<String>,
+        mainChannels: [String: String] = [:],
         now: Date
     ) -> [SportsHighlight] {
         let candidates = fixtures.filter { fixture in
@@ -79,7 +84,12 @@ nonisolated enum SportsHighlights {
             return (upcoming || fixture.isInProgress) && !followed
         }
         let scored = candidates.compactMap { fixture -> SportsHighlight? in
-            let (score, reason) = evaluate(fixture, table: standings[fixture.leagueId] ?? [])
+            var (score, reason) = evaluate(fixture, table: standings[fixture.leagueId] ?? [])
+            if let channel = mainChannels[fixture.id] {
+                // The broadcaster's own call that this is a big game.
+                score += 35
+                if case .headline = reason { reason = .mainChannel(channel) }
+            }
             var total = score
             if availableIds.contains(fixture.id) { total += 10 }
             if fixture.isInProgress { total += 5 }
@@ -161,6 +171,7 @@ nonisolated extension SportsHighlight.Reason {
             String(localized: "\(SportsPeriodLabel.ordinal(first)) v \(SportsPeriodLabel.ordinal(second))")
         case .derby: String(localized: "Derby")
         case .raceDay: String(localized: "Race day")
+        case let .mainChannel(channel): String(localized: "On \(channel)")
         case .headline: String(localized: "Big game")
         }
     }

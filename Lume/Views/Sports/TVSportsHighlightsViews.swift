@@ -110,16 +110,8 @@
 
         private var backdrop: some View {
             ZStack {
-                Color(white: 0.09)
-                RadialGradient(
-                    colors: [fixture.homePalette.primary.opacity(0.55), .clear],
-                    center: UnitPoint(x: 0.25, y: 0.2), startRadius: 0, endRadius: 360
-                )
-                RadialGradient(
-                    colors: [fixture.awayPalette.primary.opacity(0.4), .clear],
-                    center: UnitPoint(x: 0.9, y: 0.45), startRadius: 0, endRadius: 320
-                )
-                LinearGradient(colors: [.clear, .black.opacity(0.75)], startPoint: .center, endPoint: .bottom)
+                SportsArtworkBackdrop(fixture: fixture, size: .card)
+                LinearGradient(colors: [.black.opacity(0.35), .black.opacity(0.85)], startPoint: .top, endPoint: .bottom)
             }
         }
     }

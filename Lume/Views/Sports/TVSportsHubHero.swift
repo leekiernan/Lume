@@ -174,15 +174,9 @@
 
         var body: some View {
             ZStack {
-                RadialGradient(
-                    colors: [fixture.homePalette.primary.opacity(0.55), .clear],
-                    center: UnitPoint(x: 0.75, y: 0.2), startRadius: 0, endRadius: 1100
-                )
-                RadialGradient(
-                    colors: [fixture.awayPalette.primary.opacity(0.35), .clear],
-                    center: UnitPoint(x: 1.0, y: 0.7), startRadius: 0, endRadius: 900
-                )
-                LinearGradient(colors: [.black.opacity(0.85), .clear], startPoint: .leading, endPoint: .center)
+                SportsArtworkBackdrop(fixture: fixture, size: .hero)
+                LinearGradient(colors: [.black.opacity(0.9), .black.opacity(0.35), .clear], startPoint: .leading, endPoint: .trailing)
+                LinearGradient(colors: [.clear, .black], startPoint: .center, endPoint: .bottom)
             }
             .frame(height: 820)
             .frame(maxWidth: .infinity)

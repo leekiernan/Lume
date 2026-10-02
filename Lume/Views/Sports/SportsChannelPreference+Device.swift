@@ -31,3 +31,19 @@ extension SportsChannelPreference.Context {
         #endif
     }
 }
+
+/// "Mark as Main Channel" in a channel's menu: the viewer's correction to which
+/// of their channels count as a broadcaster's flagship for "Big this week".
+struct MainChannelMenuItem: View {
+    let channelName: String
+    @State private var overrides = SportsFlagshipOverrides.shared
+
+    var body: some View {
+        let isMain = overrides.isFlagship(channelName)
+        Button {
+            overrides.toggle(channelName)
+        } label: {
+            Label(isMain ? "Not a Main Channel" : "Mark as Main Channel", systemImage: isMain ? "star.slash" : "star")
+        }
+    }
+}

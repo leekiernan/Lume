@@ -86,9 +86,8 @@ private struct SportsHighlightCard: View {
         .frame(width: 220, height: 190, alignment: .topLeading)
         .background {
             ZStack {
-                Color(white: 0.12)
-                TeamPalette.gradient(home: fixture.homePalette, away: fixture.awayPalette)
-                LinearGradient(colors: [.clear, .black.opacity(0.6)], startPoint: .center, endPoint: .bottom)
+                SportsArtworkBackdrop(fixture: fixture, size: .card)
+                LinearGradient(colors: [.black.opacity(0.3), .black.opacity(0.85)], startPoint: .top, endPoint: .bottom)
             }
             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         }
@@ -293,5 +292,100 @@ extension SportsKnockoutStep {
         case .next, .upcoming:
             return "\(opponent) · \(date.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated)))"
         }
+    }
+}
+
+// MARK: - Hero
+
+/// The iPhone / iPad / Mac hub's headliner on Today — the same game the tvOS
+/// hub leads with (`SportsHubGrouping.heroFixture`): fan art behind the
+/// crests and score, and Watch on the channel that suits this viewer.
+struct SportsHubHeroCard: View {
+    let fixture: SportsFixture
+    let availability: SportsChannelAvailability
+    let onWatch: (ResolvedChannel) -> Void
+    let onOpen: () -> Void
+    @AppStorage(SportsSyncService.hideScoresKey) private var hideScoresSetting = false
+    @State private var reveal = SportsScoreReveal.shared
+
+    private var showsScore: Bool {
+        fixture.showsScore(hidingScores: hideScoresSetting, reveal: reveal)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 8) {
+                if fixture.isInProgress {
+                    LiveBadge(fontSize: 12)
+                    if let detail = fixture.status.liveDetail(family: fixture.periodFamily, hidingScores: !showsScore) {
+                        Text(verbatim: detail).font(.caption.weight(.bold)).monospacedDigit()
+                    }
+                } else {
+                    Text(verbatim: fixture.cardWhenText).font(.caption.weight(.bold))
+                }
+                Text(verbatim: fixture.tournamentLine ?? fixture.leagueName)
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.8))
+                    .lineLimit(1)
+            }
+            if let home = fixture.home, let away = fixture.away {
+                HStack(alignment: .center) {
+                    side(home)
+                    Spacer(minLength: 8)
+                    if showsScore, fixture.status.state != .scheduled {
+                        Text(verbatim: fixture.scoreLine)
+                            .font(.system(size: 40, weight: .bold, design: .rounded))
+                            .monospacedDigit()
+                    } else {
+                        Text("vs").font(.title3).foregroundStyle(.white.opacity(0.7))
+                    }
+                    Spacer(minLength: 8)
+                    side(away)
+                }
+            } else {
+                Text(verbatim: fixture.eventTitle).font(.title2.weight(.bold)).lineLimit(2)
+            }
+            HStack(spacing: 10) {
+                if case let .available(_, best) = availability {
+                    Button {
+                        onWatch(best)
+                    } label: {
+                        Label {
+                            Text("Watch on \(best.stream.name)").lineLimit(1)
+                        } icon: {
+                            Image(systemName: "play.fill")
+                        }
+                        .font(.subheadline.weight(.bold))
+                        .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(Color.lumeAccent)
+                }
+                Button("Match Centre", action: onOpen)
+                    .buttonStyle(.bordered)
+                    .font(.subheadline.weight(.semibold))
+            }
+        }
+        .foregroundStyle(.white)
+        .padding(18)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background {
+            ZStack {
+                SportsArtworkBackdrop(fixture: fixture, size: .hero)
+                LinearGradient(colors: [.black.opacity(0.35), .black.opacity(0.85)], startPoint: .top, endPoint: .bottom)
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        }
+        .environment(\.colorScheme, .dark)
+    }
+
+    private func side(_ competitor: SportsCompetitor) -> some View {
+        VStack(spacing: 6) {
+            TeamCrest(team: competitor.team, size: 52)
+            Text(verbatim: competitor.team.shortName.isEmpty ? competitor.team.name : competitor.team.shortName)
+                .font(.subheadline.weight(.semibold))
+                .lineLimit(1)
+        }
+        .frame(maxWidth: 120)
     }
 }

@@ -16,7 +16,8 @@
         func loadHighlights() async {
             let followedTeams = Set(follows.follows.filter { $0.kind == .team }.map(\.key))
             let result = await SportsHighlightsPipeline.run(
-                container: modelContext.container, restriction: restriction, followedTeamIds: followedTeams
+                container: modelContext.container, restriction: restriction, followedTeamIds: followedTeams,
+                overrides: SportsFlagshipOverrides.shared.marks
             )
             guard !Task.isCancelled else { return }
             highlightResolved = result.resolved

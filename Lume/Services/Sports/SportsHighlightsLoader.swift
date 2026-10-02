@@ -96,6 +96,7 @@ nonisolated enum SportsHighlightsPipeline {
         container: ModelContainer,
         restriction: ContentRestriction,
         followedTeamIds: Set<String>,
+        overrides: SportsFlagshipOverrides.Marks = .init(),
         now: Date = Date()
     ) async -> Result {
         let feed = await SportsHighlightsLoader.load(now: now)
@@ -109,8 +110,18 @@ nonisolated enum SportsHighlightsPipeline {
             ? [:]
             : await SportsChannelResolver.resolve(container: container, fixtures: toResolve, restriction: restriction)
         let available = Set(resolved.filter { !$0.value.isEmpty }.keys)
+        // Games a guide already covers, checked against the viewer's flagship
+        // channels only — a handful of guides, not every channel.
+        let nearTerm = feed.fixtures.filter {
+            $0.status.state == .scheduled && $0.startDate >= now
+                && $0.startDate.timeIntervalSince(now) < SportsChannelAvailability.guideHorizon
+        }
+        let mainChannels = await SportsFlagshipChannels.mainChannels(
+            for: nearTerm, container: container, restriction: restriction, overrides: overrides, now: now
+        )
         let highlights = SportsHighlights.rank(
-            feed.fixtures, standings: feed.standings, followedTeamIds: followedTeamIds, availableIds: available, now: now
+            feed.fixtures, standings: feed.standings, followedTeamIds: followedTeamIds,
+            availableIds: available, mainChannels: mainChannels, now: now
         )
         return Result(highlights: highlights, resolved: resolved)
     }
