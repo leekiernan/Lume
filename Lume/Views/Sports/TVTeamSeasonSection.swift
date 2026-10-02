@@ -14,6 +14,9 @@
 
     struct TVTeamSeasonSection: View {
         let teams: [SportsTeam]
+        /// The section's side inset: the hub's 60 pt rails, or `nil` for the
+        /// system inset a `CategoryPage` uses for its heading and grid.
+        var horizontalInset: CGFloat? = 60
         @State private var selectedId: String?
         @State private var season: SportsTeamSeason?
         @State private var isLoading = false
@@ -45,7 +48,7 @@
                         .focusSection()
                     }
                 }
-                .padding(.horizontal, 60)
+                .padding(.horizontal, horizontalInset)
                 .focusSection()
                 .task(id: selected.id) { await load(selected) }
             }

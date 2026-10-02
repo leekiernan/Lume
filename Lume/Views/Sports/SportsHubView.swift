@@ -63,6 +63,7 @@ struct SportsHubView: View {
     @State private var showManageTeams = false
     @State private var showingBrowse = false
     @State private var showPaywall = false
+    @State private var pendingEvent: SportsPayPerView.Event?
     // The library toolbar every area carries: playlist, sort, sync, settings.
     @Query private var playlists: [Playlist]
     @AppStorage(PlaylistSelectionStore.key) private var selectedPlaylistID: String = ""
@@ -151,6 +152,7 @@ struct SportsHubView: View {
             ChannelPickerSheet(fixture: fixture, resolved: resolved[fixture.id] ?? [], onWatch: watch)
         }
         .paywall(isPresented: $showPaywall, highlight: .sportsHub)
+        .payPerViewConfirmation($pendingEvent, onWatch: playEvent)
         #if os(iOS) || os(visionOS)
             .fullScreenCover(item: $playingMedia) { media in
                 FullScreenPlayerView(media: media)
@@ -398,7 +400,16 @@ struct SportsHubView: View {
         present(media, afterSheet: hadSheet)
     }
 
+    /// Plays a pay-per-view channel while its event is on; asks first before.
     private func watchEvent(_ event: SportsPayPerView.Event) {
+        guard event.isLive(at: Date()) else {
+            pendingEvent = event
+            return
+        }
+        playEvent(event)
+    }
+
+    private func playEvent(_ event: SportsPayPerView.Event) {
         guard let media = SportsPlayback.media(for: event, in: modelContext) else { return }
         present(media, afterSheet: false)
     }

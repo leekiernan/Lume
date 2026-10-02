@@ -103,10 +103,12 @@ private struct SportsHighlightCard: View {
                     .background(Capsule().fill(.white))
                     .foregroundStyle(.black)
                 Spacer(minLength: 4)
-                Text(verbatim: fixture.leagueName)
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(.white.opacity(0.8))
+                // When, on the top line, as on tvOS.
+                Text(verbatim: fixture.isInProgress ? String(localized: "Live now") : fixture.cardWhenText)
+                    .font(.caption.weight(.bold))
+                    .monospacedDigit()
                     .lineLimit(1)
+                    .layoutPriority(1)
             }
             Spacer(minLength: 4)
             if let home = fixture.home, let away = fixture.away {
@@ -118,9 +120,10 @@ private struct SportsHighlightCard: View {
             Text(verbatim: fixture.eventShortTitleOrMatchup)
                 .font(.subheadline.weight(.bold))
                 .lineLimit(2)
-            Text(verbatim: fixture.isInProgress ? String(localized: "Live now") : fixture.cardWhenText)
+            Text(verbatim: fixture.leagueName)
                 .font(.caption)
                 .foregroundStyle(.white.opacity(0.8))
+                .lineLimit(1)
             if let label = availability.label {
                 Label(label, systemImage: "tv")
                     .font(.caption2.weight(.semibold))

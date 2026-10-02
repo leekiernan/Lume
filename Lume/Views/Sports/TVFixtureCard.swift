@@ -18,6 +18,8 @@
         let availability: SportsChannelAvailability
         /// Off inside a rail that is already one competition.
         var showsLeagueName = true
+        /// In a grid the card fills its column; in a rail it keeps its width.
+        var fillsWidth = false
         var onSelect: () -> Void
         @AppStorage(SportsSyncService.hideScoresKey) private var hidesScores = false
         @State private var reveal = SportsScoreReveal.shared
@@ -38,7 +40,8 @@
                     availability: availability,
                     showsLeagueName: showsLeagueName,
                     showsScore: showsScore,
-                    offersReveal: canReveal
+                    offersReveal: canReveal,
+                    fillsWidth: fillsWidth
                 )
             }
             .buttonStyle(TVCardButtonStyle(focusScale: 1.06))
@@ -64,6 +67,7 @@
         let showsLeagueName: Bool
         let showsScore: Bool
         let offersReveal: Bool
+        let fillsWidth: Bool
         @Environment(\.isFocused) private var isFocused
 
         var body: some View {
@@ -83,7 +87,10 @@
             }
             .padding(.horizontal, 24)
             .padding(.vertical, 20)
-            .frame(width: 404, height: 236, alignment: .topLeading)
+            .frame(
+                minWidth: fillsWidth ? 0 : 404, maxWidth: fillsWidth ? .infinity : 404,
+                minHeight: 236, maxHeight: 236, alignment: .topLeading
+            )
             .background(
                 RoundedRectangle(cornerRadius: 26, style: .continuous)
                     .fill(Color.black.opacity(0.55))

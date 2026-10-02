@@ -86,10 +86,13 @@
                         .background(Capsule().fill(.white))
                         .foregroundStyle(.black)
                     Spacer(minLength: 8)
-                    Text(verbatim: fixture.leagueName)
-                        .font(.system(size: 19, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.8))
+                    // When, on the top line: a long title or channel name
+                    // can't push it off the card.
+                    Text(verbatim: whenLine)
+                        .font(.system(size: 21, weight: .bold))
+                        .monospacedDigit()
                         .lineLimit(1)
+                        .layoutPriority(1)
                 }
                 Spacer(minLength: 16)
                 if let home = fixture.home, let away = fixture.away {
@@ -103,12 +106,13 @@
                     .font(.system(size: 30, weight: .bold))
                     .lineLimit(2)
                     .minimumScaleFactor(0.8)
-                Text(verbatim: whenLine)
+                Text(verbatim: fixture.leagueName)
                     .font(.system(size: 21))
                     .foregroundStyle(.white.opacity(0.8))
+                    .lineLimit(1)
                     .padding(.top, 6)
                 if let label = availability.label {
-                    Label(label, systemImage: "tv")
+                    Label { Text(verbatim: label).lineLimit(1) } icon: { Image(systemName: "tv") }
                         .font(.system(size: 19, weight: .semibold))
                         .foregroundStyle(availability.isAvailable ? Color.lumeAccent : .white.opacity(0.55))
                         .padding(.top, 10)
@@ -151,6 +155,11 @@
                         .background(Capsule().fill(.white))
                         .foregroundStyle(.black)
                     Spacer(minLength: 8)
+                    Text(verbatim: event.whenText(now: Date()))
+                        .font(.system(size: 21, weight: .bold))
+                        .monospacedDigit()
+                        .lineLimit(1)
+                        .layoutPriority(1)
                 }
                 Spacer(minLength: 16)
                 if let logoURL = event.logoURL {
@@ -168,14 +177,13 @@
                     .font(.system(size: 30, weight: .bold))
                     .lineLimit(3)
                     .minimumScaleFactor(0.8)
-                Text(verbatim: event.whenText(now: Date()))
-                    .font(.system(size: 21))
-                    .foregroundStyle(.white.opacity(0.8))
-                    .padding(.top, 6)
-                Label { Text(verbatim: event.channelName).lineLimit(1) } icon: { Image(systemName: "play.fill") }
-                    .font(.system(size: 19, weight: .semibold))
-                    .foregroundStyle(Color.lumeAccent)
-                    .padding(.top, 10)
+                // Play only once it's on; before, the card says when.
+                Label { Text(verbatim: event.channelName).lineLimit(1) } icon: {
+                    Image(systemName: event.isLive(at: Date()) ? "play.fill" : "clock")
+                }
+                .font(.system(size: 19, weight: .semibold))
+                .foregroundStyle(Color.lumeAccent)
+                .padding(.top, 10)
             }
             .foregroundStyle(.white)
             .padding(26)

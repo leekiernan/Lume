@@ -51,7 +51,7 @@
 
         /// Focus back where the panel was opened from.
         func returnFromBrowse() {
-            let target = browseReturnFocus ?? .scope
+            guard let target = browseReturnFocus else { return }
             Task { @MainActor in focus = target }
         }
     }
