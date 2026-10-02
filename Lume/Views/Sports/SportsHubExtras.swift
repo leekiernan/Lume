@@ -403,7 +403,7 @@ extension SportsKnockoutStep {
 // MARK: - Hero
 
 /// The iPhone / iPad / Mac hub's headliner — the same game the tvOS hub leads
-/// with (`SportsHubGrouping.heroFixture`): fan art behind the crests and
+/// with (`SportsHeroSelectionMachine`): fan art behind the crests and
 /// score, and Watch on the channel that suits this viewer, or Remind Me for a
 /// game the guide doesn't reach yet.
 struct SportsHubHeroCard: View {

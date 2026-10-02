@@ -2,10 +2,9 @@
 //  SportsHubHeroTests.swift
 //  LumeTests
 //
-//  Which game the hub headlines: a followed team's live game, else any live
-//  game the viewer follows, else the followed team's next game this week, else
-//  the biggest "Big this week" pick, else the followed leagues' next game.
-//  Yesterday has none.
+//  Which game the hub headlines: semantic tiers keep live/followed fixtures
+//  ahead of wider highlights, while channel availability chooses within a
+//  tier. Yesterday has none.
 //
 
 import Foundation
@@ -42,77 +41,90 @@ struct SportsHubHeroTests {
         )
     }
 
+    private func hero(
+        _ fixtures: [SportsFixture],
+        fallback: SportsFixture? = nil,
+        availableIDs: Set<String> = [],
+        segment: SportsHubSegment = .today
+    ) -> SportsFixture? {
+        let grouping = grouping(segment: segment)
+        let candidates = grouping.heroCandidates(in: fixtures, fallback: fallback, availableIDs: availableIDs)
+        var machine = SportsHeroSelectionMachine()
+        machine.reconcile(candidates: candidates, context: "test")
+        return machine.displayed(in: candidates, context: "test")?.fixture
+    }
+
     @Test func `a followed team's live game leads`() {
         let other = game("other", home: "5", away: "6", offset: -1800, state: .inProgress)
         let mine = game("mine", home: "1", away: "2", offset: -600, state: .inProgress)
 
-        #expect(grouping().heroFixture(in: [other, mine])?.id == "mine")
+        #expect(hero([other, mine])?.id == "mine")
     }
 
     @Test func `any live game in a followed league leads when the team isn't playing`() {
         let other = game("other", home: "5", away: "6", offset: -1800, state: .inProgress)
         let later = game("later", home: "1", away: "2", offset: 3600, state: .scheduled)
 
-        #expect(grouping().heroFixture(in: [later, other])?.id == "other")
+        #expect(hero([later, other])?.id == "other")
     }
 
     @Test func `with nothing live, the followed team's next game`() {
         let soon = game("soon", home: "1", away: "2", offset: 3 * 3600, state: .scheduled)
         let leagueOnly = game("league", home: "5", away: "6", offset: 3600, state: .scheduled)
 
-        #expect(grouping().heroFixture(in: [leagueOnly, soon])?.id == "soon")
+        #expect(hero([leagueOnly, soon])?.id == "soon")
     }
 
     @Test func `the followed team's game later in the week still headlines`() {
         let thursday = game("thursday", home: "1", away: "2", offset: 4 * 86400, state: .scheduled)
         let done = game("done", home: "1", away: "2", offset: -4 * 3600, state: .final)
 
-        #expect(grouping().heroFixture(in: [thursday, done])?.id == "thursday")
+        #expect(hero([thursday, done])?.id == "thursday")
     }
 
     @Test func `with no followed game, the biggest pick of the week`() {
         let leagueOnly = game("league", home: "5", away: "6", offset: 3600, state: .scheduled)
         let big = game("big", home: "7", away: "8", offset: 2 * 86400, state: .scheduled)
 
-        #expect(grouping().heroFixture(in: [leagueOnly], fallback: big)?.id == "big")
+        #expect(hero([leagueOnly], fallback: big)?.id == "big")
     }
 
     @Test func `with no pick either, the followed leagues' next game`() {
         let leagueOnly = game("league", home: "5", away: "6", offset: 3600, state: .scheduled)
 
-        #expect(grouping().heroFixture(in: [leagueOnly])?.id == "league")
+        #expect(hero([leagueOnly])?.id == "league")
     }
 
-    @Test func `an on-channel game beats a stronger off-channel fallback`() {
+    @Test func `channel availability keeps the followed upcoming tier ahead of a fallback`() {
         let mine = game("mine", home: "1", away: "2", offset: 3600, state: .scheduled)
         let big = game("big", home: "7", away: "8", offset: 2 * 86400, state: .scheduled)
 
-        #expect(grouping().heroFixture(in: [mine], fallback: big, availableIDs: ["mine"])?.id == "mine")
+        #expect(hero([mine], fallback: big, availableIDs: ["mine"])?.id == "mine")
     }
 
-    @Test func `an on-channel fallback beats an off-channel followed game`() {
+    @Test func `a lower-tier on-channel fallback cannot displace a followed game`() {
         let mine = game("mine", home: "1", away: "2", offset: 3600, state: .scheduled)
         let big = game("big", home: "7", away: "8", offset: 2 * 86400, state: .scheduled)
 
-        #expect(grouping().heroFixture(in: [mine], fallback: big, availableIDs: ["big"])?.id == "big")
+        #expect(hero([mine], fallback: big, availableIDs: ["big"])?.id == "mine")
     }
 
-    @Test func `the strongest event becomes a remind-me hero when nothing is on channel`() {
+    @Test func `the followed upcoming game remains the remind-me hero without a channel`() {
         let mine = game("mine", home: "1", away: "2", offset: 3600, state: .scheduled)
         let big = game("big", home: "7", away: "8", offset: 2 * 86400, state: .scheduled)
 
-        #expect(grouping().heroFixture(in: [mine], fallback: big)?.id == "big")
+        #expect(hero([mine], fallback: big)?.id == "mine")
     }
 
     @Test func `beyond a week, nothing headlines`() {
         let far = game("far", home: "1", away: "2", offset: 9 * 86400, state: .scheduled)
 
-        #expect(grouping().heroFixture(in: [far]) == nil)
+        #expect(hero([far]) == nil)
     }
 
     @Test func `yesterday has no hero`() {
         let mine = game("mine", home: "1", away: "2", offset: -600, state: .inProgress)
 
-        #expect(grouping(segment: .yesterday).heroFixture(in: [mine]) == nil)
+        #expect(hero([mine], segment: .yesterday) == nil)
     }
 }

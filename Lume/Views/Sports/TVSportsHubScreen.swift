@@ -52,6 +52,7 @@
         @State var browseReturnFocus: TVSportsFocus?
         @State private var segment: SportsHubSegment = .today
         @State private var resolved: [String: [ResolvedChannel]] = [:]
+        @State private var heroSelection = SportsHeroSelectionMachine()
         @State var selectedFixture: SportsFixture?
         @State var showManageTeams = false
         @State private var showPaywall = false
@@ -118,9 +119,10 @@
                     .filter { !$0.value.isEmpty }
                     .map(\.key)
             )
-            let hero = grouping.heroFixture(
+            let candidates = grouping.heroCandidates(
                 in: fixtures, fallback: highlightsLoad.result.highlights.first?.fixture, availableIDs: availableIDs
             )
+            let hero = heroSelection.displayed(in: candidates, context: heroSelectionContext)?.fixture
             // Big this week leaves out whichever pick is already the headline.
             let highlights = highlightsLoad.result.highlights.filter { $0.fixture.id != hero?.id }
             // The headlined game leads the page on its own, not again in a rail.
@@ -191,6 +193,9 @@
                 .scrollClipDisabled()
                 .defaultFocus($focus, defaultFocus(hero: hero, availability: heroAvailability, groups: groups))
                 .task(id: resolveKey(toResolve)) { await runResolve(toResolve) }
+                .task(id: heroSelectionKey(for: candidates)) {
+                    heroSelection.reconcile(candidates: candidates, context: heroSelectionContext)
+                }
             }
         }
 
@@ -460,31 +465,6 @@
             }
         }
 
-        // MARK: - Lifecycle
-
-        private func onAppear() {
-            store.loadCached(leagueIds: displayLeagueIds)
-            SportsSyncService.shared.refreshIfStale()
-            SportsSyncService.shared.beginLivePolling()
-        }
-
-        private func resolveKey(_ fixtures: [SportsFixture]) -> String {
-            fixtures.map(\.id).joined(separator: ",") + "|" + String(epg.isSyncing)
-        }
-
-        private func runResolve(_ fixtures: [SportsFixture]) async {
-            guard !fixtures.isEmpty else {
-                resolved = [:]
-                return
-            }
-            await SportsChannelResolver.resolveSoonestFirst(
-                container: modelContext.container,
-                fixtures: fixtures,
-                restriction: restriction,
-                publish: { resolved = $0 }
-            )
-        }
-
         // MARK: - Playback
 
         func watch(_ channel: ResolvedChannel) {
@@ -522,6 +502,50 @@
     }
 
     private extension TVSportsHubScreen {
+        // MARK: - Lifecycle
+
+        func onAppear() {
+            store.loadCached(leagueIds: displayLeagueIds)
+            SportsSyncService.shared.refreshIfStale()
+            SportsSyncService.shared.beginLivePolling()
+        }
+
+        func resolveKey(_ fixtures: [SportsFixture]) -> String {
+            fixtures.map(\.id).joined(separator: ",") + "|" + String(epg.isSyncing)
+        }
+
+        func runResolve(_ fixtures: [SportsFixture]) async {
+            guard !fixtures.isEmpty else {
+                resolved = [:]
+                return
+            }
+            await SportsChannelResolver.resolveSoonestFirst(
+                container: modelContext.container,
+                fixtures: fixtures,
+                restriction: restriction,
+                publish: { resolved = $0 }
+            )
+        }
+
+        var heroSelectionContext: String {
+            let scopeToken = switch scope {
+            case .myTeams: "myTeams"
+            case let .league(id): "league:\(id)"
+            }
+            let followsToken = follows.follows
+                .map { "\($0.kind.rawValue):\($0.key)" }
+                .sorted()
+                .joined(separator: ",")
+            return "\(scopeToken)|\(segment.rawValue)|\(followsToken)"
+        }
+
+        func heroSelectionKey(for candidates: [SportsHeroSelectionMachine.Candidate]) -> String {
+            let candidatesToken = candidates
+                .map { "\($0.id):\($0.tier.rawValue):\($0.isAvailable)" }
+                .joined(separator: ",")
+            return "\(heroSelectionContext)|\(candidatesToken)"
+        }
+
         // MARK: - Follow
 
         private func isFollowed(_ team: SportsTeam) -> Bool {
@@ -553,40 +577,6 @@
                 .filter { $0.kind == .team }
                 .compactMap { store.team(by: $0.key) }
                 .filter(SportsTeamSeasonLoader.supports)
-        }
-    }
-
-    /// The page-title chrome for the scope menu: bare white text at rest, a soft
-    /// wash when focused. A solid white fill here would turn the heading into a
-    /// button and shout over the cards.
-    private struct TVSportsTitleChrome<Content: View>: View {
-        @ViewBuilder var content: () -> Content
-        @Environment(\.isFocused) private var isFocused
-
-        var body: some View {
-            content()
-                .foregroundStyle(.white)
-                .padding(.horizontal, 18)
-                .padding(.vertical, 8)
-                .background(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .fill(.white.opacity(isFocused ? 0.16 : 0))
-                )
-                .animation(.easeOut(duration: 0.15), value: isFocused)
-        }
-    }
-
-    /// A round icon-only control that shares the pills' rest wash and white
-    /// focus fill, for actions that need no label at rest.
-    private struct TVSportsCircleChrome<Content: View>: View {
-        @ViewBuilder var content: () -> Content
-        @Environment(\.isFocused) private var isFocused
-
-        var body: some View {
-            content()
-                .foregroundStyle(isFocused ? .black : .white)
-                .frame(width: 64, height: 64)
-                .background(Circle().fill(isFocused ? AnyShapeStyle(.white) : AnyShapeStyle(.white.opacity(0.1))))
         }
     }
 

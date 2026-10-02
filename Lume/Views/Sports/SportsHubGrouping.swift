@@ -141,37 +141,47 @@ struct SportsHubGrouping {
     /// How far ahead a game can be and still headline the hub.
     static let heroHorizon: TimeInterval = 7 * 86400
 
-    /// The game the hub headlines, so the page always leads with something.
-    /// Prefer a resolvable fixture across the normal live/followed priority;
-    /// when no candidate is in the viewer's channels, use `fallback` — the
-    /// strongest upcoming Big This Week event — as an honest Remind Me hero.
-    /// Yesterday has none: it is results.
-    func heroFixture(
+    /// Hero candidates in semantic priority order. Availability is only a
+    /// tie-break within each tier: a lower-tier highlight cannot replace a live
+    /// game simply because its guide match arrived first.
+    func heroCandidates(
         in fixtures: [SportsFixture],
         fallback: SportsFixture? = nil,
         availableIDs: Set<String> = []
-    ) -> SportsFixture? {
-        guard segment != .yesterday else { return nil }
+    ) -> [SportsHeroSelectionMachine.Candidate] {
+        guard segment != .yesterday else { return [] }
         let live = fixtures.filter(\.isInProgress)
         let upcoming = upcomingFixtures(alongside: fixtures)
+        var candidates: [SportsHeroSelectionMachine.Candidate] = []
+        var seen: Set<String> = []
 
-        var candidates: [SportsFixture] = []
-        candidates.append(contentsOf: live.filter(involvesFollowedTeam))
-        candidates.append(contentsOf: live.filter { !involvesFollowedTeam($0) })
+        func append(_ fixtures: [SportsFixture], tier: SportsHeroSelectionMachine.Tier) {
+            for fixture in fixtures where seen.insert(fixture.id).inserted {
+                candidates.append(SportsHeroSelectionMachine.Candidate(
+                    fixture: fixture, tier: tier, isAvailable: availableIDs.contains(fixture.id)
+                ))
+            }
+        }
+
+        append(live.filter(involvesFollowedTeam), tier: .followedLive)
+        append(live.filter { !involvesFollowedTeam($0) }, tier: .live)
         if scopeIsLeague {
-            candidates.append(contentsOf: upcoming)
+            append(upcoming, tier: .primaryUpcoming)
         } else {
-            candidates.append(contentsOf: upcoming.filter(involvesFollowedTeam))
-            candidates.append(contentsOf: upcoming.filter { !involvesFollowedTeam($0) })
+            append(upcoming.filter(involvesFollowedTeam), tier: .primaryUpcoming)
         }
-        if let fallback, !candidates.contains(where: { $0.id == fallback.id }) {
-            candidates.append(fallback)
+        if let fallback {
+            let tier: SportsHeroSelectionMachine.Tier = if fallback.isInProgress {
+                involvesFollowedTeam(fallback) ? .followedLive : .live
+            } else {
+                .highlight
+            }
+            append([fallback], tier: tier)
         }
-
-        if let onChannel = candidates.first(where: { availableIDs.contains($0.id) }) {
-            return onChannel
+        if !scopeIsLeague {
+            append(upcoming.filter { !involvesFollowedTeam($0) }, tier: .contextualUpcoming)
         }
-        return fallback ?? candidates.first
+        return candidates
     }
 
     /// The scope's games in the week ahead, soonest first — what's on screen

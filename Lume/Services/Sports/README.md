@@ -225,10 +225,12 @@ effects out, one owner — applied to what the Apple TV redesign added:
 
 - **Pure, no state:** `SportsHighlights.rank`, `SportsTeamSeasonBuilder`,
   `SportsRacingSeason.build`, `SportsChannelPreference.ordered`,
-  `SportsChannelAvailability`, `SportsHubGrouping.heroFixture`. Unit-tested.
+  `SportsChannelAvailability`, `SportsHubGrouping.heroCandidates`. Unit-tested.
 - **Machines:** `SportsAlertMachine` (what a poll raises; memory per game,
-  raised ids) and `PlayerDetourMachine` (the way back to a film, and when its
-  pill shows). Both pure values; their owners perform the effects.
+  raised ids), `SportsHeroSelectionMachine` (stable hero identity across
+  score/guide partial results), and `PlayerDetourMachine` (the way back to a
+  film, and when its pill shows). Both pure values; their owners perform the
+  effects.
 - **Owners:** `SportsAlertCoordinator` owns the alert machine, the 30 s feed
   and the toast queue for the life of a playback session; it is reset when
   playback ends so the next session starts from a baseline. The player's

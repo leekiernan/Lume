@@ -2,7 +2,7 @@
 //  TVSportsHubHero.swift
 //  Lume
 //
-//  The game the tvOS hub headlines (`SportsHubGrouping.heroFixture`): big
+//  The game the tvOS hub headlines (`SportsHeroSelectionMachine`): big
 //  crests and score over fan art and the two teams' colours, and Watch on the
 //  channel the resolver ranks first — the one press from the hub to the game —
 //  or Remind Me for a game the guide doesn't reach yet. Match Centre opens the

@@ -57,6 +57,7 @@ struct SportsHubView: View {
     @State private var scope: SportsHubScope = .myTeams
     @State private var segment: SportsHubSegment = .today
     @State private var resolved: [String: [ResolvedChannel]] = [:]
+    @State private var heroSelection = SportsHeroSelectionMachine()
     @State private var highlightsLoad = SportsHighlightsLoadMachine()
     @State private var selectedFixture: SportsFixture?
     @State private var pickerFixture: SportsFixture?
@@ -213,9 +214,10 @@ struct SportsHubView: View {
     }
 
     private func followedContent(_ fixtures: [SportsFixture]) -> some View {
-        let hero = grouping.heroFixture(
+        let candidates = grouping.heroCandidates(
             in: fixtures, fallback: highlightsLoad.result.highlights.first?.fixture, availableIDs: heroAvailableIDs
         )
+        let hero = heroSelection.displayed(in: candidates, context: heroSelectionContext)?.fixture
         return VStack(spacing: 0) {
             Picker("Range", selection: $segment) {
                 ForEach(SportsHubSegment.allCases) { segment in
@@ -229,18 +231,7 @@ struct SportsHubView: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 20) {
                     statusHints
-                    if let hero {
-                        SportsHubHeroCard(
-                            fixture: hero,
-                            availability: SportsChannelAvailability(
-                                resolved[hero.id] ?? highlightsLoad.result.resolved[hero.id],
-                                startDate: hero.headlineDate,
-                                preference: .current
-                            ),
-                            onWatch: watch,
-                            onOpen: { selectedFixture = hero }
-                        )
-                    }
+                    heroCard(hero)
                     SportsSectionsView(
                         // The headlined game leads on its own, not again below.
                         groups: grouping.groups(for: fixtures.filter { $0.id != hero?.id }),
@@ -266,6 +257,25 @@ struct SportsHubView: View {
         // its channel once the guide reaches it.
         .task(id: resolveKey(fixtures + offScreen(hero, in: fixtures))) {
             await runResolve(fixtures + offScreen(hero, in: fixtures))
+        }
+        .task(id: heroSelectionKey(for: candidates)) {
+            heroSelection.reconcile(candidates: candidates, context: heroSelectionContext)
+        }
+    }
+
+    @ViewBuilder
+    private func heroCard(_ hero: SportsFixture?) -> some View {
+        if let hero {
+            SportsHubHeroCard(
+                fixture: hero,
+                availability: SportsChannelAvailability(
+                    resolved[hero.id] ?? highlightsLoad.result.resolved[hero.id],
+                    startDate: hero.headlineDate,
+                    preference: .current
+                ),
+                onWatch: watch,
+                onOpen: { selectedFixture = hero }
+            )
         }
     }
 
@@ -335,6 +345,25 @@ struct SportsHubView: View {
 
     private func resolveKey(_ fixtures: [SportsFixture]) -> String {
         fixtures.map(\.id).joined(separator: ",") + "|" + String(epg.isSyncing)
+    }
+
+    private var heroSelectionContext: String {
+        let scopeToken = switch scope {
+        case .myTeams: "myTeams"
+        case let .league(id): "league:\(id)"
+        }
+        let followsToken = follows.follows
+            .map { "\($0.kind.rawValue):\($0.key)" }
+            .sorted()
+            .joined(separator: ",")
+        return "\(scopeToken)|\(segment.rawValue)|\(followsToken)"
+    }
+
+    private func heroSelectionKey(for candidates: [SportsHeroSelectionMachine.Candidate]) -> String {
+        let candidatesToken = candidates
+            .map { "\($0.id):\($0.tier.rawValue):\($0.isAvailable)" }
+            .joined(separator: ",")
+        return "\(heroSelectionContext)|\(candidatesToken)"
     }
 
     private func runResolve(_ fixtures: [SportsFixture]) async {
