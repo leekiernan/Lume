@@ -50,8 +50,10 @@
             hideScoresSetting && !reveal.isRevealed(fixture.id)
         }
 
+        /// The resolver's channels, ordered within each tier for this viewer's
+        /// languages and screen (`SportsChannelPreference`).
         private var channels: [ResolvedChannel] {
-            resolved.isEmpty ? selfResolved : resolved
+            SportsChannelPreference.ordered(resolved.isEmpty ? selfResolved : resolved, context: .current)
         }
 
         var body: some View {

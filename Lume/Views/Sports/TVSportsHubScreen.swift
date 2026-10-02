@@ -100,10 +100,13 @@
             // One grouping pass per render: the fixtures and groups feed the
             // rails, the default focus and the resolve key alike.
             let fixtures = grouping.visibleFixtures
+            let preference = SportsChannelPreference.Context.current
             let hero = grouping.heroFixture(in: fixtures)
             // The headlined game leads the page on its own, not again in a rail.
             let groups = grouping.groups(for: fixtures.filter { $0.id != hero?.id })
-            let heroAvailability = hero.map { SportsChannelAvailability(resolved[$0.id], startDate: $0.headlineDate) }
+            let heroAvailability = hero.map {
+                SportsChannelAvailability(resolved[$0.id], startDate: $0.headlineDate, preference: preference)
+            }
             return ScrollViewReader { scrollProxy in
                 ScrollView {
                     ZStack(alignment: .top) {
@@ -131,7 +134,7 @@
                                 noGamesState
                             } else {
                                 ForEach(groups) { group in
-                                    section(for: group, scrollProxy: scrollProxy)
+                                    section(for: group, preference: preference, scrollProxy: scrollProxy)
                                 }
                             }
                         }
@@ -253,7 +256,11 @@
 
         /// The heading matches `HomeRow`'s — subheadline, bold, secondary — so
         /// the hub's rails read like every other rail on the tvOS Home.
-        private func section(for group: SportsFixtureGroup, scrollProxy: ScrollViewProxy) -> some View {
+        private func section(
+            for group: SportsFixtureGroup,
+            preference: SportsChannelPreference.Context,
+            scrollProxy: ScrollViewProxy
+        ) -> some View {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(spacing: 10) {
                     if let logoURL = group.logoURL {
@@ -279,7 +286,9 @@
                         ForEach(group.fixtures) { fixture in
                             TVFixtureCard(
                                 fixture: fixture,
-                                availability: SportsChannelAvailability(resolved[fixture.id], startDate: fixture.headlineDate),
+                                availability: SportsChannelAvailability(
+                                    resolved[fixture.id], startDate: fixture.headlineDate, preference: preference
+                                ),
                                 showsLeagueName: !group.isSingleLeague
                             ) {
                                 selectedFixture = fixture

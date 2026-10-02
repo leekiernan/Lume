@@ -24,8 +24,15 @@ nonisolated enum SportsChannelAvailability: Equatable {
 
     /// `resolved` is the resolver's answer for one fixture, `nil` when it has
     /// none yet. The same channel offered by two playlists counts once.
-    init(_ resolved: [ResolvedChannel]?, startDate: Date, now: Date = Date()) {
-        guard let resolved else {
+    init(
+        _ resolved: [ResolvedChannel]?,
+        startDate: Date,
+        preference: SportsChannelPreference.Context? = nil,
+        now: Date = Date()
+    ) {
+        guard let resolved = resolved.map({ channels in
+            preference.map { SportsChannelPreference.ordered(channels, context: $0) } ?? channels
+        }) else {
             self = .unknown
             return
         }
