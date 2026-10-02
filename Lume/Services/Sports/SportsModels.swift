@@ -469,6 +469,11 @@ nonisolated struct SportsStandingRow: Identifiable, Codable, Hashable {
     /// as separate tables instead of one list whose ranks restart. `nil` for a
     /// single-table league and in snapshots written before the field existed.
     let group: String?
+    /// What this place earns, as the provider words it ("Qualifies for round
+    /// of 16", "Relegation"), and the colour it marks it with; `nil` for an
+    /// ordinary place and in snapshots written before the fields existed.
+    let note: String?
+    let noteColorHex: String?
 
     init(
         id: String,
@@ -483,7 +488,9 @@ nonisolated struct SportsStandingRow: Identifiable, Codable, Hashable {
         goalDifference: Int? = nil,
         points: Int? = nil,
         extra: [String: String] = [:],
-        group: String? = nil
+        group: String? = nil,
+        note: String? = nil,
+        noteColorHex: String? = nil
     ) {
         self.id = id
         self.kind = kind
@@ -498,6 +505,8 @@ nonisolated struct SportsStandingRow: Identifiable, Codable, Hashable {
         self.points = points
         self.extra = extra
         self.group = group
+        self.note = note
+        self.noteColorHex = noteColorHex
     }
 }
 

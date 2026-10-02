@@ -30,9 +30,16 @@ nonisolated struct ESPNFlexibleValue: Codable, Hashable {
             stringValue = String(int)
         } else if let double = try? container.decode(Double.self) {
             stringValue = String(double)
+        } else if let object = try? decoder.container(keyedBy: ObjectKeys.self) {
+            // A team schedule's score: `{ "value": 2.0, "displayValue": "2" }`.
+            stringValue = try? object.decode(String.self, forKey: .displayValue)
         } else {
             stringValue = nil
         }
+    }
+
+    private enum ObjectKeys: String, CodingKey {
+        case displayValue
     }
 }
 
@@ -108,6 +115,12 @@ nonisolated struct ESPNEvent: Codable, Hashable {
     /// its matches; tennis events carry no `competitions` of their own.
     let groupings: [ESPNGrouping]?
     let venue: ESPNVenue?
+    /// A team schedule's round: "League Phase", "Third Round", "Quarterfinals".
+    let seasonType: ESPNSeasonType?
+}
+
+nonisolated struct ESPNSeasonType: Codable, Hashable {
+    let name: String?
 }
 
 nonisolated struct ESPNGrouping: Codable, Hashable {
@@ -246,6 +259,13 @@ nonisolated struct ESPNStandingsEntry: Codable, Hashable {
     let team: ESPNTeam?
     let athlete: ESPNAthlete?
     let stats: [ESPNStat]?
+    /// What the row's place earns — "Qualifies for round of 16" — and its colour.
+    let note: ESPNStandingNote?
+}
+
+nonisolated struct ESPNStandingNote: Codable, Hashable {
+    let description: String?
+    let color: String?
 }
 
 nonisolated struct ESPNStat: Codable, Hashable {

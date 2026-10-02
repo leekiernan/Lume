@@ -137,6 +137,10 @@
                                     section(for: group, preference: preference, scrollProxy: scrollProxy)
                                 }
                             }
+                            if scope == .myTeams, !seasonTeams.isEmpty {
+                                TVTeamSeasonSection(teams: seasonTeams)
+                                    .padding(.top, 24)
+                            }
                         }
                         // The native tab chrome is the next focus target above
                         // this screen. Match Settings' top breathing room so an
@@ -491,6 +495,14 @@
 
         private var scopeTitle: String {
             grouping.scopeTitle
+        }
+
+        /// Followed football teams, for the season section.
+        var seasonTeams: [SportsTeam] {
+            follows.follows
+                .filter { $0.kind == .team }
+                .compactMap { store.team(by: $0.key) }
+                .filter(SportsTeamSeasonLoader.supports)
         }
     }
 

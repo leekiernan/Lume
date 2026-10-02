@@ -24,7 +24,7 @@ nonisolated struct ESPNClient: SportsDataProvider {
     private let requestTimeout: TimeInterval
 
     /// Site API for scoreboards, teams and summaries.
-    private static let siteAPIBase = URL(string: "https://site.api.espn.com/apis/site/v2/sports")!
+    static let siteAPIBase = URL(string: "https://site.api.espn.com/apis/site/v2/sports")!
     /// Web API for standings (a different host and path prefix).
     private static let webAPIBase = URL(string: "https://site.web.api.espn.com/apis/v2/sports")!
 
@@ -105,7 +105,7 @@ nonisolated struct ESPNClient: SportsDataProvider {
 
     /// Fetches and decodes `T`, returning `nil` (and logging) on any failure so
     /// callers can degrade to an empty result. Retries once on a transient error.
-    private func fetch<T: Decodable>(_ url: URL) async -> T? {
+    func fetch<T: Decodable>(_ url: URL) async -> T? {
         var request = URLRequest(url: url)
         request.timeoutInterval = requestTimeout
         request.setValue("application/json", forHTTPHeaderField: "Accept")
@@ -217,7 +217,8 @@ nonisolated extension ESPNClient {
         guard let id = event.id else { return nil }
         let competition = event.competitions?.first
         let startDate = parseDate(event.date) ?? competition.flatMap { parseDate($0.date) } ?? Date.distantPast
-        let status = isRacing ? weekendStatus(event) : mapStatus(event.status)
+        // A team schedule's events carry their status on the competition.
+        let status = isRacing ? weekendStatus(event) : mapStatus(event.status ?? competition?.status)
 
         var home: SportsCompetitor?
         var away: SportsCompetitor?
@@ -261,20 +262,6 @@ nonisolated extension ESPNClient {
             shortName: nonEmpty(event.shortName),
             leagueLogoURL: context.leagueLogoURL
         )
-    }
-
-    /// A race weekend's own status mirrors its first session: ESPN calls the
-    /// whole weekend "Final" once FP1 is over, with the race still to come or
-    /// under way. The weekend is live while any session is, else wherever the
-    /// race stands; the event's status only when no session reports one.
-    static func weekendStatus(_ event: ESPNEvent) -> SportsFixtureStatus {
-        let competitions = event.competitions ?? []
-        let sessionStatuses = competitions.compactMap(\.status).map(mapStatus)
-        if let live = sessionStatuses.first(where: { $0.state == .inProgress }) {
-            return live
-        }
-        let race = competitions.last { $0.type?.abbreviation == SportsSessionKind.race.rawValue } ?? competitions.last
-        return race?.status.map(mapStatus) ?? mapStatus(event.status)
     }
 
     static func nonEmpty(_ text: String?) -> String? {
@@ -483,7 +470,9 @@ nonisolated extension ESPNClient {
                 goalDifference: stats.intStat(anyOf: ["pointDifferential", "pointsDifference"]),
                 points: stats.pointsStat(),
                 extra: stats.extra,
-                group: group
+                group: group,
+                note: entry.note?.description,
+                noteColorHex: entry.note?.color
             )
         case .driver:
             guard let athlete = entry.athlete else { return nil }
