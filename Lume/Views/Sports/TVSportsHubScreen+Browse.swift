@@ -29,7 +29,7 @@
         /// The rail's first card opens the panel on a left press; the rest
         /// just move left.
         func browseOpener(leading: Bool) -> (() -> Void)? {
-            guard leading else { return nil }
+            guard leading, pageKey == nil else { return nil }
             return { openBrowse() }
         }
 
@@ -38,12 +38,15 @@
             showingBrowse = true
         }
 
+        /// My Sports is the hub itself; a follow opens its own page.
         func selectScope(_ value: SportsHubScope) {
-            scope = value
             showingBrowse = false
-            // A new scope is a new page: land on the title, at the top.
-            browseReturnFocus = .scope
-            returnFromBrowse()
+            switch value {
+            case .all:
+                returnFromBrowse()
+            case let .follow(key):
+                open(follow: key)
+            }
         }
 
         /// Focus back where the panel was opened from.

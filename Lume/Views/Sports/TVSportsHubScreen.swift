@@ -38,13 +38,17 @@
     struct TVSportsHubScreen: View {
         @Environment(\.modelContext) var modelContext
         @Environment(\.contentRestriction) var restriction
+        @Environment(DeepLinkRouter.self) var router: DeepLinkRouter?
 
         @State private var premium = PremiumManager.shared
         @State private var store = SportsStore.shared
         @State var follows = SportsFollowService.shared
         @State private var epg = EPGSyncService.shared
 
-        @State var scope: SportsHubScope = .all
+        @State var scope: SportsHubScope
+        /// Set on a follow's own page, pushed from the hub; `nil` on the hub.
+        let pageKey: String?
+        @State var localPath = NavigationPath()
         /// Follows taken off the hub in Settings ▸ Sports.
         @AppStorage(SportsHubLayout.hiddenKey) private var hiddenFollowsRaw = ""
         /// The scope panel, and where focus was when it opened.
@@ -54,7 +58,7 @@
         @State private var heroSelection = SportsHeroSelectionMachine()
         @State var selectedFixture: SportsFixture?
         @State var showManageTeams = false
-        @State private var showPaywall = false
+        @State var showPaywall = false
         @State private var playingMedia: PlayableMedia?
         /// Playback queued behind the dismissing detail cover; see `watch`.
         @State private var pendingMedia: PlayableMedia?
@@ -72,7 +76,27 @@
 
         @FocusState var focus: TVSportsFocus?
 
+        init(pageKey: String? = nil) {
+            self.pageKey = pageKey
+            _scope = State(initialValue: pageKey.map { .follow($0) } ?? .all)
+        }
+
+        /// The hub owns the stack its follows' pages push onto, as Movies'
+        /// landing page does for its categories.
         var body: some View {
+            if pageKey == nil {
+                NavigationStack(path: pathBinding) {
+                    screen
+                        .navigationDestination(for: SportsFollowRoute.self) { route in
+                            TVSportsHubScreen(pageKey: route.key)
+                        }
+                }
+            } else {
+                screen
+            }
+        }
+
+        private var screen: some View {
             Group {
                 if premium.isPremium {
                     hub
@@ -104,10 +128,16 @@
                     }
                 } else {
                     content
-                        .overlay(alignment: .leading) { browseSidebar }
+                        .overlay(alignment: .leading) {
+                            // The panel is the hub's; a follow's page is reached
+                            // through it, and Menu goes back.
+                            if pageKey == nil { browseSidebar }
+                        }
                 }
             }
-            .task(id: follows.follows.map(\.key)) { await loadHighlights() }
+            .task(id: follows.follows.map(\.key)) {
+                if pageKey == nil { await loadHighlights() }
+            }
         }
 
         /// Home's immersive layout: the slide's artwork fixed full-screen
@@ -123,8 +153,12 @@
                     .filter { !$0.value.isEmpty }
                     .map(\.key)
             )
+            // A follow's page headlines only its own games, never the week's
+            // wider picks.
             let candidates = grouping.heroCandidates(
-                in: fixtures, highlights: highlightsLoad.result.highlights.map(\.fixture), availableIDs: availableIDs
+                in: fixtures,
+                highlights: pageKey == nil ? highlightsLoad.result.highlights.map(\.fixture) : [],
+                availableIDs: availableIDs
             )
             let carousel = Array(heroSelection.carouselCandidates(in: candidates, context: heroSelectionContext).prefix(Self.carouselLimit))
             let carouselIDs = Set(carousel.map(\.id))
@@ -251,12 +285,16 @@
         /// The page title; selecting it, or pressing left from the page's
         /// leading edge, opens the scope panel.
         private var scopeMenu: some View {
-            Button(action: openBrowse) {
+            Button {
+                if pageKey == nil { openBrowse() }
+            } label: {
                 TVSportsTitleChrome {
                     HStack(alignment: .firstTextBaseline, spacing: 14) {
-                        Image(systemName: "sidebar.left")
-                            .font(.system(size: 24, weight: .semibold))
-                            .foregroundStyle(.white.opacity(0.55))
+                        if pageKey == nil {
+                            Image(systemName: "sidebar.left")
+                                .font(.system(size: 24, weight: .semibold))
+                                .foregroundStyle(.white.opacity(0.55))
+                        }
                         Text(verbatim: scopeTitle)
                             .font(.system(size: 34, weight: .bold))
                             .lineLimit(1)
@@ -265,10 +303,7 @@
             }
             .buttonStyle(TVCardButtonStyle(focusScale: 1.02))
             .focused($focus, equals: .scope)
-            .onLeadingEdgeLeft(openBrowse)
-            // Narrowed to one follow, Menu on the title goes back to everything
-            // first; on My Sports it passes through to the tab bar.
-            .onExitCommand(perform: scope == .all ? nil : { selectScope(.all) })
+            .onLeadingEdgeLeft(browseOpener(leading: true))
             .accessibilityLabel(Text(verbatim: scopeTitle))
             .accessibilityHint(Text("Browse"))
         }
@@ -307,9 +342,9 @@
                         }
                         // A followed club's row ends at its season: the page
                         // narrowed to the team, its table and players below.
-                        if let team = seasonTeam(forFollow: group.followKey) {
+                        if pageKey == nil, let team = seasonTeam(forFollow: group.followKey) {
                             Button {
-                                selectScope(.follow(team.id))
+                                open(follow: team.id)
                             } label: {
                                 TVClubSeasonCard(team: team)
                             }
@@ -345,76 +380,6 @@
                     .foregroundStyle(.secondary)
             }
             .padding(.horizontal, 60)
-        }
-
-        // MARK: - States
-
-        private var onboardingState: some View {
-            fullScreenState(
-                title: "Follow Your Teams",
-                message: "Add leagues and teams to see fixtures, live scores and standings, with one tap to the channel carrying the game."
-            ) {
-                Button {
-                    showManageTeams = true
-                } label: {
-                    Label("Manage Teams", systemImage: "person.2.badge.plus")
-                        .font(.title3.weight(.semibold))
-                        .padding(.horizontal, 44)
-                        .padding(.vertical, 20)
-                }
-                .buttonStyle(TVCardButtonStyle(focusScale: 1.05))
-            }
-        }
-
-        private var lockedState: some View {
-            fullScreenState(
-                title: PremiumFeature.sportsHub.title,
-                message: PremiumFeature.sportsHub.subtitle
-            ) {
-                Button {
-                    showPaywall = true
-                } label: {
-                    Text("Unlock Sports Hub")
-                        .font(.title3.weight(.semibold))
-                        .padding(.horizontal, 44)
-                        .padding(.vertical, 20)
-                }
-                .buttonStyle(TVCardButtonStyle(focusScale: 1.05))
-            }
-        }
-
-        private var noGamesState: some View {
-            VStack(spacing: 24) {
-                Image(systemName: "sportscourt")
-                    .font(.system(size: 64))
-                    .foregroundStyle(.white.opacity(0.35))
-                Text("No games")
-                    .font(.title.weight(.semibold))
-                    .foregroundStyle(.white.opacity(0.6))
-            }
-            .frame(maxWidth: .infinity, minHeight: 560)
-        }
-
-        private func fullScreenState(
-            title: LocalizedStringResource,
-            message: LocalizedStringResource,
-            @ViewBuilder action: () -> some View
-        ) -> some View {
-            VStack(spacing: 24) {
-                Image(systemName: "sportscourt")
-                    .font(.system(size: 80))
-                    .foregroundStyle(.white.opacity(0.5))
-                Text(title)
-                    .font(.largeTitle.weight(.bold))
-                    .foregroundStyle(.white)
-                Text(message)
-                    .font(.title3)
-                    .foregroundStyle(.white.opacity(0.6))
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: 820)
-                action()
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
 
         private func hintRow(_ text: LocalizedStringKey, icon: String) -> some View {

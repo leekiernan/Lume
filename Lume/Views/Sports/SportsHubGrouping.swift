@@ -23,6 +23,12 @@ enum SportsHubScope: Hashable {
     case follow(String)
 }
 
+/// A follow's own page, pushed from the browse panel or a row's header — the
+/// way Movies pushes a category's grid rather than filtering its landing page.
+struct SportsFollowRoute: Hashable {
+    let key: String
+}
+
 @MainActor
 struct SportsHubGrouping {
     let scope: SportsHubScope
