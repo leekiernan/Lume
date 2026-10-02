@@ -28,7 +28,7 @@ struct HomeHeroCarousel: View {
     /// The auto-advance clock, which the page dots render as a loading bar.
     /// Read only by `HeroClockIndicator`: held as plain `@State` it was read by
     /// this body, which re-rendered the whole carousel — artwork, gradient and
-    /// copy — at the clock's 20 Hz tick. The same split as tvOS's `TVHeroModel`.
+    /// copy — at the clock's 20 Hz tick. The same split as tvOS's `TVHeroCarouselModel`.
     @State private var clock = HeroClock()
 
     /// Which hero the overlay is showing. Deliberately LAGS the scroll position:

@@ -21,119 +21,6 @@
     import SwiftData
     import SwiftUI
 
-    // MARK: - Hero model
-
-    /// Carousel state for the immersive hero: the featured items, the current and
-    /// displayed slide, and the auto-advance clock. An `@Observable` class so the
-    /// 20 Hz `progress` ticks only re-render the views that actually read
-    /// `progress` (the page dots) — never the showcase or the scroll content.
-    @MainActor @Observable
-    final class TVHeroModel {
-        private(set) var items: [HeroItem] = []
-        private(set) var currentIndex = 0
-
-        /// Fill of the active page dot (0…1); doubles as the auto-advance clock
-        /// so the loading-bar dot and the slide jump can never drift apart.
-        private(set) var progress: Double = 0
-
-        /// Which hero the info overlay is showing. Deliberately LAGS the current
-        /// slide: on a page change the copy fades out, swaps while invisible,
-        /// then fades back in (see `crossfadeInfo`).
-        private var displayedID: String?
-        private(set) var infoOpacity: Double = 1
-
-        /// Set while the hero is below the fold so the carousel doesn't page
-        /// (and prefetch artwork) where nobody can see it.
-        var isPaused = false
-
-        private let autoAdvanceInterval: Duration = .seconds(6)
-
-        var currentHero: HeroItem? {
-            items.indices.contains(currentIndex) ? items[currentIndex] : items.first
-        }
-
-        var displayedHero: HeroItem? {
-            items.first { $0.id == displayedID } ?? currentHero
-        }
-
-        func configure(items: [HeroItem]) {
-            self.items = items
-            if !items.indices.contains(currentIndex) { currentIndex = 0 }
-            if displayedID == nil || !items.contains(where: { $0.id == displayedID }) {
-                displayedID = items.first?.id
-            }
-            prefetchNeighbours()
-        }
-
-        func advance() {
-            page(by: 1)
-        }
-
-        func retreat() {
-            page(by: -1)
-        }
-
-        /// One 50ms tick of the auto-advance clock. Returns `true` when the bar
-        /// has filled and the caller should page (the view pages so it can also
-        /// re-assert hero focus, which the model knows nothing about).
-        func tickAutoAdvance() -> Bool {
-            guard items.count > 1 else { return false }
-            // While paused, hold the bar EMPTY rather than frozen so the slide
-            // always gets a full dwell once it becomes visible again.
-            if isPaused {
-                progress = 0
-                return false
-            }
-            if progress >= 1 {
-                // Reset BEFORE paging so the next tick can't re-trigger an
-                // advance while the page change is still settling.
-                progress = 0
-                return true
-            }
-            let total = Double(autoAdvanceInterval.components.seconds)
-            progress = min(progress + 0.05 / total, 1)
-            return false
-        }
-
-        private func page(by delta: Int) {
-            guard items.count > 1 else { return }
-            progress = 0
-            // Animate the index change so the backdrop (keyed by hero id with an
-            // opacity transition) crossfades rather than swapping hard.
-            withAnimation(.easeInOut(duration: 0.8)) {
-                currentIndex = (currentIndex + delta + items.count) % items.count
-            }
-            crossfadeInfo()
-            prefetchNeighbours()
-        }
-
-        /// Fades the info overlay out, swaps it while invisible, then fades back
-        /// in. Reading `currentHero` in the completion (not a captured value)
-        /// self-heals rapid paging to whatever slide is current on reappear.
-        private func crossfadeInfo() {
-            guard displayedID != currentHero?.id else { return }
-            withAnimation(.easeInOut(duration: 0.25)) {
-                infoOpacity = 0
-            } completion: {
-                self.displayedID = self.currentHero?.id
-                withAnimation(.easeOut(duration: 0.45)) {
-                    self.infoOpacity = 1
-                }
-            }
-        }
-
-        /// Warms the cache for the slides on either side so crossfades land on an
-        /// already-decoded image instead of a placeholder flash.
-        private func prefetchNeighbours() {
-            let count = items.count
-            guard count > 1 else { return }
-            let neighbours = [(currentIndex - 1 + count) % count, (currentIndex + 1) % count]
-                .compactMap { items[$0].imageURL }
-            guard !neighbours.isEmpty else { return }
-            Task { await ImagePipeline.shared.prefetch(neighbours, maxPixelSize: nil) }
-        }
-    }
-
     // MARK: - Screen
 
     /// The immersive home: full-screen backdrop behind a single native vertical
@@ -153,7 +40,7 @@
         let onSelectHero: (HeroItem) -> Void
         @ViewBuilder var rows: Rows
 
-        @State private var model = TVHeroModel()
+        @State private var model = TVHeroCarouselModel<HeroItem>(prefetchURL: \.imageURL)
         @State private var zone: TVHomeZone = .expanded
         @State private var containerHeight: CGFloat = 0
 
@@ -247,7 +134,7 @@
     /// Apple's material-masked-by-gradient treatment from the media catalog
     /// sample, plus a bottom scrim that keeps the hero copy legible.
     private struct TVHeroBackdrop: View {
-        let model: TVHeroModel
+        let model: TVHeroCarouselModel<HeroItem>
         let belowFold: Bool
         let warmStartBackdropURL: URL?
 
@@ -280,45 +167,7 @@
                     .transition(.opacity)
                 }
             }
-            .overlay {
-                // Frosted glass that creeps up from the bottom: a light wash
-                // behind the peeking row when expanded, the whole screen once
-                // the user is below the fold.
-                Rectangle()
-                    .fill(.regularMaterial)
-                    .mask {
-                        LinearGradient(
-                            stops: [
-                                .init(color: .black, location: 0.2),
-                                .init(color: .black.opacity(belowFold ? 1 : 0.3), location: 0.375),
-                                .init(color: .black.opacity(belowFold ? 1 : 0), location: 0.5)
-                            ],
-                            startPoint: .bottom,
-                            endPoint: .top
-                        )
-                    }
-            }
-            .overlay {
-                // Bottom scrim so the title and overview stay legible over
-                // bright artwork.
-                LinearGradient(
-                    stops: [
-                        .init(color: .clear, location: 0.3),
-                        .init(color: .black.opacity(0.45), location: 0.62),
-                        .init(color: .black.opacity(0.85), location: 1)
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-            }
-            .overlay {
-                // Extra dim below the fold so the rows read against a calm,
-                // near-black background that still carries the artwork's tint.
-                Color.black.opacity(belowFold ? 0.45 : 0)
-            }
-            .compositingGroup()
-            .ignoresSafeArea()
-            .allowsHitTesting(false)
+            .tvHeroBackdropTreatment(belowFold: belowFold)
         }
     }
 
@@ -330,7 +179,7 @@
     /// the hero via `onSelect` (navigation happens in `HomeView`); left/right
     /// pages the carousel.
     private struct TVHeroShowcase: View {
-        let model: TVHeroModel
+        let model: TVHeroCarouselModel<HeroItem>
         let onSelect: (HeroItem) -> Void
 
         @Environment(\.modelContext) private var modelContext
@@ -355,7 +204,7 @@
             }
             .focusSection()
             .task(id: model.items.map(\.id)) {
-                await runAutoAdvance()
+                await model.runAutoAdvance()
             }
         }
 
@@ -495,34 +344,6 @@
                 .foregroundStyle(heroFocused ? .black : .white)
                 .scaleEffect(heroFocused ? 1.04 : 1.0)
                 .animation(.easeOut(duration: 0.18), value: heroFocused)
-        }
-
-        /// Drives the model's auto-advance clock.
-        private func runAutoAdvance() async {
-            guard model.items.count > 1 else { return }
-            while !Task.isCancelled {
-                try? await Task.sleep(for: .milliseconds(50))
-                if Task.isCancelled { return }
-                if model.tickAutoAdvance() {
-                    model.advance()
-                }
-            }
-        }
-    }
-
-    /// Renders only the page dots, so the model's 20 Hz `progress` ticks
-    /// re-render this leaf and nothing else.
-    private struct TVHeroPageDots: View {
-        let model: TVHeroModel
-
-        var body: some View {
-            if model.items.count > 1 {
-                HeroPageIndicator(
-                    count: model.items.count,
-                    activeIndex: model.currentIndex,
-                    progress: model.progress
-                )
-            }
         }
     }
 
