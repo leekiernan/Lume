@@ -252,8 +252,18 @@ nonisolated extension ESPNClient {
             name: nonEmpty(event.name),
             shortName: nonEmpty(event.shortName),
             leagueLogoURL: context.leagueLogoURL,
-            stage: nonEmpty(event.season?.slug)
+            stage: nonEmpty(event.season?.slug),
+            mainCardDate: mainCardDate(event, startDate: startDate)
         )
+    }
+
+    /// A fight card lists each bout as a competition with its own start: early
+    /// prelims, prelims, then the main card, last. The event's own date is the
+    /// first of those, hours before what anyone means by "UFC 332 is on at".
+    static func mainCardDate(_ event: ESPNEvent, startDate: Date) -> Date? {
+        let latest = (event.competitions ?? []).compactMap { parseDate($0.date) }.max()
+        guard let latest, latest > startDate else { return nil }
+        return latest
     }
 
     static func nonEmpty(_ text: String?) -> String? {

@@ -27,7 +27,10 @@ nonisolated extension SportsFixture {
         case "football", "baseball", "australian-football": return 3.75 * 3600
         case "tennis": return 4 * 3600
         case "cricket": return 8 * 3600
-        case "mma", "boxing": return 6 * 3600
+        case "mma", "boxing":
+            // Prelims to the end of the main card.
+            if let mainCard = mainCardDate { return max(6 * 3600, mainCard.timeIntervalSince(startDate) + 3 * 3600) }
+            return 6 * 3600
         case "racing":
             // An unexpanded weekend runs until its race is over.
             if let race = raceSession?.date { return race.timeIntervalSince(startDate) + 2.5 * 3600 }

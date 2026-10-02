@@ -45,7 +45,7 @@ final class SportsReminders {
         if reminders[fixture.id] != nil {
             reminders[fixture.id] = nil
         } else {
-            reminders[fixture.id] = Reminder(fixtureId: fixture.id, leagueId: fixture.leagueId, start: fixture.startDate)
+            reminders[fixture.id] = Reminder(fixtureId: fixture.id, leagueId: fixture.leagueId, start: fixture.headlineDate)
         }
         persist()
     }

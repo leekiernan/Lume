@@ -297,6 +297,10 @@ nonisolated struct SportsFixture: Identifiable, Codable, Hashable {
     /// The competition stage as the provider keys it ("final", "semifinals",
     /// "league-phase"); what "Big this week" reads finals from.
     let stage: String?
+    /// A fight card's main card, when it starts after the prelims that open
+    /// the event: UFC 332 begins at 20:00 UTC but its main card is at midnight.
+    /// `nil` for everything else, and in snapshots written before the field.
+    let mainCardDate: Date?
 
     init(
         id: String,
@@ -316,7 +320,8 @@ nonisolated struct SportsFixture: Identifiable, Codable, Hashable {
         leagueLogoURL: URL? = nil,
         round: String? = nil,
         startTimeIsTentative: Bool? = nil,
-        stage: String? = nil
+        stage: String? = nil,
+        mainCardDate: Date? = nil
     ) {
         self.id = id
         self.leagueId = leagueId
@@ -336,6 +341,7 @@ nonisolated struct SportsFixture: Identifiable, Codable, Hashable {
         self.round = round
         self.startTimeIsTentative = startTimeIsTentative
         self.stage = stage
+        self.mainCardDate = mainCardDate
     }
 }
 
@@ -427,10 +433,11 @@ nonisolated extension SportsFixture {
 
     /// The moment a card headlines: a session card's own start; the race for an
     /// unexpanded weekend (`startDate` is the first practice, which is not what
-    /// anyone tunes in for); else the fixture's own start.
+    /// anyone tunes in for); a fight card's main card (likewise, not the early
+    /// prelims); else the fixture's own start.
     var headlineDate: Date {
         if sessionKind != nil { return startDate }
-        return raceSession?.date ?? startDate
+        return raceSession?.date ?? mainCardDate ?? startDate
     }
 
     /// Whether the headline falls on a different day than the fixture's start,

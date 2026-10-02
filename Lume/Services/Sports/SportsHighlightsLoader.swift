@@ -186,8 +186,9 @@ nonisolated enum SportsHighlightsPipeline {
         )
     }
 
-    /// Drops an event a highlight already shows: the same channel, around the
-    /// same time. A name-only event on that channel is the same one too.
+    /// Drops an event a highlight already shows: the same channel around the
+    /// same time (a name-only event on that channel is the same one too), or
+    /// a title naming the highlight's teams or event.
     static func unclaimed(
         _ events: [SportsPayPerView.Event],
         highlights: [SportsHighlight],
@@ -196,8 +197,11 @@ nonisolated enum SportsHighlightsPipeline {
         let claims = highlights.compactMap { highlight in
             mainChannels[highlight.fixture.id].map { (channel: $0, start: highlight.fixture.startDate) }
         }
+        let targets = highlights.compactMap { SportsChannelResolver.target(for: $0.fixture) }
         return events.filter { event in
-            !claims.contains { claim in
+            let title = SportsMatcher.normalize(event.title)
+            if targets.contains(where: { SportsChannelResolver.isPresent($0, in: title) }) { return false }
+            return !claims.contains { claim in
                 guard claim.channel == event.channelName else { return false }
                 guard let start = event.start else { return true }
                 return abs(start.timeIntervalSince(claim.start)) < 3 * 3600

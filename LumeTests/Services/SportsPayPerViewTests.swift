@@ -32,15 +32,54 @@ struct SportsPayPerViewTests {
         #expect(SportsPayPerView.isPayPerView("US 01", categoryName: "USA | PPV EVENTS"))
     }
 
-    @Test func `reads the event from a renamed channel`() {
-        #expect(SportsPayPerView.title(fromChannelName: "US (PPV 05) | UFC 310 Pantoja vs Asakura") == "UFC 310 Pantoja vs Asakura")
-        #expect(SportsPayPerView.title(fromChannelName: "PPV 2: Canelo vs Crawford") == "Canelo vs Crawford")
+    private func parse(_ name: String) -> SportsEventChannelName.Parsed? {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "UTC")!
+        return SportsEventChannelName.parse(name, now: now, calendar: calendar)
     }
 
-    @Test func `a channel name with no event in it gives none`() {
-        #expect(SportsPayPerView.title(fromChannelName: "US: PPV 05") == nil)
-        #expect(SportsPayPerView.title(fromChannelName: "Sky Sports Box Office HD") == nil)
-        #expect(SportsPayPerView.title(fromChannelName: "LIVE EVENT 3") == nil)
+    @Test func `reads the event and its time from a provider's event channel`() throws {
+        // 1_800_000_000 is Friday 15 Jan 2027, 08:00 UTC.
+        let parsed = try #require(parse("US|NFHS Tue 12:00 - Somersworth vs. Laconia"))
+        #expect(parsed.title == "Somersworth vs. Laconia")
+        #expect(parsed.start == now.addingTimeInterval((4 * 24 + 4) * 3600))
+        #expect(!parsed.isLive)
+    }
+
+    @Test func `a time earlier today is the game under way, not next week's`() throws {
+        let parsed = try #require(parse("UK|DAZN Fri 06:30 - Joshua vs Dubois"))
+        #expect(parsed.start == now.addingTimeInterval(-1.5 * 3600))
+    }
+
+    @Test func `LIVE in the name means it's on now`() {
+        #expect(parse("US|NFHS LIVE - Fife vs. Orting") == .init(title: "Fife vs. Orting", start: nil, isLive: true))
+    }
+
+    @Test func `reads the event from a renamed channel without a time`() {
+        #expect(parse("US (PPV 05) | UFC 310 Pantoja vs Asakura")?.title == "UFC 310 Pantoja vs Asakura")
+        #expect(parse("PPV 2: Canelo vs Crawford")?.title == "Canelo vs Crawford")
+    }
+
+    @Test(arguments: ["US|SWAC No event", "US|SWAC Tue 17:50 - No event", "US: PPV 05", "Sky Sports Box Office HD", "LIVE EVENT 3"])
+    func `a placeholder or bare channel name gives no event`(name: String) {
+        #expect(parse(name) == nil)
+    }
+
+    @Test func `a category named for one event`() {
+        #expect(SportsEventChannelName.event(inCategory: "UFC Fight Night | Rosas Jr vs Barcelos (Sat)")
+            == "UFC Fight Night: Rosas Jr vs Barcelos")
+        #expect(SportsEventChannelName.event(inCategory: "LIVE | Rugby (Sat)") == nil)
+        #expect(SportsEventChannelName.event(inCategory: "PPV | PPV Events 1") == nil)
+    }
+
+    @Test(arguments: ["PPV | PPV Events 1", "PPV | PPV Boxing (Sat)", "LIVE | Requested Live Events"])
+    func `the provider's pay-per-view categories count`(category: String) {
+        #expect(SportsPayPerView.isPayPerView("Channel 1", categoryName: category))
+    }
+
+    @Test(arguments: ["UK | Sky Sports", "UK | TNT Events (Live Only)", "LIVE | EPL", "LIVE | Wrestling (Live Only)"])
+    func `ordinary sports categories don't`(category: String) {
+        #expect(!SportsPayPerView.isPayPerView("Channel 1", categoryName: category))
     }
 
     @Test func `skips placeholder guide rows`() {
@@ -130,5 +169,35 @@ struct SportsPayPerViewTests {
         )
         let picked = rank([fight], mainChannels: ["fight": "US: PPV 05"])
         #expect(picked.first?.reason == .payPerView)
+    }
+}
+
+// MARK: - Fight-card times
+
+struct SportsMainCardTests {
+    /// UFC 332 as ESPN lists it: the event dated at the early prelims, each
+    /// bout with its own start, the main card last.
+    @Test func `a fight card headlines at its main card, not the early prelims`() throws {
+        let json = """
+        {"id": "600061182", "date": "2026-10-03T20:00Z", "name": "UFC 332: Silva vs. Wang",
+         "competitions": [{"date": "2026-10-03T20:00Z"}, {"date": "2026-10-03T22:00Z"}, {"date": "2026-10-04T00:00Z"}]}
+        """
+        let event = try JSONDecoder().decode(ESPNEvent.self, from: Data(json.utf8))
+        let start = Date(timeIntervalSince1970: 1_791_057_600) // 2026-10-03T20:00Z
+        let mainCard = try #require(ESPNClient.mainCardDate(event, startDate: start))
+        #expect(mainCard == start.addingTimeInterval(4 * 3600))
+
+        let fixture = SportsFixture(
+            id: "ufc", leagueId: "espn:mma/ufc", leagueName: "UFC", leagueAbbreviation: "UFC",
+            startDate: start, status: SportsFixtureStatus(state: .scheduled), mainCardDate: mainCard
+        )
+        #expect(fixture.headlineDate == mainCard)
+        #expect(fixture.expectedEnd >= mainCard.addingTimeInterval(3 * 3600))
+    }
+
+    @Test func `a single-start event has no separate main card`() throws {
+        let json = #"{"id": "1", "date": "2026-10-03T20:00Z", "competitions": [{"date": "2026-10-03T20:00Z"}]}"#
+        let event = try JSONDecoder().decode(ESPNEvent.self, from: Data(json.utf8))
+        #expect(ESPNClient.mainCardDate(event, startDate: Date(timeIntervalSince1970: 1_791_057_600)) == nil)
     }
 }

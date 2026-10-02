@@ -317,7 +317,8 @@ nonisolated extension SportsFixture {
             leagueLogoURL: leagueLogoURL,
             round: round,
             startTimeIsTentative: startTimeIsTentative,
-            stage: stage
+            stage: stage,
+            mainCardDate: mainCardDate
         )
     }
 }

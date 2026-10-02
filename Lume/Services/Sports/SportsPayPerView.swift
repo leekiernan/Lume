@@ -24,14 +24,18 @@ nonisolated enum SportsPayPerView {
     struct Event: Identifiable, Equatable {
         let id: String
         let title: String
-        /// From the guide; `nil` when the event came from the channel name.
+        /// From the guide, or a time in the channel's name; `nil` when
+        /// neither gives one.
         let start: Date?
         let end: Date?
         let channelName: String
         let streamId: String
         let logoURL: URL?
+        /// The channel's name says LIVE.
+        var isMarkedLive = false
 
         func isLive(at now: Date) -> Bool {
+            if isMarkedLive { return true }
             guard let start, let end else { return false }
             return start <= now && end > now
         }
@@ -66,23 +70,9 @@ nonisolated enum SportsPayPerView {
         return false
     }
 
-    /// The event a channel's name carries, if the provider put one there.
-    static func title(fromChannelName name: String) -> String? {
-        let segments = name
-            .split(whereSeparator: { "|:()[]".contains($0) })
-            .map { $0.trimmingCharacters(in: .whitespaces) }
-        let candidates = segments.filter { segment in
-            let haystack = SportsMatcher.normalize(segment)
-            let words = haystack.split(separator: " ")
-            let letters = segment.unicodeScalars.filter(CharacterSet.letters.contains).count
-            return words.count >= 2 && letters >= 6 && !isMarkerOnly(haystack)
-        }
-        return candidates.max { $0.count < $1.count }
-    }
-
     /// "us ppv 05", "sky sports box office", "live event 3": a marker plus a
     /// country code, a broadcaster or a number, and nothing that names an event.
-    private static func isMarkerOnly(_ haystack: String) -> Bool {
+    static func isMarkerOnly(_ haystack: String) -> Bool {
         guard hasMarker(haystack) else { return false }
         let filler: Set<Substring> = [
             "ppv", "pay", "per", "view", "box", "office", "live", "event", "events", "sky", "sports", "sport",
@@ -114,7 +104,13 @@ nonisolated enum SportsPayPerView {
         let name: String
         let epgChannelId: String?
         let logoURL: URL?
+        /// The event the channel's category is named for, if it is.
+        var categoryEvent: String?
     }
+
+    /// A name-only event's assumed length, so "Sat 20:00" reads as live
+    /// through the evening.
+    static let assumedLength: TimeInterval = 3 * 3600
 
     private static let channelCache = Mutex<(generation: SportsChannelResolver.CacheGeneration, channels: [Channel])?>(nil)
     private static let eventCache = Mutex<(generation: SportsChannelResolver.CacheGeneration, events: [Event], at: Date)?>(nil)
@@ -152,16 +148,26 @@ nonisolated enum SportsPayPerView {
         }
         let liveType = "live" // CategoryType.live; the enum is main-actor isolated
         let categories = (try? context.fetch(FetchDescriptor<Category>(predicate: #Predicate { $0.typeRaw == liveType }))) ?? []
-        let ppvCategoryIds = Set(categories.filter { isPayPerView("", categoryName: $0.name) }.map(\.id))
+        // "PPV | PPV Events 1", and a category named for one event — "UFC
+        // Fight Night | Rosas Jr vs Barcelos (Sat)" — whose channels are its feeds.
+        var eventCategories: [String: String?] = [:]
+        for category in categories {
+            if let event = SportsEventChannelName.event(inCategory: category.name) {
+                eventCategories[category.id] = .some(event)
+            } else if isPayPerView("", categoryName: category.name) {
+                eventCategories[category.id] = .some(nil)
+            }
+        }
         let streams = (try? context.fetch(SportsChannelResolver.candidateStreamDescriptor(restriction: restriction))) ?? []
         let channels = streams.compactMap { stream -> Channel? in
-            let inCategory = stream.categoryId.map(ppvCategoryIds.contains) ?? false
-            guard inCategory || isPayPerView(stream.name) else { return nil }
+            let category = stream.categoryId.flatMap { eventCategories[$0] }
+            guard category != nil || isPayPerView(stream.name) else { return nil }
             return Channel(
                 streamId: stream.id,
                 name: stream.name,
                 epgChannelId: stream.epgChannelId.flatMap { $0.isEmpty ? nil : $0 },
-                logoURL: stream.streamIcon.flatMap(URL.init(string:))
+                logoURL: stream.streamIcon.flatMap(URL.init(string:)),
+                categoryEvent: category ?? nil
             )
         }
         channelCache.withLock { $0 = (generation, channels) }
@@ -191,15 +197,26 @@ nonisolated enum SportsPayPerView {
                     start: listing.start, end: listing.end, channelName: channel.name,
                     streamId: channel.streamId, logoURL: channel.logoURL
                 ))
-            } else if let title = title(fromChannelName: channel.name) {
-                guard seenTitles.insert(SportsMatcher.normalize(title)).inserted else { continue }
-                events.append(Event(
-                    id: channel.streamId, title: title, start: nil, end: nil, channelName: channel.name,
-                    streamId: channel.streamId, logoURL: channel.logoURL
-                ))
+            } else if let event = nameEvent(on: channel, now: now) {
+                guard seenTitles.insert(SportsMatcher.normalize(event.title)).inserted else { continue }
+                events.append(event)
             }
         }
         return Array(order(events, now: now).prefix(limit))
+    }
+
+    /// The event a channel's name — or else its category's — carries, within
+    /// the week ahead.
+    static func nameEvent(on channel: Channel, now: Date) -> Event? {
+        let parsed = SportsEventChannelName.parse(channel.name, now: now)
+            ?? channel.categoryEvent.map { SportsEventChannelName.Parsed(title: $0, start: nil, isLive: false) }
+        guard let parsed else { return nil }
+        if let start = parsed.start, start.timeIntervalSince(now) > window { return nil }
+        return Event(
+            id: channel.streamId, title: parsed.title, start: parsed.start,
+            end: parsed.start?.addingTimeInterval(assumedLength), channelName: channel.name,
+            streamId: channel.streamId, logoURL: channel.logoURL, isMarkedLive: parsed.isLive
+        )
     }
 
     static func order(_ events: [Event], now: Date) -> [Event] {
