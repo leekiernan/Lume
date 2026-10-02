@@ -2791,6 +2791,7 @@
       }
     },
     "★ My Teams" : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -11353,6 +11354,58 @@
         }
       }
     },
+    "Close Browse" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Durchsuchen schließen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cerrar explorar"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fermer l'exploration"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chiudi Sfoglia"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ブラウズを閉じる"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "둘러보기 닫기"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fechar navegação"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "关闭浏览"
+          }
+        }
+      }
+    },
     "Close episodes" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -15559,6 +15612,7 @@
       }
     },
     "Drag to reorder — the first few lead the Home shelf." : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -15606,6 +15660,58 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "拖动以重新排序 — 靠前的几项会显示在主页栏目的最前面。"
+          }
+        }
+      }
+    },
+    "Drag to reorder — the Sports hub's rows follow this order, and the first few lead the Home shelf." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zum Neuordnen ziehen – die Reihen des Sport-Hubs folgen dieser Reihenfolge, und die ersten erscheinen zuerst auf der Startseite."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Arrastra para reordenar: las filas del centro de deportes siguen este orden y las primeras encabezan Inicio."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Faites glisser pour réorganiser : les rangées de l'espace Sports suivent cet ordre, et les premières mènent l'Accueil."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Trascina per riordinare: le righe dell'hub Sport seguono quest'ordine e le prime aprono la Home."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ドラッグで並べ替え：スポーツハブの行はこの順に並び、上位はホームの先頭に表示されます。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "드래그해 순서를 바꾸세요: 스포츠 허브의 행이 이 순서를 따르고, 상위 항목이 홈 선반 앞쪽에 표시됩니다."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Arraste para reordenar: as fileiras do hub de esportes seguem esta ordem, e as primeiras abrem o Início."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "拖动以重新排序：体育中心各行按此顺序排列，前几项会出现在首页最前。"
           }
         }
       }
@@ -33679,6 +33785,7 @@
       }
     },
     "My Teams" : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -36293,6 +36400,58 @@
         }
       }
     },
+    "No start time is listed for this event on %@." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Für dieses Event ist auf %@ keine Startzeit angegeben."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No hay hora de inicio para este evento en %@."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aucune heure de début n'est indiquée pour cet événement sur %@."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Per questo evento non è indicato un orario di inizio su %@."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ではこのイベントの開始時刻が掲載されていません。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@에 이 이벤트의 시작 시간이 표시되어 있지 않습니다."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nenhum horário de início está listado para este evento em %@."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 未列出此赛事的开始时间。"
+          }
+        }
+      }
+    },
     "No subtitles found for this title." : {
       "localizations" : {
         "de" : {
@@ -36770,6 +36929,64 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "暂不"
+          }
+        }
+      }
+    },
+    "Not on yet — starts %@ on %@." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Noch nicht live – beginnt %1$@ auf %2$@."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Not on yet — starts %1$@ on %2$@."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aún no ha empezado: comienza %1$@ en %2$@."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pas encore commencé — débute %1$@ sur %2$@."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Non ancora iniziato: inizia %1$@ su %2$@."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "まだ始まっていません — %2$@で%1$@に開始します。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "아직 시작 전 — %2$@에서 %1$@에 시작합니다."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ainda não começou — começa %1$@ em %2$@."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "尚未开始 — 将于 %1$@ 在 %2$@ 开始。"
           }
         }
       }
@@ -50113,6 +50330,7 @@
       }
     },
     "Select a row to lift it, then move up or down and select again to place — the first few lead the Home shelf." : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -50160,6 +50378,58 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "选择一行将其拿起，上下移动后再次选择即可放置 — 靠前的几项会显示在主页栏目的最前面。"
+          }
+        }
+      }
+    },
+    "Select a row to lift it, then move up or down and select again to place — the Sports hub's rows follow this order, and the first few lead the Home shelf." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wähle eine Reihe zum Anheben, bewege sie nach oben oder unten und wähle erneut zum Ablegen – die Reihen des Sport-Hubs folgen dieser Reihenfolge, und die ersten erscheinen zuerst auf der Startseite."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Selecciona una fila para levantarla, muévela arriba o abajo y vuelve a seleccionar para colocarla: las filas del centro de deportes siguen este orden y las primeras encabezan Inicio."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sélectionnez une rangée pour la soulever, déplacez-la puis sélectionnez à nouveau pour la poser : les rangées de l'espace Sports suivent cet ordre, et les premières mènent l'Accueil."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Seleziona una riga per sollevarla, spostala su o giù e seleziona di nuovo per posizionarla: le righe dell'hub Sport seguono quest'ordine e le prime aprono la Home."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "行を選択して持ち上げ、上下に動かしてもう一度選択すると配置されます。スポーツハブの行はこの順に並び、上位はホームの先頭に表示されます。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "행을 선택해 들어 올리고 위아래로 옮긴 뒤 다시 선택해 놓으세요. 스포츠 허브의 행이 이 순서를 따르고, 상위 항목이 홈 선반 앞쪽에 표시됩니다."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Selecione uma fileira para erguê-la, mova para cima ou para baixo e selecione de novo para posicionar: as fileiras do hub de esportes seguem esta ordem, e as primeiras abrem o Início."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "选择一行将其提起，上下移动后再次选择即可放下。体育中心各行按此顺序排列，前几项会出现在首页最前。"
           }
         }
       }
@@ -65764,6 +66034,58 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "再次观看"
+          }
+        }
+      }
+    },
+    "Watch Channel Anyway" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sender trotzdem ansehen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ver el canal de todos modos"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Regarder la chaîne quand même"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Guarda comunque il canale"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "チャンネルを再生する"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "그래도 채널 보기"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Assistir ao canal mesmo assim"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "仍然观看频道"
           }
         }
       }
