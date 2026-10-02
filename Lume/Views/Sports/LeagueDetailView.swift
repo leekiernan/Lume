@@ -213,13 +213,12 @@ struct LeagueDetailView: View {
 
     private var visibleFixtures: [SportsFixture] {
         let now = Date()
-        let range = SportsHubView.dateRange(for: segment, now: now)
         // A race weekend becomes one card per session before the day filter,
         // exactly as on the hub (`SportsHubGrouping`) and the Home rail, so
         // Saturday's race shows under Saturday, not under Thursday's practice.
         return snapshotFixtures
             .flatMap { $0.expandedBySession(now: now) }
-            .filter { range.contains($0.startDate) }
+            .filter { SportsHubView.fixture($0, isIn: segment, now: now) }
             .sorted(by: SportsFixture.displayOrder)
     }
 

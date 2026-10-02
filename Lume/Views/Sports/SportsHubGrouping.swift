@@ -68,7 +68,6 @@ struct SportsHubGrouping {
     /// by kickoff. A league followed as a league contributes all of its fixtures; a
     /// league present only through a followed team contributes just that team's.
     var visibleFixtures: [SportsFixture] {
-        let range = SportsHubView.dateRange(for: segment, now: now)
         var byID: [String: SportsFixture] = [:]
         for leagueId in displayLeagueIds {
             guard let snapshot = store.snapshot(for: leagueId) else { continue }
@@ -76,7 +75,7 @@ struct SportsHubGrouping {
             // A race weekend becomes one card per session before the day filter,
             // so Saturday's race shows under Saturday, not under Thursday's practice.
             for fixture in snapshot.fixtures.flatMap({ $0.expandedBySession(now: now) })
-                where range.contains(fixture.startDate)
+                where SportsHubView.fixture(fixture, isIn: segment, now: now)
             {
                 if leagueFollowed || involvesFollowedTeam(fixture) {
                     byID[fixture.id] = fixture

@@ -97,7 +97,9 @@ enum SportsRailPlanner {
     }
 
     private static func isInWindow(_ fixture: SportsFixture, start: Date, end: Date) -> Bool {
-        fixture.isInProgress || (fixture.startDate >= start && fixture.startDate < end)
+        // Live, or on at some point in the window — a card that started last
+        // night and ran past midnight still counts for today.
+        fixture.isInProgress || fixture.isOn(during: start ..< end)
     }
 
     private static func involvesFollowedTeam(_ fixture: SportsFixture, followedTeamKeys: Set<String>) -> Bool {

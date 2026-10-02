@@ -327,6 +327,24 @@ struct SportsHubView: View {
             return now ..< end
         }
     }
+
+    /// Whether a fixture belongs under a segment. Today claims what is live or
+    /// on at any point today, so an event that started last night and runs past
+    /// midnight stays in Today; the other segments go by start.
+    static func fixture(
+        _ fixture: SportsFixture,
+        isIn segment: SportsHubSegment,
+        now: Date,
+        calendar: Calendar = .current
+    ) -> Bool {
+        let range = dateRange(for: segment, now: now, calendar: calendar)
+        switch segment {
+        case .today:
+            return fixture.isInProgress || fixture.isOn(during: range)
+        case .yesterday, .upcoming:
+            return range.contains(fixture.startDate)
+        }
+    }
 }
 
 #Preview {
