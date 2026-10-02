@@ -106,43 +106,99 @@ struct SportsTeamSeasonPanel: View {
         teams.first { $0.id == selectedId } ?? teams.first
     }
 
+    @Environment(\.horizontalSizeClass) private var sizeClass
+
     var body: some View {
         if let selected {
             VStack(alignment: .leading, spacing: 12) {
-                HStack {
-                    Text("Your Teams")
-                        .font(.headline)
-                    Spacer()
-                    if teams.count > 1 {
-                        Picker("Team", selection: Binding(get: { selected.id }, set: { selectedId = $0 })) {
-                            ForEach(teams) { Text(verbatim: $0.name).tag($0.id) }
-                        }
-                        .pickerStyle(.menu)
-                    }
-                }
-                HStack(spacing: 10) {
-                    TeamCrest(team: selected, size: 36)
-                    Text("\(selected.name) this season")
-                        .font(.title3.weight(.bold))
-                }
-                if let season, season.team.id == selected.id {
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        LazyHStack(alignment: .top, spacing: 12) {
-                            ForEach(season.competitions) { SportsSeasonCompetitionCard(competition: $0) }
-                        }
-                    }
-                    .scrollClipDisabled()
-                    if !season.leaders.isEmpty {
-                        leaders(season)
+                Text("Your Teams")
+                    .font(.headline)
+                if teams.count > 1, sizeClass == .regular {
+                    // The left selection pane, as elsewhere on iPad and Mac.
+                    HStack(alignment: .top, spacing: 20) {
+                        teamList
+                        seasonBody(selected)
                     }
                 } else {
-                    ProgressView().frame(maxWidth: .infinity, minHeight: 120)
+                    if teams.count > 1 { teamChips }
+                    seasonBody(selected)
                 }
             }
             .task(id: selected.id) {
                 let loaded = await SportsTeamSeasonLoader.load(team: selected)
                 guard !Task.isCancelled else { return }
                 season = loaded
+            }
+        }
+    }
+
+    private var teamList: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            ForEach(teams) { team in
+                Button {
+                    selectedId = team.id
+                } label: {
+                    HStack(spacing: 10) {
+                        TeamCrest(team: team, size: 26)
+                        Text(verbatim: team.name).lineLimit(1)
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 8)
+                    .contentShape(Rectangle())
+                    .background(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .fill(team.id == selected?.id ? AnyShapeStyle(.quaternary) : AnyShapeStyle(.clear))
+                    )
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .frame(width: 220)
+    }
+
+    private var teamChips: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(teams) { team in
+                    Button {
+                        selectedId = team.id
+                    } label: {
+                        HStack(spacing: 6) {
+                            TeamCrest(team: team, size: 20)
+                            Text(verbatim: team.shortName.isEmpty ? team.name : team.shortName)
+                                .font(.subheadline.weight(.semibold))
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 7)
+                        .background(Capsule().fill(team.id == selected?.id ? AnyShapeStyle(.tint.opacity(0.3)) : AnyShapeStyle(.quaternary)))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+        .scrollClipDisabled()
+    }
+
+    private func seasonBody(_ selected: SportsTeam) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 10) {
+                TeamCrest(team: selected, size: 36)
+                Text("\(selected.name) this season")
+                    .font(.title3.weight(.bold))
+            }
+            if let season, season.team.id == selected.id {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    LazyHStack(alignment: .top, spacing: 12) {
+                        ForEach(season.competitions) { SportsSeasonCompetitionCard(competition: $0) }
+                    }
+                }
+                .scrollClipDisabled()
+                if !season.leaders.isEmpty {
+                    leaders(season)
+                }
+            } else {
+                ProgressView().frame(maxWidth: .infinity, minHeight: 120)
             }
         }
     }
@@ -168,6 +224,8 @@ struct SportsTeamSeasonPanel: View {
                         }
                     }
                     .padding(12)
+                    // Fill the grid row, so boards side by side share a height.
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                     .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                 }
             }

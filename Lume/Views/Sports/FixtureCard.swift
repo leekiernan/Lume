@@ -92,7 +92,9 @@ struct FixtureCard: View {
 
             trailing
         }
-        .frame(maxWidth: .infinity, minHeight: contentMinHeight)
+        // Fills the height a row offers, so cards side by side in a rail match;
+        // in a list it takes its natural height.
+        .frame(maxWidth: .infinity, minHeight: contentMinHeight, maxHeight: .infinity)
         .padding(.vertical, 12)
         .padding(.horizontal, 14)
         .background(gradient, in: RoundedRectangle(cornerRadius: 16))

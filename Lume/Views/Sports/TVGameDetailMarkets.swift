@@ -34,6 +34,8 @@
                         oddsPanel(odds)
                     }
                 }
+                // Panels in a row share the tallest one's height.
+                .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
@@ -181,6 +183,7 @@
                 content()
             }
             .padding(26)
+            .frame(maxHeight: .infinity, alignment: .topLeading)
             .background(RoundedRectangle(cornerRadius: 24, style: .continuous).fill(.white.opacity(0.06)))
         }
     }

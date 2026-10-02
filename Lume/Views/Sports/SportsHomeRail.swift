@@ -115,7 +115,7 @@ struct SportsHomeRail: View {
             VStack(alignment: .leading, spacing: 12) {
                 header(showSeeAll: true)
                 ScrollView(.horizontal, showsIndicators: false) {
-                    LazyHStack(spacing: 12) {
+                    HStack(spacing: 12) {
                         ForEach(fixtures) { fixture in
                             FixtureCard(
                                 fixture: fixture,
@@ -129,6 +129,8 @@ struct SportsHomeRail: View {
                             .frame(width: Self.cardWidth)
                         }
                     }
+                    // Every card takes the tallest one's height.
+                    .fixedSize(horizontal: false, vertical: true)
                     .padding(.horizontal)
                     .padding(.vertical, 4)
                 }

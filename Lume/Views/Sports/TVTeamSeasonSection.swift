@@ -29,11 +29,18 @@
                         .font(.subheadline)
                         .fontWeight(.bold)
                         .foregroundStyle(.secondary)
-                    if teams.count > 1 {
-                        teamPicker
+                    HStack(alignment: .top, spacing: 40) {
+                        // The left selection pane, as Settings and Live TV use.
+                        if teams.count > 1 {
+                            teamPane
+                                .focusSection()
+                        }
+                        VStack(alignment: .leading, spacing: 28) {
+                            header(selected)
+                            content
+                        }
+                        .focusSection()
                     }
-                    header(selected)
-                    content
                 }
                 .padding(.horizontal, 60)
                 .focusSection()
@@ -43,24 +50,30 @@
 
         // MARK: - Picker
 
-        private var teamPicker: some View {
-            HStack(spacing: 14) {
+        private var teamPane: some View {
+            VStack(alignment: .leading, spacing: 8) {
                 ForEach(teams) { team in
                     Button {
                         selectedId = team.id
                     } label: {
-                        HStack(spacing: 12) {
-                            TeamCrest(team: team, size: 36)
+                        HStack(spacing: 16) {
+                            TeamCrest(team: team, size: 40)
                             Text(verbatim: team.shortName.isEmpty ? team.name : team.shortName)
-                                .font(.system(size: 24, weight: .semibold))
+                                .font(.system(size: 26, weight: .semibold))
+                                .lineLimit(1)
+                            Spacer(minLength: 0)
                         }
                         .padding(.horizontal, 20)
-                        .padding(.vertical, 12)
-                        .background(Capsule().fill(.white.opacity(team.id == selected?.id ? 0.2 : 0.07)))
+                        .frame(height: 72)
+                        .background(
+                            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                .fill(.white.opacity(team.id == selected?.id ? 0.18 : 0.05))
+                        )
                     }
-                    .buttonStyle(TVCardButtonStyle(focusScale: 1.05))
+                    .buttonStyle(TVCardButtonStyle(focusScale: 1.03))
                 }
             }
+            .frame(width: 360)
         }
 
         private func header(_ team: SportsTeam) -> some View {
@@ -325,7 +338,8 @@
             }
             .foregroundStyle(.white)
             .padding(26)
-            .frame(width: 380, alignment: .topLeading)
+            // One height for every board in the row, however many names each has.
+            .frame(width: 380, height: 260, alignment: .topLeading)
             .background(RoundedRectangle(cornerRadius: 28, style: .continuous).fill(.white.opacity(0.07)))
         }
 
