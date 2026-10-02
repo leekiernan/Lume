@@ -1,0 +1,297 @@
+//
+//  SportsHubExtras.swift
+//  Lume
+//
+//  The iPhone / iPad / Mac hub's sections beyond the day's fixtures — the same
+//  two the tvOS hub carries: "Big this week" (the week's biggest events past
+//  the viewer's follows, each with why) and "Your teams" (a followed football
+//  team's season, one card per competition, then its leading players).
+//
+
+import SwiftUI
+
+// MARK: - Big this week
+
+struct SportsHighlightsRail: View {
+    let highlights: [SportsHighlight]
+    let availability: (SportsFixture) -> SportsChannelAvailability
+    let onOpen: (SportsFixture) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Big This Week")
+                .font(.headline)
+            ScrollView(.horizontal, showsIndicators: false) {
+                LazyHStack(spacing: 12) {
+                    ForEach(highlights) { highlight in
+                        Button {
+                            onOpen(highlight.fixture)
+                        } label: {
+                            SportsHighlightCard(highlight: highlight, availability: availability(highlight.fixture))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+            .scrollClipDisabled()
+        }
+    }
+}
+
+private struct SportsHighlightCard: View {
+    let highlight: SportsHighlight
+    let availability: SportsChannelAvailability
+
+    private var fixture: SportsFixture {
+        highlight.fixture
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text(verbatim: highlight.reason.chip)
+                    .font(.caption.weight(.heavy))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(Capsule().fill(.white))
+                    .foregroundStyle(.black)
+                Spacer(minLength: 4)
+                Text(verbatim: fixture.leagueName)
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.white.opacity(0.8))
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 4)
+            if let home = fixture.home, let away = fixture.away {
+                HStack(spacing: 6) {
+                    TeamCrest(team: home.team, size: 30)
+                    TeamCrest(team: away.team, size: 30)
+                }
+            }
+            Text(verbatim: fixture.eventShortTitleOrMatchup)
+                .font(.subheadline.weight(.bold))
+                .lineLimit(2)
+            Text(verbatim: fixture.isInProgress ? String(localized: "Live now") : fixture.cardWhenText)
+                .font(.caption)
+                .foregroundStyle(.white.opacity(0.8))
+            if let label = availability.label {
+                Label(label, systemImage: "tv")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(availability.isAvailable ? Color.lumeAccent : .white.opacity(0.6))
+                    .lineLimit(1)
+            }
+        }
+        .foregroundStyle(.white)
+        .padding(12)
+        .frame(width: 220, height: 190, alignment: .topLeading)
+        .background {
+            ZStack {
+                Color(white: 0.12)
+                TeamPalette.gradient(home: fixture.homePalette, away: fixture.awayPalette)
+                LinearGradient(colors: [.clear, .black.opacity(0.6)], startPoint: .center, endPoint: .bottom)
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        }
+        .accessibilityElement(children: .combine)
+    }
+}
+
+// MARK: - Your teams
+
+struct SportsTeamSeasonPanel: View {
+    let teams: [SportsTeam]
+    @State private var selectedId: String?
+    @State private var season: SportsTeamSeason?
+
+    private var selected: SportsTeam? {
+        teams.first { $0.id == selectedId } ?? teams.first
+    }
+
+    var body: some View {
+        if let selected {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    Text("Your Teams")
+                        .font(.headline)
+                    Spacer()
+                    if teams.count > 1 {
+                        Picker("Team", selection: Binding(get: { selected.id }, set: { selectedId = $0 })) {
+                            ForEach(teams) { Text(verbatim: $0.name).tag($0.id) }
+                        }
+                        .pickerStyle(.menu)
+                    }
+                }
+                HStack(spacing: 10) {
+                    TeamCrest(team: selected, size: 36)
+                    Text("\(selected.name) this season")
+                        .font(.title3.weight(.bold))
+                }
+                if let season, season.team.id == selected.id {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        LazyHStack(alignment: .top, spacing: 12) {
+                            ForEach(season.competitions) { SportsSeasonCompetitionCard(competition: $0) }
+                        }
+                    }
+                    .scrollClipDisabled()
+                    if !season.leaders.isEmpty {
+                        leaders(season)
+                    }
+                } else {
+                    ProgressView().frame(maxWidth: .infinity, minHeight: 120)
+                }
+            }
+            .task(id: selected.id) {
+                let loaded = await SportsTeamSeasonLoader.load(team: selected)
+                guard !Task.isCancelled else { return }
+                season = loaded
+            }
+        }
+    }
+
+    private func leaders(_ season: SportsTeamSeason) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("Players").font(.subheadline.weight(.bold))
+                if let name = season.leadersCompetitionName {
+                    Text(verbatim: name).font(.caption).foregroundStyle(.secondary)
+                }
+            }
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 160), spacing: 12)], spacing: 12) {
+                ForEach(season.leaders) { board in
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(board.kind.title).font(.caption.weight(.bold)).foregroundStyle(.secondary)
+                        ForEach(Array(board.entries.enumerated()), id: \.offset) { _, entry in
+                            HStack {
+                                Text(verbatim: entry.name).font(.subheadline).lineLimit(1)
+                                Spacer(minLength: 4)
+                                Text(entry.value.formatted(.number)).font(.subheadline.weight(.bold)).monospacedDigit()
+                            }
+                        }
+                    }
+                    .padding(12)
+                    .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                }
+            }
+        }
+    }
+}
+
+private struct SportsSeasonCompetitionCard: View {
+    let competition: SportsSeasonCompetition
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(verbatim: competition.name)
+                .font(.subheadline.weight(.bold))
+                .lineLimit(1)
+            switch competition.format {
+            case let .table(table):
+                place(table.position, table.points)
+                VStack(spacing: 2) {
+                    ForEach(table.rows) { row in
+                        HStack {
+                            Text(row.rank.formatted(.number)).frame(width: 22, alignment: .leading).foregroundStyle(.secondary)
+                            Text(verbatim: row.name).lineLimit(1)
+                            Spacer(minLength: 4)
+                            Text(verbatim: row.points.map(String.init) ?? "–").fontWeight(.bold)
+                        }
+                        .font(.caption)
+                        .monospacedDigit()
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 3)
+                        .background(
+                            RoundedRectangle(cornerRadius: 6)
+                                .fill(row.id == table.teamRowId ? Color.lumeAccent.opacity(0.35) : .clear)
+                        )
+                    }
+                }
+            case let .leaguePhase(phase):
+                place(phase.position, phase.points, of: phase.total)
+                HStack(spacing: 1.5) {
+                    ForEach(1 ... max(phase.total, 1), id: \.self) { rank in
+                        RoundedRectangle(cornerRadius: 1.5)
+                            .fill(rank == phase.position ? Color.primary : bandColor(rank, phase))
+                            .frame(height: 18)
+                    }
+                }
+                ForEach(Array(phase.bands.enumerated()), id: \.offset) { _, band in
+                    Text(verbatim: "\(band.first)–\(band.last)  \(band.label)")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            case let .knockout(steps):
+                ForEach(Array(steps.enumerated()), id: \.offset) { _, step in
+                    HStack(alignment: .top, spacing: 8) {
+                        Image(systemName: step.symbol)
+                            .foregroundStyle(step.state == .won ? Color.blue : .secondary)
+                            .frame(width: 18)
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(verbatim: step.round).font(.caption.weight(.bold))
+                            Text(verbatim: step.detailLine).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+                        }
+                    }
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(12)
+        .frame(width: 250, height: 250, alignment: .topLeading)
+        .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+
+    private func place(_ position: Int, _ points: Int?, of total: Int? = nil) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            Text(position.formatted(.number)).font(.largeTitle.weight(.bold))
+            if let total {
+                Text("of \(total)").font(.caption).foregroundStyle(.secondary)
+            }
+            if let points {
+                Text("\(points) pts").font(.caption).foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private func bandColor(_ rank: Int, _ phase: SportsLeaguePhase) -> Color {
+        guard let band = phase.bands.first(where: { ($0.first ... $0.last).contains(rank) }) else { return .gray.opacity(0.2) }
+        return band.colorHex.flatMap { Color(hex: $0) } ?? .gray.opacity(0.5)
+    }
+}
+
+extension SportsLeaderBoard.Kind {
+    var title: LocalizedStringKey {
+        switch self {
+        case .goals: "Goals"
+        case .assists: "Assists"
+        case .appearances: "Appearances"
+        case .saves: "Saves"
+        }
+    }
+}
+
+extension SportsKnockoutStep {
+    var symbol: String {
+        switch state {
+        case .won: "checkmark.circle.fill"
+        case .lost: "xmark.circle"
+        case .drawn: "equal.circle"
+        case .live: "dot.radiowaves.left.and.right"
+        case .next: "circle.circle"
+        case .upcoming: "circle"
+        }
+    }
+
+    /// "Won 4–2 v Ipswich", or the opponent and date to come.
+    var detailLine: String {
+        let opponent = opponent ?? ""
+        let score = score ?? ""
+        switch state {
+        case .won: return String(localized: "Won \(score) v \(opponent)")
+        case .lost: return String(localized: "Lost \(score) v \(opponent)")
+        case .drawn: return String(localized: "Drew \(score) v \(opponent)")
+        case .live: return String(localized: "Live v \(opponent)")
+        case .next, .upcoming:
+            return "\(opponent) · \(date.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated)))"
+        }
+    }
+}

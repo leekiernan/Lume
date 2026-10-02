@@ -97,7 +97,8 @@ struct SportsSectionsView: View {
             onOpenDetail: { onOpenDetail(fixture) },
             onWatch: onWatch,
             onFollowToggle: onFollowToggle,
-            onPickChannel: { onPickChannel(fixture) }
+            onPickChannel: { onPickChannel(fixture) },
+            availability: SportsChannelAvailability(resolved[fixture.id], startDate: fixture.headlineDate, preference: .current)
         )
     }
 

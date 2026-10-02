@@ -14,31 +14,13 @@
 
     extension TVSportsHubScreen {
         func loadHighlights() async {
-            let feed = await SportsHighlightsLoader.load()
-            guard !Task.isCancelled else { return }
             let followedTeams = Set(follows.follows.filter { $0.kind == .team }.map(\.key))
-            let now = Date()
-            // Resolve the games a guide could already cover, so channel
-            // availability can count towards the ranking and show on the cards.
-            let near = feed.fixtures.filter {
-                $0.startDate.timeIntervalSince(now) < SportsChannelAvailability.guideHorizon && $0.expectedEnd > now
-            }
-            let firstPass = SportsHighlights.rank(
-                feed.fixtures, standings: feed.standings, followedTeamIds: followedTeams, availableIds: [], now: now
+            let result = await SportsHighlightsPipeline.run(
+                container: modelContext.container, restriction: restriction, followedTeamIds: followedTeams
             )
-            let toResolve = firstPass.map(\.fixture).filter { fixture in near.contains { $0.id == fixture.id } }
-            var resolvedNow: [String: [ResolvedChannel]] = [:]
-            if !toResolve.isEmpty {
-                resolvedNow = await SportsChannelResolver.resolve(
-                    container: modelContext.container, fixtures: toResolve, restriction: restriction
-                )
-            }
             guard !Task.isCancelled else { return }
-            let available = Set(resolvedNow.filter { !$0.value.isEmpty }.keys)
-            highlightResolved = resolvedNow
-            highlights = SportsHighlights.rank(
-                feed.fixtures, standings: feed.standings, followedTeamIds: followedTeams, availableIds: available, now: now
-            )
+            highlightResolved = result.resolved
+            highlights = result.highlights
         }
 
         func highlightAvailability(_ fixture: SportsFixture) -> SportsChannelAvailability {

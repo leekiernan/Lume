@@ -46,3 +46,17 @@ nonisolated extension SportsFixture {
         startDate < range.upperBound && expectedEnd > range.lowerBound
     }
 }
+
+nonisolated extension SportsFixture {
+    /// When a card says a game is: the time alone for today, the weekday
+    /// and time otherwise, so a Saturday kickoff in Thursday's list is never
+    /// read as today's.
+    var cardWhenText: String {
+        if startTimeIsTentative == true {
+            return headlineDate.formatted(.dateTime.weekday(.abbreviated))
+        }
+        return headlineIsToday
+            ? headlineDate.formatted(.dateTime.hour().minute())
+            : headlineDate.formatted(.dateTime.weekday(.abbreviated).hour().minute())
+    }
+}

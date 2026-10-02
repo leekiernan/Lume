@@ -57,6 +57,7 @@ struct SportsHubView: View {
     @State private var scope: SportsHubScope = .myTeams
     @State private var segment: SportsHubSegment = .today
     @State private var resolved: [String: [ResolvedChannel]] = [:]
+    @State private var highlights = SportsHighlightsPipeline.Result(highlights: [], resolved: [:])
     @State private var selectedFixture: SportsFixture?
     @State private var pickerFixture: SportsFixture?
     @State private var showManageTeams = false
@@ -133,45 +134,93 @@ struct SportsHubView: View {
 
     // MARK: - Content
 
-    @ViewBuilder
     private func hubContent(_ fixtures: [SportsFixture]) -> some View {
-        if follows.follows.isEmpty {
-            SportsOnboardingCard { showManageTeams = true }
-        } else {
-            VStack(spacing: 0) {
-                Picker("Range", selection: $segment) {
-                    ForEach(SportsHubSegment.allCases) { segment in
-                        Text(segment.title).tag(segment)
-                    }
-                }
-                .hubSegmentedPickerStyle()
-                .padding(.horizontal)
-                .padding(.bottom, 8)
-
+        Group {
+            if follows.follows.isEmpty {
                 ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 20) {
-                        if epg.isSyncing {
-                            hint("Updating guide…", icon: "arrow.triangle.2.circlepath")
-                        }
-                        if store.refreshError {
-                            hint("Scores unavailable — showing your saved data.", icon: "wifi.slash")
-                        }
-                        SportsSectionsView(
-                            groups: grouping.groups(for: fixtures),
-                            resolved: resolved,
-                            isFollowed: isFollowed,
-                            onOpenDetail: { selectedFixture = $0 },
-                            onWatch: watch,
-                            onFollowToggle: toggleFollow,
-                            onPickChannel: { pickerFixture = $0 },
-                            onSelectLeague: { scope = .league($0) }
-                        )
+                    VStack(alignment: .leading, spacing: 24) {
+                        SportsOnboardingCard { showManageTeams = true }
+                        highlightsRail
                     }
                     .padding()
                 }
+            } else {
+                followedContent(fixtures)
             }
-            .task(id: resolveKey(fixtures)) { await runResolve(fixtures) }
         }
+        .task(id: follows.follows.map(\.key)) { await loadHighlights() }
+    }
+
+    @ViewBuilder
+    private var highlightsRail: some View {
+        if !highlights.highlights.isEmpty {
+            SportsHighlightsRail(
+                highlights: highlights.highlights,
+                availability: { fixture in
+                    SportsChannelAvailability(highlights.resolved[fixture.id], startDate: fixture.headlineDate, preference: .current)
+                },
+                onOpen: { selectedFixture = $0 }
+            )
+        }
+    }
+
+    /// Followed football teams, for the season panel.
+    private var seasonTeams: [SportsTeam] {
+        follows.follows
+            .filter { $0.kind == .team }
+            .compactMap { store.team(by: $0.key) }
+            .filter(SportsTeamSeasonLoader.supports)
+    }
+
+    private func loadHighlights() async {
+        let followedTeams = Set(follows.follows.filter { $0.kind == .team }.map(\.key))
+        let result = await SportsHighlightsPipeline.run(
+            container: modelContext.container, restriction: restriction, followedTeamIds: followedTeams
+        )
+        guard !Task.isCancelled else { return }
+        highlights = result
+    }
+
+    private func followedContent(_ fixtures: [SportsFixture]) -> some View {
+        VStack(spacing: 0) {
+            Picker("Range", selection: $segment) {
+                ForEach(SportsHubSegment.allCases) { segment in
+                    Text(segment.title).tag(segment)
+                }
+            }
+            .hubSegmentedPickerStyle()
+            .padding(.horizontal)
+            .padding(.bottom, 8)
+
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 20) {
+                    if epg.isSyncing {
+                        hint("Updating guide…", icon: "arrow.triangle.2.circlepath")
+                    }
+                    if store.refreshError {
+                        hint("Scores unavailable — showing your saved data.", icon: "wifi.slash")
+                    }
+                    SportsSectionsView(
+                        groups: grouping.groups(for: fixtures),
+                        resolved: resolved,
+                        isFollowed: isFollowed,
+                        onOpenDetail: { selectedFixture = $0 },
+                        onWatch: watch,
+                        onFollowToggle: toggleFollow,
+                        onPickChannel: { pickerFixture = $0 },
+                        onSelectLeague: { scope = .league($0) }
+                    )
+                    if scope == .myTeams {
+                        highlightsRail
+                        if !seasonTeams.isEmpty {
+                            SportsTeamSeasonPanel(teams: seasonTeams)
+                        }
+                    }
+                }
+                .padding()
+            }
+        }
+        .task(id: resolveKey(fixtures)) { await runResolve(fixtures) }
     }
 
     private var lockedState: some View {

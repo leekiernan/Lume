@@ -10,6 +10,7 @@
 //
 
 import Foundation
+import SwiftData
 import Synchronization
 
 nonisolated enum SportsHighlightsLoader {
@@ -79,5 +80,38 @@ nonisolated enum SportsHighlightsLoader {
     private struct MonthKey: Hashable {
         let year: Int
         let month: Int
+    }
+}
+
+/// The whole "Big this week" pass a hub runs: load the feed, rank it, resolve
+/// channels for the games a guide could already cover, and rank again with
+/// that availability counted. Shared by the tvOS and iOS hubs.
+nonisolated enum SportsHighlightsPipeline {
+    struct Result: Equatable {
+        let highlights: [SportsHighlight]
+        let resolved: [String: [ResolvedChannel]]
+    }
+
+    static func run(
+        container: ModelContainer,
+        restriction: ContentRestriction,
+        followedTeamIds: Set<String>,
+        now: Date = Date()
+    ) async -> Result {
+        let feed = await SportsHighlightsLoader.load(now: now)
+        let firstPass = SportsHighlights.rank(
+            feed.fixtures, standings: feed.standings, followedTeamIds: followedTeamIds, availableIds: [], now: now
+        )
+        let toResolve = firstPass.map(\.fixture).filter {
+            $0.startDate.timeIntervalSince(now) < SportsChannelAvailability.guideHorizon && $0.expectedEnd > now
+        }
+        let resolved = toResolve.isEmpty
+            ? [:]
+            : await SportsChannelResolver.resolve(container: container, fixtures: toResolve, restriction: restriction)
+        let available = Set(resolved.filter { !$0.value.isEmpty }.keys)
+        let highlights = SportsHighlights.rank(
+            feed.fixtures, standings: feed.standings, followedTeamIds: followedTeamIds, availableIds: available, now: now
+        )
+        return Result(highlights: highlights, resolved: resolved)
     }
 }

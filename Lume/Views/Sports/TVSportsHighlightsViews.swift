@@ -12,21 +12,6 @@
 
     import SwiftUI
 
-    extension SportsHighlight.Reason {
-        var chip: String {
-            switch self {
-            case .final: String(localized: "Final")
-            case .semiFinal: String(localized: "Semi-final")
-            case .numberedCard: String(localized: "Numbered card")
-            case let .tableClash(first, second):
-                String(localized: "\(SportsPeriodLabel.ordinal(first)) v \(SportsPeriodLabel.ordinal(second))")
-            case .derby: String(localized: "Derby")
-            case .raceDay: String(localized: "Race day")
-            case .headline: String(localized: "Big game")
-            }
-        }
-    }
-
     // MARK: - Rail
 
     struct TVSportsHighlightsSection: View {
