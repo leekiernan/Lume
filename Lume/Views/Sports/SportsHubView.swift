@@ -63,6 +63,13 @@ struct SportsHubView: View {
     @State private var showManageTeams = false
     @State private var showingBrowse = false
     @State private var showPaywall = false
+    // The library toolbar every area carries: playlist, sort, sync, settings.
+    @Query private var playlists: [Playlist]
+    @AppStorage(PlaylistSelectionStore.key) private var selectedPlaylistID: String = ""
+    @AppStorage(SortStorageKey.sportsCategories) private var categorySortRaw: String = CategorySortOption.playlist.rawValue
+    @AppStorage(SortStorageKey.sportsContent) private var contentSortRaw: String = ContentSortOption.playlist.rawValue
+    @State private var showingSync = false
+    @State private var showingSettings = false
     @State private var localPath = NavigationPath()
     #if os(iOS) || os(visionOS)
         @State private var playingMedia: PlayableMedia?
@@ -82,15 +89,26 @@ struct SportsHubView: View {
         if pageKey == nil {
             NavigationStack(path: pathBinding) {
                 screen
+                    // The same title and toolbar as Movies, Series and Live TV,
+                    // in the same order — item order in the bar follows it.
+                    .platformNavigationTitle("Sports")
+                    .profileMenuToolbar()
+                    .libraryToolbar(config: LibraryToolbarConfiguration(
+                        playlists: playlists,
+                        selectedPlaylistID: $selectedPlaylistID,
+                        categorySortRaw: $categorySortRaw,
+                        contentSortRaw: $contentSortRaw,
+                        showingSync: $showingSync,
+                        showingSettings: $showingSettings,
+                        activePlaylist: playlists.active(for: selectedPlaylistID)
+                    ))
+                    .browseSidebarToolbar(isPresented: $showingBrowse, isEnabled: premium.isPremium)
                     .navigationDestination(for: SportsLeague.self) { league in
                         LeagueDetailView(league: league)
                     }
                     .navigationDestination(for: SportsFollowRoute.self) { route in
                         SportsHubView(pageKey: route.key)
                     }
-                    // Inside the stack, where a toolbar item can reach the
-                    // navigation bar — Movies, Series and Live TV do the same.
-                    .profileMenuToolbar()
             }
             // Above the stack, so the panel covers the navigation bar too — the
             // bar draws over anything inside the stack.
@@ -125,10 +143,6 @@ struct SportsHubView: View {
                 lockedState
             }
         }
-        .platformNavigationTitle("Sports")
-        .hubInlineNavigationTitle()
-        .toolbar { if premium.isPremium { hubToolbar } }
-        .browseSidebarToolbar(isPresented: $showingBrowse, isEnabled: premium.isPremium && pageKey == nil)
         .sheet(isPresented: $showManageTeams) { ManageTeamsSheet() }
         .sheet(item: $selectedFixture, onDismiss: presentPendingMedia) { fixture in
             GameDetailSheet(fixture: fixture, resolved: resolved[fixture.id] ?? [], onWatch: watch)
@@ -146,27 +160,6 @@ struct SportsHubView: View {
             .onDisappear { SportsSyncService.shared.endLivePolling() }
     }
 
-    // MARK: - Toolbar
-
-    @ToolbarContentBuilder
-    private var hubToolbar: some ToolbarContent {
-        // The hub's title opens the browse panel, as its toolbar button does;
-        // a team's page is titled with the team.
-        ToolbarItem(placement: .principal) {
-            if pageKey == nil {
-                Button {
-                    showingBrowse.toggle()
-                } label: {
-                    Text(scopeTitle).font(.headline)
-                }
-                .buttonStyle(.plain)
-                .accessibilityHint(Text("Browse"))
-            } else {
-                Text(verbatim: scopeTitle).font(.headline)
-            }
-        }
-    }
-
     // MARK: - Content
 
     private func hubContent(_ fixtures: [SportsFixture]) -> some View {
@@ -179,6 +172,8 @@ struct SportsHubView: View {
                     }
                     .padding()
                 }
+            } else if pageKey != nil {
+                followPage(fixtures)
             } else {
                 followedContent(fixtures)
             }
@@ -228,11 +223,7 @@ struct SportsHubView: View {
 
     private func followedContent(_ fixtures: [SportsFixture]) -> some View {
         let candidates = grouping.heroCandidates(
-            // A team's page headlines only its own games, never the week's
-            // wider picks.
-            in: fixtures,
-            highlights: pageKey == nil ? highlightsLoad.result.highlights.map(\.fixture) : [],
-            availableIDs: heroAvailableIDs
+            in: fixtures, highlights: highlightsLoad.result.highlights.map(\.fixture), availableIDs: heroAvailableIDs
         )
         let hero = heroSelection.displayed(in: candidates, context: heroSelectionContext)?.fixture
         let carouselCandidates = Array(heroSelection.carouselCandidates(in: candidates, context: heroSelectionContext).prefix(5))
@@ -257,11 +248,6 @@ struct SportsHubView: View {
                     .padding(.horizontal)
                     if scope == .all {
                         highlightsRail(excluding: carouselFixtureIDs)
-                            .padding(.horizontal)
-                    }
-                    // A team's own page carries its club season.
-                    if let team = grouping.scopedTeam, SportsTeamSeasonLoader.supports(team) {
-                        SportsTeamSeasonPanel(teams: [team])
                             .padding(.horizontal)
                     }
                 }
@@ -533,13 +519,43 @@ private extension SportsHubView {
         return $localPath
     }
 
-    /// A follow's own page: a league's full screen, else the hub fixed to the
-    /// team.
+    /// A follow's own page — team or league alike, the hub's screen fixed to it.
     private func open(follow key: String) {
-        if let league = SportsCatalog.league(id: key) {
-            pathBinding.wrappedValue.append(league)
-        } else {
-            pathBinding.wrappedValue.append(SportsFollowRoute(key: key))
+        pathBinding.wrappedValue.append(SportsFollowRoute(key: key))
+    }
+
+    /// A team's or league's own page, framed like a Movies category: its
+    /// title, then every game it has live or coming in a grid — no hero, no
+    /// day switch — and a club's season below.
+    func followPage(_ fixtures: [SportsFixture]) -> some View {
+        CategoryPage(title: scopeTitle) {
+            if fixtures.isEmpty {
+                SportsNoGamesView()
+            } else {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 320), spacing: 12)], spacing: 12) {
+                    ForEach(fixtures) { fixture in
+                        FixtureCard(
+                            fixture: fixture,
+                            resolved: resolved[fixture.id] ?? [],
+                            isFollowed: isFollowed,
+                            showsLeagueMark: grouping.scopedFollow?.kind == .team,
+                            onOpenDetail: { selectedFixture = fixture },
+                            onWatch: watch,
+                            onFollowToggle: toggleFollow,
+                            onPickChannel: { pickerFixture = fixture },
+                            availability: SportsChannelAvailability(
+                                resolved[fixture.id], startDate: fixture.headlineDate, preference: .current
+                            )
+                        )
+                    }
+                }
+                .padding()
+            }
+            if let team = grouping.scopedTeam, SportsTeamSeasonLoader.supports(team) {
+                SportsTeamSeasonPanel(teams: [team])
+                    .padding(.horizontal)
+            }
         }
+        .task(id: resolveKey(fixtures)) { await runResolve(fixtures) }
     }
 }

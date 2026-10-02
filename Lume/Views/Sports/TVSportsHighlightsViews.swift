@@ -20,6 +20,13 @@
         let availability: (SportsFixture) -> SportsChannelAvailability
         let onSelect: (SportsFixture) -> Void
         var onWatchEvent: (SportsPayPerView.Event) -> Void = { _ in }
+        /// Left from the row's first card: the hub opens its browse panel, as
+        /// from every other row.
+        var onLeadingLeft: (() -> Void)?
+
+        private var firstID: String? {
+            highlights.first?.id ?? payPerView.first?.id
+        }
 
         var body: some View {
             VStack(alignment: .leading, spacing: 12) {
@@ -37,6 +44,7 @@
                                 TVHighlightCard(highlight: highlight, availability: availability(highlight.fixture))
                             }
                             .buttonStyle(TVCardButtonStyle(focusScale: 1.05))
+                            .onLeadingEdgeLeft(highlight.id == firstID ? onLeadingLeft : nil)
                         }
                         // Pay-per-view and event channels: straight to the channel,
                         // there's no match centre behind a guide listing.
@@ -47,6 +55,7 @@
                                 TVPayPerViewCard(event: event)
                             }
                             .buttonStyle(TVCardButtonStyle(focusScale: 1.05))
+                            .onLeadingEdgeLeft(event.id == firstID ? onLeadingLeft : nil)
                         }
                     }
                     .padding(.horizontal, 60)

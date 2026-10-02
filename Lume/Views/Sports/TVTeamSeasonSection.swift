@@ -25,10 +25,13 @@
         var body: some View {
             if let selected {
                 VStack(alignment: .leading, spacing: 28) {
-                    Text("Your Teams")
-                        .font(.subheadline)
-                        .fontWeight(.bold)
-                        .foregroundStyle(.secondary)
+                    // On a team's own page the season needs no section heading.
+                    if teams.count > 1 {
+                        Text("Your Teams")
+                            .font(.subheadline)
+                            .fontWeight(.bold)
+                            .foregroundStyle(.secondary)
+                    }
                     HStack(alignment: .top, spacing: 40) {
                         // The left selection pane, as Settings and Live TV use.
                         if teams.count > 1 {
@@ -231,6 +234,9 @@
             .padding(28)
             .frame(width: 420, height: 440, alignment: .topLeading)
             .background(RoundedRectangle(cornerRadius: 30, style: .continuous).fill(.white.opacity(0.07)))
+            // A fixed card: a long table or cup run stops at its edge rather
+            // than drawing over the row below.
+            .clipShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
         }
 
         private func bigPlace(_ position: Int, detail: String) -> some View {

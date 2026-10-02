@@ -32,19 +32,7 @@ struct CategoryContentGrid<Item: Identifiable & Hashable & WatchlistFavoritable,
     private let columns = [GridItem(.adaptive(minimum: PosterCardMetrics.gridMinimum), spacing: PosterCardMetrics.gridSpacing)]
 
     var body: some View {
-        ScrollView {
-            // tvOS suppresses the system navigation title (it renders centred and
-            // the tab bar only shows the section, not the category), so we surface
-            // the category name as a leading-aligned heading in the content itself.
-            #if os(tvOS)
-                Text(title)
-                    .font(.largeTitle)
-                    .fontWeight(.bold)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal)
-                    .padding(.top, 40)
-            #endif
-
+        CategoryPage(title: title) {
             if items.isEmpty {
                 ContentUnavailableView(
                     emptyTitle,
@@ -72,16 +60,47 @@ struct CategoryContentGrid<Item: Identifiable & Hashable & WatchlistFavoritable,
                 .padding()
             }
         }
-        .browseActivity()
         // tvOS surfaces sorting through the tab bar's library controls instead of a
         // toolbar, mirroring the main browse views.
         #if !os(tvOS)
-            .navigationTitle(title)
-            .toolbar {
-                ToolbarItem(placement: .automatic) {
-                    ContentSortMenu(sortRaw: $sortRaw)
-                }
+        .toolbar {
+            ToolbarItem(placement: .automatic) {
+                ContentSortMenu(sortRaw: $sortRaw)
             }
+        }
+        #endif
+    }
+}
+
+// MARK: - Category page
+
+/// The frame every category-style page shares — a Movies or Series category,
+/// a Sports team or league: one scrolling page, titled by the navigation bar,
+/// or on tvOS (which suppresses that title) by a leading heading in the
+/// content. Callers supply what sits under it.
+struct CategoryPage<Content: View>: View {
+    let title: String
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        ScrollView {
+            // tvOS suppresses the system navigation title (it renders centred and
+            // the tab bar only shows the section, not the category), so we surface
+            // the category name as a leading-aligned heading in the content itself.
+            #if os(tvOS)
+                Text(title)
+                    .font(.largeTitle)
+                    .fontWeight(.bold)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal)
+                    .padding(.top, 40)
+            #endif
+
+            content()
+        }
+        .browseActivity()
+        #if !os(tvOS)
+            .navigationTitle(title)
         #endif
     }
 }

@@ -195,7 +195,9 @@ struct SportsHubGrouping {
     /// viewer's order, named and badged as the rows are.
     var sidebarEntries: [SportsBrowseSidebar.Entry] {
         follows.map { follow in
-            SportsBrowseSidebar.Entry(key: follow.key, title: title(of: follow), logoURL: logoURL(of: follow, in: []))
+            SportsBrowseSidebar.Entry(
+                key: follow.key, title: title(of: follow), logoURL: logoURL(of: follow, in: []), isTeam: follow.kind == .team
+            )
         }
     }
 

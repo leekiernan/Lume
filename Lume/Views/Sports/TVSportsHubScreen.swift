@@ -54,7 +54,7 @@
         /// The scope panel, and where focus was when it opened.
         @State var showingBrowse = false
         @State var browseReturnFocus: TVSportsFocus?
-        @State private var resolved: [String: [ResolvedChannel]] = [:]
+        @State var resolved: [String: [ResolvedChannel]] = [:]
         @State private var heroSelection = SportsHeroSelectionMachine()
         @State var selectedFixture: SportsFixture?
         @State var showManageTeams = false
@@ -126,13 +126,11 @@
                     } else {
                         onboardingState
                     }
+                } else if pageKey != nil {
+                    followPage
                 } else {
                     content
-                        .overlay(alignment: .leading) {
-                            // The panel is the hub's; a follow's page is reached
-                            // through it, and Menu goes back.
-                            if pageKey == nil { browseSidebar }
-                        }
+                        .overlay(alignment: .leading) { browseSidebar }
                 }
             }
             .task(id: follows.follows.map(\.key)) {
@@ -153,12 +151,8 @@
                     .filter { !$0.value.isEmpty }
                     .map(\.key)
             )
-            // A follow's page headlines only its own games, never the week's
-            // wider picks.
             let candidates = grouping.heroCandidates(
-                in: fixtures,
-                highlights: pageKey == nil ? highlightsLoad.result.highlights.map(\.fixture) : [],
-                availableIDs: availableIDs
+                in: fixtures, highlights: highlightsLoad.result.highlights.map(\.fixture), availableIDs: availableIDs
             )
             let carousel = Array(heroSelection.carouselCandidates(in: candidates, context: heroSelectionContext).prefix(Self.carouselLimit))
             let carouselIDs = Set(carousel.map(\.id))
@@ -204,13 +198,10 @@
                                     payPerView: highlightsLoad.result.payPerView,
                                     availability: highlightAvailability,
                                     onSelect: { selectedFixture = $0 },
-                                    onWatchEvent: watchEvent
+                                    onWatchEvent: watchEvent,
+                                    onLeadingLeft: browseOpener(leading: true)
                                 )
                                 .padding(.top, 24)
-                            }
-                            if let team = seasonTeam {
-                                TVTeamSeasonSection(teams: [team])
-                                    .padding(.top, 24)
                             }
                         }
                         .padding(.bottom, 40)
@@ -285,16 +276,12 @@
         /// The page title; selecting it, or pressing left from the page's
         /// leading edge, opens the scope panel.
         private var scopeMenu: some View {
-            Button {
-                if pageKey == nil { openBrowse() }
-            } label: {
+            Button(action: openBrowse) {
                 TVSportsTitleChrome {
                     HStack(alignment: .firstTextBaseline, spacing: 14) {
-                        if pageKey == nil {
-                            Image(systemName: "sidebar.left")
-                                .font(.system(size: 24, weight: .semibold))
-                                .foregroundStyle(.white.opacity(0.55))
-                        }
+                        Image(systemName: "sidebar.left")
+                            .font(.system(size: 24, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.55))
                         Text(verbatim: scopeTitle)
                             .font(.system(size: 34, weight: .bold))
                             .lineLimit(1)
@@ -342,7 +329,7 @@
                         }
                         // A followed club's row ends at its season: the page
                         // narrowed to the team, its table and players below.
-                        if pageKey == nil, let team = seasonTeam(forFollow: group.followKey) {
+                        if let team = seasonTeam(forFollow: group.followKey) {
                             Button {
                                 open(follow: team.id)
                             } label: {
@@ -521,6 +508,47 @@
 
         private var scopeTitle: String {
             grouping.scopeTitle
+        }
+
+        // MARK: - A follow's page
+
+        /// A team's or league's own page, framed like a Movies category: the
+        /// heading, every game it has live or coming in a grid — no hero, no
+        /// title button, no rows — and a club's season below. Menu goes back.
+        var followPage: some View {
+            let fixtures = grouping.visibleFixtures
+            let preference = SportsChannelPreference.Context.current
+            return CategoryPage(title: scopeTitle) {
+                if fixtures.isEmpty {
+                    noGamesState
+                } else {
+                    LazyVGrid(
+                        columns: [GridItem(.adaptive(minimum: 404), spacing: 40)],
+                        alignment: .leading,
+                        spacing: 40
+                    ) {
+                        ForEach(fixtures) { fixture in
+                            TVFixtureCard(
+                                fixture: fixture,
+                                availability: SportsChannelAvailability(
+                                    resolved[fixture.id], startDate: fixture.headlineDate, preference: preference
+                                ),
+                                showsLeagueName: grouping.scopedFollow?.kind == .team
+                            ) {
+                                selectedFixture = fixture
+                            }
+                        }
+                    }
+                    .padding(.horizontal)
+                    .padding(.vertical, 24)
+                }
+                if let team = seasonTeam {
+                    TVTeamSeasonSection(teams: [team])
+                        .padding(.top, 24)
+                        .padding(.bottom, 60)
+                }
+            }
+            .task(id: resolveKey(fixtures)) { await runResolve(fixtures) }
         }
 
         /// The team the page is narrowed to, when its season can be shown.

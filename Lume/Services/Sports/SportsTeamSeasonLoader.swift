@@ -56,13 +56,22 @@ nonisolated enum SportsTeamSeasonLoader {
             }
             return cards.sorted { $0.0 < $1.0 }.map(\.1)
         }
+        // The league is the card that must be there: a failed or slow request
+        // dropped it outright, then the half-hour cache kept the season
+        // without it. Ask once more, and don't keep a season still missing it.
+        var league = await domesticCard
+        if league == nil {
+            league = await competition(domestic, isDomesticLeague: true, team: team, client: client, now: now)
+        }
         let season = await SportsTeamSeason(
             team: team,
-            competitions: [domesticCard].compactMap(\.self) + otherCards,
+            competitions: [league].compactMap(\.self) + otherCards,
             leaders: SportsTeamSeasonBuilder.leaders(squad),
             leadersCompetitionName: domestic.name
         )
-        cache.withLock { $0[team.id] = (season, now) }
+        if league != nil {
+            cache.withLock { $0[team.id] = (season, now) }
+        }
         return season
     }
 

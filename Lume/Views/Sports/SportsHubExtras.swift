@@ -158,8 +158,11 @@ struct SportsTeamSeasonPanel: View {
     var body: some View {
         if let selected {
             VStack(alignment: .leading, spacing: 12) {
-                Text("Your Teams")
-                    .font(.headline)
+                // On a team's own page the season needs no section heading.
+                if teams.count > 1 {
+                    Text("Your Teams")
+                        .font(.headline)
+                }
                 if teams.count > 1, sizeClass == .regular {
                     // The left selection pane, as elsewhere on iPad and Mac.
                     HStack(alignment: .top, spacing: 20) {
@@ -342,6 +345,9 @@ private struct SportsSeasonCompetitionCard: View {
         .padding(12)
         .frame(width: 250, height: 250, alignment: .topLeading)
         .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        // A fixed card: a long table or cup run stops at its edge rather than
+        // drawing over the row below.
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
     private func place(_ position: Int, _ points: Int?, of total: Int? = nil) -> some View {

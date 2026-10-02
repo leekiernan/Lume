@@ -165,4 +165,7 @@ enum SortStorageKey {
     static let movieContent = "lume.sort.movies.content"
     static let seriesCategories = "lume.sort.series.categories"
     static let seriesContent = "lume.sort.series.content"
+    /// The Sports hub carries the same library toolbar as the other areas.
+    static let sportsCategories = "lume.sort.sports.categories"
+    static let sportsContent = "lume.sort.sports.content"
 }
