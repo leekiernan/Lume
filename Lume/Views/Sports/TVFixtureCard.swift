@@ -20,6 +20,16 @@
         var showsLeagueName = true
         var onSelect: () -> Void
         @AppStorage(SportsSyncService.hideScoresKey) private var hidesScores = false
+        @State private var reveal = SportsScoreReveal.shared
+
+        private var showsScore: Bool {
+            fixture.showsScore(hidingScores: hidesScores, reveal: reveal)
+        }
+
+        /// A finished game whose score Hide Scores is holding back.
+        private var canReveal: Bool {
+            !showsScore && fixture.status.state == .final && fixture.hasTeams
+        }
 
         var body: some View {
             Button(action: onSelect) {
@@ -27,16 +37,22 @@
                     fixture: fixture,
                     availability: availability,
                     showsLeagueName: showsLeagueName,
-                    showsScore: !hidesScores
+                    showsScore: showsScore,
+                    offersReveal: canReveal
                 )
             }
             .buttonStyle(TVCardButtonStyle(focusScale: 1.06))
+            .contextMenu {
+                if canReveal {
+                    Button("Reveal score", systemImage: "eye") { reveal.reveal(fixture.id) }
+                }
+            }
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(Text(verbatim: spokenSummary))
         }
 
         private var spokenSummary: String {
-            var line = fixture.tvSpokenSummary(showsScore: !hidesScores)
+            var line = fixture.tvSpokenSummary(showsScore: showsScore)
             if let channels = availability.label { line += ", " + channels }
             return line
         }
@@ -61,6 +77,7 @@
         let availability: SportsChannelAvailability
         let showsLeagueName: Bool
         let showsScore: Bool
+        let offersReveal: Bool
         @Environment(\.isFocused) private var isFocused
 
         var body: some View {
@@ -176,7 +193,12 @@
 
         @ViewBuilder
         private var channelLine: some View {
-            if fixture.status.state != .final, let label = availability.label {
+            if offersReveal {
+                Label("Hold to reveal the score", systemImage: "eye.slash")
+                    .font(.system(size: 19, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.75))
+                    .lineLimit(1)
+            } else if fixture.status.state != .final, let label = availability.label {
                 Label {
                     Text(verbatim: label)
                 } icon: {

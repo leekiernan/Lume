@@ -18,6 +18,9 @@
         let showsScore: Bool
         var watchFocus: FocusState<TVSportsFocus?>.Binding
         let onWatch: (ResolvedChannel) -> Void
+        /// Set when Hide Scores is on and the game can be replayed from its
+        /// start: that becomes the main action, and joining live the second.
+        var onWatchFromStart: (() -> Void)?
         let onOpen: () -> Void
 
         var body: some View {
@@ -107,22 +110,47 @@
         private var actions: some View {
             HStack(spacing: 24) {
                 if case let .available(count, best) = availability {
-                    Button {
-                        onWatch(best)
-                    } label: {
-                        Label {
-                            Text("Watch on \(best.stream.name)")
-                                .lineLimit(1)
-                        } icon: {
-                            Image(systemName: "play.fill")
+                    if let onWatchFromStart {
+                        Button(action: onWatchFromStart) {
+                            Label {
+                                Text("Watch from Start")
+                                    .lineLimit(1)
+                            } icon: {
+                                Image(systemName: "backward.end.fill")
+                            }
+                            .font(.system(size: 28, weight: .bold))
+                            .padding(.horizontal, 36)
                         }
-                        .font(.system(size: 28, weight: .bold))
-                        .padding(.horizontal, 36)
+                        .buttonStyle(TVGlassButtonStyle())
+                        .frame(width: 560)
+                        .focused(watchFocus, equals: .heroWatch)
+                        Button {
+                            onWatch(best)
+                        } label: {
+                            Text("Watch live")
+                                .font(.system(size: 28, weight: .semibold))
+                                .padding(.horizontal, 32)
+                        }
+                        .buttonStyle(TVGlassButtonStyle())
+                        .frame(width: 300)
+                    } else {
+                        Button {
+                            onWatch(best)
+                        } label: {
+                            Label {
+                                Text("Watch on \(best.stream.name)")
+                                    .lineLimit(1)
+                            } icon: {
+                                Image(systemName: "play.fill")
+                            }
+                            .font(.system(size: 28, weight: .bold))
+                            .padding(.horizontal, 36)
+                        }
+                        .buttonStyle(TVGlassButtonStyle())
+                        .frame(width: 720)
+                        .focused(watchFocus, equals: .heroWatch)
                     }
-                    .buttonStyle(TVGlassButtonStyle())
-                    .frame(width: 720)
-                    .focused(watchFocus, equals: .heroWatch)
-                    if count > 1 {
+                    if count > 1, onWatchFromStart == nil {
                         Text("\(count - 1) more on your channels")
                             .font(.system(size: 24))
                             .foregroundStyle(.white.opacity(0.7))

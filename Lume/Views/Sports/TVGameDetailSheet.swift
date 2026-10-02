@@ -42,7 +42,13 @@
         @State private var fetchedStandings: [SportsStandingRow] = []
         @State private var tab: GameDetailTab = .timeline
         @State private var selfResolved: [ResolvedChannel] = []
-        @AppStorage(SportsSyncService.hideScoresKey) private var hidesScores = false
+        @AppStorage(SportsSyncService.hideScoresKey) private var hideScoresSetting = false
+        @State private var reveal = SportsScoreReveal.shared
+
+        /// Hide Scores, unless this one game has been revealed.
+        private var hidesScores: Bool {
+            hideScoresSetting && !reveal.isRevealed(fixture.id)
+        }
 
         private var channels: [ResolvedChannel] {
             resolved.isEmpty ? selfResolved : resolved

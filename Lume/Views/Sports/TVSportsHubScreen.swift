@@ -56,6 +56,9 @@
         /// Playback queued behind the dismissing detail cover; see `watch`.
         @State private var pendingMedia: PlayableMedia?
         @AppStorage(SportsSyncService.hideScoresKey) private var hidesScores = false
+        /// The headlined game from its first minute, when Hide Scores is on and
+        /// the channel can replay it — worked out once per game, not per render.
+        @State private var heroFromStart: PlayableMedia?
 
         @FocusState private var focus: TVSportsFocus?
 
@@ -113,12 +116,16 @@
                                 TVSportsHubHero(
                                     fixture: hero,
                                     availability: heroAvailability,
-                                    showsScore: !hidesScores,
+                                    showsScore: hero.showsScore(hidingScores: hidesScores, reveal: SportsScoreReveal.shared),
                                     watchFocus: $focus,
                                     onWatch: watch,
+                                    onWatchFromStart: heroFromStart.map { media in { playingMedia = media } },
                                     onOpen: { selectedFixture = hero }
                                 )
                                 .padding(.vertical, 24)
+                                .task(id: "\(hero.id)|\(hidesScores)|\(heroAvailability.isAvailable)") {
+                                    heroFromStart = fromStartMedia(hero, availability: heroAvailability)
+                                }
                             }
                             if groups.isEmpty, hero == nil {
                                 noGamesState
@@ -436,6 +443,12 @@
             } else {
                 playingMedia = media
             }
+        }
+
+        /// Catch-up from kickoff for a live game under Hide Scores.
+        private func fromStartMedia(_ fixture: SportsFixture, availability: SportsChannelAvailability) -> PlayableMedia? {
+            guard hidesScores, fixture.isInProgress, case let .available(_, best) = availability else { return nil }
+            return SportsPlayback.fromStartMedia(for: best, fixture: fixture, in: modelContext)
         }
 
         private func presentPendingMedia() {
