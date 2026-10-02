@@ -18,6 +18,12 @@ struct SportsArtworkBackdrop: View {
         ZStack {
             Color(white: 0.08)
             TeamPalette.gradient(home: fixture.homePalette, away: fixture.awayPalette)
+        }
+        // The picture is an overlay, so it fills whatever space the caller
+        // gives and never sizes the backdrop: a `scaledToFill` image reports its
+        // overflowing size to layout, and `.clipped()` alone only hides the
+        // overflow — on iOS it widened the whole Sports page past the screen.
+        .overlay {
             if let url {
                 CachedAsyncImage(url: url, maxPixelSize: size == .hero ? 1920 : 640) { phase in
                     if case let .success(image) = phase {

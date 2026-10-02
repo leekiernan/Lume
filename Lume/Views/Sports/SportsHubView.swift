@@ -202,39 +202,40 @@ struct SportsHubView: View {
         let hero = heroSelection.displayed(in: candidates, context: heroSelectionContext)?.fixture
         let carouselCandidates = Array(heroSelection.carouselCandidates(in: candidates, context: heroSelectionContext).prefix(5))
         let carouselFixtureIDs = Set(carouselCandidates.map(\.id))
-        return ZStack(alignment: .top) {
-            heroBackdrop(carouselCandidates)
-            VStack(spacing: 0) {
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 20) {
-                        statusHints
+        return VStack(spacing: 0) {
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 20) {
+                    statusHints
+                        .padding(.horizontal)
+                    heroCarousel(carouselCandidates)
+                    SportsSectionsView(
+                        // Carousel pages lead on their own, not again below.
+                        groups: grouping.groups(for: fixtures.filter { !carouselFixtureIDs.contains($0.id) }),
+                        resolved: resolved,
+                        isFollowed: isFollowed,
+                        onOpenDetail: { selectedFixture = $0 },
+                        onWatch: watch,
+                        onFollowToggle: toggleFollow,
+                        onPickChannel: { pickerFixture = $0 },
+                        onSelectFollow: { scope = .follow($0) }
+                    )
+                    .padding(.horizontal)
+                    if scope == .all {
+                        highlightsRail(excluding: carouselFixtureIDs)
                             .padding(.horizontal)
-                        heroCarousel(carouselCandidates)
-                        SportsSectionsView(
-                            // Carousel pages lead on their own, not again below.
-                            groups: grouping.groups(for: fixtures.filter { !carouselFixtureIDs.contains($0.id) }),
-                            resolved: resolved,
-                            isFollowed: isFollowed,
-                            onOpenDetail: { selectedFixture = $0 },
-                            onWatch: watch,
-                            onFollowToggle: toggleFollow,
-                            onPickChannel: { pickerFixture = $0 },
-                            onSelectFollow: { scope = .follow($0) }
-                        )
-                        if scope == .all {
-                            highlightsRail(excluding: carouselFixtureIDs)
-                        }
-                        // A team's own page carries its club season.
-                        if let team = grouping.scopedTeam, SportsTeamSeasonLoader.supports(team) {
-                            SportsTeamSeasonPanel(teams: [team])
-                                .padding(.horizontal)
-                        }
                     }
-                    .padding(.vertical)
+                    // A team's own page carries its club season.
+                    if let team = grouping.scopedTeam, SportsTeamSeasonLoader.supports(team) {
+                        SportsTeamSeasonPanel(teams: [team])
+                            .padding(.horizontal)
+                    }
                 }
+                .padding(.vertical)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        // Behind the page, never sizing it.
+        .background(alignment: .top) { heroBackdrop(carouselCandidates) }
         // A headline from later in the week isn't on screen, but still wants
         // its channel once the guide reaches it.
         .task(id: resolveKey(fixtures + offScreen(hero, in: fixtures))) {
