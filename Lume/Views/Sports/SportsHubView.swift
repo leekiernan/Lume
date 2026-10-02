@@ -167,11 +167,11 @@ struct SportsHubView: View {
         .task(id: follows.follows.map(\.key)) { await loadHighlights() }
     }
 
-    /// Big this week, less whichever pick is already the headline.
+    /// Big this week, less the fixtures already offered by the hero carousel.
     @ViewBuilder
-    private func highlightsRail(excluding heroId: String? = nil) -> some View {
+    private func highlightsRail(excluding fixtureIDs: Set<String> = []) -> some View {
         let highlights = highlightsLoad.result
-        let picks = highlights.highlights.filter { $0.fixture.id != heroId }
+        let picks = highlights.highlights.filter { !fixtureIDs.contains($0.fixture.id) }
         if !picks.isEmpty || !highlights.payPerView.isEmpty {
             SportsHighlightsRail(
                 highlights: picks,
@@ -218,6 +218,8 @@ struct SportsHubView: View {
             in: fixtures, fallback: highlightsLoad.result.highlights.first?.fixture, availableIDs: heroAvailableIDs
         )
         let hero = heroSelection.displayed(in: candidates, context: heroSelectionContext)?.fixture
+        let carouselCandidates = Array(heroSelection.carouselCandidates(in: candidates, context: heroSelectionContext).prefix(5))
+        let carouselFixtureIDs = Set(carouselCandidates.map(\.id))
         return VStack(spacing: 0) {
             Picker("Range", selection: $segment) {
                 ForEach(SportsHubSegment.allCases) { segment in
@@ -231,10 +233,11 @@ struct SportsHubView: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 20) {
                     statusHints
-                    heroCard(hero)
+                        .padding(.horizontal)
+                    heroCarousel(carouselCandidates)
                     SportsSectionsView(
-                        // The headlined game leads on its own, not again below.
-                        groups: grouping.groups(for: fixtures.filter { $0.id != hero?.id }),
+                        // Carousel pages lead on their own, not again below.
+                        groups: grouping.groups(for: fixtures.filter { !carouselFixtureIDs.contains($0.id) }),
                         resolved: resolved,
                         isFollowed: isFollowed,
                         onOpenDetail: { selectedFixture = $0 },
@@ -244,13 +247,13 @@ struct SportsHubView: View {
                         onSelectLeague: { scope = .league($0) }
                     )
                     if scope == .myTeams {
-                        highlightsRail(excluding: hero?.id)
+                        highlightsRail(excluding: carouselFixtureIDs)
                         if !seasonTeams.isEmpty {
                             SportsTeamSeasonPanel(teams: seasonTeams)
                         }
                     }
                 }
-                .padding()
+                .padding(.vertical)
             }
         }
         // A headline from later in the week isn't on screen, but still wants
@@ -263,18 +266,22 @@ struct SportsHubView: View {
         }
     }
 
+    private func heroAvailability(_ fixture: SportsFixture) -> SportsChannelAvailability {
+        SportsChannelAvailability(
+            resolved[fixture.id] ?? highlightsLoad.result.resolved[fixture.id],
+            startDate: fixture.headlineDate,
+            preference: .current
+        )
+    }
+
     @ViewBuilder
-    private func heroCard(_ hero: SportsFixture?) -> some View {
-        if let hero {
-            SportsHubHeroCard(
-                fixture: hero,
-                availability: SportsChannelAvailability(
-                    resolved[hero.id] ?? highlightsLoad.result.resolved[hero.id],
-                    startDate: hero.headlineDate,
-                    preference: .current
-                ),
+    private func heroCarousel(_ candidates: [SportsHeroSelectionMachine.Candidate]) -> some View {
+        if !candidates.isEmpty {
+            SportsHubHeroCarousel(
+                candidates: candidates,
+                availability: heroAvailability,
                 onWatch: watch,
-                onOpen: { selectedFixture = hero }
+                onOpen: { selectedFixture = $0 }
             )
         }
     }

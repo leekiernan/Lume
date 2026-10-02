@@ -138,6 +138,7 @@
             return ScrollViewReader { scrollProxy in
                 ScrollView {
                     ZStack(alignment: .top) {
+                        Color.black
                         if let hero {
                             TVSportsHubHeroBackdrop(fixture: hero)
                         }

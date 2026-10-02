@@ -85,4 +85,13 @@ struct SportsHeroSelectionMachineTests {
 
         #expect(machine.displayed(in: [upcoming], context: "upcoming")?.id == "upcoming")
     }
+
+    @Test func `the carousel leads with the stable semantic selection`() {
+        let live = candidate("live", tier: .live)
+        let highlight = candidate("highlight", tier: .highlight, available: true)
+        var machine = SportsHeroSelectionMachine()
+        machine.reconcile(candidates: [live, highlight], context: "today")
+
+        #expect(machine.carouselCandidates(in: [live, highlight], context: "today").map(\.id) == ["live", "highlight"])
+    }
 }

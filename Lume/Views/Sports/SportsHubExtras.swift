@@ -487,14 +487,6 @@ struct SportsHubHeroCard: View {
         .foregroundStyle(.white)
         .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background {
-            ZStack {
-                SportsArtworkBackdrop(fixture: fixture, size: .hero)
-                LinearGradient(colors: [.black.opacity(0.35), .black.opacity(0.85)], startPoint: .top, endPoint: .bottom)
-            }
-            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-        }
-        .environment(\.colorScheme, .dark)
     }
 
     private func side(_ competitor: SportsCompetitor) -> some View {

@@ -65,6 +65,7 @@
                 }
             }
             .scrollClipDisabled()
+            .background(.black)
             .background(alignment: .top) {
                 TVSportsHubHeroBackdrop(fixture: first.fixture)
             }

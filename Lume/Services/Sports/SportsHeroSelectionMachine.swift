@@ -58,6 +58,14 @@ nonisolated struct SportsHeroSelectionMachine: Equatable {
         return Self.preferred(in: candidates)
     }
 
+    /// The carousel order for the current render. Its lead page is the stable
+    /// semantic selection; the remaining valid candidates stay available as
+    /// neighbouring pages instead of replacing the one a viewer is reading.
+    func carouselCandidates(in candidates: [Candidate], context: String) -> [Candidate] {
+        guard let selected = displayed(in: candidates, context: context) else { return [] }
+        return [selected] + candidates.filter { $0.id != selected.id }
+    }
+
     /// Records the currently displayed hero after a view update. A same-tier
     /// resolver result cannot replace a valid hero under the viewer; only a
     /// higher semantic tier can promote over it.

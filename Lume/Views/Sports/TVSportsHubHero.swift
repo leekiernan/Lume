@@ -203,8 +203,23 @@
                 LinearGradient(colors: [.black.opacity(0.9), .black.opacity(0.35), .clear], startPoint: .leading, endPoint: .trailing)
                 LinearGradient(colors: [.clear, .black], startPoint: .center, endPoint: .bottom)
             }
-            .frame(height: 820)
+            // The hub's rails carry on below this view. Feather the artwork
+            // into their black canvas instead of leaving a visible 820pt edge
+            // through whichever section happens to follow the hero.
+            .frame(height: 920)
             .frame(maxWidth: .infinity)
+            .mask {
+                LinearGradient(
+                    stops: [
+                        .init(color: .black, location: 0),
+                        .init(color: .black, location: 0.62),
+                        .init(color: .black.opacity(0.4), location: 0.86),
+                        .init(color: .clear, location: 1)
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            }
             .allowsHitTesting(false)
             .accessibilityHidden(true)
         }
