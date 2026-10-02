@@ -12,12 +12,14 @@ struct SportsHighlightsLoadMachineTests {
         let first = machine.begin()
         let result = SportsHighlightsPipeline.Result(highlights: [], resolved: ["fixture": []])
 
-        #expect(machine.finish(first, result: result))
+        let appliedFirst = machine.finish(first, result: result)
+        #expect(appliedFirst)
         let refresh = machine.begin()
 
         #expect(machine.isLoading)
         #expect(machine.result == result)
-        #expect(machine.finish(refresh, result: .init(highlights: [], resolved: [:])))
+        let appliedRefresh = machine.finish(refresh, result: .init(highlights: [], resolved: [:]))
+        #expect(appliedRefresh)
         #expect(!machine.isLoading)
     }
 
@@ -27,10 +29,12 @@ struct SportsHighlightsLoadMachineTests {
         let current = machine.begin()
         let result = SportsHighlightsPipeline.Result(highlights: [], resolved: ["fixture": []])
 
-        #expect(!machine.finish(old, result: result))
+        let appliedOld = machine.finish(old, result: result)
+        #expect(!appliedOld)
         #expect(machine.isLoading)
         #expect(machine.result == .init(highlights: [], resolved: [:]))
-        #expect(machine.finish(current, result: result))
+        let appliedCurrent = machine.finish(current, result: result)
+        #expect(appliedCurrent)
         #expect(machine.result == result)
     }
 }
