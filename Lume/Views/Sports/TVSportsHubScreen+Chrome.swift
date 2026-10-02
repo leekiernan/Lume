@@ -29,18 +29,4 @@
         }
     }
 
-    /// A round icon-only control that shares the pills' rest wash and white
-    /// focus fill, for actions that need no label at rest.
-    struct TVSportsCircleChrome<Content: View>: View {
-        @ViewBuilder var content: () -> Content
-        @Environment(\.isFocused) private var isFocused
-
-        var body: some View {
-            content()
-                .foregroundStyle(isFocused ? .black : .white)
-                .frame(width: 64, height: 64)
-                .background(Circle().fill(isFocused ? AnyShapeStyle(.white) : AnyShapeStyle(.white.opacity(0.1))))
-        }
-    }
-
 #endif

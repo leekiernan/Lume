@@ -103,3 +103,27 @@ struct SportsHighlightsTests {
         #expect(rank([card]).map(\.id) == ["ufc"])
     }
 }
+
+struct SportsHeavyweightsTests {
+    private let now = Date(timeIntervalSince1970: 1_800_000_000)
+
+    private func international(_ home: String, _ away: String, league: String = "espn:soccer/fifa.worldq.uefa") -> SportsFixture {
+        func team(_ name: String) -> SportsCompetitor {
+            SportsCompetitor(team: SportsTeam(leagueId: league, teamId: name, name: name, shortName: name, abbreviation: ""))
+        }
+        return SportsFixture(
+            id: "\(home)-\(away)", leagueId: league, leagueName: "", leagueAbbreviation: "",
+            startDate: now.addingTimeInterval(3600), status: SportsFixtureStatus(state: .scheduled),
+            home: team(home), away: team(away)
+        )
+    }
+
+    @Test func `a France v Italy qualifier is big this week`() {
+        let picked = SportsHighlights.rank(
+            [international("France", "Italy"), international("Kazakhstan", "Moldova")],
+            standings: [:], followedTeamIds: [], availableIds: [], now: now
+        )
+        #expect(picked.map(\.id) == ["France-Italy"])
+        #expect(picked.first?.reason == .heavyweights)
+    }
+}

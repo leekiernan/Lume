@@ -143,14 +143,17 @@ struct SportsHubGrouping {
 
     /// Hero candidates in semantic priority order. Availability is only a
     /// tie-break within each tier: a lower-tier highlight cannot replace a live
-    /// game simply because its guide match arrived first.
+    /// game simply because its guide match arrived first. Within a tier the
+    /// bigger game leads (`SportsHighlights.evaluate`), and among the wider
+    /// upcoming games today's lead the week's — they're what the carousel
+    /// pages through after its headline.
     func heroCandidates(
         in fixtures: [SportsFixture],
-        fallback: SportsFixture? = nil,
+        highlights: [SportsFixture] = [],
         availableIDs: Set<String> = []
     ) -> [SportsHeroSelectionMachine.Candidate] {
         guard segment != .yesterday else { return [] }
-        let live = fixtures.filter(\.isInProgress)
+        let live = byStature(fixtures.filter(\.isInProgress))
         let upcoming = upcomingFixtures(alongside: fixtures)
         var candidates: [SportsHeroSelectionMachine.Candidate] = []
         var seen: Set<String> = []
@@ -170,18 +173,37 @@ struct SportsHubGrouping {
         } else {
             append(upcoming.filter(involvesFollowedTeam), tier: .primaryUpcoming)
         }
-        if let fallback {
-            let tier: SportsHeroSelectionMachine.Tier = if fallback.isInProgress {
-                involvesFollowedTeam(fallback) ? .followedLive : .live
+        for highlight in highlights {
+            let tier: SportsHeroSelectionMachine.Tier = if highlight.isInProgress {
+                involvesFollowedTeam(highlight) ? .followedLive : .live
             } else {
                 .highlight
             }
-            append([fallback], tier: tier)
+            append([highlight], tier: tier)
         }
         if !scopeIsLeague {
-            append(upcoming.filter { !involvesFollowedTeam($0) }, tier: .contextualUpcoming)
+            let others = upcoming.filter { !involvesFollowedTeam($0) }
+            let calendar = Calendar.current
+            let today = others.filter { calendar.isDate($0.headlineDate, inSameDayAs: now) }
+            append(byStature(today), tier: .contextualUpcoming)
+            append(others, tier: .contextualUpcoming)
         }
         return candidates
+    }
+
+    /// Bigger games first — a heavyweight international before a minnows'
+    /// qualifier — keeping kickoff order between equals.
+    private func byStature(_ fixtures: [SportsFixture]) -> [SportsFixture] {
+        let scores = Dictionary(uniqueKeysWithValues: fixtures.map { fixture in
+            (fixture.id, SportsHighlights.evaluate(fixture, table: store.snapshot(for: fixture.leagueId)?.standings ?? []).0)
+        })
+        return fixtures.enumerated()
+            .sorted { lhs, rhs in
+                let left = scores[lhs.element.id] ?? 0
+                let right = scores[rhs.element.id] ?? 0
+                return left != right ? left > right : lhs.offset < rhs.offset
+            }
+            .map(\.element)
     }
 
     /// The scope's games in the week ahead, soonest first — what's on screen

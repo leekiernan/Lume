@@ -48,7 +48,7 @@ struct SportsHubHeroTests {
         segment: SportsHubSegment = .today
     ) -> SportsFixture? {
         let grouping = grouping(segment: segment)
-        let candidates = grouping.heroCandidates(in: fixtures, fallback: fallback, availableIDs: availableIDs)
+        let candidates = grouping.heroCandidates(in: fixtures, highlights: fallback.map { [$0] } ?? [], availableIDs: availableIDs)
         var machine = SportsHeroSelectionMachine()
         machine.reconcile(candidates: candidates, context: "test")
         return machine.displayed(in: candidates, context: "test")?.fixture
@@ -126,5 +126,22 @@ struct SportsHubHeroTests {
         let mine = game("mine", home: "1", away: "2", offset: -600, state: .inProgress)
 
         #expect(hero([mine], segment: .yesterday) == nil)
+    }
+
+    @Test func `the carousel pages through today's games, the bigger first`() {
+        let minnows = game("minnows", home: "5", away: "6", offset: 2 * 3600, state: .scheduled)
+        let derby = game("derby", home: "Arsenal", away: "Tottenham Hotspur", offset: 4 * 3600, state: .scheduled)
+        let later = game("later", home: "7", away: "8", offset: 3 * 86400, state: .scheduled)
+
+        let ids = grouping().heroCandidates(in: [minnows, derby, later]).map(\.id)
+        #expect(ids == ["derby", "minnows", "later"])
+    }
+
+    @Test func `every Big This Week pick can be a slide`() {
+        let first = game("first", home: "7", away: "8", offset: 2 * 86400, state: .scheduled)
+        let second = game("second", home: "9", away: "10", offset: 3 * 86400, state: .scheduled)
+
+        let ids = grouping().heroCandidates(in: [], highlights: [first, second]).map(\.id)
+        #expect(ids.starts(with: ["first", "second"]))
     }
 }

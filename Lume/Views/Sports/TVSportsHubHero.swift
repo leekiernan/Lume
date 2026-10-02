@@ -23,8 +23,9 @@
         /// start: that becomes the main action, and joining live the second.
         var onWatchFromStart: (() -> Void)?
         let onOpen: () -> Void
-        /// Left from the leading action: the hub opens its browse panel.
-        var onLeadingLeft: (() -> Void)?
+        /// Left from the leading action, right from Match Centre: the
+        /// carousel pages back or on.
+        var onPage: ((Int) -> Void)?
         @State private var reminders = SportsReminders.shared
 
         private var isAvailable: Bool {
@@ -39,17 +40,23 @@
         var body: some View {
             VStack(alignment: .leading, spacing: 26) {
                 statusLine
-                if let home = fixture.home, let away = fixture.away {
-                    matchup(home: home, away: away)
-                } else {
-                    Text(verbatim: fixture.sessionKind.map { "\(fixture.eventShortTitle) · \(String(localized: $0.displayName))" } ?? fixture.eventTitle)
-                        .font(.system(size: 64, weight: .bold))
-                        .foregroundStyle(.white)
-                        .lineLimit(2)
+                // One height for every slide: the focused buttons below must
+                // not move as the carousel pages, or the focus engine re-scrolls
+                // to follow them.
+                Group {
+                    if let home = fixture.home, let away = fixture.away {
+                        matchup(home: home, away: away)
+                    } else {
+                        Text(verbatim: fixture.sessionKind.map { "\(fixture.eventShortTitle) · \(String(localized: $0.displayName))" } ?? fixture.eventTitle)
+                            .font(.system(size: 64, weight: .bold))
+                            .foregroundStyle(.white)
+                            .lineLimit(2)
+                            .minimumScaleFactor(0.7)
+                    }
                 }
+                .frame(height: 150, alignment: .leading)
                 actions
             }
-            .padding(.horizontal, 60)
             .frame(maxWidth: .infinity, alignment: .leading)
             .focusSection()
         }
@@ -137,7 +144,7 @@
                         .buttonStyle(TVGlassButtonStyle())
                         .frame(width: 560)
                         .focused(watchFocus, equals: .heroWatch)
-                        .onLeadingEdgeLeft(onLeadingLeft)
+                        .onCarouselEdge(.left, onPage)
                         Button {
                             onWatch(best)
                         } label: {
@@ -163,7 +170,7 @@
                         .buttonStyle(TVGlassButtonStyle())
                         .frame(width: 720)
                         .focused(watchFocus, equals: .heroWatch)
-                        .onLeadingEdgeLeft(onLeadingLeft)
+                        .onCarouselEdge(.left, onPage)
                     }
                     if count > 1, onWatchFromStart == nil {
                         Text("\(count - 1) more on your channels")
@@ -171,8 +178,9 @@
                             .foregroundStyle(.white.opacity(0.7))
                     }
                 }
-                if !isAvailable, fixture.status.state == .scheduled {
-                    // Not in the guide yet — days away, usually.
+                if fixture.status.state == .scheduled {
+                    // Watch is for a game that's on; before kickoff the
+                    // useful action is being told when it is.
                     let reminded = reminders.isReminded(fixture.id)
                     Button { reminders.toggle(fixture) } label: {
                         Label(reminded ? "Reminder Set" : "Remind Me", systemImage: reminded ? "bell.fill" : "bell")
@@ -182,7 +190,7 @@
                     .buttonStyle(TVGlassButtonStyle())
                     .frame(width: 400)
                     .focused(watchFocus, equals: .heroWatch)
-                    .onLeadingEdgeLeft(onLeadingLeft)
+                    .onCarouselEdge(.left, onPage)
                 }
                 Button(action: onOpen) {
                     Text("Match Centre")
@@ -192,7 +200,25 @@
                 .buttonStyle(TVGlassButtonStyle())
                 .frame(width: 320)
                 .focused(watchFocus, equals: .heroDetail)
-                .onLeadingEdgeLeft(canWatchNow || fixture.status.state == .scheduled ? nil : onLeadingLeft)
+                .onCarouselEdge(.left, canWatchNow || fixture.status.state == .scheduled ? nil : onPage)
+                .onCarouselEdge(.right, onPage)
+            }
+        }
+    }
+
+    private extension View {
+        /// Pages the carousel when the remote moves past the hero's outermost
+        /// button. Deferred out of the move-command handler, as Home's hero
+        /// does: tvOS delivers it inside the focus engine's animated update.
+        @ViewBuilder
+        func onCarouselEdge(_ edge: MoveCommandDirection, _ onPage: ((Int) -> Void)?) -> some View {
+            if let onPage {
+                onMoveCommand { direction in
+                    guard direction == edge else { return }
+                    Task { onPage(edge == .left ? -1 : 1) }
+                }
+            } else {
+                self
             }
         }
     }

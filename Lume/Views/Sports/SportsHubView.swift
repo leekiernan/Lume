@@ -216,7 +216,7 @@ struct SportsHubView: View {
 
     private func followedContent(_ fixtures: [SportsFixture]) -> some View {
         let candidates = grouping.heroCandidates(
-            in: fixtures, fallback: highlightsLoad.result.highlights.first?.fixture, availableIDs: heroAvailableIDs
+            in: fixtures, highlights: highlightsLoad.result.highlights.map(\.fixture), availableIDs: heroAvailableIDs
         )
         let hero = heroSelection.displayed(in: candidates, context: heroSelectionContext)?.fixture
         let carouselCandidates = Array(heroSelection.carouselCandidates(in: candidates, context: heroSelectionContext).prefix(5))

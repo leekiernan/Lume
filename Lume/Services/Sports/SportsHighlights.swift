@@ -21,6 +21,8 @@ nonisolated struct SportsHighlight: Identifiable, Equatable {
         case numberedCard
         case tableClash(Int, Int)
         case derby
+        /// Two of football's heavyweight nations: France v Italy.
+        case heavyweights
         case raceDay
         /// A race weekend's other headline session — qualifying, a sprint.
         case session(SportsSessionKind)
@@ -52,7 +54,9 @@ nonisolated enum SportsHighlights {
         case "espn:soccer/uefa.champions", "espn:racing/f1": 30
         case "espn:soccer/eng.1", "espn:soccer/esp.1", "espn:soccer/ger.1", "espn:soccer/ita.1",
              "espn:football/nfl": 20
-        case "espn:soccer/fra.1", "espn:soccer/uefa.europa", "espn:basketball/nba": 15
+        case "espn:soccer/fifa.world", "espn:soccer/uefa.euro", "espn:soccer/conmebol.america": 30
+        case "espn:soccer/fra.1", "espn:soccer/uefa.europa", "espn:basketball/nba", "espn:soccer/uefa.nations": 15
+        case "espn:soccer/fifa.worldq.uefa", "espn:soccer/fifa.worldq.conmebol", "espn:soccer/uefa.euroq": 10
         default: 5
         }
     }
@@ -65,6 +69,13 @@ nonisolated enum SportsHighlights {
         ["AS Roma", "Lazio"], ["Juventus", "Torino"], ["Bayern Munich", "Borussia Dortmund"],
         ["Schalke 04", "Borussia Dortmund"], ["Paris Saint-Germain", "Marseille"], ["Celtic", "Rangers"],
         ["Ajax", "Feyenoord"], ["Benfica", "Sporting CP"], ["Boca Juniors", "River Plate"]
+    ]
+
+    /// Nations whose meeting is an event whatever the competition — the
+    /// recent tournament winners and finalists, by ESPN's team names.
+    static let heavyweightNations: Set<String> = [
+        "France", "Italy", "England", "Spain", "Germany", "Portugal", "Netherlands", "Belgium", "Croatia",
+        "Brazil", "Argentina", "Uruguay"
     ]
 
     /// Ranked highlights from `fixtures`, best first.
@@ -153,6 +164,10 @@ nonisolated enum SportsHighlights {
             score += 30
             reasons.append((30, .derby))
         }
+        if isHeavyweightClash(fixture) {
+            score += 30
+            reasons.append((30, .heavyweights))
+        }
         let strongest = reasons.max { $0.0 < $1.0 }?.1 ?? .headline
         return (score, strongest)
     }
@@ -165,6 +180,11 @@ nonisolated enum SportsHighlights {
               homeRank <= 4, awayRank <= 4
         else { return nil }
         return (min(homeRank, awayRank), max(homeRank, awayRank))
+    }
+
+    static func isHeavyweightClash(_ fixture: SportsFixture) -> Bool {
+        guard fixture.sport == "soccer", let home = fixture.home?.team.name, let away = fixture.away?.team.name else { return false }
+        return heavyweightNations.contains(home) && heavyweightNations.contains(away)
     }
 
     static func isDerby(_ fixture: SportsFixture) -> Bool {
@@ -193,6 +213,7 @@ nonisolated extension SportsHighlight.Reason {
         case let .tableClash(first, second):
             String(localized: "\(SportsPeriodLabel.ordinal(first)) v \(SportsPeriodLabel.ordinal(second))")
         case .derby: String(localized: "Derby")
+        case .heavyweights: String(localized: "Heavyweights")
         case .raceDay: String(localized: "Race day")
         case let .session(kind): String(localized: kind.displayName)
         case .payPerView: String(localized: "Pay-per-view")

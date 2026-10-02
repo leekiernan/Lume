@@ -24,7 +24,6 @@
     enum TVSportsFocus: Hashable {
         case scope
         case segment(SportsHubSegment)
-        case manage
         case heroWatch
         case heroDetail
         case card(String)
@@ -66,6 +65,11 @@
         /// "Big this week", and the channels its near-term games resolved to.
         @State var highlightsLoad = SportsHighlightsLoadMachine()
 
+        /// The headline carousel, and where the page sits against its fold.
+        @State private var heroModel = TVSportsHeroModel()
+        @State private var heroZone: TVHomeZone = .expanded
+        @State private var containerHeight: CGFloat = 0
+
         @FocusState var focus: TVSportsFocus?
 
         var body: some View {
@@ -106,9 +110,9 @@
             .task(id: follows.follows.map(\.key)) { await loadHighlights() }
         }
 
-        /// The whole hub is one scrolling page so the header can never sit over
-        /// the cards: title-style scope menu on the left, the day switch and the
-        /// Manage Teams button on the right, then the rails.
+        /// Home's immersive layout: the slide's artwork fixed full-screen
+        /// behind one scrolling page, which opens with the showcase — header at
+        /// its top, the headline carousel at its foot — then the rails.
         private var content: some View {
             // One grouping pass per render: the fixtures and groups feed the
             // rails, the default focus and the resolve key alike.
@@ -120,47 +124,40 @@
                     .map(\.key)
             )
             let candidates = grouping.heroCandidates(
-                in: fixtures, fallback: highlightsLoad.result.highlights.first?.fixture, availableIDs: availableIDs
+                in: fixtures, highlights: highlightsLoad.result.highlights.map(\.fixture), availableIDs: availableIDs
             )
-            let hero = heroSelection.displayed(in: candidates, context: heroSelectionContext)?.fixture
-            // Big this week leaves out whichever pick is already the headline.
-            let highlights = highlightsLoad.result.highlights.filter { $0.fixture.id != hero?.id }
-            // The headlined game leads the page on its own, not again in a rail.
-            let groups = grouping.groups(for: fixtures.filter { $0.id != hero?.id })
-            let heroAvailability = hero.map {
-                SportsChannelAvailability(
-                    resolved[$0.id] ?? highlightsLoad.result.resolved[$0.id], startDate: $0.headlineDate, preference: preference
-                )
-            }
-            // A headline from later in the week isn't on screen, but still
-            // wants its channel once the guide reaches it.
-            let toResolve = fixtures + [hero].compactMap(\.self).filter { hero in !fixtures.contains { $0.id == hero.id } }
+            let carousel = Array(heroSelection.carouselCandidates(in: candidates, context: heroSelectionContext).prefix(Self.carouselLimit))
+            let carouselIDs = Set(carousel.map(\.id))
+            let hero = heroModel.displayedHero?.fixture
+            // Big this week leaves out whatever the carousel already shows.
+            let highlights = highlightsLoad.result.highlights.filter { !carouselIDs.contains($0.fixture.id) }
+            // The carousel's games lead the page on their own, not again in a rail.
+            let groups = grouping.groups(for: fixtures.filter { !carouselIDs.contains($0.id) })
+            let heroAvailability = hero.map { availability(of: $0, preference: preference) }
+            // Slides from later in the week aren't on screen, but still want
+            // their channels once the guide reaches them.
+            let toResolve = fixtures + carousel.map(\.fixture).filter { slide in !fixtures.contains { $0.id == slide.id } }
             return ScrollViewReader { scrollProxy in
-                ScrollView {
-                    ZStack(alignment: .top) {
-                        Color.black
-                        if let hero {
-                            TVSportsHubHeroBackdrop(fixture: hero)
-                        }
+                ZStack {
+                    TVSportsHeroBackdrop(fixture: hero, belowFold: heroZone != .expanded)
+                        .animation(.easeInOut(duration: 0.8), value: hero?.id)
+                    ScrollView {
                         LazyVStack(alignment: .leading, spacing: 36) {
-                            header
-                            if let hero, let heroAvailability {
-                                TVSportsHubHero(
-                                    fixture: hero,
-                                    availability: heroAvailability,
-                                    showsScore: hero.showsScore(hidingScores: hidesScores, reveal: SportsScoreReveal.shared),
-                                    watchFocus: $focus,
+                            if carousel.isEmpty {
+                                header.padding(.top, Self.headerTop)
+                            } else {
+                                TVSportsHeroShowcase(
+                                    model: heroModel,
+                                    availability: { availability(of: $0, preference: preference) },
+                                    showsScore: { $0.showsScore(hidingScores: hidesScores, reveal: SportsScoreReveal.shared) },
+                                    focus: $focus,
                                     onWatch: watch,
                                     onWatchFromStart: heroFromStart.map { media in { playingMedia = media } },
-                                    onOpen: { selectedFixture = hero },
-                                    onLeadingLeft: openBrowse
+                                    onOpen: { selectedFixture = $0 },
+                                    header: { header.padding(.top, Self.headerTop) }
                                 )
-                                .padding(.vertical, 24)
-                                .task(id: "\(hero.id)|\(hidesScores)|\(heroAvailability.isAvailable)") {
-                                    heroFromStart = fromStartMedia(hero, availability: heroAvailability)
-                                }
                             }
-                            if groups.isEmpty, hero == nil {
+                            if groups.isEmpty, carousel.isEmpty {
                                 noGamesState
                             } else {
                                 ForEach(groups) { group in
@@ -182,22 +179,50 @@
                                     .padding(.top, 24)
                             }
                         }
-                        // The native tab chrome is the next focus target above
-                        // this screen. Match Settings' top breathing room so an
-                        // exit from the filters has an unambiguous spatial route
-                        // to it; at 20pt the controls sat inside that region and
-                        // trapped focus inside the scroll view.
-                        .padding(.top, 72)
                         .padding(.bottom, 40)
                     }
+                    .scrollIndicators(.hidden)
+                    .scrollClipDisabled()
+                    .scrollTargetBehavior(TVHomeFoldBehavior(zone: heroZone, showcaseHeight: carousel.isEmpty ? 0 : showcaseHeight))
+                    .onScrollGeometryChange(for: TVHomeZone.self) { geometry in
+                        TVHomeZone(
+                            offset: geometry.contentOffset.y + geometry.contentInsets.top,
+                            showcaseHeight: carousel.isEmpty ? 0 : showcaseHeight
+                        )
+                    } action: { _, newZone in
+                        guard newZone != heroZone else { return }
+                        withAnimation(.easeInOut(duration: 0.5)) { heroZone = newZone }
+                    }
+                    .defaultFocus($focus, defaultFocus(hero: hero, availability: heroAvailability, groups: groups))
                 }
-                .scrollClipDisabled()
-                .defaultFocus($focus, defaultFocus(hero: hero, availability: heroAvailability, groups: groups))
+                // Full-bleed vertically, like Home: the backdrop and the
+                // showcase span the real screen; rows keep their side inset.
+                .ignoresSafeArea(edges: .vertical)
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { containerHeight = $0 }
+                .onChange(of: heroZone) { _, zone in heroModel.isPaused = zone != .expanded }
+                .onChange(of: carousel.map(\.id), initial: true) { _, _ in heroModel.configure(items: carousel) }
                 .task(id: resolveKey(toResolve)) { await runResolve(toResolve) }
                 .task(id: heroSelectionKey(for: candidates)) {
                     heroSelection.reconcile(candidates: candidates, context: heroSelectionContext)
                 }
+                .task(id: "\(hero?.id ?? "")|\(hidesScores)|\(heroAvailability?.isAvailable ?? false)") {
+                    heroFromStart = hero.flatMap { hero in heroAvailability.flatMap { fromStartMedia(hero, availability: $0) } }
+                }
             }
+        }
+
+        private static let carouselLimit = 8
+        /// Clear of the tab bar above, which the full-bleed page now sits under.
+        private static let headerTop: CGFloat = 110
+
+        private var showcaseHeight: CGFloat {
+            max(containerHeight - TVHomeMetrics.rowPeek, 0)
+        }
+
+        private func availability(of fixture: SportsFixture, preference: SportsChannelPreference.Context) -> SportsChannelAvailability {
+            SportsChannelAvailability(
+                resolved[fixture.id] ?? highlightsLoad.result.resolved[fixture.id], startDate: fixture.headlineDate, preference: preference
+            )
         }
 
         // MARK: - Header
@@ -211,7 +236,6 @@
                     scopeMenu
                     Spacer(minLength: 24)
                     segmentedControl
-                    manageButton
                 }
                 if epg.isSyncing {
                     hintRow("Updating guide…", icon: "arrow.triangle.2.circlepath")
@@ -285,20 +309,6 @@
             .onLeadingEdgeLeft(openBrowse)
             .accessibilityLabel(Text(verbatim: scopeTitle))
             .accessibilityHint(Text("Choose leagues"))
-        }
-
-        private var manageButton: some View {
-            Button {
-                showManageTeams = true
-            } label: {
-                TVSportsCircleChrome {
-                    Image(systemName: "person.2.badge.plus")
-                        .font(.system(size: 26, weight: .semibold))
-                }
-            }
-            .buttonStyle(TVCardButtonStyle(focusScale: 1.06))
-            .focused($focus, equals: .manage)
-            .accessibilityLabel(Text("Manage Teams"))
         }
 
         // MARK: - Sections

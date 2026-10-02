@@ -42,7 +42,22 @@ actor SportsArtwork {
         "espn:soccer/eng.1": "4328", "espn:soccer/esp.1": "4335", "espn:soccer/ger.1": "4331",
         "espn:soccer/ita.1": "4332", "espn:soccer/fra.1": "4334", "espn:soccer/uefa.champions": "4480",
         "espn:soccer/uefa.europa": "4481", "espn:soccer/eng.fa": "4482", "espn:soccer/eng.league_cup": "4570",
-        "espn:football/nfl": "4391", "espn:basketball/nba": "4387", "espn:racing/f1": "4370", "espn:mma/ufc": "4443"
+        "espn:football/nfl": "4391", "espn:basketball/nba": "4387", "espn:racing/f1": "4370", "espn:mma/ufc": "4443",
+        // National teams rarely have fan art of their own, so their games
+        // borrow the tournament's: qualifiers take the finals' artwork.
+        "espn:soccer/fifa.world": "4429", "espn:soccer/fifa.worldq.uefa": "4429",
+        "espn:soccer/fifa.worldq.conmebol": "4429", "espn:soccer/fifa.worldq.concacaf": "4429",
+        "espn:soccer/fifa.worldq.caf": "4429", "espn:soccer/fifa.worldq.afc": "4429",
+        "espn:soccer/uefa.euro": "4502", "espn:soccer/uefa.euroq": "4502", "espn:soccer/uefa.nations": "4490",
+        "espn:soccer/conmebol.america": "4499", "espn:soccer/fifa.cwc": "4503"
+    ]
+
+    /// ESPN's sport → TheSportsDB's generic artwork for it, the last resort
+    /// so a headline is never a bare colour wash.
+    static let sportImages: [String: String] = [
+        "soccer": "soccer", "football": "american_football", "basketball": "basketball", "hockey": "ice_hockey",
+        "baseball": "baseball", "rugby": "rugby", "australian-football": "australian_football", "racing": "motorsport",
+        "mma": "fighting", "tennis": "tennis", "golf": "golf", "cricket": "cricket"
     ]
 
     /// ESPN's sport → TheSportsDB's `strSport`.
@@ -79,11 +94,14 @@ actor SportsArtwork {
         }
     }
 
-    /// The backdrop for a fixture: the home side's fan art, else its
-    /// competition's.
+    /// The backdrop for a fixture: the home side's fan art, else the away
+    /// side's, else its competition's, else the sport's own.
     func art(for fixture: SportsFixture, size: Size) async -> URL? {
-        if let home = fixture.home?.team, let url = await teamArt(home) { return Self.sized(url, size) }
-        return await leagueArt(fixture.leagueId).map { Self.sized($0, size) }
+        for team in [fixture.home?.team, fixture.away?.team].compactMap(\.self) {
+            if let url = await teamArt(team) { return Self.sized(url, size) }
+        }
+        if let url = await leagueArt(fixture.leagueId) { return Self.sized(url, size) }
+        return Self.sportImages[fixture.sport].flatMap { URL(string: "https://www.thesportsdb.com/images/sports/\($0).jpg") }
     }
 
     func teamArt(_ team: SportsTeam) async -> URL? {

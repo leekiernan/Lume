@@ -113,9 +113,17 @@ struct BrowseSidebarPanel: View {
 
     private var imageSize: CGFloat {
         #if os(tvOS)
-            32
+            40
         #else
-            22
+            24
+        #endif
+    }
+
+    private var iconSpacing: CGFloat {
+        #if os(tvOS)
+            18
+        #else
+            12
         #endif
     }
 
@@ -227,11 +235,15 @@ struct BrowseSidebarPanel: View {
     private func rowView(_ row: Row) -> some View {
         let isSelected = row.id == selectedId
         return Button(action: row.action) {
-            HStack(spacing: 12) {
+            HStack(spacing: iconSpacing) {
                 if let systemImage = row.systemImage {
                     Image(systemName: systemImage)
                         .font(.subheadline.weight(.semibold))
-                        .frame(width: imageSize)
+                        // A column wide enough to align ordinary symbols; a
+                        // wide one (two figures and a badge) widens its own
+                        // row rather than running into the title.
+                        .frame(minWidth: imageSize)
+                        .fixedSize()
                 } else if let imageURL = row.imageURL {
                     CachedAsyncImage(url: imageURL, maxPixelSize: 64) { phase in
                         if case let .success(image) = phase {
