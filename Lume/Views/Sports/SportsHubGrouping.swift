@@ -33,14 +33,24 @@ struct SportsHubGrouping {
     /// fixture — `involvesFollowedTeam` runs for every fixture on screen.
     let followedTeamKeys: Set<String>
     let followedLeagueKeys: Set<String>
+    /// Follows the viewer took off the hub (Settings ▸ Sports): no row of
+    /// their own, and nothing on the page only because of them.
+    let hiddenKeys: Set<String>
 
     /// How far ahead the hub's rows reach.
     static let horizon: TimeInterval = 14 * 86400
 
-    init(scope: SportsHubScope, follows: [SportsFollow], store: SportsStore, now: Date = .init()) {
+    init(
+        scope: SportsHubScope,
+        follows: [SportsFollow],
+        store: SportsStore,
+        hiddenKeys: Set<String> = [],
+        now: Date = .init()
+    ) {
         self.scope = scope
         self.follows = follows
         self.store = store
+        self.hiddenKeys = hiddenKeys
         self.now = now
         followedTeamKeys = Set(follows.filter { $0.kind == .team }.map(\.key))
         followedLeagueKeys = Set(follows.filter { $0.kind == .league }.map(\.key))
@@ -128,7 +138,11 @@ struct SportsHubGrouping {
         switch scopedFollow?.kind {
         case .league: true
         case .team: scopedFollow.map { involves(fixture, team: $0.key) } ?? false
-        case nil: followedLeagueKeys.contains(fixture.leagueId) || involvesFollowedTeam(fixture)
+        case nil:
+            (followedLeagueKeys.contains(fixture.leagueId) && !hiddenKeys.contains(fixture.leagueId))
+                || [fixture.home?.team.id, fixture.away?.team.id].contains { key in
+                    key.map { followedTeamKeys.contains($0) && !hiddenKeys.contains($0) } ?? false
+                }
         }
     }
 
@@ -151,7 +165,7 @@ struct SportsHubGrouping {
             groups.append(SportsFixtureGroup(id: "live", title: String(localized: "Live now"), logoURL: nil, leagueId: nil, fixtures: live))
         }
         var claimed = Set(live.map(\.id))
-        for follow in follows {
+        for follow in follows where !hiddenKeys.contains(follow.key) {
             let rowFixtures = fixtures.filter { fixture in
                 guard !claimed.contains(fixture.id) else { return false }
                 return follow.kind == .team ? involves(fixture, team: follow.key) : fixture.leagueId == follow.key

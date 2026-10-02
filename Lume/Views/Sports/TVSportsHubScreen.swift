@@ -45,6 +45,8 @@
         @State private var epg = EPGSyncService.shared
 
         @State var scope: SportsHubScope = .all
+        /// Follows taken off the hub in Settings ▸ Sports.
+        @AppStorage(SportsHubLayout.hiddenKey) private var hiddenFollowsRaw = ""
         /// The scope panel, and where focus was when it opened.
         @State var showingBrowse = false
         @State var browseReturnFocus: TVSportsFocus?
@@ -540,7 +542,9 @@
 
         /// The shared selection/grouping rules; the tvOS hub keeps only its chrome.
         private var grouping: SportsHubGrouping {
-            SportsHubGrouping(scope: scope, follows: follows.follows, store: store)
+            SportsHubGrouping(
+                scope: scope, follows: follows.follows, store: store, hiddenKeys: SportsHubLayout.hidden(hiddenFollowsRaw)
+            )
         }
 
         private var displayLeagueIds: [String] {

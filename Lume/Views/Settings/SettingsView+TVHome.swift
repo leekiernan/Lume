@@ -20,7 +20,7 @@ import SwiftUI
             VStack(alignment: .leading, spacing: 28) {
                 tvAreaPicker
                 if showingSportsSettings {
-                    TVSportsSettingsPane()
+                    TVSportsSettingsPane(proxy: proxy)
                 } else {
                     tvAreaEnableRow
                     tvAreaEnableNote

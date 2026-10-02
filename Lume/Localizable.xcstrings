@@ -21219,6 +21219,66 @@
         }
       }
     },
+    "Follow teams and leagues to build your Sports hub." : {
+      "comment" : "Settings, Sports Sections: empty state.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Folge Teams und Ligen, um deinen Sport-Hub zu gestalten."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Follow teams and leagues to build your Sports hub."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sigue equipos y ligas para crear tu centro de deportes."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Suivez des équipes et des ligues pour composer votre espace Sports."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Segui squadre e campionati per creare il tuo hub Sport."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "チームやリーグをフォローしてスポーツハブを作りましょう。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "팀과 리그를 팔로우해 스포츠 허브를 만드세요."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Siga equipes e ligas para montar seu hub de esportes."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "关注球队和联赛，打造你的体育中心。"
+          }
+        }
+      }
+    },
     "Follow the device appearance, or keep Lume always in Dark or Light Mode." : {
       "localizations" : {
         "de" : {
@@ -24215,6 +24275,126 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "隐藏%@"
+          }
+        }
+      }
+    },
+    "Hide a team or league to take its row off the Sports hub — it stays followed. Drag to reorder: the hub's rows follow this order, and the first few lead the Home shelf." : {
+      "comment" : "Settings, Sports Sections footer (iPhone/iPad/Mac).",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Blende ein Team oder eine Liga aus, um die Reihe aus dem Sport-Hub zu entfernen – du folgst ihr weiterhin. Zum Neuordnen ziehen: Die Reihen des Hubs folgen dieser Reihenfolge, und die ersten erscheinen zuerst auf der Startseite."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hide a team or league to take its row off the Sports hub — it stays followed. Drag to reorder: the hub's rows follow this order, and the first few lead the Home shelf."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Oculta un equipo o una liga para quitar su fila del centro de deportes; lo seguirás siguiendo. Arrastra para reordenar: las filas siguen este orden y las primeras encabezan Inicio."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Masquez une équipe ou une ligue pour retirer sa rangée de l'espace Sports ; vous la suivez toujours. Faites glisser pour réorganiser : les rangées suivent cet ordre, et les premières mènent l'Accueil."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nascondi una squadra o un campionato per togliere la sua riga dall'hub Sport: continuerai a seguirlo. Trascina per riordinare: le righe seguono quest'ordine e le prime aprono la Home."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "チームやリーグを非表示にすると、スポーツハブからその行が消えます（フォローは続きます）。ドラッグで並べ替え：ハブの行はこの順に並び、上位はホームの先頭に表示されます。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "팀이나 리그를 숨기면 스포츠 허브에서 해당 행이 사라집니다(팔로우는 유지). 드래그해 순서를 바꾸세요: 허브의 행이 이 순서를 따르고, 상위 항목이 홈 선반 앞쪽에 표시됩니다."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Oculte uma equipe ou liga para tirar a fileira dela do hub de esportes; você continua seguindo. Arraste para reordenar: as fileiras seguem esta ordem, e as primeiras abrem o Início."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "隐藏某支球队或联赛即可将其从体育中心移除，但仍保持关注。拖动以重新排序：中心各行按此顺序排列，前几项会出现在首页最前。"
+          }
+        }
+      }
+    },
+    "Hide a team or league to take its row off the Sports hub — it stays followed. Select a row to lift it, then move up or down and select again to place." : {
+      "comment" : "Settings, Sports Sections footer (Apple TV).",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Blende ein Team oder eine Liga aus, um die Reihe aus dem Sport-Hub zu entfernen – du folgst ihr weiterhin. Wähle eine Reihe zum Anheben, bewege sie nach oben oder unten und wähle erneut zum Ablegen."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hide a team or league to take its row off the Sports hub — it stays followed. Select a row to lift it, then move up or down and select again to place."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Oculta un equipo o una liga para quitar su fila del centro de deportes; lo seguirás siguiendo. Selecciona una fila para levantarla, muévela arriba o abajo y vuelve a seleccionar para colocarla."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Masquez une équipe ou une ligue pour retirer sa rangée de l'espace Sports ; vous la suivez toujours. Sélectionnez une rangée pour la soulever, déplacez-la puis sélectionnez à nouveau pour la poser."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nascondi una squadra o un campionato per togliere la sua riga dall'hub Sport: continuerai a seguirlo. Seleziona una riga per sollevarla, spostala su o giù e seleziona di nuovo per posizionarla."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "チームやリーグを非表示にすると、スポーツハブからその行が消えます（フォローは続きます）。行を選択して持ち上げ、上下に動かしてもう一度選択すると配置されます。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "팀이나 리그를 숨기면 스포츠 허브에서 해당 행이 사라집니다(팔로우는 유지). 행을 선택해 들어 올리고 위아래로 옮긴 뒤 다시 선택해 놓으세요."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Oculte uma equipe ou liga para tirar a fileira dela do hub de esportes; você continua seguindo. Selecione uma fileira para erguê-la, mova para cima ou para baixo e selecione de novo para posicionar."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "隐藏某支球队或联赛即可将其从体育中心移除，但仍保持关注。选择一行将其提起，上下移动后再次选择即可放下。"
           }
         }
       }
@@ -49592,6 +49772,66 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "栏目"
+          }
+        }
+      }
+    },
+    "Sections orders the Sports hub and hides rows from it; Manage Teams follows and unfollows." : {
+      "comment" : "Settings, Sports: footer under Sections and Manage Teams.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unter „Bereiche“ ordnest du den Sport-Hub und blendest Reihen aus; unter „Teams verwalten“ folgst du Teams und Ligen oder entfolgst ihnen."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sections orders the Sports hub and hides rows from it; Manage Teams follows and unfollows."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Secciones ordena el centro de deportes y oculta filas; Gestionar equipos sirve para seguir y dejar de seguir."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sections ordonne l'espace Sports et en masque des rangées ; Gérer les équipes permet de suivre ou de ne plus suivre."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sezioni ordina l'hub Sport e ne nasconde le righe; Gestisci squadre serve a seguire e smettere di seguire."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "「セクション」でスポーツハブの並び順と非表示を設定し、「チームを管理」でフォローとフォロー解除を行います。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "섹션에서는 스포츠 허브의 순서를 정하고 행을 숨기며, 팀 관리에서는 팔로우와 팔로우 해제를 합니다."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Seções ordena o hub de esportes e oculta fileiras; Gerenciar times serve para seguir e deixar de seguir."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "「栏目」用于排序体育中心并隐藏行；「管理球队」用于关注和取消关注。"
           }
         }
       }

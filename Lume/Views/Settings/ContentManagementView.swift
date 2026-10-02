@@ -402,7 +402,8 @@ struct ContentManagementView: View {
                                 drillInValue: selectedType == .live ? category : nil,
                                 onToggleHidden: { ContentOrganizer.toggleHidden(category) },
                                 onToggleRestricted: { ContentOrganizer.toggleRestricted(category) },
-                                onDrillIn: { selectedCategory = $0 }
+                                onDrillIn: { selectedCategory = $0 },
+                                icon: { EmptyView() }
                             )
                         }
                         .onMove(perform: moveHandler)
@@ -447,19 +448,23 @@ struct ContentManagementView: View {
 // MARK: - iOS / macOS row
 
 #if !os(tvOS)
-    /// One reorderable category row: a leading hide toggle, the name, and an
-    /// optional trailing link into channel management (live only). Hiding and
+    /// One reorderable row: a leading hide toggle, an optional restriction
+    /// lock, the name, and an optional trailing link into channel management
+    /// (live categories only). Shared with the Sports hub's sections. Hiding and
     /// reordering are deliberately separate modes — reorder happens in edit mode
     /// (drag handles), hiding in normal mode — which sidesteps the edit-mode /
     /// in-row-control interaction traps.
-    private struct ContentManageRow: View {
+    struct ContentManageRow<Icon: View>: View {
         let title: String
         let isHidden: Bool
-        let isRestricted: Bool
-        let drillInValue: Category?
+        var isRestricted = false
+        var drillInValue: Category?
         let onToggleHidden: () -> Void
-        let onToggleRestricted: () -> Void
-        let onDrillIn: (Category) -> Void
+        /// nil where child-profile restriction doesn't apply: no lock.
+        var onToggleRestricted: (() -> Void)?
+        var onDrillIn: (Category) -> Void = { _ in }
+        /// Drawn before the name — a crest, for a sports follow.
+        @ViewBuilder var icon: () -> Icon
 
         var body: some View {
             HStack(spacing: 12) {
@@ -470,13 +475,16 @@ struct ContentManagementView: View {
                 .buttonStyle(.borderless)
                 .accessibilityLabel(isHidden ? "Show \(title)" : "Hide \(title)")
 
-                Button(action: onToggleRestricted) {
-                    Image(systemName: isRestricted ? "lock.fill" : "lock.open")
-                        .foregroundStyle(isRestricted ? Color.orange : Color.secondary)
+                if let onToggleRestricted {
+                    Button(action: onToggleRestricted) {
+                        Image(systemName: isRestricted ? "lock.fill" : "lock.open")
+                            .foregroundStyle(isRestricted ? Color.orange : Color.secondary)
+                    }
+                    .buttonStyle(.borderless)
+                    .accessibilityLabel(isRestricted ? "Unrestrict \(title)" : "Restrict \(title)")
                 }
-                .buttonStyle(.borderless)
-                .accessibilityLabel(isRestricted ? "Unrestrict \(title)" : "Restrict \(title)")
 
+                icon()
                 Text(title)
                     .foregroundStyle(isHidden ? .secondary : .primary)
 

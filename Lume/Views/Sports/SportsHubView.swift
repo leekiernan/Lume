@@ -50,6 +50,8 @@ struct SportsHubView: View {
     @State private var epg = EPGSyncService.shared
 
     @State private var scope: SportsHubScope = .all
+    /// Follows taken off the hub in Settings ▸ Sports.
+    @AppStorage(SportsHubLayout.hiddenKey) private var hiddenFollowsRaw = ""
     @State private var resolved: [String: [ResolvedChannel]] = [:]
     @State private var heroSelection = SportsHeroSelectionMachine()
     @State private var heroCarouselID: String?
@@ -428,7 +430,9 @@ struct SportsHubView: View {
 
     /// The shared selection/grouping rules; the phone hub keeps only its chrome.
     private var grouping: SportsHubGrouping {
-        SportsHubGrouping(scope: scope, follows: follows.follows, store: store)
+        SportsHubGrouping(
+            scope: scope, follows: follows.follows, store: store, hiddenKeys: SportsHubLayout.hidden(hiddenFollowsRaw)
+        )
     }
 
     private var displayLeagueIds: [String] {

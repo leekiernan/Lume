@@ -183,4 +183,28 @@ struct SportsHubHeroTests {
         let ids = grouping().heroCandidates(in: [], highlights: [first, second]).map(\.id)
         #expect(ids.starts(with: ["first", "second"]))
     }
+
+    @Test func `a hidden follow has no row and brings nothing to the page`() {
+        let follows = [
+            SportsFollow(key: "\(leagueId):1", kind: .team, sortOrder: 0),
+            SportsFollow(key: leagueId, kind: .league, sortOrder: 1)
+        ]
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let grouping = SportsHubGrouping(
+            scope: .all, follows: follows, store: SportsStore(cache: SportsCacheStore(directory: dir)),
+            hiddenKeys: [leagueId], now: now
+        )
+        let mine = game("mine", home: "1", away: "2", offset: 3600, state: .scheduled)
+        let league = game("league", home: "5", away: "6", offset: 7200, state: .scheduled)
+
+        #expect(grouping.groups(for: [mine, league]).map(\.id) == ["\(leagueId):1"])
+    }
+
+    @Test func `hiding toggles one follow in the stored set`() {
+        let raw = SportsHubLayout.toggling("espn:soccer/eng.1", in: "")
+        #expect(SportsHubLayout.hidden(raw) == ["espn:soccer/eng.1"])
+        let both = SportsHubLayout.toggling("espn:soccer/eng.1:363", in: raw)
+        #expect(SportsHubLayout.hidden(both) == ["espn:soccer/eng.1", "espn:soccer/eng.1:363"])
+        #expect(SportsHubLayout.hidden(SportsHubLayout.toggling("espn:soccer/eng.1", in: both)) == ["espn:soccer/eng.1:363"])
+    }
 }

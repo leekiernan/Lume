@@ -52,6 +52,11 @@ import SwiftUI
 
         private var teamsSection: some View {
             Section {
+                NavigationLink {
+                    SportsSectionsSettingsView()
+                } label: {
+                    Label("Sections", systemImage: "list.bullet")
+                }
                 Button {
                     showingManageTeams = true
                 } label: {
@@ -59,6 +64,8 @@ import SwiftUI
                 }
             } header: {
                 Text("Following")
+            } footer: {
+                Text("Sections orders the Sports hub and hides rows from it; Manage Teams follows and unfollows.")
             }
         }
 
