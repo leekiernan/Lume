@@ -453,7 +453,7 @@ struct SportsHubHeroCard: View {
                 Text(verbatim: fixture.eventTitle).font(.title2.weight(.bold)).lineLimit(2)
             }
             HStack(spacing: 10) {
-                if case let .available(_, best) = availability {
+                if fixture.isInProgress, case let .available(_, best) = availability {
                     Button {
                         onWatch(best)
                     } label: {

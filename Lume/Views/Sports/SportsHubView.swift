@@ -58,6 +58,7 @@ struct SportsHubView: View {
     @State private var segment: SportsHubSegment = .today
     @State private var resolved: [String: [ResolvedChannel]] = [:]
     @State private var heroSelection = SportsHeroSelectionMachine()
+    @State private var heroCarouselID: String?
     @State private var highlightsLoad = SportsHighlightsLoadMachine()
     @State private var selectedFixture: SportsFixture?
     @State private var pickerFixture: SportsFixture?
@@ -220,42 +221,46 @@ struct SportsHubView: View {
         let hero = heroSelection.displayed(in: candidates, context: heroSelectionContext)?.fixture
         let carouselCandidates = Array(heroSelection.carouselCandidates(in: candidates, context: heroSelectionContext).prefix(5))
         let carouselFixtureIDs = Set(carouselCandidates.map(\.id))
-        return VStack(spacing: 0) {
-            Picker("Range", selection: $segment) {
-                ForEach(SportsHubSegment.allCases) { segment in
-                    Text(segment.title).tag(segment)
-                }
-            }
-            .hubSegmentedPickerStyle()
-            .padding(.horizontal)
-            .padding(.bottom, 8)
-
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 20) {
-                    statusHints
-                        .padding(.horizontal)
-                    heroCarousel(carouselCandidates)
-                    SportsSectionsView(
-                        // Carousel pages lead on their own, not again below.
-                        groups: grouping.groups(for: fixtures.filter { !carouselFixtureIDs.contains($0.id) }),
-                        resolved: resolved,
-                        isFollowed: isFollowed,
-                        onOpenDetail: { selectedFixture = $0 },
-                        onWatch: watch,
-                        onFollowToggle: toggleFollow,
-                        onPickChannel: { pickerFixture = $0 },
-                        onSelectLeague: { scope = .league($0) }
-                    )
-                    if scope == .myTeams {
-                        highlightsRail(excluding: carouselFixtureIDs)
-                        if !seasonTeams.isEmpty {
-                            SportsTeamSeasonPanel(teams: seasonTeams)
-                        }
+        return ZStack(alignment: .top) {
+            heroBackdrop(carouselCandidates)
+            VStack(spacing: 0) {
+                Picker("Range", selection: $segment) {
+                    ForEach(SportsHubSegment.allCases) { segment in
+                        Text(segment.title).tag(segment)
                     }
                 }
-                .padding(.vertical)
+                .hubSegmentedPickerStyle()
+                .padding(.horizontal)
+                .padding(.bottom, 8)
+
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 20) {
+                        statusHints
+                            .padding(.horizontal)
+                        heroCarousel(carouselCandidates)
+                        SportsSectionsView(
+                            // Carousel pages lead on their own, not again below.
+                            groups: grouping.groups(for: fixtures.filter { !carouselFixtureIDs.contains($0.id) }),
+                            resolved: resolved,
+                            isFollowed: isFollowed,
+                            onOpenDetail: { selectedFixture = $0 },
+                            onWatch: watch,
+                            onFollowToggle: toggleFollow,
+                            onPickChannel: { pickerFixture = $0 },
+                            onSelectLeague: { scope = .league($0) }
+                        )
+                        if scope == .myTeams {
+                            highlightsRail(excluding: carouselFixtureIDs)
+                            if !seasonTeams.isEmpty {
+                                SportsTeamSeasonPanel(teams: seasonTeams)
+                            }
+                        }
+                    }
+                    .padding(.vertical)
+                }
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         // A headline from later in the week isn't on screen, but still wants
         // its channel once the guide reaches it.
         .task(id: resolveKey(fixtures + offScreen(hero, in: fixtures))) {
@@ -279,10 +284,19 @@ struct SportsHubView: View {
         if !candidates.isEmpty {
             SportsHubHeroCarousel(
                 candidates: candidates,
+                currentID: $heroCarouselID,
                 availability: heroAvailability,
                 onWatch: watch,
                 onOpen: { selectedFixture = $0 }
             )
+        }
+    }
+
+    @ViewBuilder
+    private func heroBackdrop(_ candidates: [SportsHeroSelectionMachine.Candidate]) -> some View {
+        if let fixture = candidates.first(where: { $0.id == heroCarouselID })?.fixture ?? candidates.first?.fixture {
+            SportsHubHeroBackdrop(fixture: fixture)
+                .ignoresSafeArea(edges: [.top, .horizontal])
         }
     }
 

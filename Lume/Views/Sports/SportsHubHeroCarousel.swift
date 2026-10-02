@@ -11,12 +11,12 @@ import SwiftUI
 
 struct SportsHubHeroCarousel: View {
     let candidates: [SportsHeroSelectionMachine.Candidate]
+    @Binding var currentID: String?
     let availability: (SportsFixture) -> SportsChannelAvailability
     let onWatch: (ResolvedChannel) -> Void
     let onOpen: (SportsFixture) -> Void
 
-    @State private var currentID: String?
-    @ScaledMetric(relativeTo: .body) private var heroHeight: CGFloat = 340
+    @ScaledMetric(relativeTo: .body) private var heroHeight: CGFloat = 260
 
     private var activeIndex: Int {
         candidates.firstIndex { $0.id == currentID } ?? 0
@@ -118,26 +118,49 @@ private struct SportsHubHeroCarouselPage: View {
     let onOpen: () -> Void
 
     var body: some View {
-        ZStack(alignment: .bottomLeading) {
+        SportsHubHeroCard(fixture: fixture, availability: availability, onWatch: onWatch, onOpen: onOpen)
+            .padding(.horizontal, 20)
+            .padding(.top, 22)
+            .padding(.bottom, 30)
+            .environment(\.colorScheme, .dark)
+    }
+}
+
+/// The selected carousel page's artwork, deliberately lifted out of the
+/// content column so it reaches the window edge and fades into the normal page
+/// background instead of forming a card behind the hero controls.
+struct SportsHubHeroBackdrop: View {
+    let fixture: SportsFixture
+
+    var body: some View {
+        ZStack {
             SportsArtworkBackdrop(fixture: fixture, size: .hero)
-            // Artwork and the team-colour fallback dissolve into the page's
-            // black canvas rather than ending in a visible rectangular panel.
             LinearGradient(
                 stops: [
-                    .init(color: .black.opacity(0.05), location: 0),
-                    .init(color: .black.opacity(0.32), location: 0.42),
-                    .init(color: .black.opacity(0.88), location: 0.82),
+                    .init(color: .black.opacity(0.12), location: 0),
+                    .init(color: .black.opacity(0.36), location: 0.46),
+                    .init(color: .black.opacity(0.78), location: 0.78),
                     .init(color: .black, location: 1)
                 ],
                 startPoint: .top,
                 endPoint: .bottom
             )
-            SportsHubHeroCard(fixture: fixture, availability: availability, onWatch: onWatch, onOpen: onOpen)
-                .padding(.horizontal, 20)
-                .padding(.top, 22)
-                .padding(.bottom, 30)
         }
-        .background(.black)
-        .environment(\.colorScheme, .dark)
+        .frame(height: 380)
+        .frame(maxWidth: .infinity)
+        .mask {
+            LinearGradient(
+                stops: [
+                    .init(color: .black, location: 0),
+                    .init(color: .black, location: 0.72),
+                    .init(color: .black.opacity(0.35), location: 0.91),
+                    .init(color: .clear, location: 1)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 }

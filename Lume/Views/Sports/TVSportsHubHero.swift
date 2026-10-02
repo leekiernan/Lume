@@ -32,6 +32,10 @@
             return false
         }
 
+        private var canWatchNow: Bool {
+            fixture.isInProgress && isAvailable
+        }
+
         var body: some View {
             VStack(alignment: .leading, spacing: 26) {
                 statusLine
@@ -118,7 +122,7 @@
 
         private var actions: some View {
             HStack(spacing: 24) {
-                if case let .available(count, best) = availability {
+                if fixture.isInProgress, case let .available(count, best) = availability {
                     if let onWatchFromStart {
                         Button(action: onWatchFromStart) {
                             Label {
@@ -188,7 +192,7 @@
                 .buttonStyle(TVGlassButtonStyle())
                 .frame(width: 320)
                 .focused(watchFocus, equals: .heroDetail)
-                .onLeadingEdgeLeft(isAvailable || fixture.status.state == .scheduled ? nil : onLeadingLeft)
+                .onLeadingEdgeLeft(canWatchNow || fixture.status.state == .scheduled ? nil : onLeadingLeft)
             }
         }
     }
