@@ -155,7 +155,7 @@ struct SportsHubView: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 24) {
                         SportsOnboardingCard { showManageTeams = true }
-                        highlightsRail
+                        highlightsRail()
                     }
                     .padding()
                 }
@@ -166,12 +166,14 @@ struct SportsHubView: View {
         .task(id: follows.follows.map(\.key)) { await loadHighlights() }
     }
 
+    /// Big this week, less whichever pick is already the headline.
     @ViewBuilder
-    private var highlightsRail: some View {
+    private func highlightsRail(excluding heroId: String? = nil) -> some View {
         let highlights = highlightsLoad.result
-        if !highlights.highlights.isEmpty || !highlights.payPerView.isEmpty {
+        let picks = highlights.highlights.filter { $0.fixture.id != heroId }
+        if !picks.isEmpty || !highlights.payPerView.isEmpty {
             SportsHighlightsRail(
-                highlights: highlights.highlights,
+                highlights: picks,
                 payPerView: highlights.payPerView,
                 availability: { fixture in
                     SportsChannelAvailability(highlights.resolved[fixture.id], startDate: fixture.headlineDate, preference: .current)
@@ -197,12 +199,13 @@ struct SportsHubView: View {
             container: modelContext.container, restriction: restriction, followedTeamIds: followedTeams,
             overrides: SportsFlagshipOverrides.shared.marks
         )
-        guard !Task.isCancelled else { return }
+        // A superseded request's result is ignored by the machine, so one that
+        // lands as the view goes away still counts.
         highlightsLoad.finish(request, result: result)
     }
 
     private func followedContent(_ fixtures: [SportsFixture]) -> some View {
-        let hero = grouping.heroFixture(in: fixtures)
+        let hero = grouping.heroFixture(in: fixtures, fallback: highlightsLoad.result.highlights.first?.fixture)
         return VStack(spacing: 0) {
             Picker("Range", selection: $segment) {
                 ForEach(SportsHubSegment.allCases) { segment in
@@ -215,19 +218,15 @@ struct SportsHubView: View {
 
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 20) {
-                    if epg.isSyncing {
-                        hint("Updating guide…", icon: "arrow.triangle.2.circlepath")
-                    }
-                    if store.refreshError {
-                        hint("Scores unavailable — showing your saved data.", icon: "wifi.slash")
-                    }
-                    if let fetchedAt = store.newestSnapshotDate(in: displayLeagueIds) {
-                        freshnessHint(fetchedAt)
-                    }
+                    statusHints
                     if let hero {
                         SportsHubHeroCard(
                             fixture: hero,
-                            availability: SportsChannelAvailability(resolved[hero.id], startDate: hero.headlineDate, preference: .current),
+                            availability: SportsChannelAvailability(
+                                resolved[hero.id] ?? highlightsLoad.result.resolved[hero.id],
+                                startDate: hero.headlineDate,
+                                preference: .current
+                            ),
                             onWatch: watch,
                             onOpen: { selectedFixture = hero }
                         )
@@ -244,7 +243,7 @@ struct SportsHubView: View {
                         onSelectLeague: { scope = .league($0) }
                     )
                     if scope == .myTeams {
-                        highlightsRail
+                        highlightsRail(excluding: hero?.id)
                         if !seasonTeams.isEmpty {
                             SportsTeamSeasonPanel(teams: seasonTeams)
                         }
@@ -253,7 +252,28 @@ struct SportsHubView: View {
                 .padding()
             }
         }
-        .task(id: resolveKey(fixtures)) { await runResolve(fixtures) }
+        // A headline from later in the week isn't on screen, but still wants
+        // its channel once the guide reaches it.
+        .task(id: resolveKey(fixtures + offScreen(hero, in: fixtures))) {
+            await runResolve(fixtures + offScreen(hero, in: fixtures))
+        }
+    }
+
+    /// Guide sync, a failed refresh, and how old the scores are.
+    @ViewBuilder
+    private var statusHints: some View {
+        if epg.isSyncing {
+            hint("Updating guide…", icon: "arrow.triangle.2.circlepath")
+        }
+        if store.refreshError {
+            hint("Scores unavailable — showing your saved data.", icon: "wifi.slash")
+        }
+        if let fetchedAt = store.newestSnapshotDate(in: displayLeagueIds) {
+            SportsFreshnessLabel(fetchedAt: fetchedAt)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
     }
 
     private var lockedState: some View {
@@ -278,20 +298,6 @@ struct SportsHubView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    /// A quiet provenance cue: score data is cached so the hub can open
-    /// instantly, and this makes an older snapshot legible without competing
-    /// with the explicit refresh affordances.
-    private func freshnessHint(_ date: Date) -> some View {
-        Label {
-            Text(date, style: .relative)
-        } icon: {
-            Image(systemName: "clock")
-        }
-        .font(.caption)
-        .foregroundStyle(.secondary)
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
     // MARK: - Navigation path
 
     private var pathBinding: Binding<NavigationPath> {
@@ -312,6 +318,11 @@ struct SportsHubView: View {
     /// Resolves the currently visible fixtures to the viewer's channels in one
     /// off-main pass, re-running when the fixture set changes or an EPG refresh
     /// finishes (fresh sub-titles sharpen matching).
+    private func offScreen(_ hero: SportsFixture?, in fixtures: [SportsFixture]) -> [SportsFixture] {
+        guard let hero, !fixtures.contains(where: { $0.id == hero.id }) else { return [] }
+        return [hero]
+    }
+
     private func resolveKey(_ fixtures: [SportsFixture]) -> String {
         fixtures.map(\.id).joined(separator: ",") + "|" + String(epg.isSyncing)
     }

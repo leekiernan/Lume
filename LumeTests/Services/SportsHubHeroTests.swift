@@ -2,8 +2,10 @@
 //  SportsHubHeroTests.swift
 //  LumeTests
 //
-//  Which game the hub headlines on Today: a followed team's live game, else
-//  any live game the viewer follows, else a followed team's game starting soon.
+//  Which game the hub headlines: a followed team's live game, else any live
+//  game the viewer follows, else the followed team's next game this week, else
+//  the biggest "Big this week" pick, else the followed leagues' next game.
+//  Yesterday has none.
 //
 
 import Foundation
@@ -54,23 +56,42 @@ struct SportsHubHeroTests {
         #expect(grouping().heroFixture(in: [later, other])?.id == "other")
     }
 
-    @Test func `with nothing live, the followed team's next game within twelve hours`() {
+    @Test func `with nothing live, the followed team's next game`() {
         let soon = game("soon", home: "1", away: "2", offset: 3 * 3600, state: .scheduled)
         let leagueOnly = game("league", home: "5", away: "6", offset: 3600, state: .scheduled)
 
         #expect(grouping().heroFixture(in: [leagueOnly, soon])?.id == "soon")
     }
 
-    @Test func `nothing qualifies, no hero`() {
-        let tomorrow = game("tomorrow", home: "1", away: "2", offset: 20 * 3600, state: .scheduled)
+    @Test func `the followed team's game later in the week still headlines`() {
+        let thursday = game("thursday", home: "1", away: "2", offset: 4 * 86400, state: .scheduled)
         let done = game("done", home: "1", away: "2", offset: -4 * 3600, state: .final)
 
-        #expect(grouping().heroFixture(in: [tomorrow, done]) == nil)
+        #expect(grouping().heroFixture(in: [thursday, done])?.id == "thursday")
     }
 
-    @Test func `only today has a hero`() {
+    @Test func `with no followed game, the biggest pick of the week`() {
+        let leagueOnly = game("league", home: "5", away: "6", offset: 3600, state: .scheduled)
+        let big = game("big", home: "7", away: "8", offset: 2 * 86400, state: .scheduled)
+
+        #expect(grouping().heroFixture(in: [leagueOnly], fallback: big)?.id == "big")
+    }
+
+    @Test func `with no pick either, the followed leagues' next game`() {
+        let leagueOnly = game("league", home: "5", away: "6", offset: 3600, state: .scheduled)
+
+        #expect(grouping().heroFixture(in: [leagueOnly])?.id == "league")
+    }
+
+    @Test func `beyond a week, nothing headlines`() {
+        let far = game("far", home: "1", away: "2", offset: 9 * 86400, state: .scheduled)
+
+        #expect(grouping().heroFixture(in: [far]) == nil)
+    }
+
+    @Test func `yesterday has no hero`() {
         let mine = game("mine", home: "1", away: "2", offset: -600, state: .inProgress)
 
-        #expect(grouping(segment: .upcoming).heroFixture(in: [mine]) == nil)
+        #expect(grouping(segment: .yesterday).heroFixture(in: [mine]) == nil)
     }
 }

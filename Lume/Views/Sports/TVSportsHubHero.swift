@@ -3,9 +3,10 @@
 //  Lume
 //
 //  The game the tvOS hub headlines (`SportsHubGrouping.heroFixture`): big
-//  crests and score over the two teams' colours, and Watch on the channel the
-//  resolver ranks first — the one press from the hub to the game. Match Centre
-//  opens the detail; the rest of the channels live there.
+//  crests and score over fan art and the two teams' colours, and Watch on the
+//  channel the resolver ranks first — the one press from the hub to the game —
+//  or Remind Me for a game the guide doesn't reach yet. Match Centre opens the
+//  detail; the rest of the channels live there.
 //
 
 #if os(tvOS)
@@ -24,6 +25,7 @@
         let onOpen: () -> Void
         /// Left from the leading action: the hub opens its browse panel.
         var onLeadingLeft: (() -> Void)?
+        @State private var reminders = SportsReminders.shared
 
         private var isAvailable: Bool {
             if case .available = availability { return true }
@@ -165,6 +167,19 @@
                             .foregroundStyle(.white.opacity(0.7))
                     }
                 }
+                if !isAvailable, fixture.status.state == .scheduled {
+                    // Not in the guide yet — days away, usually.
+                    let reminded = reminders.isReminded(fixture.id)
+                    Button { reminders.toggle(fixture) } label: {
+                        Label(reminded ? "Reminder Set" : "Remind Me", systemImage: reminded ? "bell.fill" : "bell")
+                            .font(.system(size: 28, weight: .bold))
+                            .padding(.horizontal, 36)
+                    }
+                    .buttonStyle(TVGlassButtonStyle())
+                    .frame(width: 400)
+                    .focused(watchFocus, equals: .heroWatch)
+                    .onLeadingEdgeLeft(onLeadingLeft)
+                }
                 Button(action: onOpen) {
                     Text("Match Centre")
                         .font(.system(size: 28, weight: .semibold))
@@ -173,7 +188,7 @@
                 .buttonStyle(TVGlassButtonStyle())
                 .frame(width: 320)
                 .focused(watchFocus, equals: .heroDetail)
-                .onLeadingEdgeLeft(isAvailable ? nil : onLeadingLeft)
+                .onLeadingEdgeLeft(isAvailable || fixture.status.state == .scheduled ? nil : onLeadingLeft)
             }
         }
     }

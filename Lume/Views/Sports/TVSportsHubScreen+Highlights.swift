@@ -20,7 +20,8 @@
                 container: modelContext.container, restriction: restriction, followedTeamIds: followedTeams,
                 overrides: SportsFlagshipOverrides.shared.marks
             )
-            guard !Task.isCancelled else { return }
+            // A superseded request's result is ignored by the machine, so one
+            // that lands as the view goes away still counts.
             highlightsLoad.finish(request, result: result)
         }
 

@@ -402,9 +402,10 @@ extension SportsKnockoutStep {
 
 // MARK: - Hero
 
-/// The iPhone / iPad / Mac hub's headliner on Today — the same game the tvOS
-/// hub leads with (`SportsHubGrouping.heroFixture`): fan art behind the
-/// crests and score, and Watch on the channel that suits this viewer.
+/// The iPhone / iPad / Mac hub's headliner — the same game the tvOS hub leads
+/// with (`SportsHubGrouping.heroFixture`): fan art behind the crests and
+/// score, and Watch on the channel that suits this viewer, or Remind Me for a
+/// game the guide doesn't reach yet.
 struct SportsHubHeroCard: View {
     let fixture: SportsFixture
     let availability: SportsChannelAvailability
@@ -412,6 +413,7 @@ struct SportsHubHeroCard: View {
     let onOpen: () -> Void
     @AppStorage(SportsSyncService.hideScoresKey) private var hideScoresSetting = false
     @State private var reveal = SportsScoreReveal.shared
+    @State private var reminders = SportsReminders.shared
 
     private var showsScore: Bool {
         fixture.showsScore(hidingScores: hideScoresSetting, reveal: reveal)
@@ -462,6 +464,17 @@ struct SportsHubHeroCard: View {
                         }
                         .font(.subheadline.weight(.bold))
                         .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(Color.lumeAccent)
+                } else if fixture.status.state == .scheduled {
+                    let reminded = reminders.isReminded(fixture.id)
+                    Button {
+                        reminders.toggle(fixture)
+                    } label: {
+                        Label(reminded ? "Reminder Set" : "Remind Me", systemImage: reminded ? "bell.fill" : "bell")
+                            .font(.subheadline.weight(.bold))
+                            .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.borderedProminent)
                     .tint(Color.lumeAccent)

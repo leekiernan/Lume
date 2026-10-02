@@ -113,12 +113,19 @@
             // rails, the default focus and the resolve key alike.
             let fixtures = grouping.visibleFixtures
             let preference = SportsChannelPreference.Context.current
-            let hero = grouping.heroFixture(in: fixtures)
+            let hero = grouping.heroFixture(in: fixtures, fallback: highlightsLoad.result.highlights.first?.fixture)
+            // Big this week leaves out whichever pick is already the headline.
+            let highlights = highlightsLoad.result.highlights.filter { $0.fixture.id != hero?.id }
             // The headlined game leads the page on its own, not again in a rail.
             let groups = grouping.groups(for: fixtures.filter { $0.id != hero?.id })
             let heroAvailability = hero.map {
-                SportsChannelAvailability(resolved[$0.id], startDate: $0.headlineDate, preference: preference)
+                SportsChannelAvailability(
+                    resolved[$0.id] ?? highlightsLoad.result.resolved[$0.id], startDate: $0.headlineDate, preference: preference
+                )
             }
+            // A headline from later in the week isn't on screen, but still
+            // wants its channel once the guide reaches it.
+            let toResolve = fixtures + [hero].compactMap(\.self).filter { hero in !fixtures.contains { $0.id == hero.id } }
             return ScrollViewReader { scrollProxy in
                 ScrollView {
                     ZStack(alignment: .top) {
@@ -150,9 +157,9 @@
                                     section(for: group, preference: preference, scrollProxy: scrollProxy)
                                 }
                             }
-                            if scope == .myTeams, !highlightsLoad.result.highlights.isEmpty || !highlightsLoad.result.payPerView.isEmpty {
+                            if scope == .myTeams, !highlights.isEmpty || !highlightsLoad.result.payPerView.isEmpty {
                                 TVSportsHighlightsSection(
-                                    highlights: highlightsLoad.result.highlights,
+                                    highlights: highlights,
                                     payPerView: highlightsLoad.result.payPerView,
                                     availability: highlightAvailability,
                                     onSelect: { selectedFixture = $0 },
@@ -176,7 +183,7 @@
                 }
                 .scrollClipDisabled()
                 .defaultFocus($focus, defaultFocus(hero: hero, availability: heroAvailability, groups: groups))
-                .task(id: resolveKey(fixtures)) { await runResolve(fixtures) }
+                .task(id: resolveKey(toResolve)) { await runResolve(toResolve) }
             }
         }
 
@@ -200,7 +207,9 @@
                     hintRow("Scores unavailable — showing your saved data.", icon: "wifi.slash")
                 }
                 if let fetchedAt = store.newestSnapshotDate(in: displayLeagueIds) {
-                    freshnessHintRow(fetchedAt)
+                    SportsFreshnessLabel(fetchedAt: fetchedAt)
+                        .font(.callout)
+                        .foregroundStyle(.white.opacity(0.55))
                 }
             }
             .padding(.horizontal, 60)
@@ -411,16 +420,6 @@
             Label(text, systemImage: icon)
                 .font(.callout)
                 .foregroundStyle(.white.opacity(0.55))
-        }
-
-        private func freshnessHintRow(_ date: Date) -> some View {
-            Label {
-                Text(date, style: .relative)
-            } icon: {
-                Image(systemName: "clock")
-            }
-            .font(.callout)
-            .foregroundStyle(.white.opacity(0.55))
         }
 
         // MARK: - Focus

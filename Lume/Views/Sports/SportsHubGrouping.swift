@@ -138,24 +138,41 @@ struct SportsHubGrouping {
         return groups
     }
 
-    /// How soon a followed team's next game must start to headline the hub.
-    static let heroLeadTime: TimeInterval = 12 * 3600
+    /// How far ahead a game can be and still headline the hub.
+    static let heroHorizon: TimeInterval = 7 * 86400
 
-    /// The game the hub headlines on Today: a live game with a followed team,
-    /// else a live game in a followed league, else a followed team's game
-    /// starting within `heroLeadTime`. `nil` on other segments, and when
-    /// nothing qualifies — the rails then lead.
-    func heroFixture(in fixtures: [SportsFixture]) -> SportsFixture? {
-        guard segment == .today else { return nil }
+    /// The game the hub headlines, so the page always leads with something:
+    /// a live game with a followed team, else any live game on screen, else
+    /// the followed team's next game this week (the league's next, in a
+    /// league scope), else `fallback` — the biggest "Big this week" pick —
+    /// else the followed leagues' next game. Yesterday has none: it's results.
+    func heroFixture(in fixtures: [SportsFixture], fallback: SportsFixture? = nil) -> SportsFixture? {
+        guard segment != .yesterday else { return nil }
         let live = fixtures.filter(\.isInProgress)
         if let mine = live.first(where: involvesFollowedTeam) { return mine }
         if let first = live.first { return first }
-        return fixtures
-            .filter { fixture in
-                fixture.status.state == .scheduled && involvesFollowedTeam(fixture)
-                    && fixture.startDate >= now && fixture.startDate.timeIntervalSince(now) <= Self.heroLeadTime
-            }
-            .min { $0.startDate < $1.startDate }
+        let upcoming = upcomingFixtures(alongside: fixtures)
+        if scopeIsLeague { return upcoming.first }
+        if let mine = upcoming.first(where: involvesFollowedTeam) { return mine }
+        return fallback ?? upcoming.first
+    }
+
+    /// The scope's games in the week ahead, soonest first — what's on screen
+    /// plus the rest of the cached schedule, practice sessions left out.
+    private func upcomingFixtures(alongside fixtures: [SportsFixture]) -> [SportsFixture] {
+        var byID: [String: SportsFixture] = [:]
+        let cached = displayLeagueIds
+            .compactMap { store.snapshot(for: $0) }
+            .flatMap { snapshot in snapshot.fixtures.flatMap { $0.expandedBySession(now: now) } }
+        for fixture in fixtures + cached {
+            guard fixture.status.state == .scheduled, fixture.startDate >= now,
+                  fixture.startDate.timeIntervalSince(now) <= Self.heroHorizon,
+                  ![.fp1, .fp2, .fp3].contains(fixture.sessionKind),
+                  scopeIsLeague || followedLeagueKeys.contains(fixture.leagueId) || involvesFollowedTeam(fixture)
+            else { continue }
+            byID[fixture.id] = fixture
+        }
+        return byID.values.sorted { $0.startDate < $1.startDate }
     }
 
     var scopeTitle: String {
