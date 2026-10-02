@@ -148,7 +148,7 @@ struct SportsHubGrouping {
         var groups: [SportsFixtureGroup] = []
         let live = fixtures.filter(\.isInProgress)
         if !live.isEmpty {
-            groups.append(SportsFixtureGroup(id: "live", title: String(localized: "Live Now"), logoURL: nil, leagueId: nil, fixtures: live))
+            groups.append(SportsFixtureGroup(id: "live", title: String(localized: "Live now"), logoURL: nil, leagueId: nil, fixtures: live))
         }
         var claimed = Set(live.map(\.id))
         for follow in follows {
