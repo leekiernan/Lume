@@ -211,6 +211,8 @@ nonisolated struct ESPNCompetitor: Codable, Hashable {
     let athlete: ESPNAthlete?
     /// A tennis player's games per set.
     let linescores: [ESPNLinescore]?
+    /// A race session's finishing (or grid) position.
+    let order: Int?
 }
 
 nonisolated struct ESPNLinescore: Codable, Hashable {

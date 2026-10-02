@@ -251,11 +251,15 @@ nonisolated struct SportsSession: Codable, Hashable {
     /// `nil` when the provider sent none and in snapshots written before the
     /// field existed.
     let state: SportsFixtureState?
+    /// The drivers in the order the session finished, once it has; `nil`
+    /// before, and in snapshots written before the field existed.
+    let classification: [String]?
 
-    init(kind: SportsSessionKind, date: Date, state: SportsFixtureState? = nil) {
+    init(kind: SportsSessionKind, date: Date, state: SportsFixtureState? = nil, classification: [String]? = nil) {
         self.kind = kind
         self.date = date
         self.state = state
+        self.classification = classification
     }
 }
 

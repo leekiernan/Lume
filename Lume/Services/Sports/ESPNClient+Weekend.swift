@@ -22,4 +22,21 @@ nonisolated extension ESPNClient {
         let race = competitions.last { $0.type?.abbreviation == SportsSessionKind.race.rawValue } ?? competitions.last
         return race?.status.map(mapStatus) ?? mapStatus(event.status)
     }
+
+    /// A race weekend's sessions, each with its state and — once run — its
+    /// finishing order.
+    static func mapSessions(_ event: ESPNEvent) -> [SportsSession] {
+        (event.competitions ?? []).compactMap { comp in
+            guard let raw = comp.type?.abbreviation,
+                  let kind = SportsSessionKind(rawValue: raw),
+                  let date = parseDate(comp.date)
+            else { return nil }
+            let order = (comp.competitors ?? []).sorted { ($0.order ?? .max) < ($1.order ?? .max) }
+            let classification = order.compactMap { $0.athlete?.displayName }
+            return SportsSession(
+                kind: kind, date: date, state: comp.status.map { mapStatus($0).state },
+                classification: classification.isEmpty ? nil : classification
+            )
+        }
+    }
 }

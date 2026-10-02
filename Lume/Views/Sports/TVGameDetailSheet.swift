@@ -66,6 +66,9 @@
                     }
                     detailTabsSection
                     standingsSection
+                    if fixture.sport == "racing", !hidesScores {
+                        TVRacingSeasonSection(fixture: fixture)
+                    }
                 }
                 .frame(maxWidth: 1500)
                 .frame(maxWidth: .infinity)
@@ -176,32 +179,6 @@
                     sessionList
                 }
             }
-        }
-
-        /// A race weekend's timetable: every session with its day and time.
-        private var sessionList: some View {
-            VStack(spacing: 6) {
-                ForEach(Array(fixture.sessions.enumerated()), id: \.offset) { _, session in
-                    let isCurrent = session.kind == fixture.sessionKind
-                    HStack {
-                        Text(session.kind.displayName)
-                            .font(.system(size: 28, weight: isCurrent ? .bold : .medium))
-                            .foregroundStyle(isCurrent ? .white : .white.opacity(0.85))
-                        Spacer()
-                        Text(session.date, format: .dateTime.weekday(.abbreviated).month(.abbreviated).day())
-                            .font(.system(size: 26))
-                            .foregroundStyle(.white.opacity(0.6))
-                        Text(session.date, format: .dateTime.hour().minute())
-                            .font(.system(size: 28, weight: .semibold))
-                            .monospacedDigit()
-                            .foregroundStyle(.white)
-                            .frame(minWidth: 110, alignment: .trailing)
-                    }
-                    .tvFocusRow()
-                }
-            }
-            .frame(maxWidth: 900)
-            .padding(.top, 8)
         }
 
         @ViewBuilder
@@ -479,6 +456,39 @@
 
     /// The header's per-team column, kept out of the struct body for length.
     extension TVGameDetailSheet {
+        /// A race weekend's timetable: every session with its day and time.
+        private var sessionList: some View {
+            VStack(spacing: 6) {
+                ForEach(Array(fixture.sessions.enumerated()), id: \.offset) { _, session in
+                    let isCurrent = session.kind == fixture.sessionKind
+                    HStack {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(session.kind.displayName)
+                                .font(.system(size: 28, weight: isCurrent ? .bold : .medium))
+                                .foregroundStyle(isCurrent ? .white : .white.opacity(0.85))
+                            if !hidesScores, let podium = session.podiumLine {
+                                Text(verbatim: podium)
+                                    .font(.system(size: 21))
+                                    .foregroundStyle(.white.opacity(0.6))
+                            }
+                        }
+                        Spacer()
+                        Text(session.date, format: .dateTime.weekday(.abbreviated).month(.abbreviated).day())
+                            .font(.system(size: 26))
+                            .foregroundStyle(.white.opacity(0.6))
+                        Text(session.date, format: .dateTime.hour().minute())
+                            .font(.system(size: 28, weight: .semibold))
+                            .monospacedDigit()
+                            .foregroundStyle(.white)
+                            .frame(minWidth: 110, alignment: .trailing)
+                    }
+                    .tvFocusRow()
+                }
+            }
+            .frame(maxWidth: 900)
+            .padding(.top, 8)
+        }
+
         /// A finished game's record and form already count its result.
         private var showsRecordAndForm: Bool {
             !hidesScores || fixture.status.state != .final

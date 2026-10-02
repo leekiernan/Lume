@@ -235,16 +235,7 @@ nonisolated extension ESPNClient {
             .flatMap { $0.names ?? [] }
             .filter { !$0.isEmpty }
 
-        var sessions: [SportsSession] = []
-        if isRacing {
-            sessions = (event.competitions ?? []).compactMap { comp in
-                guard let raw = comp.type?.abbreviation,
-                      let kind = SportsSessionKind(rawValue: raw),
-                      let date = parseDate(comp.date)
-                else { return nil }
-                return SportsSession(kind: kind, date: date, state: comp.status.map { mapStatus($0).state })
-            }
-        }
+        let sessions = isRacing ? mapSessions(event) : []
 
         return SportsFixture(
             id: id,
