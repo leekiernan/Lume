@@ -143,9 +143,16 @@ struct BrowseSidebarPanel: View {
                     .transition(.move(edge: .leading).combined(with: .opacity))
             }
         }
-        // Escapes the safe area so the panel hugs the display the way the Apple
-        // TV browse panel does, rather than floating inside the title-safe box.
+        #if os(iOS)
+        // Above the navigation bar now, so it keeps clear of the status bar
+        // and notch; it may run under the floating tab bar at the foot.
+        .ignoresSafeArea(edges: .bottom)
+        #else
+        // Escapes the safe area so the panel hugs the display the way the
+        // Apple TV browse panel does, rather than floating inside the
+        // title-safe box.
         .ignoresSafeArea()
+        #endif
         .animation(.snappy(duration: 0.28), value: isPresented)
     }
 
@@ -163,12 +170,28 @@ struct BrowseSidebarPanel: View {
 
     private var panel: some View {
         VStack(alignment: .leading, spacing: 0) {
-            title
-                .font(headerFont)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, contentPadding)
-                .padding(.top, contentPadding)
-                .padding(.bottom, 12)
+            HStack(spacing: 12) {
+                #if !os(tvOS)
+                    // The panel covers the toolbar's browse button, so it
+                    // carries its own: the same icon, closing it.
+                    Button {
+                        isPresented = false
+                    } label: {
+                        Image(systemName: "line.3.horizontal")
+                            .font(.title3.weight(.semibold))
+                            .frame(width: 44, height: 44)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(Text("Close Browse"))
+                #endif
+                title
+                    .font(headerFont)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .padding(.horizontal, contentPadding)
+            .padding(.top, contentPadding)
+            .padding(.bottom, 12)
 
             ScrollViewReader { proxy in
                 ScrollView {

@@ -91,16 +91,6 @@ struct MoviesView: View {
                 activePlaylist: activePlaylist
             ))
             .browseSidebarToolbar(isPresented: $showingBrowse, isEnabled: !sortedCategories.isEmpty)
-            .overlay(alignment: .leading) {
-                LibraryBrowseSidebar(
-                    isPresented: $showingBrowse,
-                    categories: sortedCategories,
-                    genres: genres,
-                    type: .vod,
-                    onSelectCategory: { open($0) },
-                    onSelectGenre: { open(genre: $0) }
-                )
-            }
             .navigationDestination(for: Category.self) { category in
                 MovieCategoryView(category: category, animationNamespace: animationNamespace)
             }
@@ -123,6 +113,18 @@ struct MoviesView: View {
                     .navigationTransition(.zoom(sourceID: movie.id, in: animationNamespace))
                 #endif
             }
+        }
+        // Above the stack, so the panel covers the navigation bar too — the
+        // bar draws over anything inside the stack.
+        .overlay(alignment: .leading) {
+            LibraryBrowseSidebar(
+                isPresented: $showingBrowse,
+                categories: sortedCategories,
+                genres: genres,
+                type: .vod,
+                onSelectCategory: { open($0) },
+                onSelectGenre: { open(genre: $0) }
+            )
         }
     }
 

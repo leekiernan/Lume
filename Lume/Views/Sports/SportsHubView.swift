@@ -78,23 +78,6 @@ struct SportsHubView: View {
                     lockedState
                 }
             }
-            .overlay(alignment: .leading) {
-                if premium.isPremium {
-                    SportsBrowseSidebar(
-                        isPresented: $showingBrowse,
-                        entries: grouping.sidebarEntries,
-                        scope: scope,
-                        onSelect: { value in
-                            scope = value
-                            showingBrowse = false
-                        },
-                        onManageTeams: {
-                            showingBrowse = false
-                            showManageTeams = true
-                        }
-                    )
-                }
-            }
             .platformNavigationTitle("Sports")
             .hubInlineNavigationTitle()
             .navigationDestination(for: SportsLeague.self) { league in
@@ -116,6 +99,25 @@ struct SportsHubView: View {
                 }
             #endif
         }
+        // Above the stack, so the panel covers the navigation bar too — the
+        // bar draws over anything inside the stack.
+        .overlay(alignment: .leading) {
+            if premium.isPremium {
+                SportsBrowseSidebar(
+                    isPresented: $showingBrowse,
+                    entries: grouping.sidebarEntries,
+                    scope: scope,
+                    onSelect: { value in
+                        scope = value
+                        showingBrowse = false
+                    },
+                    onManageTeams: {
+                        showingBrowse = false
+                        showManageTeams = true
+                    }
+                )
+            }
+        }
         .profileMenuToolbar()
         .onAppear(perform: onAppear)
         .onDisappear { SportsSyncService.shared.endLivePolling() }
@@ -126,21 +128,18 @@ struct SportsHubView: View {
     @ToolbarContentBuilder
     private var hubToolbar: some ToolbarContent {
         // The scope is picked from the browse panel Movies and Live TV use;
-        // the title names it and opens it too. The bar draws above the panel,
-        // so the title steps aside while the panel (with its own) is open.
+        // the title names it and opens it too.
         ToolbarItem(placement: .principal) {
-            if !showingBrowse {
-                Button {
-                    showingBrowse.toggle()
-                } label: {
-                    Text(scopeTitle).font(.headline)
-                }
-                .buttonStyle(.plain)
-                .accessibilityHint(Text("Browse"))
+            Button {
+                showingBrowse.toggle()
+            } label: {
+                Text(scopeTitle).font(.headline)
             }
+            .buttonStyle(.plain)
+            .accessibilityHint(Text("Browse"))
         }
         // Narrowed to one follow, the way back to everything.
-        if scope != .all, !showingBrowse {
+        if scope != .all {
             #if os(macOS)
                 ToolbarItem(placement: .navigation) { allSportsButton }
             #else

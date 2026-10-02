@@ -72,6 +72,8 @@ struct LiveTVView: View {
     @State private var playingMedia: PlayableMedia?
     @State private var showingSettings = false
     @State private var showingBrowse = false
+    /// The sections the browse panel lists, as the content last resolved them.
+    @State private var browseSections: [LiveTVSection]?
     #if os(tvOS)
         @Environment(DeepLinkRouter.self) private var router
         /// Bumped whenever the content should take focus deliberately rather
@@ -183,6 +185,19 @@ struct LiveTVView: View {
                 rootContent(sections: nil)
             }
         }
+        // Above the stack, so the panel covers the navigation bar too — the
+        // bar draws over anything inside the stack.
+        .overlay(alignment: .leading) {
+            if let sections = browseSections {
+                LiveTVBrowseSidebar(
+                    isPresented: $showingBrowse,
+                    sections: sections,
+                    selectedSection: displayedSection(in: sections),
+                    onSelect: selectSection,
+                    onReturnToContent: browseReturnHandler
+                )
+            }
+        }
     }
 
     /// Attaches the browse panel to the same navigation-content root as Movies
@@ -216,25 +231,16 @@ struct LiveTVView: View {
                 isPresented: $showingBrowse,
                 isEnabled: !playlists.isEmpty && !categories.isEmpty
             )
-            .overlay(alignment: .leading) {
-                if let sections {
-                    LiveTVBrowseSidebar(
-                        isPresented: $showingBrowse,
-                        sections: sections,
-                        selectedSection: displayedSection(in: sections),
-                        onSelect: selectSection,
-                        onReturnToContent: browseReturnHandler
-                    )
-                }
-            }
+            // Hands the sections up to the panel, which sits above the stack.
+            .onChange(of: sections?.map(\.id), initial: true) { _, _ in browseSections = sections }
         #if os(iOS) || os(tvOS)
             .fullScreenCover(item: $playingMedia) { media in
                 FullScreenPlayerView(media: media)
             }
         #endif
         #if os(iOS)
-            .fullScreenCover(item: $multiViewLaunch) { launch in
-                MultiViewScreen(seed: launch.seed)
+        .fullScreenCover(item: $multiViewLaunch) { launch in
+            MultiViewScreen(seed: launch.seed)
         }
         #endif
         .paywall(isPresented: $showingPaywall, highlight: .multiView)
