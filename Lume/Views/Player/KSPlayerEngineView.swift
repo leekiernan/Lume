@@ -116,6 +116,7 @@ struct KSPlayerEngineView: View {
     /// disarmed). See `handleState`.
     @State var stallWatchdog: Task<Void, Never>?
     @State var isControlsVisible = true
+    @Environment(PlayerControlsBridge.self) var remoteBridge: PlayerControlsBridge?
 
     /// Whether the controls are on screen — see `PlayerChrome`.
     var drawsControls: Bool {
@@ -367,7 +368,12 @@ struct KSPlayerEngineView: View {
             // type from a click-pad Select, so the on-screen button never sees
             // it. Drive togglePlay() explicitly, otherwise the press falls
             // through to KSPlayer's own handling, which pauses but won't resume.
-            .onPlayPauseCommand { togglePlay() }
+            .onPlayPauseCommand {
+                if remoteBridge?.claimsPlayPause() != true { togglePlay() }
+            }
+            .onChange(of: isControlsVisible, initial: true) { _, visible in
+                remoteBridge?.controlsVisible = visible
+            }
         }
 
         private var tapCatcher: some View {
@@ -421,7 +427,7 @@ struct KSPlayerEngineView: View {
                 panelCloseToken += 1
             } else if isControlsVisible {
                 hideControls()
-            } else {
+            } else if remoteBridge?.claimsBack() != true {
                 closePlayer()
             }
         }

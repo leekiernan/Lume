@@ -193,6 +193,10 @@ import SwiftUI
                 }
 
                 if enabled {
+                    TVSportsAlertSettingsSection()
+                }
+
+                if enabled {
                     VStack(alignment: .leading, spacing: 8) {
                         TVSettingsSectionLabel("Sports Data")
 

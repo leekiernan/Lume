@@ -30,6 +30,7 @@ import SwiftUI
                     teamsSection
                     tabSection
                     scoresSection
+                    SportsAlertSettingsSection()
                     refreshSection
                 }
             }

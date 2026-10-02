@@ -274,6 +274,8 @@ struct FullScreenPlayerView: View {
         #if os(iOS)
         .statusBarHidden(true)
         #endif
+        .playerSportsAlerts(activeMedia: activeMedia, bridge: controlsBridge, position: { clock.current },
+                            switchMedia: { switchMedia(to: $0) })
         .environment(controlsBridge)
         .persistentSystemOverlays(.hidden)
         .preferredColorScheme(.dark)
