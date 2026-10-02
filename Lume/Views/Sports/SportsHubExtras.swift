@@ -14,8 +14,10 @@ import SwiftUI
 
 struct SportsHighlightsRail: View {
     let highlights: [SportsHighlight]
+    var payPerView: [SportsPayPerView.Event] = []
     let availability: (SportsFixture) -> SportsChannelAvailability
     let onOpen: (SportsFixture) -> Void
+    var onWatchEvent: (SportsPayPerView.Event) -> Void = { _ in }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -31,10 +33,55 @@ struct SportsHighlightsRail: View {
                         }
                         .buttonStyle(.plain)
                     }
+                    ForEach(payPerView) { event in
+                        Button {
+                            onWatchEvent(event)
+                        } label: {
+                            SportsPayPerViewCard(event: event)
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
             }
             .scrollClipDisabled()
         }
+    }
+}
+
+/// A pay-per-view or event channel's listing; tapping plays the channel.
+private struct SportsPayPerViewCard: View {
+    let event: SportsPayPerView.Event
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Pay-per-view")
+                .font(.caption.weight(.heavy))
+                .padding(.horizontal, 8)
+                .padding(.vertical, 3)
+                .background(Capsule().fill(.white))
+                .foregroundStyle(.black)
+            Spacer(minLength: 4)
+            Text(verbatim: event.title)
+                .font(.subheadline.weight(.bold))
+                .lineLimit(3)
+            Text(verbatim: event.whenText(now: Date()))
+                .font(.caption)
+                .foregroundStyle(.white.opacity(0.8))
+            Label { Text(verbatim: event.channelName).lineLimit(1) } icon: { Image(systemName: "play.fill") }
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(Color.lumeAccent)
+        }
+        .foregroundStyle(.white)
+        .padding(12)
+        .frame(width: 220, height: 190, alignment: .topLeading)
+        .background(
+            LinearGradient(
+                colors: [Color(red: 0.32, green: 0.08, blue: 0.12), Color(red: 0.08, green: 0.04, blue: 0.1)],
+                startPoint: .topLeading, endPoint: .bottomTrailing
+            ),
+            in: RoundedRectangle(cornerRadius: 16, style: .continuous)
+        )
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -49,7 +96,7 @@ private struct SportsHighlightCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Text(verbatim: highlight.reason.chip)
+                Text(verbatim: highlight.chip)
                     .font(.caption.weight(.heavy))
                     .padding(.horizontal, 8)
                     .padding(.vertical, 3)

@@ -16,8 +16,10 @@
 
     struct TVSportsHighlightsSection: View {
         let highlights: [SportsHighlight]
+        var payPerView: [SportsPayPerView.Event] = []
         let availability: (SportsFixture) -> SportsChannelAvailability
         let onSelect: (SportsFixture) -> Void
+        var onWatchEvent: (SportsPayPerView.Event) -> Void = { _ in }
 
         var body: some View {
             VStack(alignment: .leading, spacing: 12) {
@@ -33,6 +35,16 @@
                                 onSelect(highlight.fixture)
                             } label: {
                                 TVHighlightCard(highlight: highlight, availability: availability(highlight.fixture))
+                            }
+                            .buttonStyle(TVCardButtonStyle(focusScale: 1.05))
+                        }
+                        // Pay-per-view and event channels: straight to the channel,
+                        // there's no match centre behind a guide listing.
+                        ForEach(payPerView) { event in
+                            Button {
+                                onWatchEvent(event)
+                            } label: {
+                                TVPayPerViewCard(event: event)
                             }
                             .buttonStyle(TVCardButtonStyle(focusScale: 1.05))
                         }
@@ -58,7 +70,7 @@
         var body: some View {
             VStack(alignment: .leading, spacing: 0) {
                 HStack {
-                    Text(verbatim: highlight.reason.chip)
+                    Text(verbatim: highlight.chip)
                         .font(.system(size: 19, weight: .heavy))
                         .padding(.horizontal, 14)
                         .padding(.vertical, 6)
@@ -116,6 +128,63 @@
         }
     }
 
+    private struct TVPayPerViewCard: View {
+        let event: SportsPayPerView.Event
+        @Environment(\.isFocused) private var isFocused
+
+        var body: some View {
+            VStack(alignment: .leading, spacing: 0) {
+                HStack {
+                    Text("Pay-per-view")
+                        .font(.system(size: 19, weight: .heavy))
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 6)
+                        .background(Capsule().fill(.white))
+                        .foregroundStyle(.black)
+                    Spacer(minLength: 8)
+                }
+                Spacer(minLength: 16)
+                if let logoURL = event.logoURL {
+                    CachedAsyncImage(url: logoURL, maxPixelSize: 160) { phase in
+                        if case let .success(image) = phase {
+                            image.resizable().scaledToFit()
+                        } else {
+                            Color.clear
+                        }
+                    }
+                    .frame(width: 120, height: 64, alignment: .leading)
+                    .padding(.bottom, 14)
+                }
+                Text(verbatim: event.title)
+                    .font(.system(size: 30, weight: .bold))
+                    .lineLimit(3)
+                    .minimumScaleFactor(0.8)
+                Text(verbatim: event.whenText(now: Date()))
+                    .font(.system(size: 21))
+                    .foregroundStyle(.white.opacity(0.8))
+                    .padding(.top, 6)
+                Label { Text(verbatim: event.channelName).lineLimit(1) } icon: { Image(systemName: "play.fill") }
+                    .font(.system(size: 19, weight: .semibold))
+                    .foregroundStyle(Color.lumeAccent)
+                    .padding(.top, 10)
+            }
+            .foregroundStyle(.white)
+            .padding(26)
+            .frame(width: 404, height: 400, alignment: .topLeading)
+            .background(
+                LinearGradient(
+                    colors: [Color(red: 0.32, green: 0.08, blue: 0.12), Color(red: 0.08, green: 0.04, blue: 0.1)],
+                    startPoint: .topLeading, endPoint: .bottomTrailing
+                )
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 30, style: .continuous)
+                    .strokeBorder(.white.opacity(isFocused ? 1 : 0.08), lineWidth: isFocused ? 4 : 1)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
+        }
+    }
+
     // MARK: - Headline (few follows)
 
     struct TVSportsHighlightHero: View {
@@ -139,7 +208,7 @@
                         .padding(.vertical, 6)
                         .background(Capsule().fill(.white))
                         .foregroundStyle(.black)
-                    Text(verbatim: "\(fixture.leagueName) · \(highlight.reason.chip)")
+                    Text(verbatim: "\(fixture.leagueName) · \(highlight.chip)")
                         .font(.system(size: 24))
                         .foregroundStyle(.white.opacity(0.8))
                 }

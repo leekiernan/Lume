@@ -40,6 +40,8 @@ nonisolated enum SportsFlagshipChannels {
         let key = SportsFlagshipOverrides.key(for: name)
         if overrides.unmarked.contains(key) { return false }
         if overrides.marked.contains(key) { return true }
+        // A pay-per-view channel carries only events someone will pay for.
+        if SportsPayPerView.isPayPerView(name) { return true }
         let haystack = SportsMatcher.normalize(name)
         return phrases.contains { haystack.contains(" \($0) ") }
     }

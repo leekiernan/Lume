@@ -61,6 +61,7 @@ struct SportsHubView: View {
     @State private var selectedFixture: SportsFixture?
     @State private var pickerFixture: SportsFixture?
     @State private var showManageTeams = false
+    @State private var showingBrowse = false
     @State private var showPaywall = false
     @State private var localPath = NavigationPath()
     #if os(iOS) || os(visionOS)
@@ -79,12 +80,30 @@ struct SportsHubView: View {
                     lockedState
                 }
             }
+            .overlay(alignment: .leading) {
+                if premium.isPremium {
+                    SportsBrowseSidebar(
+                        isPresented: $showingBrowse,
+                        leagues: followedLeagues,
+                        scope: scope,
+                        onSelect: { value in
+                            scope = value
+                            showingBrowse = false
+                        },
+                        onManageTeams: {
+                            showingBrowse = false
+                            showManageTeams = true
+                        }
+                    )
+                }
+            }
             .platformNavigationTitle("Sports")
             .hubInlineNavigationTitle()
             .navigationDestination(for: SportsLeague.self) { league in
                 LeagueDetailView(league: league)
             }
             .toolbar { if premium.isPremium { hubToolbar } }
+            .browseSidebarToolbar(isPresented: $showingBrowse, isEnabled: premium.isPremium)
             .sheet(isPresented: $showManageTeams) { ManageTeamsSheet() }
             .sheet(item: $selectedFixture, onDismiss: presentPendingMedia) { fixture in
                 GameDetailSheet(fixture: fixture, resolved: resolved[fixture.id] ?? [], onWatch: watch)
@@ -108,20 +127,16 @@ struct SportsHubView: View {
 
     @ToolbarContentBuilder
     private var hubToolbar: some ToolbarContent {
+        // The scope is picked from the browse panel Movies and Live TV use;
+        // the title names it and opens it too.
         ToolbarItem(placement: .principal) {
-            Menu {
-                Picker("Scope", selection: $scope) {
-                    Label("My Teams", systemImage: "star.fill").tag(SportsHubScope.myTeams)
-                    ForEach(followedLeagues) { league in
-                        Text(league.name).tag(SportsHubScope.league(league.id))
-                    }
-                }
+            Button {
+                showingBrowse.toggle()
             } label: {
-                HStack(spacing: 4) {
-                    Text(scopeTitle).font(.headline)
-                    Image(systemName: "chevron.down").font(.caption2.weight(.bold))
-                }
+                Text(scopeTitle).font(.headline)
             }
+            .buttonStyle(.plain)
+            .accessibilityHint(Text("Choose leagues"))
         }
         ToolbarItem(placement: .primaryAction) {
             Button {
@@ -154,13 +169,15 @@ struct SportsHubView: View {
     @ViewBuilder
     private var highlightsRail: some View {
         let highlights = highlightsLoad.result
-        if !highlights.highlights.isEmpty {
+        if !highlights.highlights.isEmpty || !highlights.payPerView.isEmpty {
             SportsHighlightsRail(
                 highlights: highlights.highlights,
+                payPerView: highlights.payPerView,
                 availability: { fixture in
                     SportsChannelAvailability(highlights.resolved[fixture.id], startDate: fixture.headlineDate, preference: .current)
                 },
-                onOpen: { selectedFixture = $0 }
+                onOpen: { selectedFixture = $0 },
+                onWatchEvent: watchEvent
             )
         }
     }
@@ -321,6 +338,11 @@ struct SportsHubView: View {
         selectedFixture = nil
         pickerFixture = nil
         present(media, afterSheet: hadSheet)
+    }
+
+    private func watchEvent(_ event: SportsPayPerView.Event) {
+        guard let media = SportsPlayback.media(for: event, in: modelContext) else { return }
+        present(media, afterSheet: false)
     }
 
     /// A sheet's dismissal is not done when its binding drops to `nil`, and a

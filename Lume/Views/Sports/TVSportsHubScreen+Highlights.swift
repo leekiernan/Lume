@@ -41,11 +41,13 @@
                         onOpen: { selectedFixture = first.fixture }
                     )
                     .padding(.top, 100)
-                    if highlightsLoad.result.highlights.count > 1 {
+                    if highlightsLoad.result.highlights.count > 1 || !highlightsLoad.result.payPerView.isEmpty {
                         TVSportsHighlightsSection(
                             highlights: Array(highlightsLoad.result.highlights.dropFirst()),
+                            payPerView: highlightsLoad.result.payPerView,
                             availability: highlightAvailability,
-                            onSelect: { selectedFixture = $0 }
+                            onSelect: { selectedFixture = $0 },
+                            onWatchEvent: watchEvent
                         )
                     }
                     Button {

@@ -22,6 +22,13 @@
         /// start: that becomes the main action, and joining live the second.
         var onWatchFromStart: (() -> Void)?
         let onOpen: () -> Void
+        /// Left from the leading action: the hub opens its browse panel.
+        var onLeadingLeft: (() -> Void)?
+
+        private var isAvailable: Bool {
+            if case .available = availability { return true }
+            return false
+        }
 
         var body: some View {
             VStack(alignment: .leading, spacing: 26) {
@@ -124,6 +131,7 @@
                         .buttonStyle(TVGlassButtonStyle())
                         .frame(width: 560)
                         .focused(watchFocus, equals: .heroWatch)
+                        .onLeadingEdgeLeft(onLeadingLeft)
                         Button {
                             onWatch(best)
                         } label: {
@@ -149,6 +157,7 @@
                         .buttonStyle(TVGlassButtonStyle())
                         .frame(width: 720)
                         .focused(watchFocus, equals: .heroWatch)
+                        .onLeadingEdgeLeft(onLeadingLeft)
                     }
                     if count > 1, onWatchFromStart == nil {
                         Text("\(count - 1) more on your channels")
@@ -164,6 +173,7 @@
                 .buttonStyle(TVGlassButtonStyle())
                 .frame(width: 320)
                 .focused(watchFocus, equals: .heroDetail)
+                .onLeadingEdgeLeft(isAvailable ? nil : onLeadingLeft)
             }
         }
     }

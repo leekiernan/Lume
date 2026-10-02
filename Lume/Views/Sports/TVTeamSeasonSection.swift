@@ -114,6 +114,7 @@
                     .padding(.vertical, 12)
                 }
                 .scrollClipDisabled()
+                .clippedAtLeadingEdge()
                 if !season.leaders.isEmpty {
                     leaders(season)
                 }
@@ -134,14 +135,21 @@
                             .foregroundStyle(.white.opacity(0.6))
                     }
                 }
-                HStack(alignment: .top, spacing: 32) {
-                    ForEach(season.leaders) { board in
-                        Button {} label: {
-                            TVLeaderBoardCard(board: board)
+                // Scrolls like the competition cards: beside the team pane
+                // there's room for three boards, not four.
+                ScrollView(.horizontal, showsIndicators: false) {
+                    LazyHStack(alignment: .top, spacing: 32) {
+                        ForEach(season.leaders) { board in
+                            Button {} label: {
+                                TVLeaderBoardCard(board: board)
+                            }
+                            .buttonStyle(TVCardButtonStyle(focusScale: 1.04))
                         }
-                        .buttonStyle(TVCardButtonStyle(focusScale: 1.04))
                     }
+                    .padding(.vertical, 12)
                 }
+                .scrollClipDisabled()
+                .clippedAtLeadingEdge()
             }
         }
 
@@ -152,6 +160,22 @@
             guard !Task.isCancelled else { return }
             season = loaded
             isLoading = false
+        }
+    }
+
+    private extension View {
+        /// Lets focus growth and the trailing cards spill as usual, but clips at
+        /// the leading edge, where scrolled-off cards would otherwise slide
+        /// over the team pane.
+        func clippedAtLeadingEdge() -> some View {
+            mask {
+                Rectangle()
+                    .padding(.vertical, -60)
+                    .padding(.trailing, -1000)
+                    // Room for the first card's focus growth, inside the
+                    // 40 pt gap to the pane.
+                    .padding(.leading, -24)
+            }
         }
     }
 

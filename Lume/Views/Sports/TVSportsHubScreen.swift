@@ -46,7 +46,10 @@
         @State var follows = SportsFollowService.shared
         @State private var epg = EPGSyncService.shared
 
-        @State private var scope: SportsHubScope = .myTeams
+        @State var scope: SportsHubScope = .myTeams
+        /// The scope panel, and where focus was when it opened.
+        @State var showingBrowse = false
+        @State var browseReturnFocus: TVSportsFocus?
         @State private var segment: SportsHubSegment = .today
         @State private var resolved: [String: [ResolvedChannel]] = [:]
         @State var selectedFixture: SportsFixture?
@@ -62,7 +65,7 @@
         /// "Big this week", and the channels its near-term games resolved to.
         @State var highlightsLoad = SportsHighlightsLoadMachine()
 
-        @FocusState private var focus: TVSportsFocus?
+        @FocusState var focus: TVSportsFocus?
 
         var body: some View {
             Group {
@@ -96,6 +99,7 @@
                     }
                 } else {
                     content
+                        .overlay(alignment: .leading) { browseSidebar }
                 }
             }
             .task(id: follows.follows.map(\.key)) { await loadHighlights() }
@@ -131,7 +135,8 @@
                                     watchFocus: $focus,
                                     onWatch: watch,
                                     onWatchFromStart: heroFromStart.map { media in { playingMedia = media } },
-                                    onOpen: { selectedFixture = hero }
+                                    onOpen: { selectedFixture = hero },
+                                    onLeadingLeft: openBrowse
                                 )
                                 .padding(.vertical, 24)
                                 .task(id: "\(hero.id)|\(hidesScores)|\(heroAvailability.isAvailable)") {
@@ -145,11 +150,13 @@
                                     section(for: group, preference: preference, scrollProxy: scrollProxy)
                                 }
                             }
-                            if scope == .myTeams, !highlightsLoad.result.highlights.isEmpty {
+                            if scope == .myTeams, !highlightsLoad.result.highlights.isEmpty || !highlightsLoad.result.payPerView.isEmpty {
                                 TVSportsHighlightsSection(
                                     highlights: highlightsLoad.result.highlights,
+                                    payPerView: highlightsLoad.result.payPerView,
                                     availability: highlightAvailability,
-                                    onSelect: { selectedFixture = $0 }
+                                    onSelect: { selectedFixture = $0 },
+                                    onWatchEvent: watchEvent
                                 )
                                 .padding(.top, 24)
                             }
@@ -236,29 +243,26 @@
             .animation(.easeOut(duration: 0.18), value: isItemFocused)
         }
 
+        /// The page title; selecting it, or pressing left from the page's
+        /// leading edge, opens the scope panel.
         private var scopeMenu: some View {
-            Menu {
-                Picker("Scope", selection: $scope) {
-                    Label("My Teams", systemImage: "star.fill").tag(SportsHubScope.myTeams)
-                    ForEach(followedLeagues) { league in
-                        Text(verbatim: league.name).tag(SportsHubScope.league(league.id))
-                    }
-                }
-            } label: {
+            Button(action: openBrowse) {
                 TVSportsTitleChrome {
                     HStack(alignment: .firstTextBaseline, spacing: 14) {
+                        Image(systemName: "sidebar.left")
+                            .font(.system(size: 24, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.55))
                         Text(verbatim: scopeTitle)
                             .font(.system(size: 34, weight: .bold))
                             .lineLimit(1)
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 18, weight: .bold))
-                            .foregroundStyle(.white.opacity(0.55))
                     }
                 }
             }
             .buttonStyle(TVCardButtonStyle(focusScale: 1.02))
             .focused($focus, equals: .scope)
+            .onLeadingEdgeLeft(openBrowse)
             .accessibilityLabel(Text(verbatim: scopeTitle))
+            .accessibilityHint(Text("Choose leagues"))
         }
 
         private var manageButton: some View {
@@ -317,6 +321,7 @@
                                 selectedFixture = fixture
                             }
                             .focused($focus, equals: .card(fixture.id))
+                            .onLeadingEdgeLeft(browseOpener(leading: fixture.id == group.fixtures.first?.id))
                             // A card owns the first Menu press: return to the
                             // filters and make their lazy header visible again.
                             // The filters deliberately have no exit handler, so
@@ -485,6 +490,12 @@
             } else {
                 playingMedia = media
             }
+        }
+
+        /// A pay-per-view or event channel, straight from its card.
+        func watchEvent(_ event: SportsPayPerView.Event) {
+            guard let media = SportsPlayback.media(for: event, in: modelContext) else { return }
+            playingMedia = media
         }
 
         /// Catch-up from kickoff for a live game under Hide Scores.

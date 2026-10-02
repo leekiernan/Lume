@@ -50,6 +50,11 @@ struct SportsHubGrouping {
     /// current scope — this feeds the scope menu, which must always offer the
     /// full list, not just the league currently selected.
     var followedLeagues: [SportsLeague] {
+        Self.followedLeagues(follows)
+    }
+
+    /// The leagues the scope can narrow to, for the browse panel.
+    static func followedLeagues(_ follows: [SportsFollow]) -> [SportsLeague] {
         SportsRailPlanner.displayLeagueIds(for: follows).compactMap { SportsCatalog.league(id: $0) }
     }
 

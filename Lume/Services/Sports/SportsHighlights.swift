@@ -22,6 +22,10 @@ nonisolated struct SportsHighlight: Identifiable, Equatable {
         case tableClash(Int, Int)
         case derby
         case raceDay
+        /// A race weekend's other headline session — qualifying, a sprint.
+        case session(SportsSessionKind)
+        /// Listed on one of the viewer's pay-per-view or event channels.
+        case payPerView
         /// Listed on a broadcaster's flagship channel in the viewer's guide.
         case mainChannel(String)
         case headline
@@ -86,9 +90,14 @@ nonisolated enum SportsHighlights {
         let scored = candidates.compactMap { fixture -> SportsHighlight? in
             var (score, reason) = evaluate(fixture, table: standings[fixture.leagueId] ?? [])
             if let channel = mainChannels[fixture.id] {
-                // The broadcaster's own call that this is a big game.
+                // The broadcaster's own call that this is a big game — or a
+                // pay-per-view, which is the biggest call there is.
                 score += 35
-                if case .headline = reason { reason = .mainChannel(channel) }
+                if SportsPayPerView.isPayPerView(channel) {
+                    reason = .payPerView
+                } else if case .headline = reason {
+                    reason = .mainChannel(channel)
+                }
             }
             var total = score
             if availableIds.contains(fixture.id) { total += 10 }
@@ -110,6 +119,8 @@ nonisolated enum SportsHighlights {
 
     /// The fixture's score and the strongest reason behind it.
     static func evaluate(_ fixture: SportsFixture, table: [SportsStandingRow]) -> (Int, SportsHighlight.Reason) {
+        // Practice sessions are never the weekend's headline.
+        if [.fp1, .fp2, .fp3].contains(fixture.sessionKind) { return (0, .headline) }
         var score = competitionWeight(fixture.leagueId)
         var reasons: [(Int, SportsHighlight.Reason)] = [(score, .headline)]
 
@@ -130,6 +141,8 @@ nonisolated enum SportsHighlights {
         if fixture.sport == "racing", fixture.sessionKind == .race || (fixture.sessionKind == nil && fixture.raceSession != nil) {
             score += 10
             reasons.append((40, .raceDay))
+        } else if fixture.sport == "racing", let kind = fixture.sessionKind {
+            reasons.append((score + 1, .session(kind)))
         }
         if let clash = tableClash(fixture, table: table) {
             let boost = 25 + (5 - max(clash.0, clash.1)) * 2
@@ -160,8 +173,18 @@ nonisolated enum SportsHighlights {
     }
 }
 
+nonisolated extension SportsHighlight {
+    /// The card's one-line reason. A generic pick reads "Big game" only where
+    /// there is a game — a fight night or a qualifying session is an event.
+    var chip: String {
+        guard case .headline = reason else { return reason.chip }
+        if fixture.hasTeams { return String(localized: "Big game") }
+        return String(localized: "Big event")
+    }
+}
+
 nonisolated extension SportsHighlight.Reason {
-    /// The card's one-line reason.
+    /// The reason's own wording; `SportsHighlight.chip` is what cards show.
     var chip: String {
         switch self {
         case .final: String(localized: "Final")
@@ -171,6 +194,8 @@ nonisolated extension SportsHighlight.Reason {
             String(localized: "\(SportsPeriodLabel.ordinal(first)) v \(SportsPeriodLabel.ordinal(second))")
         case .derby: String(localized: "Derby")
         case .raceDay: String(localized: "Race day")
+        case let .session(kind): String(localized: kind.displayName)
+        case .payPerView: String(localized: "Pay-per-view")
         case let .mainChannel(channel): String(localized: "On \(channel)")
         case .headline: String(localized: "Big game")
         }

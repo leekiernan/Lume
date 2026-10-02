@@ -23,6 +23,14 @@ enum SportsPlayback {
         return PlayableMedia.from(stream: stream, playlist: playlist)
     }
 
+    /// A pay-per-view or event channel's stream, by id.
+    static func media(for event: SportsPayPerView.Event, in context: ModelContext) -> PlayableMedia? {
+        guard let stream = PlayerContentLookup.liveStream(event.streamId, in: context),
+              let playlist = LiveChannelNavigator.playlist(for: stream, in: context)
+        else { return nil }
+        return PlayableMedia.from(stream: stream, playlist: playlist)
+    }
+
     /// A live game from its first minute, through the channel's catch-up
     /// archive — what Hide Scores leads with, since joining live gives the
     /// score away. The programme the resolver matched sets the start (else the

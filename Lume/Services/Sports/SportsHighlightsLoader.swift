@@ -142,6 +142,9 @@ nonisolated enum SportsHighlightsPipeline {
     struct Result: Equatable {
         let highlights: [SportsHighlight]
         let resolved: [String: [ResolvedChannel]]
+        /// Events on the viewer's pay-per-view and event channels that aren't
+        /// already a highlight — most never reach ESPN's scoreboards.
+        var payPerView: [SportsPayPerView.Event] = []
     }
 
     static func run(
@@ -175,6 +178,30 @@ nonisolated enum SportsHighlightsPipeline {
             feed.fixtures, standings: feed.standings, followedTeamIds: followedTeamIds,
             availableIds: available, mainChannels: mainChannels, now: now
         )
-        return Result(highlights: highlights, resolved: resolved)
+        let events = await SportsPayPerView.events(container: container, restriction: restriction, now: now)
+        return Result(
+            highlights: highlights,
+            resolved: resolved,
+            payPerView: unclaimed(events, highlights: highlights, mainChannels: mainChannels)
+        )
+    }
+
+    /// Drops an event a highlight already shows: the same channel, around the
+    /// same time. A name-only event on that channel is the same one too.
+    static func unclaimed(
+        _ events: [SportsPayPerView.Event],
+        highlights: [SportsHighlight],
+        mainChannels: [String: String]
+    ) -> [SportsPayPerView.Event] {
+        let claims = highlights.compactMap { highlight in
+            mainChannels[highlight.fixture.id].map { (channel: $0, start: highlight.fixture.startDate) }
+        }
+        return events.filter { event in
+            !claims.contains { claim in
+                guard claim.channel == event.channelName else { return false }
+                guard let start = event.start else { return true }
+                return abs(start.timeIntervalSince(claim.start)) < 3 * 3600
+            }
+        }
     }
 }
