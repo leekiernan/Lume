@@ -113,7 +113,14 @@
             // rails, the default focus and the resolve key alike.
             let fixtures = grouping.visibleFixtures
             let preference = SportsChannelPreference.Context.current
-            let hero = grouping.heroFixture(in: fixtures, fallback: highlightsLoad.result.highlights.first?.fixture)
+            let availableIDs = Set(
+                (resolved.merging(highlightsLoad.result.resolved) { current, cached in current.isEmpty ? cached : current })
+                    .filter { !$0.value.isEmpty }
+                    .map(\.key)
+            )
+            let hero = grouping.heroFixture(
+                in: fixtures, fallback: highlightsLoad.result.highlights.first?.fixture, availableIDs: availableIDs
+            )
             // Big this week leaves out whichever pick is already the headline.
             let highlights = highlightsLoad.result.highlights.filter { $0.fixture.id != hero?.id }
             // The headlined game leads the page on its own, not again in a rail.

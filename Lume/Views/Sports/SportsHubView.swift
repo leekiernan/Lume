@@ -204,8 +204,18 @@ struct SportsHubView: View {
         highlightsLoad.finish(request, result: result)
     }
 
+    private var heroAvailableIDs: Set<String> {
+        Set(
+            (resolved.merging(highlightsLoad.result.resolved) { current, cached in current.isEmpty ? cached : current })
+                .filter { !$0.value.isEmpty }
+                .map(\.key)
+        )
+    }
+
     private func followedContent(_ fixtures: [SportsFixture]) -> some View {
-        let hero = grouping.heroFixture(in: fixtures, fallback: highlightsLoad.result.highlights.first?.fixture)
+        let hero = grouping.heroFixture(
+            in: fixtures, fallback: highlightsLoad.result.highlights.first?.fixture, availableIDs: heroAvailableIDs
+        )
         return VStack(spacing: 0) {
             Picker("Range", selection: $segment) {
                 ForEach(SportsHubSegment.allCases) { segment in

@@ -141,20 +141,37 @@ struct SportsHubGrouping {
     /// How far ahead a game can be and still headline the hub.
     static let heroHorizon: TimeInterval = 7 * 86400
 
-    /// The game the hub headlines, so the page always leads with something:
-    /// a live game with a followed team, else any live game on screen, else
-    /// the followed team's next game this week (the league's next, in a
-    /// league scope), else `fallback` — the biggest "Big this week" pick —
-    /// else the followed leagues' next game. Yesterday has none: it's results.
-    func heroFixture(in fixtures: [SportsFixture], fallback: SportsFixture? = nil) -> SportsFixture? {
+    /// The game the hub headlines, so the page always leads with something.
+    /// Prefer a resolvable fixture across the normal live/followed priority;
+    /// when no candidate is in the viewer's channels, use `fallback` — the
+    /// strongest upcoming Big This Week event — as an honest Remind Me hero.
+    /// Yesterday has none: it is results.
+    func heroFixture(
+        in fixtures: [SportsFixture],
+        fallback: SportsFixture? = nil,
+        availableIDs: Set<String> = []
+    ) -> SportsFixture? {
         guard segment != .yesterday else { return nil }
         let live = fixtures.filter(\.isInProgress)
-        if let mine = live.first(where: involvesFollowedTeam) { return mine }
-        if let first = live.first { return first }
         let upcoming = upcomingFixtures(alongside: fixtures)
-        if scopeIsLeague { return upcoming.first }
-        if let mine = upcoming.first(where: involvesFollowedTeam) { return mine }
-        return fallback ?? upcoming.first
+
+        var candidates: [SportsFixture] = []
+        candidates.append(contentsOf: live.filter(involvesFollowedTeam))
+        candidates.append(contentsOf: live.filter { !involvesFollowedTeam($0) })
+        if scopeIsLeague {
+            candidates.append(contentsOf: upcoming)
+        } else {
+            candidates.append(contentsOf: upcoming.filter(involvesFollowedTeam))
+            candidates.append(contentsOf: upcoming.filter { !involvesFollowedTeam($0) })
+        }
+        if let fallback, !candidates.contains(where: { $0.id == fallback.id }) {
+            candidates.append(fallback)
+        }
+
+        if let onChannel = candidates.first(where: { availableIDs.contains($0.id) }) {
+            return onChannel
+        }
+        return fallback ?? candidates.first
     }
 
     /// The scope's games in the week ahead, soonest first — what's on screen

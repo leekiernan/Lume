@@ -83,6 +83,27 @@ struct SportsHubHeroTests {
         #expect(grouping().heroFixture(in: [leagueOnly])?.id == "league")
     }
 
+    @Test func `an on-channel game beats a stronger off-channel fallback`() {
+        let mine = game("mine", home: "1", away: "2", offset: 3600, state: .scheduled)
+        let big = game("big", home: "7", away: "8", offset: 2 * 86400, state: .scheduled)
+
+        #expect(grouping().heroFixture(in: [mine], fallback: big, availableIDs: ["mine"])?.id == "mine")
+    }
+
+    @Test func `an on-channel fallback beats an off-channel followed game`() {
+        let mine = game("mine", home: "1", away: "2", offset: 3600, state: .scheduled)
+        let big = game("big", home: "7", away: "8", offset: 2 * 86400, state: .scheduled)
+
+        #expect(grouping().heroFixture(in: [mine], fallback: big, availableIDs: ["big"])?.id == "big")
+    }
+
+    @Test func `the strongest event becomes a remind-me hero when nothing is on channel`() {
+        let mine = game("mine", home: "1", away: "2", offset: 3600, state: .scheduled)
+        let big = game("big", home: "7", away: "8", offset: 2 * 86400, state: .scheduled)
+
+        #expect(grouping().heroFixture(in: [mine], fallback: big)?.id == "big")
+    }
+
     @Test func `beyond a week, nothing headlines`() {
         let far = game("far", home: "1", away: "2", offset: 9 * 86400, state: .scheduled)
 
