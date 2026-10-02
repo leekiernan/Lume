@@ -82,8 +82,8 @@ nonisolated enum SportsHighlights {
         now: Date
     ) -> [SportsHighlight] {
         let candidates = fixtures.filter { fixture in
-            let upcoming = fixture.status.state == .scheduled && fixture.startDate >= now
-                && fixture.startDate <= now.addingTimeInterval(window)
+            let upcoming = fixture.status.state == .scheduled && fixture.headlineDate >= now
+                && fixture.headlineDate <= now.addingTimeInterval(window)
             let followed = [fixture.home?.team.id, fixture.away?.team.id].compactMap(\.self).contains(where: followedTeamIds.contains)
             return (upcoming || fixture.isInProgress) && !followed
         }
@@ -104,7 +104,7 @@ nonisolated enum SportsHighlights {
             if fixture.isInProgress { total += 5 }
             return total >= threshold ? SportsHighlight(fixture: fixture, reason: reason, score: total) : nil
         }
-        .sorted { $0.score != $1.score ? $0.score > $1.score : $0.fixture.startDate < $1.fixture.startDate }
+        .sorted { $0.score != $1.score ? $0.score > $1.score : $0.fixture.headlineDate < $1.fixture.headlineDate }
 
         var perSport: [String: Int] = [:]
         var picked: [SportsHighlight] = []

@@ -92,4 +92,14 @@ struct SportsHighlightsTests {
         let far = game("far", league: "espn:soccer/eng.fa", stage: "final", offset: 10 * 86400)
         #expect(rank([past, far]).isEmpty)
     }
+
+    @Test func `a fight card remains upcoming until its main card`() {
+        let card = SportsFixture(
+            id: "ufc", leagueId: "espn:mma/ufc", leagueName: "UFC", leagueAbbreviation: "UFC",
+            startDate: now.addingTimeInterval(-2 * 3600), status: SportsFixtureStatus(state: .scheduled),
+            name: "UFC 332: Silva vs. Wang", mainCardDate: now.addingTimeInterval(2 * 3600)
+        )
+
+        #expect(rank([card]).map(\.id) == ["ufc"])
+    }
 }

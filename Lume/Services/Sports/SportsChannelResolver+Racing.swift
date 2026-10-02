@@ -33,7 +33,7 @@ nonisolated extension SportsChannelResolver {
                 series: series,
                 kind: kind,
                 channelNamesSeries: channelNamesSeries,
-                kickoff: fixture.startDate
+                kickoff: fixture.headlineDate
             )
             let channelKey = SportsChannelPicks.channelKey(
                 epgChannelId: channel.summary.epgChannelId, name: channel.summary.name
@@ -43,7 +43,7 @@ nonisolated extension SportsChannelResolver {
             ] != nil
             // A series-named channel ("Sky Sports F1") with no guide entry at the
             // session's start is a fallback; one airing something else is not.
-            let airingAtStart = listings.contains { $0.start <= fixture.startDate && $0.end > fixture.startDate }
+            let airingAtStart = listings.contains { $0.start <= fixture.headlineDate && $0.end > fixture.headlineDate }
             let nameFallback = channelNamesSeries && !airingAtStart
 
             let source: ResolvedChannelSource

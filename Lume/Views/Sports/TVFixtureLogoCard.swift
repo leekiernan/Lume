@@ -185,11 +185,11 @@
                     // rail of bare times read every game as today's.
                     VStack(spacing: 2) {
                         if !fixture.headlineIsToday {
-                            Text(fixture.startDate, format: .dateTime.weekday(.abbreviated))
+                            Text(fixture.headlineDate, format: .dateTime.weekday(.abbreviated))
                                 .font(.system(size: 20, weight: .semibold))
                                 .foregroundStyle(.white.opacity(0.7))
                         }
-                        Text(fixture.startDate, format: .dateTime.hour().minute())
+                        Text(fixture.headlineDate, format: .dateTime.hour().minute())
                             .font(.system(size: 30, weight: .semibold, design: .rounded))
                             .monospacedDigit()
                             .foregroundStyle(.white)

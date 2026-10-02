@@ -263,7 +263,7 @@ struct GameDetailSheet: View {
                 }
             }
         case .scheduled, .postponed:
-            Text(fixture.startDate, format: fixture.startTimeIsTentative == true
+            Text(fixture.headlineDate, format: fixture.startTimeIsTentative == true
                 ? .dateTime.weekday(.abbreviated).day().month(.abbreviated)
                 : .dateTime.hour().minute())
                 .font(.system(size: 34, weight: .semibold, design: .rounded))

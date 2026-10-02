@@ -120,8 +120,8 @@ nonisolated enum SportsFlagshipChannels {
             var found: [String: String] = [:]
             for fixture in fixtures {
                 guard let target = SportsChannelResolver.target(for: fixture) else { continue }
-                let windowStart = fixture.startDate.addingTimeInterval(-SportsMatcher.leadTime)
-                let windowEnd = fixture.startDate.addingTimeInterval(SportsMatcher.lateStart)
+                let windowStart = fixture.headlineDate.addingTimeInterval(-SportsMatcher.leadTime)
+                let windowEnd = fixture.headlineDate.addingTimeInterval(SportsMatcher.lateStart)
                 if let hit = lines.first(where: { $0.start >= windowStart && $0.start <= windowEnd && SportsChannelResolver.isPresent(target, in: $0.text) }),
                    let name = byEPG[hit.channel]
                 {

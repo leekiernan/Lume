@@ -454,7 +454,7 @@ struct SportsHubView: View {
         case .today:
             return fixture.isInProgress || fixture.isOn(during: range)
         case .yesterday, .upcoming:
-            return range.contains(fixture.startDate)
+            return range.contains(fixture.headlineDate)
         }
     }
 }

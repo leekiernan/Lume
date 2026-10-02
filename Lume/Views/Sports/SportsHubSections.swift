@@ -31,7 +31,7 @@ struct SportsFixtureGroup: Identifiable {
     /// Groups fixtures by calendar day, newest header first, for the Upcoming
     /// list. Each group's title is Today / Tomorrow / a "weekday, d MMM" line.
     static func byDay(_ fixtures: [SportsFixture], calendar: Calendar = .current) -> [SportsFixtureGroup] {
-        let grouped = Dictionary(grouping: fixtures) { calendar.startOfDay(for: $0.startDate) }
+        let grouped = Dictionary(grouping: fixtures) { calendar.startOfDay(for: $0.headlineDate) }
         return grouped.keys.sorted().map { day in
             SportsFixtureGroup(
                 id: ISO8601DateFormatter.dayKey(day),

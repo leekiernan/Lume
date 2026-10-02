@@ -113,29 +113,25 @@ nonisolated enum SportsPayPerView {
     static let assumedLength: TimeInterval = 3 * 3600
 
     private static let channelCache = Mutex<(generation: SportsChannelResolver.CacheGeneration, channels: [Channel])?>(nil)
-    private static let eventCache = Mutex<(generation: SportsChannelResolver.CacheGeneration, events: [Event], at: Date)?>(nil)
     /// Matches the flagship result cache: heals a guide edit that didn't
     /// advance a source timestamp, without re-reading on every surface switch.
-    private static let eventLifetime: TimeInterval = 10 * 60
+    fileprivate static let eventLifetime: TimeInterval = 10 * 60
 
     /// The week's events on the viewer's pay-per-view and event channels,
     /// live first, then by start; name-only events last.
     static func events(container: ModelContainer, restriction: ContentRestriction, now: Date) async -> [Event] {
-        await Task.detached(priority: .utility) {
-            let context = ModelContext(container)
-            let generation = SportsChannelResolver.CacheGeneration(
-                container: container, context: context, restriction: restriction, picks: [:]
-            )
-            if let cached = eventCache.withLock({ $0 }), cached.generation == generation,
-               now.timeIntervalSince(cached.at) < eventLifetime
-            {
-                return cached.events
-            }
-            let channels = payPerViewChannels(context: context, generation: generation, restriction: restriction)
-            let events = channels.isEmpty ? [] : events(on: channels, context: context, now: now)
-            eventCache.withLock { $0 = (generation, events, now) }
-            return events
-        }.value
+        await SportsPayPerViewEventCache.shared.events(container: container, restriction: restriction, now: now)
+    }
+
+    fileprivate static func loadEvents(
+        container: ModelContainer,
+        restriction: ContentRestriction,
+        generation: SportsChannelResolver.CacheGeneration,
+        now: Date
+    ) -> [Event] {
+        let context = ModelContext(container)
+        let channels = payPerViewChannels(context: context, generation: generation, restriction: restriction)
+        return channels.isEmpty ? [] : events(on: channels, context: context, now: now)
     }
 
     private static func payPerViewChannels(
@@ -229,6 +225,58 @@ nonisolated enum SportsPayPerView {
             case (nil, nil): return lhs.title < rhs.title
             }
         }
+    }
+}
+
+/// A PPV guide scan is small but can be requested simultaneously by the Home
+/// rail, Sports Hub and a detail sheet. Keep results per viewer/catalog
+/// generation and let those callers share the one scan already in progress.
+private actor SportsPayPerViewEventCache {
+    static let shared = SportsPayPerViewEventCache()
+
+    private typealias Generation = SportsChannelResolver.CacheGeneration
+    private typealias Entry = (events: [SportsPayPerView.Event], at: Date)
+
+    /// A handful of generations covers profile switches without retaining old
+    /// catalog scopes indefinitely. The event payload itself is at most 12 rows.
+    private static let maximumEntries = 4
+
+    private var entries: [Generation: Entry] = [:]
+    private var inFlight: [Generation: Task<[SportsPayPerView.Event], Never>] = [:]
+
+    func events(
+        container: ModelContainer,
+        restriction: ContentRestriction,
+        now: Date
+    ) async -> [SportsPayPerView.Event] {
+        let context = ModelContext(container)
+        let generation = Generation(container: container, context: context, restriction: restriction, picks: [:])
+        discardExpiredEntries(now: now)
+
+        if let entry = entries[generation] { return entry.events }
+        if let task = inFlight[generation] { return await task.value }
+
+        let task = Task.detached(priority: .utility) {
+            SportsPayPerView.loadEvents(
+                container: container, restriction: restriction, generation: generation, now: now
+            )
+        }
+        inFlight[generation] = task
+        let events = await task.value
+        inFlight[generation] = nil
+        entries[generation] = (events, now)
+        trimEntries()
+        return events
+    }
+
+    private func discardExpiredEntries(now: Date) {
+        entries = entries.filter { now.timeIntervalSince($0.value.at) < SportsPayPerView.eventLifetime }
+    }
+
+    private func trimEntries() {
+        guard entries.count > Self.maximumEntries else { return }
+        let oldest = entries.min { $0.value.at < $1.value.at }?.key
+        if let oldest { entries[oldest] = nil }
     }
 }
 

@@ -26,7 +26,7 @@ nonisolated extension SportsChannelResolver {
         // A match with no order-of-play slot has a placeholder time; what is on
         // air at that placeholder says nothing about it.
         guard !phrases.isEmpty, fixture.startTimeIsTentative != true else { return nil }
-        let kickoff = fixture.startDate
+        let kickoff = fixture.headlineDate
         let tournament = fixture.name.map(SportsCompetitionMatcher.tournamentTokens) ?? []
 
         var best: CompetitionHit?

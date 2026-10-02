@@ -165,14 +165,14 @@ struct SportsHubGrouping {
             .compactMap { store.snapshot(for: $0) }
             .flatMap { snapshot in snapshot.fixtures.flatMap { $0.expandedBySession(now: now) } }
         for fixture in fixtures + cached {
-            guard fixture.status.state == .scheduled, fixture.startDate >= now,
-                  fixture.startDate.timeIntervalSince(now) <= Self.heroHorizon,
+            guard fixture.status.state == .scheduled, fixture.headlineDate >= now,
+                  fixture.headlineDate.timeIntervalSince(now) <= Self.heroHorizon,
                   ![.fp1, .fp2, .fp3].contains(fixture.sessionKind),
                   scopeIsLeague || followedLeagueKeys.contains(fixture.leagueId) || involvesFollowedTeam(fixture)
             else { continue }
             byID[fixture.id] = fixture
         }
-        return byID.values.sorted { $0.startDate < $1.startDate }
+        return byID.values.sorted { $0.headlineDate < $1.headlineDate }
     }
 
     var scopeTitle: String {

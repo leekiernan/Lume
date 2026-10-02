@@ -30,7 +30,7 @@ nonisolated extension SportsChannelResolver {
     /// The fixtures starting within `nearTermWindow`, when they are only part of
     /// `fixtures` — or nil, when resolving them first would save nothing.
     static func nearTermSubset(of fixtures: [SportsFixture], now: Date) -> [SportsFixture]? {
-        let soon = fixtures.filter { $0.startDate < now.addingTimeInterval(nearTermWindow) }
+        let soon = fixtures.filter { $0.headlineDate < now.addingTimeInterval(nearTermWindow) }
         return soon.isEmpty || soon.count == fixtures.count ? nil : soon
     }
 
@@ -103,7 +103,7 @@ nonisolated extension SportsChannelResolver {
 
         /// A fixture's answer depends on its kickoff as well as its identity.
         static func key(for fixture: SportsFixture) -> String {
-            "\(fixture.id)|\(fixture.startDate.timeIntervalSince1970)"
+            "\(fixture.id)|\(fixture.headlineDate.timeIntervalSince1970)"
         }
 
         /// The cached answers for `fixtures` under `generation`, or none when the

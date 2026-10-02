@@ -44,6 +44,22 @@ struct SportsResolveCacheTests {
         )
     }
 
+    @Test func `a fight card cache key follows its main card`() {
+        let earlyPrelims = Date(timeIntervalSince1970: 1_800_000_000)
+        let first = SportsFixture(
+            id: "ufc", leagueId: leagueId, leagueName: "UFC", leagueAbbreviation: "UFC",
+            startDate: earlyPrelims, status: SportsFixtureStatus(state: .scheduled),
+            mainCardDate: earlyPrelims.addingTimeInterval(3 * 3600)
+        )
+        let rescheduled = SportsFixture(
+            id: "ufc", leagueId: leagueId, leagueName: "UFC", leagueAbbreviation: "UFC",
+            startDate: earlyPrelims, status: SportsFixtureStatus(state: .scheduled),
+            mainCardDate: earlyPrelims.addingTimeInterval(4 * 3600)
+        )
+
+        #expect(SportsChannelResolver.ResolveCache.key(for: first) != SportsChannelResolver.ResolveCache.key(for: rescheduled))
+    }
+
     @Test func `an unchanged catalog reuses the answer, a sync recomputes it`() async throws {
         let container = try makeContainer()
         let context = ModelContext(container)

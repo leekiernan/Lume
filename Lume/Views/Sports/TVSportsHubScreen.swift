@@ -424,15 +424,19 @@
 
         // MARK: - Focus
 
-        /// Watch on the headlined game when there is a channel for it, else its
-        /// Match Centre, else the first card.
+        /// Use the hero's leading action: Watch when a channel is known,
+        /// Remind Me when a scheduled fixture is not yet in the guide; else its
+        /// Match Centre, then the first card.
         private func defaultFocus(
             hero: SportsFixture?,
             availability: SportsChannelAvailability?,
             groups: [SportsFixtureGroup]
         ) -> TVSportsFocus? {
-            if hero != nil {
-                return availability?.isAvailable == true ? .heroWatch : .heroDetail
+            if let hero {
+                if availability?.isAvailable == true || hero.status.state == .scheduled {
+                    return .heroWatch
+                }
+                return .heroDetail
             }
             return groups.first?.fixtures.first.map { TVSportsFocus.card($0.id) }
         }

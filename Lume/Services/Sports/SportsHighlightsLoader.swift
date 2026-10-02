@@ -159,7 +159,7 @@ nonisolated enum SportsHighlightsPipeline {
             feed.fixtures, standings: feed.standings, followedTeamIds: followedTeamIds, availableIds: [], now: now
         )
         let toResolve = firstPass.map(\.fixture).filter {
-            $0.startDate.timeIntervalSince(now) < SportsChannelAvailability.guideHorizon && $0.expectedEnd > now
+            $0.headlineDate.timeIntervalSince(now) < SportsChannelAvailability.guideHorizon && $0.expectedEnd > now
         }
         let resolved = toResolve.isEmpty
             ? [:]
@@ -168,8 +168,8 @@ nonisolated enum SportsHighlightsPipeline {
         // Games a guide already covers, checked against the viewer's flagship
         // channels only — a handful of guides, not every channel.
         let nearTerm = feed.fixtures.filter {
-            $0.status.state == .scheduled && $0.startDate >= now
-                && $0.startDate.timeIntervalSince(now) < SportsChannelAvailability.guideHorizon
+            $0.status.state == .scheduled && $0.headlineDate >= now
+                && $0.headlineDate.timeIntervalSince(now) < SportsChannelAvailability.guideHorizon
         }
         let mainChannels = await SportsFlagshipChannels.mainChannels(
             for: nearTerm, container: container, restriction: restriction, overrides: overrides, now: now
@@ -195,7 +195,7 @@ nonisolated enum SportsHighlightsPipeline {
         mainChannels: [String: String]
     ) -> [SportsPayPerView.Event] {
         let claims = highlights.compactMap { highlight in
-            mainChannels[highlight.fixture.id].map { (channel: $0, start: highlight.fixture.startDate) }
+            mainChannels[highlight.fixture.id].map { (channel: $0, start: highlight.fixture.headlineDate) }
         }
         let targets = highlights.compactMap { SportsChannelResolver.target(for: $0.fixture) }
         return events.filter { event in
