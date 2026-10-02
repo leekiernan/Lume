@@ -15,7 +15,7 @@
         var browseSidebar: some View {
             SportsBrowseSidebar(
                 isPresented: $showingBrowse,
-                leagues: SportsHubGrouping.followedLeagues(follows.follows),
+                entries: SportsHubGrouping(scope: scope, follows: follows.follows, store: .shared).sidebarEntries,
                 scope: scope,
                 onSelect: selectScope,
                 onManageTeams: {

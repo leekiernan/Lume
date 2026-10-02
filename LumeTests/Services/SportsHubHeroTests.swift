@@ -16,11 +16,10 @@ struct SportsHubHeroTests {
     private let now = Date(timeIntervalSince1970: 1_800_000_000)
     private let leagueId = "espn:soccer/eng.1"
 
-    private func grouping(segment: SportsHubSegment = .today) -> SportsHubGrouping {
+    private func grouping(scope: SportsHubScope = .all) -> SportsHubGrouping {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         return SportsHubGrouping(
-            scope: .myTeams,
-            segment: segment,
+            scope: scope,
             follows: [
                 SportsFollow(key: leagueId, kind: .league, sortOrder: 0),
                 SportsFollow(key: "\(leagueId):1", kind: .team, sortOrder: 1)
@@ -44,10 +43,9 @@ struct SportsHubHeroTests {
     private func hero(
         _ fixtures: [SportsFixture],
         fallback: SportsFixture? = nil,
-        availableIDs: Set<String> = [],
-        segment: SportsHubSegment = .today
+        availableIDs: Set<String> = []
     ) -> SportsFixture? {
-        let grouping = grouping(segment: segment)
+        let grouping = grouping()
         let candidates = grouping.heroCandidates(in: fixtures, highlights: fallback.map { [$0] } ?? [], availableIDs: availableIDs)
         var machine = SportsHeroSelectionMachine()
         machine.reconcile(candidates: candidates, context: "test")
@@ -122,10 +120,51 @@ struct SportsHubHeroTests {
         #expect(hero([far]) == nil)
     }
 
-    @Test func `yesterday has no hero`() {
-        let mine = game("mine", home: "1", away: "2", offset: -600, state: .inProgress)
+    // MARK: - Rows
 
-        #expect(hero([mine], segment: .yesterday) == nil)
+    @Test func `live games lead, then a row per follow in the viewer's order`() {
+        let live = game("live", home: "5", away: "6", offset: -600, state: .inProgress)
+        let mine = game("mine", home: "1", away: "2", offset: 3600, state: .scheduled)
+        let league = game("league", home: "5", away: "6", offset: 7200, state: .scheduled)
+
+        let groups = grouping().groups(for: [live, mine, league])
+        // The league is followed first here, so its row claims the team's game
+        // too, and the team's own row has nothing left to show.
+        #expect(groups.map(\.id) == ["live", leagueId])
+        #expect(groups.map { $0.fixtures.map(\.id) } == [["live"], ["mine", "league"]])
+    }
+
+    @Test func `a team followed first gets its games before its league's row`() {
+        let follows = [
+            SportsFollow(key: "\(leagueId):1", kind: .team, sortOrder: 0),
+            SportsFollow(key: leagueId, kind: .league, sortOrder: 1)
+        ]
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let grouping = SportsHubGrouping(
+            scope: .all, follows: follows, store: SportsStore(cache: SportsCacheStore(directory: dir)), now: now
+        )
+        let mine = game("mine", home: "1", away: "2", offset: 3600, state: .scheduled)
+        let league = game("league", home: "5", away: "6", offset: 7200, state: .scheduled)
+
+        let groups = grouping.groups(for: [mine, league])
+        #expect(groups.map(\.id) == ["\(leagueId):1", leagueId])
+        #expect(groups.map { $0.fixtures.map(\.id) } == [["mine"], ["league"]])
+        #expect(groups.first?.followKey == "\(leagueId):1")
+    }
+
+    @Test func `the hub shows what's live and coming, never results`() {
+        let grouping = grouping()
+        #expect(grouping.isCurrent(game("live", home: "1", away: "2", offset: -600, state: .inProgress)))
+        #expect(grouping.isCurrent(game("soon", home: "1", away: "2", offset: 86400, state: .scheduled)))
+        #expect(!grouping.isCurrent(game("done", home: "1", away: "2", offset: -4 * 3600, state: .final)))
+        #expect(!grouping.isCurrent(game("far", home: "1", away: "2", offset: 20 * 86400, state: .scheduled)))
+    }
+
+    @Test func `narrowed to a team, the page is that team's games`() {
+        let grouping = grouping(scope: .follow("\(leagueId):1"))
+        #expect(grouping.displayLeagueIds == [leagueId])
+        let mine = game("mine", home: "1", away: "2", offset: 3600, state: .scheduled)
+        #expect(grouping.groups(for: [mine]).map(\.id) == ["scope"])
     }
 
     @Test func `the carousel pages through today's games, the bigger first`() {

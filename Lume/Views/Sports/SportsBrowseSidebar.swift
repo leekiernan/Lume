@@ -2,24 +2,32 @@
 //  SportsBrowseSidebar.swift
 //  Lume
 //
-//  The Sports hub's scope — My Teams or one followed league — picked from the
-//  shared `BrowseSidebarPanel` Movies, Series and Live TV use, with Manage
-//  Teams at its foot. On tvOS it slides in on a left press from the page's
-//  leading edge; elsewhere the toolbar's browse button or the title opens it.
+//  The Sports hub's browse panel, in the shared `BrowseSidebarPanel` Movies,
+//  Series and Live TV use: My Sports, then every follow — teams and leagues
+//  in the viewer's order — each narrowing the hub to itself, and Manage Teams
+//  at its foot. On tvOS it slides in on a left press from the page's leading
+//  edge; elsewhere the toolbar's browse button or the title opens it.
 //
 
 import SwiftUI
 
 struct SportsBrowseSidebar: View {
+    /// One follow, as the panel lists it.
+    struct Entry: Equatable {
+        let key: String
+        let title: String
+        let logoURL: URL?
+    }
+
     @Binding var isPresented: Bool
-    let leagues: [SportsLeague]
+    let entries: [Entry]
     let scope: SportsHubScope
     let onSelect: (SportsHubScope) -> Void
     let onManageTeams: () -> Void
     /// Hands focus back to where the page had it.
     var onReturnToContent: (() -> Void)?
 
-    private static let myTeamsRow = "myTeams"
+    private static let allRow = "all"
 
     var body: some View {
         BrowseSidebarPanel(
@@ -33,19 +41,19 @@ struct SportsBrowseSidebar: View {
 
     private var selectedId: String {
         switch scope {
-        case .myTeams: Self.myTeamsRow
-        case let .league(id): "league:\(id)"
+        case .all: Self.allRow
+        case let .follow(key): "follow:\(key)"
         }
     }
 
     private var sections: [BrowseSidebarPanel.Section] {
-        var result = [BrowseSidebarPanel.Section(id: "mine", rows: [
-            .init(id: Self.myTeamsRow, title: Text("My Teams"), systemImage: "star.fill") { onSelect(.myTeams) }
+        var result = [BrowseSidebarPanel.Section(id: "all", rows: [
+            .init(id: Self.allRow, title: Text("My Sports"), systemImage: "sportscourt") { onSelect(.all) }
         ])]
-        if !leagues.isEmpty {
-            result.append(.init(id: "leagues", title: "Leagues", rows: leagues.map { league in
-                .init(id: "league:\(league.id)", title: Text(verbatim: league.name), imageURL: league.logoURL) {
-                    onSelect(.league(league.id))
+        if !entries.isEmpty {
+            result.append(.init(id: "following", title: "Following", rows: entries.map { entry in
+                .init(id: "follow:\(entry.key)", title: Text(verbatim: entry.title), imageURL: entry.logoURL) {
+                    onSelect(.follow(entry.key))
                 }
             }))
         }

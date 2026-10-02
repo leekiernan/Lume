@@ -179,6 +179,34 @@
         }
     }
 
+    // MARK: - Club card
+
+    /// The card that closes a followed club's row on the hub: its crest and
+    /// "Season", opening the hub narrowed to the club. Card-sized like the
+    /// fixtures beside it.
+    struct TVClubSeasonCard: View {
+        let team: SportsTeam
+        @Environment(\.isFocused) private var isFocused
+
+        var body: some View {
+            VStack(alignment: .leading, spacing: 14) {
+                TeamCrest(team: team, size: 72)
+                Spacer(minLength: 0)
+                Text(verbatim: team.shortName.isEmpty ? team.name : team.shortName)
+                    .font(.system(size: 28, weight: .bold))
+                    .lineLimit(1)
+                Label("Season", systemImage: "chevron.right")
+                    .labelStyle(.titleAndIcon)
+                    .font(.system(size: 22, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.7))
+            }
+            .foregroundStyle(.white)
+            .padding(26)
+            .frame(width: 280, height: 236, alignment: .topLeading)
+            .background(RoundedRectangle(cornerRadius: 30, style: .continuous).fill(.white.opacity(isFocused ? 0.16 : 0.07)))
+        }
+    }
+
     // MARK: - Competition card
 
     private struct TVSeasonCompetitionCard: View {

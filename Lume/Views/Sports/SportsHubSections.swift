@@ -27,6 +27,8 @@ struct SportsFixtureGroup: Identifiable {
     /// True for a group under a day header (Today / Tomorrow / "Saturday, 27 Sep"),
     /// where the cards drop their own date line as noise.
     var isGroupedByDay = false
+    /// The follow this row is — a team's row ends with its club's season.
+    var followKey: String?
 
     /// Groups fixtures by calendar day, newest header first, for the Upcoming
     /// list. Each group's title is Today / Tomorrow / a "weekday, d MMM" line.
@@ -68,7 +70,8 @@ struct SportsSectionsView: View {
     var onWatch: (ResolvedChannel) -> Void
     var onFollowToggle: (SportsTeam) -> Void
     var onPickChannel: (SportsFixture) -> Void
-    var onSelectLeague: (String) -> Void
+    /// A row's follow, from its header: the hub narrows to that team or league.
+    var onSelectFollow: (String) -> Void
 
     var body: some View {
         if groups.isEmpty {
@@ -104,9 +107,9 @@ struct SportsSectionsView: View {
 
     @ViewBuilder
     private func header(for group: SportsFixtureGroup) -> some View {
-        if let leagueId = group.leagueId {
+        if let followKey = group.followKey {
             Button {
-                onSelectLeague(leagueId)
+                onSelectFollow(followKey)
             } label: {
                 headerLabel(for: group, chevron: true)
             }

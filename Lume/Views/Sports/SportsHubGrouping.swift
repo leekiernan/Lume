@@ -2,18 +2,30 @@
 //  SportsHubGrouping.swift
 //  Lume
 //
-//  The one set of rules for which fixtures a Sports Hub scope + segment shows and
-//  how they group into sections. The phone `SportsHubView` and the tvOS
-//  `TVSportsHubScreen` both delegate here so the two hubs never disagree, leaving
-//  each screen only its own chrome.
+//  The one set of rules for which fixtures the Sports Hub shows and how they
+//  form rows. The phone `SportsHubView` and the tvOS `TVSportsHubScreen` both
+//  delegate here so the two hubs never disagree, leaving each screen only its
+//  own chrome.
+//
+//  There is no day switch: the hub is what's live and what's coming in the
+//  next fortnight, never results. Unscoped, that's a Live Now row then one row
+//  per follow in the viewer's own order (Manage Teams) — Chelsea FC above F1
+//  above the Premier League, as they like. Scoped to one follow from the
+//  sidebar, it's that team's or league's games alone.
 //
 
 import Foundation
 
+/// What the hub shows: everything followed, or one follow — a team or a
+/// league today, a driver or a player once those can be followed.
+enum SportsHubScope: Hashable {
+    case all
+    case follow(String)
+}
+
 @MainActor
 struct SportsHubGrouping {
     let scope: SportsHubScope
-    let segment: SportsHubSegment
     let follows: [SportsFollow]
     let store: SportsStore
     let now: Date
@@ -22,15 +34,11 @@ struct SportsHubGrouping {
     let followedTeamKeys: Set<String>
     let followedLeagueKeys: Set<String>
 
-    init(
-        scope: SportsHubScope,
-        segment: SportsHubSegment,
-        follows: [SportsFollow],
-        store: SportsStore,
-        now: Date = .init()
-    ) {
+    /// How far ahead the hub's rows reach.
+    static let horizon: TimeInterval = 14 * 86400
+
+    init(scope: SportsHubScope, follows: [SportsFollow], store: SportsStore, now: Date = .init()) {
         self.scope = scope
-        self.segment = segment
         self.follows = follows
         self.store = store
         self.now = now
@@ -38,29 +46,47 @@ struct SportsHubGrouping {
         followedLeagueKeys = Set(follows.filter { $0.kind == .league }.map(\.key))
     }
 
-    /// The league ids the current scope draws from: one for a league scope, or
-    /// every followed league plus the league of each followed team (deduped,
-    /// order-preserving) for My Teams.
-    var displayLeagueIds: [String] {
-        if case let .league(id) = scope { return [id] }
-        return SportsRailPlanner.displayLeagueIds(for: follows)
+    // MARK: - Scope
+
+    /// The follow the hub is narrowed to, if any.
+    var scopedFollow: SportsFollow? {
+        guard case let .follow(key) = scope else { return nil }
+        return follows.first { $0.key == key }
+            ?? SportsFollow(key: key, kind: SportsCatalog.league(id: key) == nil ? .team : .league, sortOrder: 0)
     }
 
-    /// Every followed league (plus followed teams' leagues) regardless of the
-    /// current scope — this feeds the scope menu, which must always offer the
-    /// full list, not just the league currently selected.
+    var isScoped: Bool {
+        scopedFollow != nil
+    }
+
+    /// The team the hub is narrowed to — what its club section shows.
+    var scopedTeam: SportsTeam? {
+        guard let follow = scopedFollow, follow.kind == .team else { return nil }
+        return store.team(by: follow.key)
+    }
+
+    /// The league ids the hub draws from: the scoped league or team's league,
+    /// else every followed league plus each followed team's.
+    var displayLeagueIds: [String] {
+        switch scopedFollow?.kind {
+        case .league: [scopedFollow?.key].compactMap(\.self)
+        case .team: [scopedFollow.map { Self.leagueId(ofTeam: $0.key) }].compactMap(\.self)
+        case nil: SportsRailPlanner.displayLeagueIds(for: follows)
+        }
+    }
+
+    /// "espn:soccer/eng.1:363" → "espn:soccer/eng.1".
+    static func leagueId(ofTeam key: String) -> String {
+        key.range(of: ":", options: .backwards).map { String(key[..<$0.lowerBound]) } ?? key
+    }
+
+    /// Every followed league (plus followed teams' leagues), for the sidebar.
     var followedLeagues: [SportsLeague] {
         Self.followedLeagues(follows)
     }
 
-    /// The leagues the scope can narrow to, for the browse panel.
     static func followedLeagues(_ follows: [SportsFollow]) -> [SportsLeague] {
         SportsRailPlanner.displayLeagueIds(for: follows).compactMap { SportsCatalog.league(id: $0) }
-    }
-
-    var scopeIsLeague: Bool {
-        if case .league = scope { return true }
-        return false
     }
 
     func involvesFollowedTeam(_ fixture: SportsFixture) -> Bool {
@@ -69,74 +95,105 @@ struct SportsHubGrouping {
         return false
     }
 
-    /// Every fixture on screen for the current scope + segment, deduped and sorted
-    /// by kickoff. A league followed as a league contributes all of its fixtures; a
-    /// league present only through a followed team contributes just that team's.
+    private func involves(_ fixture: SportsFixture, team key: String) -> Bool {
+        fixture.home?.team.id == key || fixture.away?.team.id == key
+    }
+
+    // MARK: - Fixtures
+
+    /// Live now, or due within `horizon` — never a result.
+    func isCurrent(_ fixture: SportsFixture) -> Bool {
+        if fixture.isInProgress { return true }
+        return fixture.status.state == .scheduled && fixture.expectedEnd > now
+            && fixture.headlineDate.timeIntervalSince(now) <= Self.horizon
+    }
+
+    /// Every fixture the hub shows, deduped, live first then by kickoff. A
+    /// league followed as a league contributes all its fixtures; one present
+    /// only through a followed team, just that team's.
     var visibleFixtures: [SportsFixture] {
         var byID: [String: SportsFixture] = [:]
         for leagueId in displayLeagueIds {
             guard let snapshot = store.snapshot(for: leagueId) else { continue }
-            let leagueFollowed = scopeIsLeague || followedLeagueKeys.contains(leagueId)
-            // A race weekend becomes one card per session before the day filter,
-            // so Saturday's race shows under Saturday, not under Thursday's practice.
-            for fixture in snapshot.fixtures.flatMap({ $0.expandedBySession(now: now) })
-                where SportsHubView.fixture(fixture, isIn: segment, now: now)
-            {
-                if leagueFollowed || involvesFollowedTeam(fixture) {
-                    byID[fixture.id] = fixture
-                }
+            // A race weekend becomes one card per session, so Saturday's race
+            // is its own card, not under Thursday's practice.
+            for fixture in snapshot.fixtures.flatMap({ $0.expandedBySession(now: now) }) where isCurrent(fixture) {
+                if isInScope(fixture) { byID[fixture.id] = fixture }
             }
         }
         return byID.values.sorted(by: SportsFixture.displayOrder)
     }
 
-    /// The display groups the sections view renders, for the `visibleFixtures`
-    /// the caller computed once per render. Upcoming groups by day;
-    /// Today/Yesterday group by "My Teams" then followed league.
-    func groups(for fixtures: [SportsFixture]) -> [SportsFixtureGroup] {
-        if segment == .upcoming {
-            return SportsFixtureGroup.byDay(fixtures)
+    private func isInScope(_ fixture: SportsFixture) -> Bool {
+        switch scopedFollow?.kind {
+        case .league: true
+        case .team: scopedFollow.map { involves(fixture, team: $0.key) } ?? false
+        case nil: followedLeagueKeys.contains(fixture.leagueId) || involvesFollowedTeam(fixture)
         }
-        // Within a section `SportsFixture.displayOrder` already puts live games
-        // first, upcoming next and finished last.
-        if case let .league(leagueId) = scope {
-            // The header carries the crest the cards drop, same as a league
-            // cluster under My Teams; no chevron, since the hub is already scoped.
-            let logoURL = fixtures.first?.leagueLogoURL ?? SportsCatalog.league(id: leagueId)?.logoURL
-            return fixtures.isEmpty ? [] : [SportsFixtureGroup(
-                id: "all", title: scopeTitle, logoURL: logoURL, leagueId: nil, fixtures: fixtures, isSingleLeague: true
-            )]
-        }
-        return byMyTeamsAndLeague(fixtures)
     }
 
-    private func byMyTeamsAndLeague(_ fixtures: [SportsFixture]) -> [SportsFixtureGroup] {
-        var groups: [SportsFixtureGroup] = []
-        let mine = fixtures.filter(involvesFollowedTeam)
-        if !mine.isEmpty {
-            groups.append(SportsFixtureGroup(
-                id: "myTeams",
-                title: String(localized: "★ My Teams"),
-                logoURL: nil,
-                leagueId: nil,
-                fixtures: mine
-            ))
+    // MARK: - Rows
+
+    /// The hub's rows for the `visibleFixtures` the caller computed once per
+    /// render. Unscoped: Live Now, then a row per follow in the viewer's order,
+    /// each game in the first row that claims it. Scoped: one row.
+    func groups(for fixtures: [SportsFixture]) -> [SportsFixtureGroup] {
+        guard !fixtures.isEmpty else { return [] }
+        if let follow = scopedFollow {
+            return [SportsFixtureGroup(
+                id: "scope", title: scopeTitle, logoURL: logoURL(of: follow, in: fixtures), leagueId: nil,
+                fixtures: fixtures, isSingleLeague: follow.kind == .league
+            )]
         }
-        let mineIDs = Set(mine.map(\.id))
-        for league in followedLeagues where followedLeagueKeys.contains(league.id) {
-            let leagueFixtures = fixtures.filter { $0.leagueId == league.id && !mineIDs.contains($0.id) }
-            guard !leagueFixtures.isEmpty else { continue }
+        var groups: [SportsFixtureGroup] = []
+        let live = fixtures.filter(\.isInProgress)
+        if !live.isEmpty {
+            groups.append(SportsFixtureGroup(id: "live", title: String(localized: "Live Now"), logoURL: nil, leagueId: nil, fixtures: live))
+        }
+        var claimed = Set(live.map(\.id))
+        for follow in follows {
+            let rowFixtures = fixtures.filter { fixture in
+                guard !claimed.contains(fixture.id) else { return false }
+                return follow.kind == .team ? involves(fixture, team: follow.key) : fixture.leagueId == follow.key
+            }
+            guard !rowFixtures.isEmpty else { continue }
+            claimed.formUnion(rowFixtures.map(\.id))
             groups.append(SportsFixtureGroup(
-                id: league.id,
-                title: league.name,
-                logoURL: leagueFixtures.first?.leagueLogoURL ?? league.logoURL,
-                leagueId: league.id,
-                fixtures: leagueFixtures,
-                isSingleLeague: true
+                id: follow.key,
+                title: title(of: follow),
+                logoURL: logoURL(of: follow, in: rowFixtures),
+                leagueId: follow.kind == .league ? follow.key : nil,
+                fixtures: rowFixtures,
+                isSingleLeague: follow.kind == .league,
+                followKey: follow.key
             ))
         }
         return groups
     }
+
+    /// The sidebar's rows: every follow — teams and leagues alike — in the
+    /// viewer's order, named and badged as the rows are.
+    var sidebarEntries: [SportsBrowseSidebar.Entry] {
+        follows.map { follow in
+            SportsBrowseSidebar.Entry(key: follow.key, title: title(of: follow), logoURL: logoURL(of: follow, in: []))
+        }
+    }
+
+    private func title(of follow: SportsFollow) -> String {
+        switch follow.kind {
+        case .league: SportsCatalog.league(id: follow.key)?.name ?? follow.key
+        case .team: store.team(by: follow.key)?.name ?? follow.key
+        }
+    }
+
+    private func logoURL(of follow: SportsFollow, in fixtures: [SportsFixture]) -> URL? {
+        switch follow.kind {
+        case .league: fixtures.first?.leagueLogoURL ?? SportsCatalog.league(id: follow.key)?.logoURL
+        case .team: store.team(by: follow.key)?.logoURL
+        }
+    }
+
+    // MARK: - Hero
 
     /// How far ahead a game can be and still headline the hub.
     static let heroHorizon: TimeInterval = 7 * 86400
@@ -152,7 +209,6 @@ struct SportsHubGrouping {
         highlights: [SportsFixture] = [],
         availableIDs: Set<String> = []
     ) -> [SportsHeroSelectionMachine.Candidate] {
-        guard segment != .yesterday else { return [] }
         let live = byStature(fixtures.filter(\.isInProgress))
         let upcoming = upcomingFixtures(alongside: fixtures)
         var candidates: [SportsHeroSelectionMachine.Candidate] = []
@@ -168,7 +224,7 @@ struct SportsHubGrouping {
 
         append(live.filter(involvesFollowedTeam), tier: .followedLive)
         append(live.filter { !involvesFollowedTeam($0) }, tier: .live)
-        if scopeIsLeague {
+        if isScoped {
             append(upcoming, tier: .primaryUpcoming)
         } else {
             append(upcoming.filter(involvesFollowedTeam), tier: .primaryUpcoming)
@@ -181,7 +237,7 @@ struct SportsHubGrouping {
             }
             append([highlight], tier: tier)
         }
-        if !scopeIsLeague {
+        if !isScoped {
             let others = upcoming.filter { !involvesFollowedTeam($0) }
             let calendar = Calendar.current
             let today = others.filter { calendar.isDate($0.headlineDate, inSameDayAs: now) }
@@ -217,7 +273,7 @@ struct SportsHubGrouping {
             guard fixture.status.state == .scheduled, fixture.headlineDate >= now,
                   fixture.headlineDate.timeIntervalSince(now) <= Self.heroHorizon,
                   ![.fp1, .fp2, .fp3].contains(fixture.sessionKind),
-                  scopeIsLeague || followedLeagueKeys.contains(fixture.leagueId) || involvesFollowedTeam(fixture)
+                  isInScope(fixture)
             else { continue }
             byID[fixture.id] = fixture
         }
@@ -225,11 +281,7 @@ struct SportsHubGrouping {
     }
 
     var scopeTitle: String {
-        switch scope {
-        case .myTeams:
-            String(localized: "My Teams")
-        case let .league(id):
-            SportsCatalog.league(id: id)?.name ?? String(localized: "My Teams")
-        }
+        guard let follow = scopedFollow else { return String(localized: "My Sports") }
+        return title(of: follow)
     }
 }

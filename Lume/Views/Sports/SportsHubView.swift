@@ -9,20 +9,15 @@
 //  Data comes from `SportsStore` (cached snapshots), the followed set from
 //  `SportsFollowService`, and channel resolution from `SportsChannelResolver` —
 //  run once per visible fixture set off the main thread, never per card. The
-//  scope Menu switches between "My Teams" and a single followed league; the
-//  segmented control walks Yesterday / Today / Upcoming.
+//  page is what's live and coming, a row per follow in the viewer's order
+//  (`SportsHubGrouping`); the browse panel narrows it to one follow, and a
+//  team's page adds its club season.
 //
 
 import SwiftData
 import SwiftUI
 
-/// What the hub is scoped to: every followed league/team, or one league.
-enum SportsHubScope: Hashable {
-    case myTeams
-    case league(String)
-}
-
-/// The time window the segmented control selects.
+/// A day window, for the league screen's own Yesterday / Today / Upcoming.
 enum SportsHubSegment: String, CaseIterable, Identifiable {
     case yesterday
     case today
@@ -54,8 +49,7 @@ struct SportsHubView: View {
     @State private var follows = SportsFollowService.shared
     @State private var epg = EPGSyncService.shared
 
-    @State private var scope: SportsHubScope = .myTeams
-    @State private var segment: SportsHubSegment = .today
+    @State private var scope: SportsHubScope = .all
     @State private var resolved: [String: [ResolvedChannel]] = [:]
     @State private var heroSelection = SportsHeroSelectionMachine()
     @State private var heroCarouselID: String?
@@ -86,7 +80,7 @@ struct SportsHubView: View {
                 if premium.isPremium {
                     SportsBrowseSidebar(
                         isPresented: $showingBrowse,
-                        leagues: followedLeagues,
+                        entries: grouping.sidebarEntries,
                         scope: scope,
                         onSelect: { value in
                             scope = value
@@ -138,14 +132,7 @@ struct SportsHubView: View {
                 Text(scopeTitle).font(.headline)
             }
             .buttonStyle(.plain)
-            .accessibilityHint(Text("Choose leagues"))
-        }
-        ToolbarItem(placement: .primaryAction) {
-            Button {
-                showManageTeams = true
-            } label: {
-                Label("Manage Teams", systemImage: "person.2.badge.plus")
-            }
+            .accessibilityHint(Text("Browse"))
         }
     }
 
@@ -186,14 +173,6 @@ struct SportsHubView: View {
         }
     }
 
-    /// Followed football teams, for the season panel.
-    private var seasonTeams: [SportsTeam] {
-        follows.follows
-            .filter { $0.kind == .team }
-            .compactMap { store.team(by: $0.key) }
-            .filter(SportsTeamSeasonLoader.supports)
-    }
-
     private func loadHighlights() async {
         let request = highlightsLoad.begin()
         let followedTeams = Set(follows.follows.filter { $0.kind == .team }.map(\.key))
@@ -224,15 +203,6 @@ struct SportsHubView: View {
         return ZStack(alignment: .top) {
             heroBackdrop(carouselCandidates)
             VStack(spacing: 0) {
-                Picker("Range", selection: $segment) {
-                    ForEach(SportsHubSegment.allCases) { segment in
-                        Text(segment.title).tag(segment)
-                    }
-                }
-                .hubSegmentedPickerStyle()
-                .padding(.horizontal)
-                .padding(.bottom, 8)
-
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 20) {
                         statusHints
@@ -247,13 +217,15 @@ struct SportsHubView: View {
                             onWatch: watch,
                             onFollowToggle: toggleFollow,
                             onPickChannel: { pickerFixture = $0 },
-                            onSelectLeague: { scope = .league($0) }
+                            onSelectFollow: { scope = .follow($0) }
                         )
-                        if scope == .myTeams {
+                        if scope == .all {
                             highlightsRail(excluding: carouselFixtureIDs)
-                            if !seasonTeams.isEmpty {
-                                SportsTeamSeasonPanel(teams: seasonTeams)
-                            }
+                        }
+                        // A team's own page carries its club season.
+                        if let team = grouping.scopedTeam, SportsTeamSeasonLoader.supports(team) {
+                            SportsTeamSeasonPanel(teams: [team])
+                                .padding(.horizontal)
                         }
                     }
                     .padding(.vertical)
@@ -370,14 +342,14 @@ struct SportsHubView: View {
 
     private var heroSelectionContext: String {
         let scopeToken = switch scope {
-        case .myTeams: "myTeams"
-        case let .league(id): "league:\(id)"
+        case .all: "all"
+        case let .follow(key): "follow:\(key)"
         }
         let followsToken = follows.follows
             .map { "\($0.kind.rawValue):\($0.key)" }
             .sorted()
             .joined(separator: ",")
-        return "\(scopeToken)|\(segment.rawValue)|\(followsToken)"
+        return "\(scopeToken)|\(followsToken)"
     }
 
     private func heroSelectionKey(for candidates: [SportsHeroSelectionMachine.Candidate]) -> String {
@@ -456,15 +428,11 @@ struct SportsHubView: View {
 
     /// The shared selection/grouping rules; the phone hub keeps only its chrome.
     private var grouping: SportsHubGrouping {
-        SportsHubGrouping(scope: scope, segment: segment, follows: follows.follows, store: store)
+        SportsHubGrouping(scope: scope, follows: follows.follows, store: store)
     }
 
     private var displayLeagueIds: [String] {
         grouping.displayLeagueIds
-    }
-
-    private var followedLeagues: [SportsLeague] {
-        grouping.followedLeagues
     }
 
     private var visibleFixtures: [SportsFixture] {

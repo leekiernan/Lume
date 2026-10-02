@@ -92,7 +92,7 @@
                         toggleAccessibility: { _, name in String(localized: "Unfollow \(name)") }
                     )
 
-                    Text("Select a row to lift it, then move up or down and select again to place — the first few lead the Home shelf.")
+                    Text("Select a row to lift it, then move up or down and select again to place — the Sports hub's rows follow this order, and the first few lead the Home shelf.")
                         .font(.system(size: 20))
                         .foregroundStyle(.secondary)
                         .padding(.horizontal, TVSettingsMetrics.rowHPadding)
