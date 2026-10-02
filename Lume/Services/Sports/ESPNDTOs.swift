@@ -287,6 +287,11 @@ nonisolated struct ESPNSummaryResponse: Codable, Hashable {
     let boxscore: ESPNBoxscore?
     let rosters: [ESPNRoster]?
     let keyEvents: [ESPNKeyEvent]?
+    /// Bookmaker lines, best provider first (ESPNDTOs+Summary.swift).
+    let pickcenter: [ESPNPickcenter]?
+    /// One entry per play, oldest first; US sports only.
+    let winprobability: [ESPNWinProbability]?
+    let header: ESPNSummaryHeader?
 }
 
 nonisolated struct ESPNBoxscore: Codable, Hashable {

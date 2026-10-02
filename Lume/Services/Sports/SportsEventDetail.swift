@@ -84,10 +84,26 @@ nonisolated struct SportsEventDetail: Codable, Hashable {
     let keyEvents: [SportsKeyEvent]
     let teamStats: [SportsTeamStat]
     let lineups: [SportsLineup]
+    /// The bookmaker's match-result prices, when the provider carries them.
+    let odds: SportsOdds?
+    /// The provider's latest win probability — US sports, live and final.
+    let winProbability: SportsWinProbability?
+    /// Each side's score by half / quarter / period.
+    let periodScores: SportsPeriodScores?
 
-    init(keyEvents: [SportsKeyEvent] = [], teamStats: [SportsTeamStat] = [], lineups: [SportsLineup] = []) {
+    init(
+        keyEvents: [SportsKeyEvent] = [],
+        teamStats: [SportsTeamStat] = [],
+        lineups: [SportsLineup] = [],
+        odds: SportsOdds? = nil,
+        winProbability: SportsWinProbability? = nil,
+        periodScores: SportsPeriodScores? = nil
+    ) {
         self.keyEvents = keyEvents
         self.teamStats = teamStats
         self.lineups = lineups
+        self.odds = odds
+        self.winProbability = winProbability
+        self.periodScores = periodScores
     }
 }

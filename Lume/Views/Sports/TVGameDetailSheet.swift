@@ -52,6 +52,7 @@
             ScrollView {
                 VStack(spacing: 48) {
                     header
+                    TVGameDetailMarkets(detail: detailLoad.detail, fixture: fixture, hidesScores: hidesScores)
                     if fixture.status.state != .final {
                         watchSection
                     }

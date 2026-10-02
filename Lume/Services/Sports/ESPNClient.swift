@@ -521,7 +521,10 @@ nonisolated extension ESPNClient {
         SportsEventDetail(
             keyEvents: (response.keyEvents ?? []).filter(isTimelineWorthy).map(mapKeyEvent),
             teamStats: mapTeamStats(response.boxscore),
-            lineups: (response.rosters ?? []).compactMap(mapLineup)
+            lineups: (response.rosters ?? []).compactMap(mapLineup),
+            odds: mapOdds(response.pickcenter),
+            winProbability: mapWinProbability(response.winprobability),
+            periodScores: mapPeriodScores(response.header)
         )
     }
 
