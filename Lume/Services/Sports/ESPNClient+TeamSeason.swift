@@ -65,7 +65,7 @@ nonisolated extension SportsFixture {
             startDate: startDate, status: status, home: home, away: away, venue: venue,
             broadcasters: broadcasters, sessions: sessions, name: name, shortName: shortName,
             sessionKind: sessionKind, leagueLogoURL: leagueLogoURL, round: round ?? self.round,
-            startTimeIsTentative: startTimeIsTentative
+            startTimeIsTentative: startTimeIsTentative, stage: stage
         )
     }
 }

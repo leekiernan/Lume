@@ -38,19 +38,19 @@
     }
 
     struct TVSportsHubScreen: View {
-        @Environment(\.modelContext) private var modelContext
-        @Environment(\.contentRestriction) private var restriction
+        @Environment(\.modelContext) var modelContext
+        @Environment(\.contentRestriction) var restriction
 
         @State private var premium = PremiumManager.shared
         @State private var store = SportsStore.shared
-        @State private var follows = SportsFollowService.shared
+        @State var follows = SportsFollowService.shared
         @State private var epg = EPGSyncService.shared
 
         @State private var scope: SportsHubScope = .myTeams
         @State private var segment: SportsHubSegment = .today
         @State private var resolved: [String: [ResolvedChannel]] = [:]
-        @State private var selectedFixture: SportsFixture?
-        @State private var showManageTeams = false
+        @State var selectedFixture: SportsFixture?
+        @State var showManageTeams = false
         @State private var showPaywall = false
         @State private var playingMedia: PlayableMedia?
         /// Playback queued behind the dismissing detail cover; see `watch`.
@@ -59,6 +59,9 @@
         /// The headlined game from its first minute, when Hide Scores is on and
         /// the channel can replay it — worked out once per game, not per render.
         @State private var heroFromStart: PlayableMedia?
+        /// "Big this week", and the channels its near-term games resolved to.
+        @State var highlights: [SportsHighlight] = []
+        @State var highlightResolved: [String: [ResolvedChannel]] = [:]
 
         @FocusState private var focus: TVSportsFocus?
 
@@ -84,13 +87,19 @@
 
         // MARK: - Hub
 
-        @ViewBuilder
         private var hub: some View {
-            if follows.follows.isEmpty {
-                onboardingState
-            } else {
-                content
+            Group {
+                if follows.follows.isEmpty {
+                    if let first = highlights.first {
+                        highlightsHub(first)
+                    } else {
+                        onboardingState
+                    }
+                } else {
+                    content
+                }
             }
+            .task(id: follows.follows.map(\.key)) { await loadHighlights() }
         }
 
         /// The whole hub is one scrolling page so the header can never sit over
@@ -136,6 +145,14 @@
                                 ForEach(groups) { group in
                                     section(for: group, preference: preference, scrollProxy: scrollProxy)
                                 }
+                            }
+                            if scope == .myTeams, !highlights.isEmpty {
+                                TVSportsHighlightsSection(
+                                    highlights: highlights,
+                                    availability: highlightAvailability,
+                                    onSelect: { selectedFixture = $0 }
+                                )
+                                .padding(.top, 24)
                             }
                             if scope == .myTeams, !seasonTeams.isEmpty {
                                 TVTeamSeasonSection(teams: seasonTeams)
@@ -443,7 +460,7 @@
 
         // MARK: - Playback
 
-        private func watch(_ channel: ResolvedChannel) {
+        func watch(_ channel: ResolvedChannel) {
             guard let media = SportsPlayback.media(for: channel, in: modelContext) else { return }
 
             if selectedFixture != nil {

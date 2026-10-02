@@ -121,6 +121,7 @@ final class SportsAlertCoordinator {
     }
 
     private func tick() async {
+        await fireDueReminders()
         guard isActive else { return }
         let settings = settings
         let now = Date()
@@ -137,6 +138,29 @@ final class SportsAlertCoordinator {
         let raised = machine.observe(followedFetched, settings: settings, watchingFixtureId: nil)
         for alert in raised {
             await enqueue(alert)
+        }
+    }
+
+    /// "Remind me" games starting now: a kick-off toast while anything plays,
+    /// whatever the alert settings — the viewer asked for these.
+    private func fireDueReminders() async {
+        guard currentMedia != nil, SportsSyncService.isEnabled, PremiumManager.shared.isPremium else { return }
+        let due = SportsReminders.shared.due(now: Date())
+        guard !due.isEmpty else { return }
+        let probes = due.compactMap { reminder -> SportsFixture? in
+            guard SportsCatalog.league(id: reminder.leagueId) != nil else { return nil }
+            return SportsFixture(
+                id: reminder.fixtureId, leagueId: reminder.leagueId, leagueName: "", leagueAbbreviation: "",
+                startDate: reminder.start, status: SportsFixtureStatus(state: .scheduled)
+            )
+        }
+        let now = Date()
+        // A race reminder names one session ("…#Race"); the feed has weekends.
+        let fetched = await Self.fetch(probes, provider: provider).flatMap { $0.expandedBySession(now: now) }
+        for reminder in due {
+            guard let fixture = fetched.first(where: { $0.id == reminder.fixtureId }), fixture.status.state != .scheduled else { continue }
+            SportsReminders.shared.fired(reminder.fixtureId)
+            await enqueue(SportsAlert(fixture: fixture, kind: .kickoff, scoringTeamId: nil))
         }
     }
 

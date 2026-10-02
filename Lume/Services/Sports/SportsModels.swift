@@ -290,6 +290,9 @@ nonisolated struct SportsFixture: Identifiable, Codable, Hashable {
     let round: String?
     /// `startDate` is only the day: a tennis match not yet on an order of play.
     let startTimeIsTentative: Bool?
+    /// The competition stage as the provider keys it ("final", "semifinals",
+    /// "league-phase"); what "Big this week" reads finals from.
+    let stage: String?
 
     init(
         id: String,
@@ -308,7 +311,8 @@ nonisolated struct SportsFixture: Identifiable, Codable, Hashable {
         sessionKind: SportsSessionKind? = nil,
         leagueLogoURL: URL? = nil,
         round: String? = nil,
-        startTimeIsTentative: Bool? = nil
+        startTimeIsTentative: Bool? = nil,
+        stage: String? = nil
     ) {
         self.id = id
         self.leagueId = leagueId
@@ -327,6 +331,7 @@ nonisolated struct SportsFixture: Identifiable, Codable, Hashable {
         self.leagueLogoURL = leagueLogoURL
         self.round = round
         self.startTimeIsTentative = startTimeIsTentative
+        self.stage = stage
     }
 }
 

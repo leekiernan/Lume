@@ -260,7 +260,8 @@ nonisolated extension ESPNClient {
             sessions: sessions,
             name: nonEmpty(event.name),
             shortName: nonEmpty(event.shortName),
-            leagueLogoURL: context.leagueLogoURL
+            leagueLogoURL: context.leagueLogoURL,
+            stage: nonEmpty(event.season?.slug)
         )
     }
 

@@ -117,6 +117,12 @@ nonisolated struct ESPNEvent: Codable, Hashable {
     let venue: ESPNVenue?
     /// A team schedule's round: "League Phase", "Third Round", "Quarterfinals".
     let seasonType: ESPNSeasonType?
+    /// The stage, keyed: `{ "slug": "final" }`.
+    let season: ESPNEventSeason?
+}
+
+nonisolated struct ESPNEventSeason: Codable, Hashable {
+    let slug: String?
 }
 
 nonisolated struct ESPNSeasonType: Codable, Hashable {
