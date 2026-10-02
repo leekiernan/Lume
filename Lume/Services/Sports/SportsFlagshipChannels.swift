@@ -47,10 +47,28 @@ nonisolated enum SportsFlagshipChannels {
     // MARK: - Finding games on flagships
 
     private static let cache = Mutex<(generation: SportsChannelResolver.CacheGeneration, channels: [Flagship])?>(nil)
+    private static let results = Mutex<FlagshipResultCache?>(nil)
+    /// Short enough to heal an EPG edit that did not advance a source timestamp,
+    /// long enough that switching between Sports surfaces does not re-read the
+    /// same flagship listings.
+    private static let resultLifetime: TimeInterval = 10 * 60
 
     struct Flagship: Equatable {
         let name: String
         let epgChannelId: String
+    }
+
+    private struct FlagshipResultCache {
+        let key: ResultKey
+        let values: [String: String]
+        let createdAt: Date
+    }
+
+    private struct ResultKey: Hashable {
+        let generation: SportsChannelResolver.CacheGeneration
+        /// Fixture identity includes kickoff because a reschedule changes its
+        /// guide window without necessarily changing the provider id.
+        let fixtures: [String]
     }
 
     /// For each fixture that one of the viewer's flagship channels lists around
@@ -60,21 +78,39 @@ nonisolated enum SportsFlagshipChannels {
         container: ModelContainer,
         restriction: ContentRestriction,
         overrides: SportsFlagshipOverrides.Marks,
-        now _: Date
+        now: Date
     ) async -> [String: String] {
         guard !fixtures.isEmpty else { return [:] }
         return await Task.detached(priority: .utility) {
             let context = ModelContext(container)
-            let flagships = flagshipChannels(context: context, container: container, restriction: restriction, overrides: overrides)
-            guard !flagships.isEmpty else { return [:] }
+            let generation = SportsChannelResolver.CacheGeneration(
+                container: container, context: context, restriction: restriction, picks: overrides.cacheKey
+            )
+            let key = ResultKey(
+                generation: generation,
+                fixtures: fixtures.map(SportsChannelResolver.ResolveCache.key).sorted()
+            )
+            if let cached = results.withLock({ $0 }), cached.key == key,
+               now.timeIntervalSince(cached.createdAt) < resultLifetime
+            {
+                return cached.values
+            }
+
+            let flagships = flagshipChannels(context: context, generation: generation, restriction: restriction, overrides: overrides)
+            guard !flagships.isEmpty else {
+                results.withLock { $0 = FlagshipResultCache(key: key, values: [:], createdAt: now) }
+                return [:]
+            }
             let byEPG = Dictionary(flagships.map { ($0.epgChannelId, $0.name) }, uniquingKeysWith: { first, _ in first })
-            let starts = fixtures.map(\.startDate)
-            guard let first = starts.min(), let last = starts.max() else { return [:] }
-            let listings = (try? context.fetch(SportsChannelResolver.epgCandidateDescriptor(
-                channelIds: Array(byEPG.keys),
-                windowStart: first.addingTimeInterval(-SportsMatcher.leadTime),
-                windowEnd: last.addingTimeInterval(SportsMatcher.lateStart)
-            ))) ?? []
+            // Do not turn several kickoff windows into one multi-hour guide
+            // scan. Adjacent/overlapping windows still merge in the resolver,
+            // while sparse fixtures read only the programme rows that can match.
+            var seen: Set<PersistentIdentifier> = []
+            let listings = SportsChannelResolver.guideWindows(for: fixtures).flatMap { window in
+                ((try? context.fetch(SportsChannelResolver.epgCandidateDescriptor(
+                    channelIds: Array(byEPG.keys), windowStart: window.lowerBound, windowEnd: window.upperBound
+                ))) ?? []).filter { seen.insert($0.persistentModelID).inserted }
+            }
             let lines = listings.map { listing in
                 (channel: listing.channelId, start: listing.start,
                  text: SportsMatcher.normalize("\(listing.title) \(listing.subtitle ?? "")"))
@@ -90,6 +126,7 @@ nonisolated enum SportsFlagshipChannels {
                     found[fixture.id] = name
                 }
             }
+            results.withLock { $0 = FlagshipResultCache(key: key, values: found, createdAt: now) }
             return found
         }.value
     }
@@ -98,13 +135,10 @@ nonisolated enum SportsFlagshipChannels {
     /// catalog generation (a playlist or guide sync starts a new one).
     private static func flagshipChannels(
         context: ModelContext,
-        container: ModelContainer,
+        generation: SportsChannelResolver.CacheGeneration,
         restriction: ContentRestriction,
         overrides: SportsFlagshipOverrides.Marks
     ) -> [Flagship] {
-        let generation = SportsChannelResolver.CacheGeneration(
-            container: container, context: context, restriction: restriction, picks: overrides.cacheKey
-        )
         if let cached = cache.withLock({ $0 }), cached.generation == generation {
             return cached.channels
         }

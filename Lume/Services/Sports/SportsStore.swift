@@ -81,6 +81,13 @@ final class SportsStore {
         refreshError = true
     }
 
+    /// The newest source data behind a set of visible leagues. Screens use this
+    /// for a quiet freshness cue; an absent value simply means no cached score
+    /// data has reached the device yet.
+    func newestSnapshotDate(in leagueIDs: [String]) -> Date? {
+        leagueIDs.compactMap { snapshots[$0]?.fetchedAt }.max()
+    }
+
     // MARK: - Derived reads
 
     func snapshot(for leagueId: String) -> SportsLeagueSnapshot? {

@@ -60,8 +60,7 @@
         /// the channel can replay it — worked out once per game, not per render.
         @State private var heroFromStart: PlayableMedia?
         /// "Big this week", and the channels its near-term games resolved to.
-        @State var highlights: [SportsHighlight] = []
-        @State var highlightResolved: [String: [ResolvedChannel]] = [:]
+        @State var highlightsLoad = SportsHighlightsLoadMachine()
 
         @FocusState private var focus: TVSportsFocus?
 
@@ -90,7 +89,7 @@
         private var hub: some View {
             Group {
                 if follows.follows.isEmpty {
-                    if let first = highlights.first {
+                    if let first = highlightsLoad.result.highlights.first {
                         highlightsHub(first)
                     } else {
                         onboardingState
@@ -146,9 +145,9 @@
                                     section(for: group, preference: preference, scrollProxy: scrollProxy)
                                 }
                             }
-                            if scope == .myTeams, !highlights.isEmpty {
+                            if scope == .myTeams, !highlightsLoad.result.highlights.isEmpty {
                                 TVSportsHighlightsSection(
-                                    highlights: highlights,
+                                    highlights: highlightsLoad.result.highlights,
                                     availability: highlightAvailability,
                                     onSelect: { selectedFixture = $0 }
                                 )
@@ -192,6 +191,9 @@
                 }
                 if store.refreshError {
                     hintRow("Scores unavailable — showing your saved data.", icon: "wifi.slash")
+                }
+                if let fetchedAt = store.newestSnapshotDate(in: displayLeagueIds) {
+                    freshnessHintRow(fetchedAt)
                 }
             }
             .padding(.horizontal, 60)
@@ -404,6 +406,16 @@
             Label(text, systemImage: icon)
                 .font(.callout)
                 .foregroundStyle(.white.opacity(0.55))
+        }
+
+        private func freshnessHintRow(_ date: Date) -> some View {
+            Label {
+                Text(date, style: .relative)
+            } icon: {
+                Image(systemName: "clock")
+            }
+            .font(.callout)
+            .foregroundStyle(.white.opacity(0.55))
         }
 
         // MARK: - Focus

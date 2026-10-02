@@ -410,7 +410,7 @@ final class SportsSyncService {
 
         let snapshot = SportsLeagueSnapshot(
             fetchedAt: Date(),
-            fixtures: Array(fixturesById.values),
+            fixtures: Self.retainedFixtures(Array(fixturesById.values)),
             standings: standings,
             teams: teams,
             teamsFetchedAt: teamsFetchedAt

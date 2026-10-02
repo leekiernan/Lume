@@ -57,7 +57,7 @@ struct SportsHubView: View {
     @State private var scope: SportsHubScope = .myTeams
     @State private var segment: SportsHubSegment = .today
     @State private var resolved: [String: [ResolvedChannel]] = [:]
-    @State private var highlights = SportsHighlightsPipeline.Result(highlights: [], resolved: [:])
+    @State private var highlightsLoad = SportsHighlightsLoadMachine()
     @State private var selectedFixture: SportsFixture?
     @State private var pickerFixture: SportsFixture?
     @State private var showManageTeams = false
@@ -153,6 +153,7 @@ struct SportsHubView: View {
 
     @ViewBuilder
     private var highlightsRail: some View {
+        let highlights = highlightsLoad.result
         if !highlights.highlights.isEmpty {
             SportsHighlightsRail(
                 highlights: highlights.highlights,
@@ -173,13 +174,14 @@ struct SportsHubView: View {
     }
 
     private func loadHighlights() async {
+        let request = highlightsLoad.begin()
         let followedTeams = Set(follows.follows.filter { $0.kind == .team }.map(\.key))
         let result = await SportsHighlightsPipeline.run(
             container: modelContext.container, restriction: restriction, followedTeamIds: followedTeams,
             overrides: SportsFlagshipOverrides.shared.marks
         )
         guard !Task.isCancelled else { return }
-        highlights = result
+        highlightsLoad.finish(request, result: result)
     }
 
     private func followedContent(_ fixtures: [SportsFixture]) -> some View {
@@ -201,6 +203,9 @@ struct SportsHubView: View {
                     }
                     if store.refreshError {
                         hint("Scores unavailable — showing your saved data.", icon: "wifi.slash")
+                    }
+                    if let fetchedAt = store.newestSnapshotDate(in: displayLeagueIds) {
+                        freshnessHint(fetchedAt)
                     }
                     if let hero {
                         SportsHubHeroCard(
@@ -254,6 +259,20 @@ struct SportsHubView: View {
             .font(.caption)
             .foregroundStyle(.secondary)
             .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// A quiet provenance cue: score data is cached so the hub can open
+    /// instantly, and this makes an older snapshot legible without competing
+    /// with the explicit refresh affordances.
+    private func freshnessHint(_ date: Date) -> some View {
+        Label {
+            Text(date, style: .relative)
+        } icon: {
+            Image(systemName: "clock")
+        }
+        .font(.caption)
+        .foregroundStyle(.secondary)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     // MARK: - Navigation path

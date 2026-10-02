@@ -52,7 +52,14 @@ actor SportsArtwork {
     ]
 
     private var entries: [String: Entry]
-    private var lastRequest: ContinuousClock.Instant?
+    /// Each cache key owns its request until it has resolved. A backdrop can be
+    /// requested by the hero, card rail and detail view at once; making those
+    /// callers share work keeps the free API rate predictable.
+    private var inFlight: [String: Task<URL?, Never>] = [:]
+    /// Reservations, rather than a "last request" timestamp, mean concurrent
+    /// callers are spaced too. Sleeping callers cannot all wake and issue a
+    /// request together.
+    private var nextRequestAt: ContinuousClock.Instant?
     private let session: URLSession
     private let fileURL: URL?
 
@@ -60,9 +67,16 @@ actor SportsArtwork {
         self.session = session
         let directory = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first
         fileURL = directory?.appendingPathComponent("SportsArtwork.json")
-        entries = fileURL
+        let decodedEntries = fileURL
             .flatMap { try? Data(contentsOf: $0) }
             .flatMap { try? JSONDecoder().decode([String: Entry].self, from: $0) } ?? [:]
+        entries = Self.prunedEntries(decodedEntries)
+        if entries.count != decodedEntries.count,
+           let fileURL,
+           let data = try? JSONEncoder().encode(entries)
+        {
+            try? data.write(to: fileURL, options: .atomic)
+        }
     }
 
     /// The backdrop for a fixture: the home side's fan art, else its
@@ -92,15 +106,28 @@ actor SportsArtwork {
 
     // MARK: - Cache
 
-    private func cached(_ key: String, fetch: () async -> URL?) async -> URL? {
+    private func cached(_ key: String, fetch: @escaping @Sendable () async -> URL?) async -> URL? {
         if let entry = entries[key] {
             let lifetime = entry.url == nil ? Self.missLifetime : Self.hitLifetime
             if Date().timeIntervalSince(entry.fetchedAt) < lifetime { return entry.url }
         }
-        let url = await fetch()
+
+        if let task = inFlight[key] { return await task.value }
+
+        let task = Task<URL?, Never> { await fetch() }
+        inFlight[key] = task
+        let url = await task.value
+        inFlight[key] = nil
         entries[key] = Entry(url: url, fetchedAt: Date())
         persist()
         return url
+    }
+
+    private static func prunedEntries(_ entries: [String: Entry], now: Date = Date()) -> [String: Entry] {
+        entries.filter { _, entry in
+            let lifetime = entry.url == nil ? Self.missLifetime : Self.hitLifetime
+            return now.timeIntervalSince(entry.fetchedAt) < lifetime
+        }
     }
 
     private func persist() {
@@ -111,11 +138,11 @@ actor SportsArtwork {
     // MARK: - Network
 
     private func fetch<T: Decodable>(_ path: String, _ query: [URLQueryItem]) async -> T? {
-        if let lastRequest {
-            let wait = Self.spacing - (ContinuousClock.now - lastRequest)
-            if wait > .zero { try? await Task.sleep(for: wait) }
-        }
-        lastRequest = .now
+        let now = ContinuousClock.now
+        let requestAt = max(nextRequestAt ?? now, now)
+        nextRequestAt = requestAt.advanced(by: Self.spacing)
+        let wait = requestAt - now
+        if wait > .zero { try? await Task.sleep(for: wait) }
         var request = URLRequest(url: Self.apiBase.appending(path: path).appending(queryItems: query))
         request.timeoutInterval = 15
         guard let (data, response) = try? await session.data(for: request),

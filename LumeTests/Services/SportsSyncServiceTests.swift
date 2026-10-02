@@ -134,6 +134,24 @@ struct SportsCacheStoreTests {
     }
 }
 
+// MARK: - snapshot retention
+
+struct SportsSnapshotRetentionTests {
+    private let now = Date(timeIntervalSince1970: 1_800_000_000)
+
+    @Test func `keeps live events and a short history while trimming stale schedule`() {
+        let retained = SportsSyncService.retainedFixtures([
+            makeFixture(id: "live", leagueId: "espn:soccer/ger.1", start: now.addingTimeInterval(-30 * 86400), state: .inProgress),
+            makeFixture(id: "recent", leagueId: "espn:soccer/ger.1", start: now.addingTimeInterval(-2 * 86400), state: .final),
+            makeFixture(id: "old", leagueId: "espn:soccer/ger.1", start: now.addingTimeInterval(-20 * 86400), state: .final),
+            makeFixture(id: "soon", leagueId: "espn:soccer/ger.1", start: now.addingTimeInterval(40 * 86400), state: .scheduled),
+            makeFixture(id: "far", leagueId: "espn:soccer/ger.1", start: now.addingTimeInterval(50 * 86400), state: .scheduled)
+        ], now: now)
+
+        #expect(Set(retained.map(\.id)) == ["live", "recent", "soon"])
+    }
+}
+
 // MARK: - monthsToFetch
 
 struct SportsSyncMonthWindowTests {
