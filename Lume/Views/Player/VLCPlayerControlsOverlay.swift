@@ -15,8 +15,10 @@ import VLCKit
         let media: PlayableMedia
         @Binding var isSeeking: Bool
         @Binding var seekPosition: TimeInterval
-        @Binding var currentTime: TimeInterval
-        @Binding var duration: TimeInterval
+        /// The 10 Hz playback clock, as the `@Observable` object: only the
+        /// `PlaybackTimeline` leaf reads it, so ticks never re-render this body
+        /// (and with it an open track `Menu`).
+        let clock: PlaybackClock
         @Binding var hideTask: Task<Void, Never>?
         var onClose: () -> Void
         var onTogglePlay: () -> Void
@@ -201,8 +203,12 @@ import VLCKit
                 if media.isLive {
                     liveIndicator
                 } else {
-                    scrubber
-                    timeLabels
+                    PlaybackTimeline(
+                        clock: clock,
+                        isSeeking: $isSeeking,
+                        seekPosition: $seekPosition,
+                        onEditingChanged: onSliderEditingChanged
+                    )
                 }
             }
             .padding(.horizontal, 20)
@@ -354,38 +360,13 @@ import VLCKit
 
         // MARK: - Scrubber
 
-        private var scrubber: some View {
-            Slider(
-                value: Binding<TimeInterval>(
-                    get: { isSeeking ? seekPosition : (currentTime.isFinite ? currentTime : 0) },
-                    set: { seekPosition = $0 }
-                ),
-                in: 0 ... max(duration.isFinite ? duration : 1, 1),
-                onEditingChanged: onSliderEditingChanged
-            )
-            .tint(.white)
-        }
-
-        private var timeLabels: some View {
-            HStack {
-                Text(timeString(from: isSeeking ? seekPosition : currentTime))
-                    .contentTransition(.numericText())
-                    .foregroundStyle(.white)
-                Spacer()
-                Text(timeString(from: max(duration, 0)))
-                    .foregroundStyle(.white.opacity(0.7))
-            }
-            .font(.caption.monospacedDigit())
-            .shadow(color: .black.opacity(0.35), radius: 3, y: 1)
-        }
-
         private func onSliderEditingChanged(editing: Bool) {
             isSeeking = editing
             if editing {
                 hideTask?.cancel()
             } else {
                 // Clock first: a catch-up seek re-places it on the segment.
-                currentTime = seekPosition
+                clock.current = seekPosition
                 coordinator.seek(to: seekPosition)
                 onScheduleHide()
             }
@@ -426,19 +407,6 @@ import VLCKit
         /// Compact rate label, e.g. `1×`, `1.25×`. `%g` drops trailing zeros.
         private func rateString(_ rate: Float) -> String {
             String(format: "%g×", rate)
-        }
-
-        private func timeString(from time: TimeInterval) -> String {
-            guard time.isFinite, time >= 0 else { return "0:00" }
-            let totalSeconds = Int(time)
-            let hours = totalSeconds / 3600
-            let minutes = (totalSeconds % 3600) / 60
-            let seconds = totalSeconds % 60
-            if hours > 0 {
-                return String(format: "%d:%02d:%02d", hours, minutes, seconds)
-            } else {
-                return String(format: "%d:%02d", minutes, seconds)
-            }
         }
     }
 #endif
