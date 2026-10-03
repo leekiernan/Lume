@@ -142,8 +142,8 @@ struct SeriesView: View {
     private var sections: some View {
         heroAndRows
             .browseActivity()
-            .onChange(of: feed.heroItems.first?.imageURL, initial: true) { _, backdropURL in
-                rememberHeroWarmStart(backdropURL)
+            .onChange(of: feed.heroItems.first, initial: true) { _, hero in
+                rememberHeroWarmStart(hero?.imageURL)
             }
             .task(id: playlistPrefix) {
                 genres = await GenreDerivation.seriesGenres(in: modelContext.container, playlistPrefix: playlistPrefix, restriction: restriction)
@@ -186,7 +186,7 @@ struct SeriesView: View {
                     if !feed.heroItems.isEmpty {
                         HomeHeroCarousel(items: feed.heroItems)
                     } else if feed.heroState.reservesSpace {
-                        HomeHeroWarmStart(backdropURL: heroWarmStartBackdropURL)
+                        HomeHeroWarmStart(backdropURL: heroWarmStartBackdropURL, posterURL: heroWarmStart.posterURL(hero: heroRef, catalogScope: heroWarmStartScope))
                     }
                     rowsContent
                 }
@@ -297,7 +297,7 @@ struct SeriesView: View {
     }
 
     private func rememberHeroWarmStart(_ backdropURL: URL?) {
-        heroWarmStart.remember(backdropURL, hero: heroRef, catalogScope: heroWarmStartScope)
+        heroWarmStart.remember(backdropURL, hero: heroRef, catalogScope: heroWarmStartScope, posterURL: feed.heroItems.first?.posterURL)
     }
 }
 

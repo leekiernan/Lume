@@ -3,6 +3,18 @@ import Foundation
 import Testing
 
 struct HeroWarmStartTests {
+    @Test func `portrait warm starts obey the same visibility scope and old records remain readable`() throws {
+        let hero = HomeSectionRef.custom(Self.alpha.id)
+        let backdrop = try #require(URL(string: "https://image.tmdb.org/t/p/original/wide.jpg"))
+        let poster = try #require(URL(string: "https://image.tmdb.org/t/p/original/poster.jpg"))
+        let raw = try #require(HeroWarmStartCache.encode(hero: hero, catalogScope: "visible", backdropURL: backdrop, posterURL: poster))
+        #expect(HeroWarmStartCache.backdropURL(from: raw, hero: hero, catalogScope: "visible", portrait: true) == poster)
+        #expect(HeroWarmStartCache.backdropURL(from: raw, hero: hero, catalogScope: "restricted", portrait: true) == nil)
+        let old = try #require(HeroWarmStartCache.encode(hero: hero, catalogScope: "visible", backdropURL: backdrop))
+        #expect(HeroWarmStartCache.backdropURL(from: old, hero: hero, catalogScope: "visible") == backdrop)
+        #expect(HeroWarmStartCache.backdropURL(from: old, hero: hero, catalogScope: "visible", portrait: true) == nil)
+    }
+
     private static let alpha = CustomHomeSection(
         id: UUID(uuidString: "00000000-0000-0000-0000-0000000000A1")!,
         title: "Popular Movies",

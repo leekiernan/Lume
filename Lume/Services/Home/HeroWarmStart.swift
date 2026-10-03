@@ -13,6 +13,7 @@ nonisolated struct HeroWarmStart: Codable, Equatable {
     let heroToken: String
     let catalogScope: String
     let backdropURL: String
+    var posterURL: String?
 }
 
 enum HeroWarmStartCache {
@@ -47,11 +48,12 @@ enum HeroWarmStartCache {
         return "\(playlistID?.uuidString ?? "none")|\(visibilityToken)|\(source)"
     }
 
-    static func encode(hero: HomeSectionRef, catalogScope: String, backdropURL: URL) -> String? {
+    static func encode(hero: HomeSectionRef, catalogScope: String, backdropURL: URL, posterURL: URL? = nil) -> String? {
         let record = HeroWarmStart(
             heroToken: hero.token,
             catalogScope: catalogScope,
-            backdropURL: backdropURL.absoluteString
+            backdropURL: backdropURL.absoluteString,
+            posterURL: posterURL?.absoluteString
         )
         guard let data = try? JSONEncoder().encode(record) else { return nil }
         return String(data: data, encoding: .utf8)
@@ -63,7 +65,8 @@ enum HeroWarmStartCache {
     static func backdropURL(
         from raw: String,
         hero: HomeSectionRef?,
-        catalogScope: String
+        catalogScope: String,
+        portrait: Bool = false
     ) -> URL? {
         guard let hero,
               let data = raw.data(using: .utf8),
@@ -71,6 +74,7 @@ enum HeroWarmStartCache {
               record.heroToken == hero.token,
               record.catalogScope == catalogScope
         else { return nil }
+        if portrait { return record.posterURL.flatMap { URL(string: $0) } }
         return URL(string: record.backdropURL)
     }
 }
@@ -94,12 +98,17 @@ final class HeroWarmStartState {
         HeroWarmStartCache.backdropURL(from: raw, hero: hero, catalogScope: catalogScope)
     }
 
-    func remember(_ backdropURL: URL?, hero: HomeSectionRef?, catalogScope: String) {
+    func posterURL(hero: HomeSectionRef?, catalogScope: String) -> URL? {
+        HeroWarmStartCache.backdropURL(from: raw, hero: hero, catalogScope: catalogScope, portrait: true)
+    }
+
+    func remember(_ backdropURL: URL?, hero: HomeSectionRef?, catalogScope: String, posterURL: URL? = nil) {
         guard let backdropURL, let hero,
               let encoded = HeroWarmStartCache.encode(
                   hero: hero,
                   catalogScope: catalogScope,
-                  backdropURL: backdropURL
+                  backdropURL: backdropURL,
+                  posterURL: posterURL
               ),
               encoded != raw
         else { return }

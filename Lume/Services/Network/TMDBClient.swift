@@ -154,7 +154,9 @@ nonisolated struct TMDBClient {
     }
 
     static var heroBackdropSize: String {
-        "w1920"
+        // A supported baseline for metadata/warm-start URLs. Hero rendering
+        // selects a larger original or a smaller rendition from its geometry.
+        "w1280"
     }
 
     static var heroLogoSize: String {
@@ -299,6 +301,7 @@ nonisolated struct TrendingTitle: Identifiable, Hashable {
 /// fields are represented as nil / empty arrays so callers can fill gaps in
 /// provider metadata without special-casing the media type.
 nonisolated struct TMDBTitleDetails {
+    var posterPath: String?
     var backdropPath: String?
     var tagline: String?
     var overview: String?
@@ -360,6 +363,7 @@ private nonisolated struct TrendingItem: Decodable {
 /// and certifications appended). Every field is optional so a single shape
 /// works for both endpoints.
 private nonisolated struct TitleDetailsResponse: Decodable {
+    let posterPath: String?
     let backdropPath: String?
     let tagline: String?
     let overview: String?
@@ -385,6 +389,7 @@ private nonisolated struct TitleDetailsResponse: Decodable {
     enum CodingKeys: String, CodingKey {
         case tagline, overview, runtime, genres, credits, similar, videos, images
         case backdropPath = "backdrop_path"
+        case posterPath = "poster_path"
         case voteAverage = "vote_average"
         case episodeRunTime = "episode_run_time"
         case releaseDates = "release_dates"
@@ -503,6 +508,7 @@ nonisolated extension TitleDetailsResponse {
             }
 
         return TMDBTitleDetails(
+            posterPath: posterPath,
             backdropPath: backdropPath,
             tagline: (tagline?.isEmpty == true) ? nil : tagline,
             overview: (overview?.isEmpty == true) ? nil : overview,

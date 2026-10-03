@@ -26,8 +26,10 @@ struct HomeHeroCarousel: View {
         HeroCarousel(
             items: items,
             imageURL: \.imageURL,
-            backdrop: { HeroBackdrop(url: $0.imageURL) },
-            info: { HeroInfo(hero: $0, isCompact: $1) }
+            backdrop: { HeroBackdrop(url: $0.imageURL, posterURL: $0.posterURL) },
+            info: { HeroInfo(hero: $0, isCompact: $1) },
+            managesArtworkComposition: true,
+            portraitURL: \.posterURL
         )
     }
 }
@@ -40,8 +42,12 @@ struct HeroCarousel<Item: Identifiable, Backdrop: View, Info: View>: View where 
     @ViewBuilder let backdrop: (Item) -> Backdrop
     /// The fixed copy over the artwork; `true` when the hero is narrow.
     @ViewBuilder let info: (Item, Bool) -> Info
+    var managesArtworkComposition = false
+    var portraitURL: ((Item) -> URL?)?
 
     @State private var currentID: String?
+    @State private var artworkSize: CGSize = .zero
+    @Environment(\.displayScale) private var displayScale
     @State private var isInteracting = false
     /// False while the hero is scrolled out of view, so the carousel doesn't
     /// page (and animate the crossfade + loading bar) where nobody can see it.
@@ -72,8 +78,6 @@ struct HeroCarousel<Item: Identifiable, Backdrop: View, Info: View>: View where 
     private static var tailCloneID: String {
         "hero-clone-tail"
     }
-
-    private let heroHeight = HomeHeroMetrics.height
 
     /// The rendered pages: the real items padded with a clone of the LAST item
     /// at the front and the FIRST at the back. Paging onto a clone is one slide;
@@ -112,44 +116,50 @@ struct HeroCarousel<Item: Identifiable, Backdrop: View, Info: View>: View where 
     }
 
     var body: some View {
-        GeometryReader { proxy in
-            let width = proxy.size.width
-            let isCompact = width < compactWidthThreshold
+        HeroCarouselFrame(portraitComposition: portraitURL != nil) {
+            GeometryReader { proxy in
+                let width = proxy.size.width
+                let isCompact = width < compactWidthThreshold
 
-            ZStack(alignment: .bottomLeading) {
-                artwork
-                // Darken the bottom so the title and buttons stay legible.
-                LinearGradient(
-                    colors: [.clear, .black.opacity(0.15), .black.opacity(0.85)],
-                    startPoint: .center,
-                    endPoint: .bottom
-                )
-                .allowsHitTesting(false)
+                ZStack(alignment: .bottomLeading) {
+                    artwork
+                    // Darken the bottom so the title and buttons stay legible.
+                    LinearGradient(
+                        colors: [.clear, .black.opacity(0.15), .black.opacity(0.85)],
+                        startPoint: .center,
+                        endPoint: .bottom
+                    )
+                    .allowsHitTesting(false)
 
-                if let hero = displayedHero {
-                    // Fixed overlay — no `.id`/`.transition` so a stable view can
-                    // fade out/in via `infoOpacity` rather than cross-dissolving.
-                    info(hero, isCompact)
-                        .opacity(infoOpacity)
+                    if let hero = displayedHero {
+                        // Fixed overlay — no `.id`/`.transition` so a stable view can
+                        // fade out/in via `infoOpacity` rather than cross-dissolving.
+                        info(hero, isCompact)
+                            .opacity(infoOpacity)
+                    }
+
+                    pageIndicator
+                        .frame(maxWidth: .infinity, alignment: .center)
+
+                    #if os(macOS)
+                        // Manual slider arrows — macOS has no touch swipe, so give the
+                        // pointer an explicit way to page. Hidden when there's nothing
+                        // to scroll between.
+                        sliderButtons
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    #endif
                 }
-
-                pageIndicator
-                    .frame(maxWidth: .infinity, alignment: .center)
-
-                #if os(macOS)
-                    // Manual slider arrows — macOS has no touch swipe, so give the
-                    // pointer an explicit way to page. Hidden when there's nothing
-                    // to scroll between.
-                    sliderButtons
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                #endif
+                .frame(width: width, height: proxy.size.height)
+                .clipped()
+                .contentShape(Rectangle())
+                .animation(.easeInOut(duration: 0.35), value: currentItemID)
             }
-            .frame(width: width, height: heroHeight)
-            .clipped()
-            .contentShape(Rectangle())
-            .animation(.easeInOut(duration: 0.35), value: currentItemID)
         }
-        .frame(height: heroHeight)
+        .onGeometryChange(for: CGSize.self) { $0.size } action: { size in
+            artworkSize = size
+            prefetchNeighbours()
+        }
+        .onChange(of: displayScale) { prefetchNeighbours() }
         .onAppear {
             // Seed `displayedID` first so the initial assignment skips the crossfade.
             if displayedID == nil { displayedID = items.first?.id }
@@ -178,10 +188,17 @@ struct HeroCarousel<Item: Identifiable, Backdrop: View, Info: View>: View where 
         let count = items.count
         guard count > 1 else { return }
         // Wrap the neighbours so the loop targets (last⇄first) are warm too.
-        let neighbours = [(index - 1 + count) % count, (index + 1) % count]
-            .compactMap { imageURL(items[$0]) }
-        guard !neighbours.isEmpty else { return }
-        Task { await ImagePipeline.shared.prefetch(neighbours, maxPixelSize: nil) }
+        guard artworkSize.width > 0 else { return }
+        for neighbour in [(index - 1 + count) % count, (index + 1) % count] {
+            let poster = HeroArtworkPolicy.portraitURL(portraitURL?(items[neighbour]), width: artworkSize.width)
+            let ratio = poster == nil ? HeroArtworkPolicy.landscapeRatio : HeroArtworkPolicy.portraitRatio
+            let height = poster == nil ? HeroArtworkPolicy.artworkHeight(width: artworkSize.width, heroHeight: artworkSize.height) : artworkSize.height
+            let zoom = poster == nil ? 1 : HeroArtworkPolicy.portraitZoom
+            let pixels = HeroArtworkPolicy.decodePoints(width: artworkSize.width, height: height, sourceRatio: ratio) * zoom * displayScale
+            let url = poster.map { HeroArtworkPolicy.posterURL($0, pixelWidth: pixels * ratio) }
+                ?? HeroArtworkPolicy.backdropURL(imageURL(items[neighbour]), pixelWidth: pixels)
+            if let url { Task { await ImagePipeline.shared.prefetch([url], maxPixelSize: pixels) } }
+        }
     }
 
     // MARK: - Scrolling artwork
@@ -192,10 +209,11 @@ struct HeroCarousel<Item: Identifiable, Backdrop: View, Info: View>: View where 
             ScrollView(.horizontal) {
                 LazyHStack(spacing: 0) {
                     ForEach(slots) { slot in
-                        backdrop(slot.item)
-                            .frame(width: width, height: heroHeight)
-                            .clipped()
-                            .id(slot.id)
+                        HeroArtworkRegion(managesComposition: managesArtworkComposition) {
+                            backdrop(slot.item)
+                        }
+                        .frame(width: width, height: proxy.size.height)
+                        .id(slot.id)
                     }
                 }
                 .scrollTargetLayout()
@@ -343,24 +361,39 @@ struct HeroCarousel<Item: Identifiable, Backdrop: View, Info: View>: View where 
 /// height once titles and actions are ready.
 struct HomeHeroWarmStart: View {
     let backdropURL: URL?
+    var posterURL: URL?
 
     var body: some View {
-        ZStack(alignment: .bottomLeading) {
-            HeroBackdrop(url: backdropURL)
-            LinearGradient(
-                colors: [.clear, .black.opacity(0.15), .black.opacity(0.85)],
-                startPoint: .center,
-                endPoint: .bottom
-            )
-            .allowsHitTesting(false)
+        HeroCarouselFrame(portraitComposition: true) {
+            ZStack(alignment: .bottomLeading) {
+                HeroArtworkRegion(managesComposition: true) {
+                    HeroBackdrop(url: backdropURL, posterURL: posterURL)
+                }
+                LinearGradient(
+                    colors: [.clear, .black.opacity(0.15), .black.opacity(0.85)],
+                    startPoint: .center,
+                    endPoint: .bottom
+                )
+                .allowsHitTesting(false)
+            }
         }
-        .frame(height: HomeHeroMetrics.height)
         .clipped()
     }
 }
 
-private enum HomeHeroMetrics {
-    static let height: CGFloat = 800
+/// Width-aware geometry without a measurement/update loop or first-frame jump.
+private struct HeroCarouselFrame: Layout {
+    var portraitComposition = false
+    func sizeThatFits(proposal: ProposedViewSize, subviews _: Subviews, cache _: inout ()) -> CGSize {
+        let width = proposal.width ?? 600
+        return CGSize(width: width, height: HeroArtworkPolicy.heroHeight(width: width, portraitComposition: portraitComposition))
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal _: ProposedViewSize, subviews: Subviews, cache _: inout ()) {
+        for subview in subviews {
+            subview.place(at: bounds.origin, proposal: ProposedViewSize(bounds.size))
+        }
+    }
 }
 
 /// The carousel's auto-advance clock, observed only by `HeroClockIndicator`.
@@ -438,34 +471,55 @@ private struct HeroSlot<Item>: Identifiable {
 
 private struct HeroBackdrop: View {
     let url: URL?
+    var posterURL: URL?
+    @State private var failedPosterURL: URL?
 
     var body: some View {
-        GeometryReader { geo in
-            CachedAsyncImage(url: url) { phase in
-                switch phase {
-                case .empty:
-                    Rectangle()
-                        .fill(Color.gray.opacity(0.25))
-                        .overlay { ProgressView() }
-                case let .success(image):
-                    image
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                        .frame(width: geo.size.width, height: geo.size.height)
-                        .clipped()
-                case .failure:
-                    Rectangle()
-                        .fill(Color.gray.opacity(0.25))
-                        .overlay {
-                            Image(systemName: "film")
-                                .font(.largeTitle)
-                                .foregroundStyle(.secondary)
-                        }
-                @unknown default:
-                    EmptyView()
+        GeometryReader { proxy in
+            let poster = HeroArtworkPolicy.portraitURL(posterURL != failedPosterURL ? posterURL : nil, width: proxy.size.width)
+            let height = poster == nil ? HeroArtworkPolicy.artworkHeight(width: proxy.size.width, heroHeight: proxy.size.height) : proxy.size.height
+            Color.black.overlay(alignment: .top) {
+                HeroArtworkImage(
+                    url: poster ?? url,
+                    sourceRatio: poster == nil ? HeroArtworkPolicy.landscapeRatio : HeroArtworkPolicy.portraitRatio,
+                    zoom: poster == nil ? 1 : HeroArtworkPolicy.portraitZoom,
+                    onFailure: { if let poster { failedPosterURL = poster } }
+                )
+                .frame(height: height)
+                .mask {
+                    if proxy.size.width < 600 {
+                        LinearGradient(stops: [.init(color: .black, location: 0), .init(color: .black, location: 0.65), .init(color: .clear, location: 1)], startPoint: .top, endPoint: .bottom)
+                    } else { Color.black }
                 }
             }
-            .frame(width: geo.size.width, height: geo.size.height)
+        }
+    }
+}
+
+/// Shared by Sports and movie/series heroes, including their warm-start frame.
+/// Only narrow surfaces split artwork from copy; tvOS uses its separate layout.
+private struct HeroArtworkRegion<Artwork: View>: View {
+    var managesComposition = false
+    @ViewBuilder let artwork: () -> Artwork
+
+    var body: some View {
+        GeometryReader { proxy in
+            let height = managesComposition ? proxy.size.height : HeroArtworkPolicy.artworkHeight(width: proxy.size.width, heroHeight: proxy.size.height)
+            Color.black.overlay(alignment: .top) {
+                artwork()
+                    .frame(width: proxy.size.width, height: height)
+                    .clipped()
+                    .mask {
+                        if proxy.size.width < 600, !managesComposition {
+                            LinearGradient(
+                                stops: [.init(color: .black, location: 0), .init(color: .black, location: 0.7), .init(color: .clear, location: 1)],
+                                startPoint: .top, endPoint: .bottom
+                            )
+                        } else {
+                            Color.black
+                        }
+                    }
+            }
         }
     }
 }

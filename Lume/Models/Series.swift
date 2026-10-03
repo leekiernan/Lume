@@ -53,6 +53,8 @@ final class Series {
 
     /// Wide landscape artwork path used for the detail hero (e.g. `/abc.jpg`).
     var backdropPath: String?
+    var posterPath: String?
+    var posterCheckedAt: Date?
     /// Transparent wordmark-logo path shown in place of the title (e.g. `/abc.png`).
     var logoPath: String?
     var tagline: String?

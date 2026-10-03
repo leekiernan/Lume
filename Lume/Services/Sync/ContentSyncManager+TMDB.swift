@@ -86,6 +86,8 @@ nonisolated func applyMovieDetails(
     includeCast: Bool = true
 ) {
     movie.backdropPath = details.backdropPath ?? movie.backdropPath
+    movie.posterPath = details.posterPath ?? movie.posterPath
+    movie.posterCheckedAt = Date()
     movie.logoPath = details.logoPath ?? movie.logoPath
     movie.tagline = details.tagline ?? movie.tagline
     movie.contentRating = details.contentRating ?? movie.contentRating
@@ -141,6 +143,8 @@ nonisolated func applySeriesDetails(
     includeCast: Bool = true
 ) {
     series.backdropPath = details.backdropPath ?? series.backdropPath
+    series.posterPath = details.posterPath ?? series.posterPath
+    series.posterCheckedAt = Date()
     series.logoPath = details.logoPath ?? series.logoPath
     series.tagline = details.tagline ?? series.tagline
     series.contentRating = details.contentRating ?? series.contentRating

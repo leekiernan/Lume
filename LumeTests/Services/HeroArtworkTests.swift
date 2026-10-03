@@ -7,6 +7,26 @@ import Testing
 /// shown — these pin that rule.
 @MainActor
 struct HeroArtworkTests {
+    @Test func `portrait artwork is retained separately from wide artwork for both media types`() throws {
+        let movie = movie(backdropPath: "/wide.jpg")
+        movie.posterPath = "/movie-poster.jpg"
+        let movieHero = try #require(HeroItem(item: .movie(movie)))
+        #expect(movieHero.posterURL?.path == "/t/p/original/movie-poster.jpg")
+        #expect(movieHero.imageURL?.path.hasSuffix("/wide.jpg") == true)
+
+        let series = Series(id: "s-1", seriesId: 1, name: "A Show")
+        series.posterPath = "/show-poster.jpg"
+        let seriesHero = try #require(HeroItem(item: .series(series), posterPath: "/fresh-poster.jpg"))
+        #expect(seriesHero.posterURL?.path == "/t/p/original/fresh-poster.jpg")
+        #expect(!seriesHero.hasWideArtwork)
+    }
+
+    @Test func `old enrichment backfills missing posters but fresh misses are negative cached`() {
+        let now = Date()
+        #expect(SectionFeed.heroNeedsArtwork(backdropPath: "/wide.jpg", posterPath: nil, posterCheckedAt: nil, logoPath: "/logo.png", enrichedAt: now))
+        #expect(!SectionFeed.heroNeedsArtwork(backdropPath: "/wide.jpg", posterPath: nil, posterCheckedAt: now, logoPath: "/logo.png", enrichedAt: now))
+    }
+
     private func movie(backdropPath: String?) -> Movie {
         let movie = Movie(id: "m-1", streamId: 1, name: "A Title")
         movie.backdropPath = backdropPath

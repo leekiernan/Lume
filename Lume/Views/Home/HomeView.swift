@@ -195,7 +195,7 @@ struct HomeView: View {
                                 if !feed.heroItems.isEmpty {
                                     HomeHeroCarousel(items: feed.heroItems)
                                 } else if hero.reservesSpace {
-                                    HomeHeroWarmStart(backdropURL: heroWarmStartBackdropURL)
+                                    HomeHeroWarmStart(backdropURL: heroWarmStartBackdropURL, posterURL: heroWarmStartPosterURL)
                                 }
                                 homeRows(content)
                             }
@@ -283,8 +283,8 @@ struct HomeView: View {
             .task(id: seriesResumeKey) {
                 await loadSeriesResume()
             }
-            .onChange(of: feed.heroItems.first?.imageURL, initial: true) { _, backdropURL in
-                rememberHeroWarmStart(backdropURL)
+            .onChange(of: feed.heroItems.first, initial: true) { _, hero in
+                rememberHeroWarmStart(hero?.imageURL)
             }
             .task(id: sportsWarmKey) {
                 warmSports()

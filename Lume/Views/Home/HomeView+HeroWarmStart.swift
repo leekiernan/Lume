@@ -39,7 +39,11 @@ extension HomeView {
         heroWarmStart.backdropURL(hero: heroRef, catalogScope: heroWarmStartScope)
     }
 
+    var heroWarmStartPosterURL: URL? {
+        heroWarmStart.posterURL(hero: heroRef, catalogScope: heroWarmStartScope)
+    }
+
     func rememberHeroWarmStart(_ backdropURL: URL?) {
-        heroWarmStart.remember(backdropURL, hero: heroRef, catalogScope: heroWarmStartScope)
+        heroWarmStart.remember(backdropURL, hero: heroRef, catalogScope: heroWarmStartScope, posterURL: feed.heroItems.first?.posterURL)
     }
 }

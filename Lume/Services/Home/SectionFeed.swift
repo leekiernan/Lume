@@ -103,6 +103,7 @@ final class SectionFeed {
             return HeroItem(
                 item: item,
                 backdropPath: presentation?.backdropPath,
+                posterPath: presentation?.posterPath,
                 logoPath: presentation?.logoPath,
                 overview: presentation?.overview
             )

@@ -38,6 +38,15 @@
         private let autoAdvanceInterval: Duration = .seconds(6)
         /// The artwork to warm for a slide, when it is known up front.
         private let prefetchURL: ((Item) -> URL?)?
+        private var artworkPixels: CGFloat?
+
+        /// View geometry/display scale owns resolution. The carousel only uses
+        /// that target to warm exactly the rendition its backdrop will display.
+        func setArtworkPixels(_ pixels: CGFloat) {
+            guard artworkPixels != pixels else { return }
+            artworkPixels = pixels
+            prefetchNeighbours()
+        }
 
         init(prefetchURL: ((Item) -> URL?)? = nil) {
             self.prefetchURL = prefetchURL
@@ -144,11 +153,12 @@
         /// already-decoded image instead of a placeholder flash.
         private func prefetchNeighbours() {
             let count = items.count
-            guard count > 1, let prefetchURL else { return }
+            guard count > 1, let prefetchURL, let artworkPixels else { return }
             let neighbours = [(currentIndex - 1 + count) % count, (currentIndex + 1) % count]
                 .compactMap { prefetchURL(items[$0]) }
             guard !neighbours.isEmpty else { return }
-            Task { await ImagePipeline.shared.prefetch(neighbours, maxPixelSize: nil) }
+            let urls = neighbours.compactMap { HeroArtworkPolicy.backdropURL($0, pixelWidth: artworkPixels) }
+            Task { await ImagePipeline.shared.prefetch(urls, maxPixelSize: artworkPixels) }
         }
     }
 
