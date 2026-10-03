@@ -1,4 +1,5 @@
 import Foundation
+import OSLog
 import SwiftData
 
 /// Outcome of `bootstrapProfiles`, handed back to `ProfileManager` so the UI
@@ -66,15 +67,30 @@ extension CloudSyncEngine {
             // the export into the outgoing profile's mirrors and the catalog
             // reset — these each used to re-run the four catalog fetches,
             // tripling the work per switch.
-            // Each step is its own signpost, so a slow switch shows where the
-            // time went — in Instruments and in the exported diagnostic report.
+            // Each step is its own signpost, for Instruments and the exported
+            // report's signpost section, and the split is logged as well so a
+            // slow switch says where the time went in the journal too.
             let swap = Perf.begin(.profileSwitchStores)
             defer { Perf.end(swap) }
+            let clock = ContinuousClock()
+            let started = clock.now
             let localValues = try Perf.measure(.profileSwitchFetch) { try fetchLocalContentValues() }
+            let fetched = clock.now
             try Perf.measure(.profileSwitchExport) { try exportCatalogState(toProfile: from, localValues: localValues) }
+            let exported = clock.now
             Perf.measure(.profileSwitchReset) { resetCatalogUserState(localValues: localValues) }
+            let reset = clock.now
             try Perf.measure(.profileSwitchImport) { try importProfileState(toID) }
+            let imported = clock.now
             try Perf.measure(.profileSwitchSave) { try saveProfileSwitchStores() }
+            let saved = clock.now
+            Logger.sync.info("""
+            Profile switch stores: fetch \((fetched - started).logSeconds, privacy: .public), \
+            export \((exported - fetched).logSeconds, privacy: .public), \
+            reset \((reset - exported).logSeconds, privacy: .public), \
+            import \((imported - reset).logSeconds, privacy: .public), \
+            save \((saved - imported).logSeconds, privacy: .public)
+            """)
 
             // Nothing below can throw: only after both stores are durable may
             // the previous profile's reconcile baseline stop describing the

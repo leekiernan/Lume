@@ -237,9 +237,16 @@ final class ProfileManager {
         let from = activeProfileID
         switchingToProfileID = id
         let interval = Perf.begin(.profileSwitch)
+        let clock = ContinuousClock()
+        let started = clock.now
+        var swapped = started
         defer {
             switchingToProfileID = nil
             Perf.end(interval)
+            Logger.sync.info("""
+            Profile switch finished in \((clock.now - started).logSeconds, privacy: .public) \
+            (store swap incl. queueing \((swapped - started).logSeconds, privacy: .public))
+            """)
         }
         preferencesSaveTask?.cancel()
         preferencesSaveTask = nil
@@ -258,6 +265,7 @@ final class ProfileManager {
             // there is no window where the catalog and active-profile pointer
             // disagree.
             try await coordinator.switchProfile(from: from, to: id)
+            swapped = clock.now
         } catch {
             Logger.sync.error("Profile switch aborted; keeping the current profile: \(error.localizedDescription)")
             return false
