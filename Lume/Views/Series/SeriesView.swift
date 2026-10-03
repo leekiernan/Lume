@@ -43,12 +43,6 @@ struct SeriesView: View {
     /// read, to key the resume lookup — see `seriesResumeKey`.
     @Query private var newestWatchedSeries: [Series]
 
-    private let categorySortRaw: String = CategorySortOption.playlist.rawValue
-
-    private var categorySort: CategorySortOption {
-        CategorySortOption(rawValue: categorySortRaw) ?? .playlist
-    }
-
     /// The playlist scope and the viewer's hidden/restricted categories are
     /// passed in by `MainTabView`, as for `HomeView`: a `@Query` can't read view
     /// state, but it can be built from init arguments, so the category list is
@@ -71,7 +65,7 @@ struct SeriesView: View {
     var body: some View {
         // Sorted once per pass: the empty check, the sidebar toggle and the
         // sidebar itself all read it.
-        let sortedCategories = categorySort.sort(categories)
+        let sortedCategories = CategorySortOption.playlist.sort(categories)
         NavigationStack(path: navigationPath) {
             Group {
                 if playlists.isEmpty {

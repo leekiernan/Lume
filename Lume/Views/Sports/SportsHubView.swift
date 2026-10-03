@@ -388,11 +388,7 @@ struct SportsHubView: View {
         #if os(macOS)
             MacPlayerWindowRouter.shared.play(media, using: openWindow)
         #elseif os(iOS) || os(visionOS)
-            if afterSheet {
-                playback.play(media, afterSheet: true)
-            } else {
-                playback.play(media, afterSheet: false)
-            }
+            playback.play(media, afterSheet: afterSheet)
         #endif
     }
 

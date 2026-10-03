@@ -25,8 +25,6 @@
 
         @Environment(\.modelContext) private var modelContext
         @Environment(\.contentRestriction) private var restriction
-        private let categorySortRaw: String = CategorySortOption.playlist.rawValue
-        private let contentSortRaw: String = ContentSortOption.playlist.rawValue
 
         @State private var playlists: [Playlist] = []
         @State private var selectedPlaylistID: UUID?
@@ -245,7 +243,7 @@
                 return
             }
             let prefix = "\(playlist.id.uuidString)-"
-            let sort = CategorySortOption(rawValue: categorySortRaw) ?? .playlist
+            let sort = CategorySortOption.playlist
             // Scoped in SQL, as in `TVChannelBrowserOverlay`: `starts(with:)` on
             // the unique (indexed) `id` is a range seek, where the unscoped fetch
             // pulled every live category of every playlist onto the main actor.
@@ -300,7 +298,7 @@
         }
 
         private func fetchChannels(scope: LiveChannelScope, prefix: String) -> [LiveStream] {
-            let sort = ContentSortOption(rawValue: contentSortRaw) ?? .playlist
+            let sort = ContentSortOption.playlist
             let descriptor = LiveChannelQuery.descriptor(for: scope, sort: sort)
             let fetched = (try? modelContext.fetch(descriptor)) ?? []
             // `scoped` applies the restriction itself — categories by their id,

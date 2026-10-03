@@ -265,8 +265,6 @@ struct MovieGenreView: View {
     var animationNamespace: Namespace.ID?
     @Environment(\.modelContext) private var modelContext
     @Environment(\.contentRestriction) private var restriction
-
-    private let contentSortRaw: String = ContentSortOption.playlist.rawValue
     @State private var movies: [Movie] = []
     @State private var pagination = PaginationMachine()
 
@@ -275,10 +273,6 @@ struct MovieGenreView: View {
     /// rather than hydrating the whole genre into memory at once — mirroring
     /// `MovieCategoryView`.
     private let pageSize = 100
-
-    private var contentSort: ContentSortOption {
-        ContentSortOption(rawValue: contentSortRaw) ?? .playlist
-    }
 
     var body: some View {
         CategoryContentGrid(
@@ -299,7 +293,7 @@ struct MovieGenreView: View {
     }
 
     private var paginationKey: String {
-        "\(genre)|\(playlistPrefix)|\(restriction.visibilityToken)|\(contentSortRaw)"
+        "\(genre)|\(playlistPrefix)|\(restriction.visibilityToken)"
     }
 
     private func loadNextPage() {
@@ -311,7 +305,7 @@ struct MovieGenreView: View {
             offset: paginationRequest.offset,
             pageSize: pageSize
         )
-        let sortBy = contentSort.movieDescriptors
+        let sortBy = ContentSortOption.playlist.movieDescriptors
         let container = modelContext.container
         Task {
             let page = await Task.detached(priority: .userInitiated) {
@@ -345,17 +339,11 @@ struct SeriesGenreView: View {
     var animationNamespace: Namespace.ID?
     @Environment(\.modelContext) private var modelContext
     @Environment(\.contentRestriction) private var restriction
-
-    private let contentSortRaw: String = ContentSortOption.playlist.rawValue
     @State private var series: [Series] = []
     @State private var pagination = PaginationMachine()
 
     /// Page a genre at a time rather than hydrating it whole; see `MovieGenreView`.
     private let pageSize = 100
-
-    private var contentSort: ContentSortOption {
-        ContentSortOption(rawValue: contentSortRaw) ?? .playlist
-    }
 
     var body: some View {
         CategoryContentGrid(
@@ -376,7 +364,7 @@ struct SeriesGenreView: View {
     }
 
     private var paginationKey: String {
-        "\(genre)|\(playlistPrefix)|\(restriction.visibilityToken)|\(contentSortRaw)"
+        "\(genre)|\(playlistPrefix)|\(restriction.visibilityToken)"
     }
 
     private func loadNextPage() {
@@ -388,7 +376,7 @@ struct SeriesGenreView: View {
             offset: paginationRequest.offset,
             pageSize: pageSize
         )
-        let sortBy = contentSort.seriesDescriptors
+        let sortBy = ContentSortOption.playlist.seriesDescriptors
         let container = modelContext.container
         Task {
             let page = await Task.detached(priority: .userInitiated) {

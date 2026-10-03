@@ -35,12 +35,8 @@ struct PlaylistSyncCoverageTests {
             let playlistID = UUID()
             PlaylistSyncCoverage.record([.movies, .series], playlistID: playlistID, at: now, defaults: defaults)
 
-            #expect(PlaylistSyncCoverage.missingEnabledAreas(
-                playlistID: playlistID, disabledAreasRaw: "liveTV", defaults: defaults
-            ).isEmpty)
-            #expect(PlaylistSyncCoverage.missingEnabledAreas(
-                playlistID: playlistID, disabledAreasRaw: "", defaults: defaults
-            ) == [.liveTV])
+            #expect(repairs(playlistID, disabled: "liveTV", defaults).isEmpty)
+            #expect(repairs(playlistID, defaults) == [.liveTV])
         }
     }
 
@@ -87,9 +83,6 @@ struct PlaylistSyncCoverageTests {
             PlaylistSyncCoverage.record([.movies, .series], playlistID: playlistID, at: now, defaults: defaults)
             PlaylistSyncCoverage.deferAutomaticRepair([.liveTV], playlistID: playlistID, defaults: defaults)
 
-            #expect(PlaylistSyncCoverage.missingEnabledAreas(
-                playlistID: playlistID, disabledAreasRaw: "", defaults: defaults
-            ) == [.liveTV])
             #expect(repairs(playlistID, defaults).isEmpty)
         }
     }
@@ -147,9 +140,7 @@ struct PlaylistSyncCoverageTests {
             )
 
             #expect(PlaylistSyncCoverage.areas(playlistID: playlist.id, defaults: defaults) == [.movies, .liveTV])
-            #expect(PlaylistSyncCoverage.missingEnabledAreas(
-                playlistID: playlist.id, disabledAreasRaw: "", defaults: defaults
-            ) == [.series])
+            #expect(repairs(playlist.id, defaults) == [.series])
             #expect(PlaylistSyncCoverage.areasWithRows(playlistID: playlist.id, context: context) == [.movies, .liveTV])
         }
     }

@@ -168,73 +168,71 @@
             // Slides from later in the week aren't on screen, but still want
             // their channels once the guide reaches them.
             let toResolve = fixtures + carousel.map(\.fixture).filter { slide in !fixtures.contains { $0.id == slide.id } }
-            return ScrollViewReader { _ in
-                ZStack {
-                    TVSportsHeroBackdrop(fixture: hero, belowFold: heroZone != .expanded)
-                        .animation(.easeInOut(duration: 0.8), value: hero?.id)
-                    ScrollView {
-                        LazyVStack(alignment: .leading, spacing: 36) {
-                            if carousel.isEmpty {
-                                header.padding(.top, TVSportsMetrics.contentTop)
-                            } else {
-                                TVSportsHeroShowcase(
-                                    model: heroModel,
-                                    availability: { availability(of: $0, preference: preference) },
-                                    showsScore: { $0.showsScore(hidingScores: hidesScores, reveal: SportsScoreReveal.shared) },
-                                    focus: $focus,
-                                    onWatch: watch,
-                                    onWatchFromStart: heroFromStart.map { media in { playback.play(media, afterSheet: false) } },
-                                    onOpen: { selectedFixture = $0 },
-                                    header: { header.padding(.top, TVSportsMetrics.contentTop) }
-                                )
-                            }
-                            if groups.isEmpty, carousel.isEmpty {
-                                noGamesState
-                            } else {
-                                ForEach(groups) { group in
-                                    section(for: group, preference: preference)
-                                }
-                            }
-                            if scope == .all, !highlights.isEmpty || !highlightsResult.payPerView.isEmpty {
-                                TVSportsHighlightsSection(
-                                    highlights: highlights,
-                                    payPerView: highlightsResult.payPerView,
-                                    availability: highlightAvailability,
-                                    onSelect: { selectedFixture = $0 },
-                                    onWatchEvent: watchEvent,
-                                    onLeadingLeft: browseOpener(leading: true)
-                                )
-                                .padding(.top, 24)
+            return ZStack {
+                TVSportsHeroBackdrop(fixture: hero, belowFold: heroZone != .expanded)
+                    .animation(.easeInOut(duration: 0.8), value: hero?.id)
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 36) {
+                        if carousel.isEmpty {
+                            header.padding(.top, TVSportsMetrics.contentTop)
+                        } else {
+                            TVSportsHeroShowcase(
+                                model: heroModel,
+                                availability: { availability(of: $0, preference: preference) },
+                                showsScore: { $0.showsScore(hidingScores: hidesScores, reveal: SportsScoreReveal.shared) },
+                                focus: $focus,
+                                onWatch: watch,
+                                onWatchFromStart: heroFromStart.map { media in { playback.play(media, afterSheet: false) } },
+                                onOpen: { selectedFixture = $0 },
+                                header: { header.padding(.top, TVSportsMetrics.contentTop) }
+                            )
+                        }
+                        if groups.isEmpty, carousel.isEmpty {
+                            noGamesState
+                        } else {
+                            ForEach(groups) { group in
+                                section(for: group, preference: preference)
                             }
                         }
-                        .padding(.bottom, 40)
+                        if scope == .all, !highlights.isEmpty || !highlightsResult.payPerView.isEmpty {
+                            TVSportsHighlightsSection(
+                                highlights: highlights,
+                                payPerView: highlightsResult.payPerView,
+                                availability: highlightAvailability,
+                                onSelect: { selectedFixture = $0 },
+                                onWatchEvent: watchEvent,
+                                onLeadingLeft: browseOpener(leading: true)
+                            )
+                            .padding(.top, 24)
+                        }
                     }
-                    .scrollIndicators(.hidden)
-                    .scrollClipDisabled()
-                    .scrollTargetBehavior(TVHomeFoldBehavior(zone: heroZone, showcaseHeight: carousel.isEmpty ? 0 : showcaseHeight))
-                    .onScrollGeometryChange(for: TVHomeZone.self) { geometry in
-                        TVHomeZone(
-                            offset: geometry.contentOffset.y + geometry.contentInsets.top,
-                            showcaseHeight: carousel.isEmpty ? 0 : showcaseHeight
-                        )
-                    } action: { _, newZone in
-                        guard newZone != heroZone else { return }
-                        withAnimation(.easeInOut(duration: 0.5)) { heroZone = newZone }
-                    }
+                    .padding(.bottom, 40)
                 }
-                // Full-bleed vertically, like Home: the backdrop and the
-                // showcase span the real screen; rows keep their side inset.
-                .ignoresSafeArea(edges: .vertical)
-                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { containerHeight = $0 }
-                .onChange(of: heroZone) { _, zone in heroModel.isPaused = zone != .expanded }
-                .onChange(of: carousel.map(\.id), initial: true) { _, _ in heroModel.configure(items: carousel) }
-                .task(id: resolveKey(toResolve)) { await runResolve(toResolve) }
-                .task(id: heroSelectionKey(for: candidates)) {
-                    heroSelection.reconcile(candidates: candidates, context: heroSelectionContext)
+                .scrollIndicators(.hidden)
+                .scrollClipDisabled()
+                .scrollTargetBehavior(TVHomeFoldBehavior(zone: heroZone, showcaseHeight: carousel.isEmpty ? 0 : showcaseHeight))
+                .onScrollGeometryChange(for: TVHomeZone.self) { geometry in
+                    TVHomeZone(
+                        offset: geometry.contentOffset.y + geometry.contentInsets.top,
+                        showcaseHeight: carousel.isEmpty ? 0 : showcaseHeight
+                    )
+                } action: { _, newZone in
+                    guard newZone != heroZone else { return }
+                    withAnimation(.easeInOut(duration: 0.5)) { heroZone = newZone }
                 }
-                .task(id: "\(hero?.id ?? "")|\(hidesScores)|\(heroAvailability?.isAvailable ?? false)") {
-                    heroFromStart = hero.flatMap { hero in heroAvailability.flatMap { fromStartMedia(hero, availability: $0) } }
-                }
+            }
+            // Full-bleed vertically, like Home: the backdrop and the
+            // showcase span the real screen; rows keep their side inset.
+            .ignoresSafeArea(edges: .vertical)
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { containerHeight = $0 }
+            .onChange(of: heroZone) { _, zone in heroModel.isPaused = zone != .expanded }
+            .onChange(of: carousel.map(\.id), initial: true) { _, _ in heroModel.configure(items: carousel) }
+            .task(id: resolveKey(toResolve)) { await runResolve(toResolve) }
+            .task(id: heroSelectionKey(for: candidates)) {
+                heroSelection.reconcile(candidates: candidates, context: heroSelectionContext)
+            }
+            .task(id: "\(hero?.id ?? "")|\(hidesScores)|\(heroAvailability?.isAvailable ?? false)") {
+                heroFromStart = hero.flatMap { hero in heroAvailability.flatMap { fromStartMedia(hero, availability: $0) } }
             }
         }
 

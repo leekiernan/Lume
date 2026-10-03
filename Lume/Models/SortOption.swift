@@ -155,17 +155,3 @@ nonisolated enum ContentSortOption: String, CaseIterable, Identifiable {
         }
     }
 }
-
-// MARK: - AppStorage keys
-
-enum SortStorageKey {
-    static let liveCategories = "lume.sort.live.categories"
-    static let liveContent = "lume.sort.live.content"
-    static let movieCategories = "lume.sort.movies.categories"
-    static let movieContent = "lume.sort.movies.content"
-    static let seriesCategories = "lume.sort.series.categories"
-    static let seriesContent = "lume.sort.series.content"
-    /// The Sports hub carries the same library toolbar as the other areas.
-    static let sportsCategories = "lume.sort.sports.categories"
-    static let sportsContent = "lume.sort.sports.content"
-}

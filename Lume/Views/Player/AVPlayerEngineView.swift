@@ -90,9 +90,6 @@ struct AVPlayerEngineView: View {
         /// Drives focus onto the transparent tap-catcher once the controls
         /// auto-hide, so the Siri remote can summon them again.
         @FocusState private var catcherFocused: Bool
-        /// Live-content sort the channel browser uses — so in-player channel
-        /// surfing follows the same order the viewer saw in the list.
-        private let liveContentSortRaw: String = ContentSortOption.playlist.rawValue
         @Environment(\.modelContext) private var modelContext
         /// Keeps channel surfing inside what this viewer may watch — a child
         /// profile must not be able to rock up/down, or recall the last channel,
@@ -329,7 +326,7 @@ struct AVPlayerEngineView: View {
             mediaSwapper.surf(
                 direction, from: media,
                 through: .init(
-                    sortRaw: liveContentSortRaw, restriction: restriction, context: modelContext,
+                    restriction: restriction, context: modelContext,
                     neighbours: itemNeighbours
                 ),
                 select: { onSelectMedia?($0) },

@@ -34,10 +34,6 @@
         /// Without it a child could press left mid-playback and tune straight
         /// into a locked category.
         @Environment(\.contentRestriction) private var restriction
-        /// The same sort choices the Live TV browse screen uses, so the browser
-        /// mirrors the order the viewer knows from the channel list.
-        private let categorySortRaw: String = CategorySortOption.playlist.rawValue
-        private let contentSortRaw: String = ContentSortOption.playlist.rawValue
 
         @State private var sections: [LiveTVSection] = []
         /// The section whose channels fill the middle column.
@@ -348,7 +344,7 @@
             let prefix = "\(playlist.id.uuidString)-"
             playlistPrefix = prefix
 
-            let categorySort = CategorySortOption(rawValue: categorySortRaw) ?? .playlist
+            let categorySort = CategorySortOption.playlist
             // Scoped in SQL. Unscoped this fetched every live category of every
             // playlist — 1,734 rows on the measured store — and threw all but
             // one playlist's away in Swift, from `onAppear`, with the stream
@@ -431,7 +427,7 @@
         }
 
         private func fetchChannels(scope: LiveChannelScope) -> [LiveStream] {
-            let sort = ContentSortOption(rawValue: contentSortRaw) ?? .playlist
+            let sort = ContentSortOption.playlist
             let descriptor = LiveChannelQuery.descriptor(for: scope, sort: sort)
             let fetched = (try? modelContext.fetch(descriptor)) ?? []
             return LiveChannelQuery.scoped(fetched, scope: scope, playlistPrefix: playlistPrefix, restriction: restriction)

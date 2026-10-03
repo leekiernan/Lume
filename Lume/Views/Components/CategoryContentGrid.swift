@@ -99,8 +99,6 @@ struct MovieCategoryView: View {
     var animationNamespace: Namespace.ID?
     @Environment(\.modelContext) private var modelContext
 
-    private let contentSortRaw: String = ContentSortOption.playlist.rawValue
-
     @State private var movies: [Movie] = []
     @State private var pagination = PaginationMachine()
     /// True while a Stalker category's content is being fetched from the portal
@@ -110,10 +108,6 @@ struct MovieCategoryView: View {
     /// page at a time and load the next as the grid nears the end, rather than
     /// hydrating the whole category into memory at once.
     private let pageSize = 100
-
-    private var contentSort: ContentSortOption {
-        ContentSortOption(rawValue: contentSortRaw) ?? .playlist
-    }
 
     /// The playlist when it's a Stalker portal, whose categories are imported
     /// on demand rather than synced whole.
@@ -129,8 +123,8 @@ struct MovieCategoryView: View {
                     ProgressView("Loading…")
                 }
             }
-            .task(id: contentSortRaw) {
-                guard pagination.prepare(for: contentSortRaw) else { return }
+            .task(id: category.id) {
+                guard pagination.prepare(for: category.id) else { return }
                 movies = []
                 await importStalkerContentIfNeeded()
                 loadNextPage()
@@ -169,7 +163,7 @@ struct MovieCategoryView: View {
         let categoryId = category.id
         var descriptor = FetchDescriptor<Movie>(
             predicate: #Predicate { $0.categoryId == categoryId },
-            sortBy: contentSort.movieDescriptors
+            sortBy: ContentSortOption.playlist.movieDescriptors
         )
         descriptor.fetchOffset = request.offset
         descriptor.fetchLimit = pageSize
@@ -218,7 +212,7 @@ struct MovieCategoryView: View {
         let categoryId = category.id
         var descriptor = FetchDescriptor<Movie>(
             predicate: #Predicate { $0.categoryId == categoryId },
-            sortBy: contentSort.movieDescriptors
+            sortBy: ContentSortOption.playlist.movieDescriptors
         )
         let window = max(movies.count, pageSize)
         descriptor.fetchLimit = window

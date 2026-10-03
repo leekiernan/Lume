@@ -26,15 +26,14 @@ final class DeepLinkRouter {
     var liveTVSection: LiveTVSection?
     var liveTVSeededPrefix: String?
     #if os(tvOS)
-        /// Whether Multi-View is covering the app. It is presented from
+        /// Non-nil while Multi-View is covering the app; carries the channels it
+        /// opened with, when it was started from a channel's long-press menu
+        /// rather than the Multi-View button. It is presented from
         /// `MainTabView` — above the tab bar — as a plain overlay rather than a
         /// `fullScreenCover`, because a tvOS cover always dismisses itself on
         /// Menu. That would make it impossible for Menu to dismiss only
         /// Multi-View's own controls overlay, which is what a viewer expects
         /// while the controls are up.
-        /// Non-nil while Multi-View is up; carries the channels it opened with,
-        /// when it was started from a channel's long-press menu rather than the
-        /// rail button.
         var multiViewLaunch: MultiViewLaunch?
 
         var isMultiViewPresented: Bool {

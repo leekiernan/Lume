@@ -103,14 +103,6 @@ extension ContentSyncManager {
         sweepLiveStreams(prefix: playlistId.uuidString) { seenIds.contains($0) }
     }
 
-    /// Deletes episodes for `playlistId` whose id is absent from `seenIds`,
-    /// leaving their series in place. Used by the m3u pipeline, where episodes
-    /// are imported alongside the rest of the catalog; the Xtream pipeline pulls
-    /// episodes lazily per-series and so isn't swept here.
-    func pruneStaleEpisodes(playlistId: UUID, seenIds: Set<String>) {
-        sweepEpisodes(prefix: playlistId.uuidString) { seenIds.contains($0) }
-    }
-
     // MARK: - m3u sweep entry points
 
     // Same sweeps, membership tested against `M3UIdentity.hash64` of the id

@@ -102,9 +102,6 @@ struct VLCPlayerEngineView: View {
         /// focus engine drops focus when the overlay disappears and no further
         /// remote input reaches the catcher.
         @FocusState private var catcherFocused: Bool
-        /// Live-content sort the channel browser uses — read so in-player channel
-        /// surfing follows the same order the viewer saw in the list.
-        let liveContentSortRaw: String = ContentSortOption.playlist.rawValue
         @Environment(\.modelContext) var modelContext
         /// Keeps channel surfing inside what this viewer may watch — a child
         /// profile must not be able to rock up/down, or recall the last channel,
