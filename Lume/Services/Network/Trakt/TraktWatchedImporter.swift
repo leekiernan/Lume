@@ -4,8 +4,7 @@
 //
 //  Applies the watched history fetched from Trakt onto the local catalog: marks
 //  matching movies and episodes as watched. The reverse direction of the
-//  fire-and-forget scrobbling in `TraktService`, run on demand from the Trakt
-//  settings screen.
+//  scrobbling in `TraktService`, run at startup and on demand from Settings.
 //
 //  Matching is by TMDB id (the only external id the library carries), so titles
 //  without a resolved `tmdbId` are skipped. Already-watched items are left
@@ -101,6 +100,9 @@ nonisolated enum TraktWatchedImporter {
                 }
                 continue
             }
+            // A rewatch/local unwatched decision made after the remote play
+            // must survive routine imports, not just paused-playback imports.
+            if let local = movie.lastWatchedDate, (dates[tmdb] ?? .distantPast) <= local { continue }
             movie.isWatched = true
             movie.watchProgress = Double(movie.durationSecs ?? 0)
             if let date = dates[tmdb] {
@@ -249,6 +251,7 @@ nonisolated enum TraktWatchedImporter {
         for episode in series.episodes where !episode.isWatched {
             let key = SeasonEpisode(season: episode.seasonNum, episode: episode.episodeNum)
             guard let date = progress.dates[key] else { continue }
+            if let local = episode.lastWatchedDate, (date ?? .distantPast) <= local { continue }
             episode.isWatched = true
             episode.watchProgress = Double(episode.durationSecs ?? 0)
             if let date {

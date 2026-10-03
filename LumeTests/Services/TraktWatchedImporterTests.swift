@@ -6,6 +6,34 @@ import Testing
 @MainActor
 @Suite(.serialized, .globalState)
 struct TraktWatchedImporterTests {
+    @Test func `old remote completion cannot erase newer local movie progress`() throws {
+        let context = try makeContext()
+        let movie = makeMovie(id: "rewatch", tmdbId: 100)
+        movie.lastWatchedDate = ISO8601DateFormatter().date(from: "2026-10-03T12:00:00Z")
+        movie.watchProgress = 120
+        context.insert(movie)
+        let summary = TraktWatchedImporter.apply(movies: [watchedMovie(tmdb: 100, lastWatchedAt: "2014-10-11T17:00:54Z")], shows: [], in: context)
+        #expect(summary.moviesMarked == 0)
+        #expect(!movie.isWatched)
+        #expect(movie.watchProgress == 120)
+    }
+
+    @Test func `old remote completion cannot erase newer local episode progress`() throws {
+        let context = try makeContext()
+        let series = Series(id: "rewatch-show", seriesId: 1, name: "Show")
+        series.tmdbId = 300
+        let episode = Episode(id: "rewatch-episode", episodeId: "2", title: "Episode", containerExtension: "mkv", seasonNum: 1, episodeNum: 2)
+        episode.lastWatchedDate = ISO8601DateFormatter().date(from: "2026-10-03T12:00:00Z")
+        episode.watchProgress = 90
+        episode.series = series
+        series.episodes = [episode]
+        context.insert(series)
+        let summary = TraktWatchedImporter.apply(movies: [], shows: [showProgress()], in: context)
+        #expect(summary.episodesMarked == 0)
+        #expect(!episode.isWatched)
+        #expect(episode.watchProgress == 90)
+    }
+
     init() {
         // The parked-progress store is a file plus an in-memory cache; every test
         // starts from empty so they can't leak into one another.

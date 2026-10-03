@@ -70,6 +70,15 @@ final class TrackerMutationQueue<Backend: TrackerAccountBackend> {
         }
     }
 
+    /// Imports must not race ahead of this device's durable intent. Await the
+    /// existing drain rather than starting another delivery loop. Failed work
+    /// stays queued; callers can defer their import instead of overwriting it.
+    func flush() async {
+        retry()
+        await drainTask?.value
+        refreshStatus()
+    }
+
     func refreshStatus() {
         guard let account else {
             pendingCount = 0

@@ -12,6 +12,25 @@ import Testing
 
 @MainActor
 struct TrackerMutationQueueTests {
+    @Test func `flush waits for pending delivery before an import can start`() async {
+        let harness = await connected()
+        harness.queue.enqueue(.history, .movie(tmdbID: 41), isPresent: true)
+        await harness.queue.flush()
+        #expect(!harness.queue.isSyncing)
+        #expect(harness.queue.pendingCount == 0)
+        #expect(harness.tracker.deliveryAttempts == [.movie(tmdbID: 41)])
+    }
+
+    @Test func `flush keeps failed intent so an import can defer`() async {
+        let harness = await connected()
+        harness.tracker.deliveryResponses = [.failed]
+        harness.queue.enqueue(.history, .movie(tmdbID: 42), isPresent: false)
+        await harness.queue.flush()
+        #expect(!harness.queue.isSyncing)
+        #expect(harness.queue.pendingCount == 1)
+        #expect(harness.queue.failedCount == 1)
+    }
+
     private struct Harness {
         let tracker: FakeTracker
         let session: TrackerAccountSession<FakeBackend>

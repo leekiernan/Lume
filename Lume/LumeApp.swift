@@ -334,7 +334,15 @@ struct LumeApp: App {
                     // its own, and nothing further down this chain depends on
                     // either, so awaiting them held back iCloud, indexing and
                     // the guide refresh behind the network.
-                    Task { await TraktService.shared.restore() }
+                    // Import finished history and paused playback after restore,
+                    // not just authorization: other devices' progress must reach
+                    // Continue Watching without a trip to Settings.
+                    Task {
+                        let profileID = profileManager.activeProfileID
+                        await TraktService.shared.restore()
+                        guard !profileManager.isSwitching, profileManager.activeProfileID == profileID else { return }
+                        await TraktService.shared.importWatched(into: catalogContainer.mainContext)
+                    }
 
                     // Same for Simkl (a second tracker integration, AUTH V2
                     // device flow): refresh stale tokens, restore the username.
