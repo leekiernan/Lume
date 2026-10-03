@@ -115,6 +115,11 @@ nonisolated extension Sequence where Element: CategorizedContent {
 final class ContentRestrictionMemo {
     private var cached = ContentRestriction()
 
+    /// Scene queries stay local; the privacy policy and ID normalization do not.
+    func restriction(isChild: Bool?, restrictedIDs: [String], hiddenIDs: [String]) -> ContentRestriction {
+        restriction(isActive: isChild ?? false, restricted: Set(restrictedIDs), hidden: Set(hiddenIDs))
+    }
+
     func restriction(isActive: Bool, restricted: Set<String>, hidden: Set<String>) -> ContentRestriction {
         if cached.isActive == isActive,
            cached.restrictedCategoryIDs == restricted,

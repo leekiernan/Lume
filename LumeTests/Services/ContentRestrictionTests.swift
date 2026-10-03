@@ -19,6 +19,27 @@ private struct StubItem: CategorizedContent {
 
 @MainActor
 struct ContentRestrictionTests {
+    @Test func `scene construction normalizes ids and keeps child and hidden policies independent`() {
+        let memo = ContentRestrictionMemo()
+        let parent = memo.restriction(isChild: nil, restrictedIDs: ["adult", "adult"], hiddenIDs: ["hidden", "hidden"])
+        #expect(parent.excludedCategoryIDs == ["hidden"])
+        let child = memo.restriction(isChild: true, restrictedIDs: ["adult"], hiddenIDs: ["hidden"])
+        #expect(child.excludedCategoryIDs == ["adult", "hidden"])
+        #expect(child.visibilityToken != parent.visibilityToken)
+        let restored = memo.restriction(isChild: false, restrictedIDs: ["adult"], hiddenIDs: ["hidden"])
+        #expect(restored.visibilityToken == parent.visibilityToken)
+    }
+
+    @Test func `separate scene memos derive identical restrictions`() {
+        let root = ContentRestrictionMemo()
+        let player = ContentRestrictionMemo()
+        let expected = root.restriction(isChild: true, restrictedIDs: ["b", "a"], hiddenIDs: ["c"])
+        let actual = player.restriction(isChild: true, restrictedIDs: ["a", "b", "a"], hiddenIDs: ["c", "c"])
+        #expect(actual == expected)
+        #expect(actual.restrictedCategoryIDs == expected.restrictedCategoryIDs)
+        #expect(actual.hiddenCategoryIDs == expected.hiddenCategoryIDs)
+    }
+
     @Test func `inactive restriction hides nothing`() {
         let restriction = ContentRestriction(isActive: false, restrictedCategoryIDs: ["a", "b"])
         #expect(restriction.hides(categoryID: "a") == false)

@@ -74,56 +74,14 @@
         }
 
         private func deviceCode(_ code: SimklDeviceCode) -> some View {
-            HStack(alignment: .top, spacing: 48) {
-                VStack(alignment: .leading, spacing: 18) {
-                    Text("On your phone or computer, go to")
-                        .font(.system(size: 24))
-                        .foregroundStyle(.secondary)
-                    Text("simkl.com/pin")
-                        .font(.system(size: 30, weight: .semibold))
-
-                    Text("Enter this code")
-                        .font(.system(size: 24))
-                        .foregroundStyle(.secondary)
-                        .padding(.top, 8)
-                    Text(code.userCode)
-                        .font(.system(size: 56, weight: .bold, design: .monospaced))
-                        .tracking(6)
-
-                    HStack(spacing: 12) {
-                        ProgressView()
-                        Text("Waiting for authorization…")
-                            .font(.system(size: 22))
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(.top, 8)
-
-                    Button("Cancel") {
-                        simkl.cancelConnect()
-                    }
-                    .buttonStyle(TVSettingsActionButtonStyle())
-                    .padding(.top, 8)
-                }
-
-                if let url = SimklClient.activationURL(for: code) {
-                    VStack(spacing: 12) {
-                        QRCodeView(string: url.absoluteString)
-                            .frame(width: 240, height: 240)
-                            .background(.white)
-                            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                        Text("Scan to open")
-                            .font(.system(size: 20))
-                            .foregroundStyle(.secondary)
-                    }
-                }
+            TrackerDeviceCodePanel(provider: .simkl, code: code.userCode, activationURL: SimklClient.activationURL(for: code)) {
+                simkl.cancelConnect()
             }
-            .padding(.horizontal, TVSettingsMetrics.rowHPadding)
-            .padding(.top, 8)
         }
 
         private var connected: some View {
             VStack(alignment: .leading, spacing: 16) {
-                TVSettingsValueRow("Connected", value: simkl.username.map { "@\($0)" } ?? "—")
+                TrackerConnectedAccount(username: simkl.username)
 
                 Text("Watched movies and episodes sync to your Simkl history. Import marks titles you've already watched on Simkl as watched here.")
                     .font(.system(size: 22))
@@ -165,21 +123,10 @@
         }
 
         private func importStatus(_ summary: SimklImportSummary) -> some View {
-            VStack(alignment: .leading, spacing: 4) {
-                if summary.failed {
-                    Text("Couldn't import from Simkl. Please try again.")
-                } else if summary.markedNothing {
-                    Text("Your watched history is already up to date.")
-                } else {
-                    Text("Imported \(summary.moviesMarked) movies and \(summary.episodesMarked) episodes.")
-                    if summary.showsQueued > 0 {
-                        Text("\(summary.showsQueued) shows will be marked the first time you open them.")
-                    }
-                }
-            }
-            .font(.system(size: 22))
-            .foregroundStyle(summary.failed ? .red : .green)
-            .padding(.horizontal, TVSettingsMetrics.rowHPadding)
+            TrackerImportStatus(
+                provider: .simkl, movies: summary.moviesMarked, episodes: summary.episodesMarked,
+                queuedShows: summary.showsQueued, failed: summary.failed
+            )
         }
     }
 

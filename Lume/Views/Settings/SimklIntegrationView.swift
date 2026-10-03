@@ -19,7 +19,6 @@
         /// Simkl is a Premium feature.
         @State private var premium = PremiumManager.shared
         @State private var showPaywall = false
-        @Environment(\.openURL) private var openURL
         @Environment(\.modelContext) private var modelContext
 
         var body: some View {
@@ -73,43 +72,9 @@
 
         private func deviceCodeSection(_ code: SimklDeviceCode) -> some View {
             Section {
-                VStack(spacing: 16) {
-                    Text("Enter this code at simkl.com/pin")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-
-                    Text(code.userCode)
-                        .font(.system(size: 40, weight: .bold, design: .monospaced))
-                        .tracking(4)
-                        .textSelection(.enabled)
-
-                    if let url = SimklClient.activationURL(for: code) {
-                        Button {
-                            openURL(url)
-                        } label: {
-                            Label("Open simkl.com/pin", systemImage: "safari")
-                        }
-                        .buttonStyle(.borderedProminent)
-
-                        QRCodeView(string: url.absoluteString)
-                            .frame(width: 160, height: 160)
-                            .padding(.top, 4)
-                    }
-
-                    HStack(spacing: 8) {
-                        ProgressView()
-                        Text("Waiting for authorization…")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(.top, 4)
-
-                    Button("Cancel", role: .cancel) {
-                        simkl.cancelConnect()
-                    }
+                TrackerDeviceCodePanel(provider: .simkl, code: code.userCode, activationURL: SimklClient.activationURL(for: code)) {
+                    simkl.cancelConnect()
                 }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 8)
             }
         }
 
@@ -117,19 +82,7 @@
 
         private var connectedSection: some View {
             Section {
-                HStack(spacing: 12) {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundStyle(.green)
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text("Connected")
-                        if let username = simkl.username {
-                            Text("@\(username)")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    Spacer()
-                }
+                TrackerConnectedAccount(username: simkl.username)
 
                 Button {
                     Task { await simkl.importWatched(into: modelContext) }
@@ -162,23 +115,11 @@
             }
         }
 
-        @ViewBuilder
         private func importStatus(_ summary: SimklImportSummary) -> some View {
-            if summary.failed {
-                Text("Couldn't import from Simkl. Please try again.")
-                    .foregroundStyle(.red)
-            } else if summary.markedNothing {
-                Text("Your watched history is already up to date.")
-                    .foregroundStyle(.green)
-            } else {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Imported \(summary.moviesMarked) movies and \(summary.episodesMarked) episodes.")
-                    if summary.showsQueued > 0 {
-                        Text("\(summary.showsQueued) shows will be marked the first time you open them.")
-                    }
-                }
-                .foregroundStyle(.green)
-            }
+            TrackerImportStatus(
+                provider: .simkl, movies: summary.moviesMarked, episodes: summary.episodesMarked,
+                queuedShows: summary.showsQueued, failed: summary.failed
+            )
         }
     }
 
