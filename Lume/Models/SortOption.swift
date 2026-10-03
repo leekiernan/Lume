@@ -68,6 +68,8 @@ nonisolated enum ContentSortOption: String, CaseIterable, Identifiable {
     case nameDescending
     case newest
     case oldest
+    /// Descending ISO release date (or provider year); missing dates sort last.
+    case releaseDate
 
     var id: String {
         rawValue
@@ -80,6 +82,7 @@ nonisolated enum ContentSortOption: String, CaseIterable, Identifiable {
         case .nameDescending: "Name (Z–A)"
         case .newest: "Newest First"
         case .oldest: "Oldest First"
+        case .releaseDate: "Release Date (Newest First)"
         }
     }
 
@@ -90,6 +93,7 @@ nonisolated enum ContentSortOption: String, CaseIterable, Identifiable {
         case .nameDescending: "textformat.abc.dottedunderline"
         case .newest: "arrow.down.circle"
         case .oldest: "arrow.up.circle"
+        case .releaseDate: "calendar"
         }
     }
 
@@ -119,6 +123,8 @@ nonisolated enum ContentSortOption: String, CaseIterable, Identifiable {
             [SortDescriptor(\Movie.added, comparator: .lexical, order: .reverse), SortDescriptor(\Movie.num)]
         case .oldest:
             [SortDescriptor(\Movie.added, comparator: .lexical, order: .forward), SortDescriptor(\Movie.num)]
+        case .releaseDate:
+            [SortDescriptor(\Movie.releaseDate, comparator: .lexical, order: .reverse), SortDescriptor(\Movie.id)]
         }
     }
 
@@ -134,6 +140,8 @@ nonisolated enum ContentSortOption: String, CaseIterable, Identifiable {
             [SortDescriptor(\Series.lastModified, comparator: .lexical, order: .reverse), SortDescriptor(\Series.num)]
         case .oldest:
             [SortDescriptor(\Series.lastModified, comparator: .lexical, order: .forward), SortDescriptor(\Series.num)]
+        case .releaseDate:
+            [SortDescriptor(\Series.releaseDate, comparator: .lexical, order: .reverse), SortDescriptor(\Series.id)]
         }
     }
 
@@ -152,6 +160,9 @@ nonisolated enum ContentSortOption: String, CaseIterable, Identifiable {
             [SortDescriptor(\LiveStream.added, comparator: .lexical, order: .reverse), SortDescriptor(\LiveStream.num)]
         case .oldest:
             [SortDescriptor(\LiveStream.added, comparator: .lexical, order: .forward), SortDescriptor(\LiveStream.num)]
+        case .releaseDate:
+            // Release dates are a VOD-only option; channels have no such field.
+            [SortDescriptor(\LiveStream.customOrder), SortDescriptor(\LiveStream.num), SortDescriptor(\LiveStream.name)]
         }
     }
 }

@@ -27,8 +27,6 @@ struct HomeView: View {
 
     @Query var playlists: [Playlist]
     @AppStorage(PlaylistSelectionStore.key) var selectedPlaylistID: String = ""
-    @AppStorage(SortStorageKey.movieCategories) private var categorySortRaw: String = CategorySortOption.playlist.rawValue
-    @AppStorage(SortStorageKey.movieContent) private var contentSortRaw: String = ContentSortOption.playlist.rawValue
 
     // Watch history (capped — naturally bounded): in-progress movies for
     // Continue Watching, finished ones for Recently Watched; series split later.
@@ -222,8 +220,6 @@ struct HomeView: View {
             .libraryToolbar(config: LibraryToolbarConfiguration(
                 playlists: playlists,
                 selectedPlaylistID: $selectedPlaylistID,
-                categorySortRaw: $categorySortRaw,
-                contentSortRaw: $contentSortRaw,
                 showingSync: $showingSync,
                 showingSettings: $showingSettings,
                 activePlaylist: activePlaylist

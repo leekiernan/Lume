@@ -44,7 +44,6 @@ struct SeriesView: View {
     @Query private var newestWatchedSeries: [Series]
 
     @AppStorage(SortStorageKey.seriesCategories) private var categorySortRaw: String = CategorySortOption.playlist.rawValue
-    @AppStorage(SortStorageKey.seriesContent) private var contentSortRaw: String = ContentSortOption.playlist.rawValue
 
     private var categorySort: CategorySortOption {
         CategorySortOption(rawValue: categorySortRaw) ?? .playlist
@@ -95,8 +94,6 @@ struct SeriesView: View {
             .libraryToolbar(config: LibraryToolbarConfiguration(
                 playlists: playlists,
                 selectedPlaylistID: $selectedPlaylistID,
-                categorySortRaw: $categorySortRaw,
-                contentSortRaw: $contentSortRaw,
                 showingSync: $showingSync,
                 showingSettings: $showingSettings,
                 activePlaylist: activePlaylist

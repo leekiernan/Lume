@@ -221,8 +221,6 @@ struct LiveTVView: View {
             .libraryToolbar(config: LibraryToolbarConfiguration(
                 playlists: playlists,
                 selectedPlaylistID: $selectedPlaylistID,
-                categorySortRaw: $categorySortRaw,
-                contentSortRaw: $contentSortRaw,
                 showingSync: $showingSync,
                 showingSettings: $showingSettings,
                 activePlaylist: activePlaylist

@@ -38,7 +38,6 @@ struct MoviesView: View {
     @State private var heroWarmStart = HeroWarmStartState(surface: .movies)
 
     @AppStorage(SortStorageKey.movieCategories) private var categorySortRaw: String = CategorySortOption.playlist.rawValue
-    @AppStorage(SortStorageKey.movieContent) private var contentSortRaw: String = ContentSortOption.playlist.rawValue
 
     private var categorySort: CategorySortOption {
         CategorySortOption(rawValue: categorySortRaw) ?? .playlist
@@ -83,8 +82,6 @@ struct MoviesView: View {
             .libraryToolbar(config: LibraryToolbarConfiguration(
                 playlists: playlists,
                 selectedPlaylistID: $selectedPlaylistID,
-                categorySortRaw: $categorySortRaw,
-                contentSortRaw: $contentSortRaw,
                 showingSync: $showingSync,
                 showingSettings: $showingSettings,
                 activePlaylist: activePlaylist

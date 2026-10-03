@@ -60,12 +60,13 @@ struct CategoryContentGrid<Item: Identifiable & Hashable & WatchlistFavoritable,
                 .padding()
             }
         }
-        // tvOS surfaces sorting through the tab bar's library controls instead of a
-        // toolbar, mirroring the main browse views.
+        // Keep the existing tvOS grid layout without a navigation toolbar.
         #if !os(tvOS)
         .toolbar {
-            ToolbarItem(placement: .automatic) {
-                ContentSortMenu(sortRaw: $sortRaw)
+            if showsSortMenu {
+                ToolbarItem(placement: .automatic) {
+                    ContentSortMenu(sortRaw: $sortRaw)
+                }
             }
         }
         #endif

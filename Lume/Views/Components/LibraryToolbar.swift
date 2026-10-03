@@ -3,8 +3,6 @@ import SwiftUI
 struct LibraryToolbarModifier: ViewModifier {
     let playlists: [Playlist]
     @Binding var selectedPlaylistID: String
-    @Binding var categorySortRaw: String
-    @Binding var contentSortRaw: String
     @Binding var showingSync: Bool
     @Binding var showingSettings: Bool
     let activePlaylist: Playlist?
@@ -16,10 +14,6 @@ struct LibraryToolbarModifier: ViewModifier {
                     ToolbarItem(placement: .automatic) {
                         PlaylistSwitcher(playlists: playlists, selectedPlaylistID: $selectedPlaylistID)
                     }
-                }
-
-                ToolbarItem(placement: .automatic) {
-                    SortMenu(categorySortRaw: $categorySortRaw, contentSortRaw: $contentSortRaw)
                 }
 
                 // One ToolbarItem each, deliberately not an HStack in a single
@@ -68,8 +62,6 @@ struct LibraryToolbarModifier: ViewModifier {
 struct LibraryToolbarConfiguration {
     let playlists: [Playlist]
     @Binding var selectedPlaylistID: String
-    @Binding var categorySortRaw: String
-    @Binding var contentSortRaw: String
     @Binding var showingSync: Bool
     @Binding var showingSettings: Bool
     let activePlaylist: Playlist?
@@ -78,14 +70,12 @@ struct LibraryToolbarConfiguration {
 extension View {
     func libraryToolbar(config: LibraryToolbarConfiguration) -> some View {
         #if os(tvOS)
-            // tvOS surfaces sync/settings/sorting through the tab bar instead.
+            // tvOS surfaces sync/settings through its own library controls.
             return self
         #else
             return modifier(LibraryToolbarModifier(
                 playlists: config.playlists,
                 selectedPlaylistID: config.$selectedPlaylistID,
-                categorySortRaw: config.$categorySortRaw,
-                contentSortRaw: config.$contentSortRaw,
                 showingSync: config.$showingSync,
                 showingSettings: config.$showingSettings,
                 activePlaylist: config.activePlaylist

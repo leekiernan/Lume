@@ -2,48 +2,10 @@
 //  SortMenu.swift
 //  Lume
 //
-//  Toolbar menu that lets the user pick category and content sort options.
-//  Used on the Live TV, Movies, and Series main views.
+//  Content ordering for category and genre grids, not curated area roots.
 //
 
 import SwiftUI
-
-struct SortMenu: View {
-    @Binding var categorySortRaw: String
-    @Binding var contentSortRaw: String
-
-    var body: some View {
-        Menu {
-            Section("Categories") {
-                ForEach(CategorySortOption.allCases) { option in
-                    Button {
-                        categorySortRaw = option.rawValue
-                    } label: {
-                        Label(option.label, systemImage: option.icon)
-                        if option.rawValue == categorySortRaw {
-                            Image(systemName: "checkmark")
-                        }
-                    }
-                }
-            }
-
-            Section("Content") {
-                ForEach(ContentSortOption.allCases) { option in
-                    Button {
-                        contentSortRaw = option.rawValue
-                    } label: {
-                        Label(option.label, systemImage: option.icon)
-                        if option.rawValue == contentSortRaw {
-                            Image(systemName: "checkmark")
-                        }
-                    }
-                }
-            }
-        } label: {
-            Image(systemName: "line.3.horizontal.decrease.circle")
-        }
-    }
-}
 
 // MARK: - Content-Only Sort Menu
 
@@ -68,13 +30,6 @@ struct ContentSortMenu: View {
             Image(systemName: "line.3.horizontal.decrease.circle")
         }
     }
-}
-
-#Preview("Full Sort Menu") {
-    SortMenu(
-        categorySortRaw: .constant(CategorySortOption.playlist.rawValue),
-        contentSortRaw: .constant(ContentSortOption.playlist.rawValue)
-    )
 }
 
 #Preview("Content Only") {
