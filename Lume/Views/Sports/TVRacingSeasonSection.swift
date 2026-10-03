@@ -13,17 +13,19 @@
 
     struct TVRacingSeasonSection: View {
         let fixture: SportsFixture
-        @State private var season: SportsRacingSeason?
+        @State private var seasonLoad = SportsRacingSeasonLoadMachine()
 
         var body: some View {
             Group {
-                if let season {
+                if let season = seasonLoad.season(for: fixture.leagueId) {
                     content(season)
                 }
             }
             .task(id: fixture.leagueId) {
                 guard let league = SportsCatalog.league(id: fixture.leagueId) else { return }
-                season = await SportsRacingSeasonLoader.load(league: league)
+                let request = seasonLoad.begin(leagueId: league.id)
+                let loaded = await SportsRacingSeasonLoader.load(league: league)
+                seasonLoad.finish(request, season: loaded)
             }
         }
 

@@ -147,100 +147,22 @@ private struct SportsHighlightCard: View {
 
 // MARK: - Your teams
 
+/// A team's season on its page: a card per competition, then its leading
+/// players. The page loads the season (it lists the season's games too) and
+/// hands it here; this only draws it.
 struct SportsTeamSeasonPanel: View {
-    let teams: [SportsTeam]
-    @State private var selectedId: String?
-    @State private var season: SportsTeamSeason?
-
-    private var selected: SportsTeam? {
-        teams.first { $0.id == selectedId } ?? teams.first
-    }
-
-    @Environment(\.horizontalSizeClass) private var sizeClass
+    let team: SportsTeam
+    let season: SportsTeamSeason?
+    let isLoading: Bool
 
     var body: some View {
-        if let selected {
-            VStack(alignment: .leading, spacing: 12) {
-                // On a team's own page the season needs no section heading.
-                if teams.count > 1 {
-                    Text("Your Teams")
-                        .font(.headline)
-                }
-                if teams.count > 1, sizeClass == .regular {
-                    // The left selection pane, as elsewhere on iPad and Mac.
-                    HStack(alignment: .top, spacing: 20) {
-                        teamList
-                        seasonBody(selected)
-                    }
-                } else {
-                    if teams.count > 1 { teamChips }
-                    seasonBody(selected)
-                }
-            }
-            .task(id: selected.id) {
-                let loaded = await SportsTeamSeasonLoader.load(team: selected)
-                guard !Task.isCancelled else { return }
-                season = loaded
-            }
-        }
-    }
-
-    private var teamList: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            ForEach(teams) { team in
-                Button {
-                    selectedId = team.id
-                } label: {
-                    HStack(spacing: 10) {
-                        TeamCrest(team: team, size: 26)
-                        Text(verbatim: team.name).lineLimit(1)
-                        Spacer(minLength: 0)
-                    }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 8)
-                    .contentShape(Rectangle())
-                    .background(
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .fill(team.id == selected?.id ? AnyShapeStyle(.quaternary) : AnyShapeStyle(.clear))
-                    )
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .frame(width: 220)
-    }
-
-    private var teamChips: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                ForEach(teams) { team in
-                    Button {
-                        selectedId = team.id
-                    } label: {
-                        HStack(spacing: 6) {
-                            TeamCrest(team: team, size: 20)
-                            Text(verbatim: team.shortName.isEmpty ? team.name : team.shortName)
-                                .font(.subheadline.weight(.semibold))
-                        }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 7)
-                        .background(Capsule().fill(team.id == selected?.id ? AnyShapeStyle(.tint.opacity(0.3)) : AnyShapeStyle(.quaternary)))
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-        }
-        .scrollClipDisabled()
-    }
-
-    private func seasonBody(_ selected: SportsTeam) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 10) {
-                TeamCrest(team: selected, size: 36)
-                Text("\(selected.name) this season")
+                TeamCrest(team: team, size: 36)
+                Text("\(team.name) this season")
                     .font(.title3.weight(.bold))
             }
-            if let season, season.team.id == selected.id {
+            if let season {
                 ScrollView(.horizontal, showsIndicators: false) {
                     LazyHStack(alignment: .top, spacing: 12) {
                         ForEach(season.competitions) { SportsSeasonCompetitionCard(competition: $0) }
@@ -250,7 +172,7 @@ struct SportsTeamSeasonPanel: View {
                 if !season.leaders.isEmpty {
                     leaders(season)
                 }
-            } else {
+            } else if isLoading {
                 ProgressView().frame(maxWidth: .infinity, minHeight: 120)
             }
         }

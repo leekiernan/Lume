@@ -62,8 +62,9 @@
         /// The headlined game from its first minute, when Hide Scores is on and
         /// the channel can replay it — worked out once per game, not per render.
         @State private var heroFromStart: PlayableMedia?
-        /// A team page's season, for its games beyond the followed competition.
-        @State var pageSeason: SportsTeamSeason?
+        /// A team page's season: drawn below its games, and the source of the
+        /// games it has beyond the followed competition.
+        @State var seasonLoad = SportsTeamSeasonLoadMachine()
         /// "Big this week", and the channels its near-term games resolved to.
         @State var highlightsLoad = SportsHighlightsLoadMachine()
 
@@ -442,7 +443,8 @@
         /// heading, every game it has live or coming in a grid — no hero, no
         /// title button, no rows — and a club's season below. Menu goes back.
         var followPage: some View {
-            let fixtures = grouping.pageFixtures(season: pageSeason)
+            let season = seasonTeam.flatMap { seasonLoad.season(for: $0.id) }
+            let fixtures = grouping.pageFixtures(season: season)
             let preference = SportsChannelPreference.Context.current
             return ScrollViewReader { proxy in
                 CategoryPage(title: scopeTitle) {
@@ -480,11 +482,10 @@
                         .padding(.vertical, 24)
                     }
                     if let team = seasonTeam {
-                        // On the page's own inset, so it lines up with the heading
-                        // and grid above.
                         TVTeamSeasonSection(
-                            teams: [team],
-                            horizontalInset: nil,
+                            team: team,
+                            season: season,
+                            isLoading: seasonLoad.isLoading(team.id),
                             // With games above, up reaches them; without, the
                             // season's first row is the page's top.
                             onMoveUpFromTop: fixtures.isEmpty
@@ -501,7 +502,9 @@
             // it was followed from.
             .task(id: seasonTeam?.id) {
                 guard let team = seasonTeam else { return }
-                pageSeason = await SportsTeamSeasonLoader.load(team: team)
+                let request = seasonLoad.begin(teamId: team.id)
+                let loaded = await SportsTeamSeasonLoader.load(team: team)
+                seasonLoad.finish(request, season: loaded)
             }
         }
 

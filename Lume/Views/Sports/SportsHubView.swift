@@ -49,8 +49,9 @@ struct SportsHubView: View {
     @State private var showingBrowse = false
     @State private var showPaywall = false
     @State private var pendingEvent: SportsPayPerView.Event?
-    /// A team page's season, for its games beyond the followed competition.
-    @State private var pageSeason: SportsTeamSeason?
+    /// A team page's season: drawn below its games, and the source of the
+    /// games it has beyond the followed competition.
+    @State private var seasonLoad = SportsTeamSeasonLoadMachine()
     // The library toolbar every area carries: playlist, sort, sync, settings.
     @Query private var playlists: [Playlist]
     @AppStorage(PlaylistSelectionStore.key) private var selectedPlaylistID: String = ""
@@ -159,7 +160,7 @@ struct SportsHubView: View {
                     .padding()
                 }
             } else if pageKey != nil {
-                followPage(grouping.pageFixtures(season: pageSeason))
+                followPage(grouping.pageFixtures(season: grouping.scopedTeam.flatMap { seasonLoad.season(for: $0.id) }))
             } else {
                 followedContent(fixtures)
             }
@@ -491,7 +492,7 @@ private extension SportsHubView {
                 .padding()
             }
             if let team = grouping.scopedTeam, SportsTeamSeasonLoader.supports(team) {
-                SportsTeamSeasonPanel(teams: [team])
+                SportsTeamSeasonPanel(team: team, season: seasonLoad.season(for: team.id), isLoading: seasonLoad.isLoading(team.id))
                     .padding(.horizontal)
             }
         }
@@ -500,7 +501,9 @@ private extension SportsHubView {
         // was followed from.
         .task(id: grouping.scopedTeam?.id) {
             guard let team = grouping.scopedTeam, SportsTeamSeasonLoader.supports(team) else { return }
-            pageSeason = await SportsTeamSeasonLoader.load(team: team)
+            let request = seasonLoad.begin(teamId: team.id)
+            let loaded = await SportsTeamSeasonLoader.load(team: team)
+            seasonLoad.finish(request, season: loaded)
         }
     }
 }

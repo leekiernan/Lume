@@ -2,10 +2,10 @@
 //  TVTeamSeasonSection.swift
 //  Lume
 //
-//  The tvOS hub's "Your teams" section: pick a followed football team, see its
-//  season — a card per competition, drawn as that competition works (table,
-//  UEFA league phase, cup path), then its leading players in the league.
-//  Loaded on demand from ESPN (`SportsTeamSeasonLoader`) when it appears.
+//  A team's season on its tvOS page: a card per competition, drawn as that
+//  competition works (table, UEFA league phase, cup path), then its leading
+//  players in the league. The page loads the season (it lists the season's
+//  games too) and hands it here; this only draws it.
 //
 
 #if os(tvOS)
@@ -13,10 +13,9 @@
     import SwiftUI
 
     struct TVTeamSeasonSection: View {
-        let teams: [SportsTeam]
-        /// The section's side inset: the hub's 60 pt rails, or `nil` for the
-        /// system inset a `CategoryPage` uses for its heading and grid.
-        var horizontalInset: CGFloat? = 60
+        let team: SportsTeam
+        let season: SportsTeamSeason?
+        let isLoading: Bool
         /// Up from the competition cards, when nothing above them takes focus:
         /// the page scrolls to its top, where the tab bar can be reached.
         var onMoveUpFromTop: (() -> Void)?
@@ -24,69 +23,16 @@
         /// A 440 pt card lifted by 4 % grows ~9 pt each way, and its shadow
         /// reaches ~30 pt below; this clears both with room to spare.
         private static let rowVerticalInset: CGFloat = 48
-        @State private var selectedId: String?
-        @State private var season: SportsTeamSeason?
-        @State private var isLoading = false
-
-        private var selected: SportsTeam? {
-            teams.first { $0.id == selectedId } ?? teams.first
-        }
 
         var body: some View {
-            if let selected {
-                VStack(alignment: .leading, spacing: 28) {
-                    // On a team's own page the season needs no section heading.
-                    if teams.count > 1 {
-                        Text("Your Teams")
-                            .font(.subheadline)
-                            .fontWeight(.bold)
-                            .foregroundStyle(.secondary)
-                    }
-                    HStack(alignment: .top, spacing: 40) {
-                        // The left selection pane, as Settings and Live TV use.
-                        if teams.count > 1 {
-                            teamPane
-                                .focusSection()
-                        }
-                        VStack(alignment: .leading, spacing: 28) {
-                            header(selected)
-                            content
-                        }
-                        .focusSection()
-                    }
-                }
-                .padding(.horizontal, horizontalInset)
-                .focusSection()
-                .task(id: selected.id) { await load(selected) }
+            VStack(alignment: .leading, spacing: 28) {
+                header(team)
+                content
             }
-        }
-
-        // MARK: - Picker
-
-        private var teamPane: some View {
-            VStack(alignment: .leading, spacing: 8) {
-                ForEach(teams) { team in
-                    Button {
-                        selectedId = team.id
-                    } label: {
-                        HStack(spacing: 16) {
-                            TeamCrest(team: team, size: 40)
-                            Text(verbatim: team.shortName.isEmpty ? team.name : team.shortName)
-                                .font(.system(size: 26, weight: .semibold))
-                                .lineLimit(1)
-                            Spacer(minLength: 0)
-                        }
-                        .padding(.horizontal, 20)
-                        .frame(height: 72)
-                        .background(
-                            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                                .fill(.white.opacity(team.id == selected?.id ? 0.18 : 0.05))
-                        )
-                    }
-                    .buttonStyle(TVCardButtonStyle(focusScale: 1.03))
-                }
-            }
-            .frame(width: 360)
+            // The page's own inset, so the section lines up with its heading
+            // and grid.
+            .padding(.horizontal)
+            .focusSection()
         }
 
         private func header(_ team: SportsTeam) -> some View {
@@ -95,7 +41,7 @@
                 VStack(alignment: .leading, spacing: 6) {
                     Text("\(team.name) this season")
                         .font(.system(size: 44, weight: .bold))
-                    if let season, season.team.id == team.id {
+                    if let season {
                         Text(subtitle(season))
                             .font(.system(size: 24))
                             .foregroundStyle(.white.opacity(0.65))
@@ -114,7 +60,7 @@
 
         @ViewBuilder
         private var content: some View {
-            if let season, season.team.id == selected?.id {
+            if let season {
                 ScrollView(.horizontal, showsIndicators: false) {
                     LazyHStack(alignment: .top, spacing: 32) {
                         ForEach(season.competitions) { competition in
@@ -135,7 +81,6 @@
                     .padding(.vertical, Self.rowVerticalInset)
                 }
                 .scrollClipDisabled()
-                .clippedAtLeadingEdge()
                 if !season.leaders.isEmpty {
                     leaders(season)
                 }
@@ -172,32 +117,6 @@
                     .padding(.vertical, Self.rowVerticalInset)
                 }
                 .scrollClipDisabled()
-                .clippedAtLeadingEdge()
-            }
-        }
-
-        private func load(_ team: SportsTeam) async {
-            if season?.team.id != team.id { season = nil }
-            isLoading = true
-            let loaded = await SportsTeamSeasonLoader.load(team: team)
-            guard !Task.isCancelled else { return }
-            season = loaded
-            isLoading = false
-        }
-    }
-
-    private extension View {
-        /// Lets focus growth and the trailing cards spill as usual, but clips at
-        /// the leading edge, where scrolled-off cards would otherwise slide
-        /// over the team pane.
-        func clippedAtLeadingEdge() -> some View {
-            mask {
-                Rectangle()
-                    .padding(.vertical, -60)
-                    .padding(.trailing, -1000)
-                    // Room for the first card's focus growth, inside the
-                    // 40 pt gap to the pane.
-                    .padding(.leading, -24)
             }
         }
     }
