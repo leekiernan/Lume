@@ -42,7 +42,7 @@ func detailNeedsTMDBFetch(tmdbId: Int?, enrichedAt: Date?) -> Bool {
 func enrichMovieDetailsIfNeeded(_ movie: Movie, context: ModelContext) async -> Bool {
     guard let tmdbId = movie.tmdbId, !TMDBFreshness.isFresh(movie.tmdbEnrichedAt) else { return false }
     let manager = ContentSyncManager(modelContainer: context.container)
-    guard let details = try? await manager.fetchTMDBMovieDetails(tmdbId: tmdbId) else { return false }
+    guard let details = try? await manager.fetchTMDBMovieDetails(tmdbId: tmdbId), !Task.isCancelled else { return false }
     applyMovieDetails(details, to: movie, context: context)
     try? context.save()
     return true
@@ -53,7 +53,7 @@ func enrichMovieDetailsIfNeeded(_ movie: Movie, context: ModelContext) async -> 
 func enrichSeriesDetailsIfNeeded(_ series: Series, context: ModelContext) async -> Bool {
     guard let tmdbId = series.tmdbId, !TMDBFreshness.isFresh(series.tmdbEnrichedAt) else { return false }
     let manager = ContentSyncManager(modelContainer: context.container)
-    guard let details = try? await manager.fetchTMDBTVDetails(tmdbId: tmdbId) else { return false }
+    guard let details = try? await manager.fetchTMDBTVDetails(tmdbId: tmdbId), !Task.isCancelled else { return false }
     applySeriesDetails(details, to: series, context: context)
     try? context.save()
     return true

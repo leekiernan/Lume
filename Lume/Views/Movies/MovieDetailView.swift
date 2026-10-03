@@ -29,11 +29,23 @@ struct MovieDetailView: View {
     @Query private var playlists: [Playlist]
 
     @State private var playingMedia: PlayableMedia?
-    @State private var similar: [HomeMediaItem] = []
-    @State private var collectionMovies: [HomeMediaItem] = []
-    @State private var otherSources: [OtherSources.Source] = []
-    @State private var refreshToken: UUID = .init()
-    @State private var isLoadingTMDB: Bool
+    @State private var loader: MovieDetailLoadMachine
+    private var isLoadingTMDB: Bool {
+        loader.contentID == movie.id ? loader.isLoadingTMDB : detailNeedsTMDBFetch(tmdbId: movie.tmdbId, enrichedAt: movie.tmdbEnrichedAt)
+    }
+
+    private var similar: [HomeMediaItem] {
+        loader.contentID == movie.id ? loader.similar : []
+    }
+
+    private var otherSources: [OtherSources.Source] {
+        loader.contentID == movie.id ? loader.otherSources : []
+    }
+
+    private var collectionMovies: [HomeMediaItem] {
+        loader.contentID == movie.id && loader.collectionID == movie.collectionId ? loader.collectionMovies : []
+    }
+
     #if !os(tvOS)
         @State private var downloads = DownloadManager.shared
         /// Offline downloads are a Premium feature; free users get the paywall.
@@ -44,10 +56,7 @@ struct MovieDetailView: View {
     init(movie: Movie, animationNamespace: Namespace.ID? = nil) {
         self.movie = movie
         self.animationNamespace = animationNamespace
-        _isLoadingTMDB = State(initialValue: detailNeedsTMDBFetch(
-            tmdbId: movie.tmdbId,
-            enrichedAt: movie.tmdbEnrichedAt
-        ))
+        _loader = State(initialValue: MovieDetailLoadMachine(movie: movie))
     }
 
     var body: some View {
@@ -72,18 +81,14 @@ struct MovieDetailView: View {
             #endif
                 .toolbar { toolbarContent }
                 .task(id: movie.id) {
-                    await enrichIfNeeded()
-                    await enrichMovieRatingsIfNeeded(movie, context: modelContext)
-                    resolveSimilar()
-                    await resolveCollection()
-                    resolveOtherSources()
-                    withAnimation(.easeInOut(duration: 0.3)) {
-                        isLoadingTMDB = false
-                    }
+                    await loader.load(movie, in: modelContext)
                 }
-                .onChange(of: movie.similarTMDBIds) { resolveSimilar() }
-                .onChange(of: movie.collectionId) { Task { await resolveCollection() } }
-                .onChange(of: refreshToken) { resolveSimilar() }
+                .task(id: [movie.id, String(movie.collectionId ?? -1)]) {
+                    await loader.loadCollection(movie, in: modelContext)
+                }
+                .onChange(of: movie.similarTMDBIds) { loader.resolveSimilar(movie, in: modelContext) }
+                .onDisappear { loader.invalidate() }
+                .animation(.easeInOut(duration: 0.3), value: isLoadingTMDB)
             #if os(iOS)
                 .fullScreenCover(item: $playingMedia) { media in
                     FullScreenPlayerView(media: media)
@@ -272,41 +277,6 @@ struct MovieDetailView: View {
     /// so playback uses the correct credentials. Falls back to the first.
     private var moviePlaylist: Playlist? {
         playlists.first { movie.id.hasPrefix($0.id.uuidString) } ?? playlists.first
-    }
-
-    // MARK: - Enrichment
-
-    private func enrichIfNeeded() async {
-        // Applied on the view's own context — see `enrichMovieDetailsIfNeeded`.
-        if await enrichMovieDetailsIfNeeded(movie, context: modelContext) {
-            refreshToken = UUID()
-        }
-    }
-
-    private func resolveSimilar() {
-        similar = RelatedTitlesResolver.similar(to: movie, in: modelContext)
-    }
-
-    private func resolveCollection() async {
-        guard let collectionId = movie.collectionId else {
-            collectionMovies = []
-            return
-        }
-
-        let manager = ContentSyncManager(modelContainer: modelContext.container)
-        let partIDs: [Int]
-        do {
-            partIDs = try await manager.fetchTMDBCollectionMovieIDs(collectionId: collectionId)
-        } catch {
-            collectionMovies = []
-            return
-        }
-
-        collectionMovies = RelatedTitlesResolver.collectionParts(partIDs, of: movie, in: modelContext)
-    }
-
-    private func resolveOtherSources() {
-        otherSources = OtherSources.resolve(for: movie, in: modelContext)
     }
 
     // MARK: - Actions

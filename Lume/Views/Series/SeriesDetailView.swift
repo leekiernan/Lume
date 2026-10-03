@@ -27,22 +27,37 @@ struct SeriesDetailView: View {
     #endif
     @Query private var playlists: [Playlist]
 
-    @State private var selectedSeason: Int = 1
-    /// The series' distinct season numbers, cached so the body (season menu,
-    /// metadata) doesn't rebuild a Set over every episode on each render — a real
-    /// cost for long-running shows with hundreds of episodes. Recomputed when the
-    /// episodes relationship changes (see `recomputeSeasons`).
-    @State private var availableSeasons: [Int] = []
-    /// Per-season episode lists, cached alongside `availableSeasons` so the body
-    /// doesn't re-filter and re-sort the whole episodes relationship on every
-    /// render (it's read by the episode list, the play button and `playTitle`).
-    @State private var episodesBySeason: [Int: [Episode]] = [:]
-    @State private var isLoadingEpisodes = false
+    @State private var loader: SeriesDetailLoadMachine
+    private var isLoadingTMDB: Bool {
+        loader.contentID == series.id ? loader.isLoadingTMDB : detailNeedsTMDBFetch(tmdbId: series.tmdbId, enrichedAt: series.tmdbEnrichedAt)
+    }
+
+    private var similar: [HomeMediaItem] {
+        loader.contentID == series.id ? loader.similar : []
+    }
+
+    private var otherSources: [OtherSources.Source] {
+        loader.contentID == series.id ? loader.otherSources : []
+    }
+
     @State private var playingMedia: PlayableMedia?
-    @State private var similar: [HomeMediaItem] = []
-    @State private var otherSources: [OtherSources.Source] = []
-    @State private var refreshToken: UUID = .init()
-    @State private var isLoadingTMDB: Bool
+    private var selectedSeason: Int {
+        get { loader.selectedSeason }
+        nonmutating set { loader.selectedSeason = newValue }
+    }
+
+    private var availableSeasons: [Int] {
+        loader.contentID == series.id ? loader.availableSeasons : []
+    }
+
+    private var episodesBySeason: [Int: [Episode]] {
+        loader.contentID == series.id ? loader.episodesBySeason : [:]
+    }
+
+    private var isLoadingEpisodes: Bool {
+        loader.isLoadingEpisodes
+    }
+
     #if !os(tvOS)
         @State private var downloads = DownloadManager.shared
     #endif
@@ -50,10 +65,7 @@ struct SeriesDetailView: View {
     init(series: Series, animationNamespace: Namespace.ID? = nil) {
         self.series = series
         self.animationNamespace = animationNamespace
-        _isLoadingTMDB = State(initialValue: detailNeedsTMDBFetch(
-            tmdbId: series.tmdbId,
-            enrichedAt: series.tmdbEnrichedAt
-        ))
+        _loader = State(initialValue: SeriesDetailLoadMachine(series: series))
     }
 
     var body: some View {
@@ -77,22 +89,15 @@ struct SeriesDetailView: View {
             #endif
                 .toolbar { toolbarContent }
                 .task(id: series.id) {
-                    await loadEpisodesIfNeeded()
-                    await enrichIfNeeded()
-                    await enrichSeriesRatingsIfNeeded(series, context: modelContext)
-                    resolveSimilar()
-                    resolveOtherSources()
-                    withAnimation(.easeInOut(duration: 0.3)) {
-                        isLoadingTMDB = false
-                    }
+                    await loader.load(series, playlist: seriesPlaylist, in: modelContext)
                 }
-                // Separate task so a stale-cache refresh runs alongside the
-                // enrichment chain above instead of delaying the first paint,
-                // and still gets cancelled when the screen goes away.
-                .task(id: series.id) { await refreshEpisodesIfStale() }
-                .onChange(of: series.similarTMDBIds) { resolveSimilar() }
-                .onChange(of: refreshToken) { resolveSimilar() }
-                .onChange(of: series.episodes.count) { recomputeSeasons() }
+                .task(id: series.id) {
+                    await loader.refreshEpisodesIfStale(series, playlist: seriesPlaylist, in: modelContext)
+                }
+                .onChange(of: series.episodes.count) { loader.recomputeSeasons(series) }
+                .onChange(of: series.similarTMDBIds) { loader.resolveSimilar(series, in: modelContext) }
+                .onDisappear { loader.invalidate() }
+                .animation(.easeInOut(duration: 0.3), value: isLoadingTMDB)
             #if os(iOS)
                 .fullScreenCover(item: $playingMedia) { media in
                     FullScreenPlayerView(media: media)
@@ -175,7 +180,7 @@ struct SeriesDetailView: View {
             VStack(spacing: 12) {
                 Text("No episodes available").foregroundStyle(.secondary)
                 Button("Retry") {
-                    Task { await loadEpisodes() }
+                    Task { await loader.loadEpisodes(series, playlist: seriesPlaylist, in: modelContext) }
                 }
                 .buttonStyle(.bordered)
             }
@@ -260,28 +265,6 @@ struct SeriesDetailView: View {
         )
     }
 
-    private func recomputeSeasons() {
-        availableSeasons = Set(series.episodes.map(\.seasonNum)).sorted()
-        episodesBySeason = Dictionary(grouping: series.episodes, by: \.seasonNum)
-            .mapValues { $0.sorted { $0.episodeNum < $1.episodeNum } }
-    }
-
-    private func determineDefaultSeason() -> Int {
-        let seasons = availableSeasons
-        guard !seasons.isEmpty else { return 1 }
-
-        // Open on the season of the furthest point reached in the series, so
-        // progress in a later season always wins over progress in an earlier
-        // one — regardless of which was watched more recently.
-        let markers = SeriesEpisodeProgress.markers(in: series.episodes)
-        let target = markers.furthestInProgress ?? markers.furthestAnyProgress
-        if let target, seasons.contains(target.seasonNum) {
-            return target.seasonNum
-        }
-
-        return seasons.first ?? 1
-    }
-
     private var seasonEpisodes: [Episode] {
         episodesBySeason[selectedSeason] ?? []
     }
@@ -304,58 +287,6 @@ struct SeriesDetailView: View {
 
     private var seriesPlaylist: Playlist? {
         playlists.first { series.id.hasPrefix($0.id.uuidString) } ?? playlists.first
-    }
-
-    // MARK: - Loading & enrichment
-
-    private func loadEpisodesIfNeeded() async {
-        if series.episodes.isEmpty {
-            await loadEpisodes()
-        }
-        recomputeSeasons()
-        selectedSeason = determineDefaultSeason()
-    }
-
-    /// Re-pulls a cached episode list once the playlist has synced past it. The
-    /// cached episodes stay on screen while it runs and new ones merge in, so
-    /// this is silent unless something actually changed. The empty case is the
-    /// blocking `loadEpisodesIfNeeded` path's job.
-    ///
-    /// m3u and WebDAV are skipped: they import and prune episodes alongside the
-    /// rest of the catalog on every sync, so there is nothing to pull
-    /// per-series there.
-    private func refreshEpisodesIfStale() async {
-        guard !series.episodes.isEmpty,
-              let playlist = seriesPlaylist,
-              playlist.supportsPerSeriesEpisodeFetch,
-              series.episodesAreStale(lastSyncedAt: playlist.lastSyncDate)
-        else { return }
-        await loadEpisodes()
-    }
-
-    private func loadEpisodes() async {
-        guard let playlist = seriesPlaylist, !isLoadingEpisodes else { return }
-        isLoadingEpisodes = true
-        defer { isLoadingEpisodes = false }
-        let manager = ContentSyncManager(modelContainer: modelContext.container)
-        // A failed fetch must not reach `insertEpisodes`: it stamps the episode
-        // cache, which would call the list fresh until the staleness window
-        // reopens — the exact thing keeping a device an episode behind.
-        guard let parsed = try? await manager.fetchEpisodes(
-            seriesId: series.seriesId,
-            seriesElementId: series.id,
-            playlist: playlist
-        ) else { return }
-        // Insert through the view's own context, attaching to `series`, so its
-        // episodes relationship — and this view — update synchronously.
-        await MainActor.run { series.insertEpisodes(parsed, into: modelContext) }
-    }
-
-    private func enrichIfNeeded() async {
-        // Applied on the view's own context — see `enrichSeriesDetailsIfNeeded`.
-        if await enrichSeriesDetailsIfNeeded(series, context: modelContext) {
-            refreshToken = UUID()
-        }
     }
 }
 
@@ -466,18 +397,6 @@ struct SeriesDetailView: View {
         }
     }
 #endif
-
-// MARK: - Related titles
-
-private extension SeriesDetailView {
-    func resolveSimilar() {
-        similar = RelatedTitlesResolver.similar(to: series, in: modelContext)
-    }
-
-    func resolveOtherSources() {
-        otherSources = OtherSources.resolve(for: series, in: modelContext)
-    }
-}
 
 // MARK: - Actions
 
