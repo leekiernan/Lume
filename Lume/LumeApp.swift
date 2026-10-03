@@ -409,6 +409,28 @@ struct LumeApp: App {
         .modelContainer(catalogContainer)
 
         #if os(macOS)
+            // Native app-menu Settings and Command-comma, using the same UI
+            // and dependencies as the library toolbar's Settings sheet.
+            Settings {
+                ContentRestrictionProvider {
+                    SettingsView()
+                        // Rebind profile-scoped preferences and reset PIN gates
+                        // if the active viewer changes while this window is open.
+                        .id(profileManager.activeProfileID)
+                        .frame(minWidth: 650, minHeight: 500)
+                        .onAppear { AppStoreReviewPrompt.shared.noteBlockingSheetAppeared() }
+                        .onDisappear { AppStoreReviewPrompt.shared.noteBlockingSheetDismissed() }
+                }
+                .appAppearance(AppAppearance.resolve(appearanceRaw))
+            }
+            .modelContainer(catalogContainer)
+            .environment(TraktService.shared)
+            .environment(PremiumManager.shared)
+            .environment(cloudSync)
+            .environment(profileManager)
+            .environment(playlistSwitch)
+            .environment(parentalControls)
+
             WindowGroup(id: "player", for: PlayableMedia.self) { $media in
                 if let media {
                     // The player is its own window on macOS, so it does not
