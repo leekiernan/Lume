@@ -20,13 +20,14 @@ import SwiftUI
         @State private var showingManageTeams = false
 
         var body: some View {
-            Form {
+            List {
                 Section {
                     Toggle("Show Sports", isOn: $enabled)
                 } footer: {
                     Text("Sports uses your Live TV channels to open games. Turning it off stops Sports refreshes for this profile.")
                 }
                 if enabled {
+                    SportsSectionsSettingsSection()
                     teamsSection
                     tabSection
                     scoresSection
@@ -34,12 +35,16 @@ import SwiftUI
                     refreshSection
                 }
             }
-            #if os(macOS)
-            .formStyle(.grouped)
-            #endif
             .navigationTitle("Sports")
             #if os(iOS)
                 .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    if enabled {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            EditButton()
+                        }
+                    }
+                }
             #endif
                 .sheet(isPresented: $showingManageTeams) {
                     ManageTeamsSheet()
@@ -52,11 +57,6 @@ import SwiftUI
 
         private var teamsSection: some View {
             Section {
-                NavigationLink {
-                    SportsSectionsSettingsView()
-                } label: {
-                    Label("Sections", systemImage: "list.bullet")
-                }
                 Button {
                     showingManageTeams = true
                 } label: {
@@ -64,8 +64,6 @@ import SwiftUI
                 }
             } header: {
                 Text("Following")
-            } footer: {
-                Text("Sections orders the Sports hub and hides rows from it; Manage Teams follows and unfollows.")
             }
         }
 
