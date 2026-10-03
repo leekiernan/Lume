@@ -184,13 +184,14 @@ actor ImagePipeline {
             return entry.task
         }
 
+        let started = ContinuousClock.now
         let task = Task.detached(priority: priority) { [maxRetries] in
             try await Self.load(url: url, maxPixelSize: maxPixelSize, key: key, retries: maxRetries)
         }
         var waiters: Set<UInt64> = []
         if let waiter { waiters.insert(waiter) }
         inFlight[key] = InFlightLoad(task: task, waiters: waiters)
-        Task { await self.retire(key: key, url: url, task: task) }
+        Task { await self.retire(key: key, url: url, task: task, started: started) }
         return task
     }
 
@@ -209,9 +210,16 @@ actor ImagePipeline {
 
     /// Records the outcome once a load settles and retires its row unless a newer
     /// load has already replaced it.
-    private func retire(key: String, url: URL, task: Task<PlatformImage, Error>) async {
+    private func retire(key: String, url: URL, task: Task<PlatformImage, Error>, started: ContinuousClock.Instant) async {
         do {
             _ = try await task.value
+            let elapsed = started.duration(to: .now)
+            if elapsed >= .seconds(3) {
+                let parts = elapsed.components
+                let milliseconds = parts.seconds * 1000 + parts.attoseconds / 1_000_000_000_000_000
+                // End-to-end disk/network/decode time, once per shared load.
+                Logger.network.notice("Slow image load completed in \(milliseconds, privacy: .public)ms, URL \(url.absoluteString, privacy: .private(mask: .hash))")
+            }
             retryAfter[url.absoluteString] = nil
         } catch {
             noteFailure(error, for: url)
