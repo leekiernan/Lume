@@ -35,4 +35,14 @@ struct SportsPlaybackPresentationTests {
         presentation.sheetDidDismiss()
         #expect(presentation.playing == nil)
     }
+
+    @Test func `direct playback supersedes an earlier pending sheet selection`() {
+        var presentation = SportsPlaybackPresentation()
+        presentation.play(media("a"), afterSheet: true)
+        presentation.play(media("b"), afterSheet: false)
+        presentation.sheetDidDismiss()
+        #expect(presentation.playing?.id == "b")
+        presentation.sheetDidDismiss()
+        #expect(presentation.playing?.id == "b")
+    }
 }

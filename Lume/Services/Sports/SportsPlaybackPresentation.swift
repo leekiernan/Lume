@@ -23,6 +23,7 @@ struct SportsPlaybackPresentation {
         if afterSheet {
             pending = media
         } else {
+            pending = nil
             playing = media
         }
     }
