@@ -26,8 +26,10 @@ struct HomeHeroCarousel: View {
         HeroCarousel(
             items: items,
             imageURL: \.imageURL,
-            backdrop: { HeroBackdrop(url: $0.imageURL) },
-            info: { HeroInfo(hero: $0, isCompact: $1) }
+            backdrop: { HeroBackdrop(url: $0.imageURL, posterURL: $0.posterURL) },
+            info: { HeroInfo(hero: $0, isCompact: $1) },
+            managesArtworkComposition: true,
+            portraitURL: \.posterURL
         )
     }
 }
@@ -41,6 +43,7 @@ struct HeroCarousel<Item: Identifiable, Backdrop: View, Info: View>: View where 
     /// The fixed copy over the artwork; `true` when the hero is narrow.
     @ViewBuilder let info: (Item, Bool) -> Info
     var managesArtworkComposition = false
+    var portraitURL: ((Item) -> URL?)?
 
     @State private var currentID: String?
     @State private var artworkSize: CGSize = .zero
@@ -185,14 +188,16 @@ struct HeroCarousel<Item: Identifiable, Backdrop: View, Info: View>: View where 
         let count = items.count
         guard count > 1 else { return }
         // Wrap the neighbours so the loop targets (last⇄first) are warm too.
-        let neighbours = [(index - 1 + count) % count, (index + 1) % count]
-            .compactMap { imageURL(items[$0]) }
-        guard !neighbours.isEmpty else { return }
         guard artworkSize.width > 0 else { return }
-        let height = HeroArtworkPolicy.artworkHeight(width: artworkSize.width, heroHeight: artworkSize.height)
-        let pixels = HeroArtworkPolicy.decodePoints(width: artworkSize.width, height: height) * displayScale
-        let urls = neighbours.compactMap { HeroArtworkPolicy.backdropURL($0, pixelWidth: pixels) }
-        Task { await ImagePipeline.shared.prefetch(urls, maxPixelSize: pixels) }
+        for neighbour in [(index - 1 + count) % count, (index + 1) % count] {
+            let poster = HeroArtworkPolicy.portraitURL(portraitURL?(items[neighbour]), width: artworkSize.width)
+            let ratio = poster == nil ? HeroArtworkPolicy.landscapeRatio : HeroArtworkPolicy.portraitRatio
+            let height = poster == nil ? HeroArtworkPolicy.artworkHeight(width: artworkSize.width, heroHeight: artworkSize.height) : artworkSize.height
+            let pixels = HeroArtworkPolicy.decodePoints(width: artworkSize.width, height: height, sourceRatio: ratio) * displayScale
+            let url = poster.map { HeroArtworkPolicy.posterURL($0, pixelWidth: pixels * ratio) }
+                ?? HeroArtworkPolicy.backdropURL(imageURL(items[neighbour]), pixelWidth: pixels)
+            if let url { Task { await ImagePipeline.shared.prefetch([url], maxPixelSize: pixels) } }
+        }
     }
 
     // MARK: - Scrolling artwork
@@ -355,12 +360,13 @@ struct HeroCarousel<Item: Identifiable, Backdrop: View, Info: View>: View where 
 /// height once titles and actions are ready.
 struct HomeHeroWarmStart: View {
     let backdropURL: URL?
+    var posterURL: URL?
 
     var body: some View {
         HeroCarouselFrame {
             ZStack(alignment: .bottomLeading) {
-                HeroArtworkRegion {
-                    HeroBackdrop(url: backdropURL)
+                HeroArtworkRegion(managesComposition: true) {
+                    HeroBackdrop(url: backdropURL, posterURL: posterURL)
                 }
                 LinearGradient(
                     colors: [.clear, .black.opacity(0.15), .black.opacity(0.85)],
@@ -463,9 +469,27 @@ private struct HeroSlot<Item>: Identifiable {
 
 private struct HeroBackdrop: View {
     let url: URL?
+    var posterURL: URL?
+    @State private var failedPosterURL: URL?
 
     var body: some View {
-        Color.black.overlay { HeroArtworkImage(url: url) }
+        GeometryReader { proxy in
+            let poster = HeroArtworkPolicy.portraitURL(posterURL != failedPosterURL ? posterURL : nil, width: proxy.size.width)
+            let height = poster == nil ? HeroArtworkPolicy.artworkHeight(width: proxy.size.width, heroHeight: proxy.size.height) : proxy.size.height
+            Color.black.overlay(alignment: .top) {
+                HeroArtworkImage(
+                    url: poster ?? url,
+                    sourceRatio: poster == nil ? HeroArtworkPolicy.landscapeRatio : HeroArtworkPolicy.portraitRatio,
+                    onFailure: { if let poster { failedPosterURL = poster } }
+                )
+                .frame(height: height)
+                .mask {
+                    if proxy.size.width < 600 {
+                        LinearGradient(stops: [.init(color: .black, location: 0), .init(color: .black, location: 0.65), .init(color: .clear, location: 1)], startPoint: .top, endPoint: .bottom)
+                    } else { Color.black }
+                }
+            }
+        }
     }
 }
 

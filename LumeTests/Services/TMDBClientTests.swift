@@ -3,6 +3,19 @@ import Foundation
 import Testing
 
 struct TMDBClientTests {
+    @Test func `movie and show details decode portrait posters without requiring images append data`() async throws {
+        for (path, poster) in [("/3/movie/987651", "/movie-poster.jpg"), ("/3/tv/987652", "/show-poster.jpg")] {
+            StubURLProtocol.register(host: "api.themoviedb.org", path: path, response: .init(status: 200, body: "{\"poster_path\":\"\(poster)\",\"backdrop_path\":\"/wide.jpg\"}"))
+        }
+        let client = TMDBClient(session: StubURLProtocol.makeSession(), token: "test-token")
+        let movie = try await client.movieDetails(987_651)
+        let show = try await client.tvDetails(987_652)
+        #expect(movie.posterPath == "/movie-poster.jpg")
+        #expect(show.posterPath == "/show-poster.jpg")
+        #expect(movie.backdropPath == "/wide.jpg")
+        #expect(show.backdropPath == "/wide.jpg")
+    }
+
     // MARK: - isConfigured
 
     @Test func `not configured when token is nil`() {

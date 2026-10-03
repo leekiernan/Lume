@@ -11,7 +11,9 @@ struct HeroArtworkImage: View {
         GeometryReader { proxy in
             let points = HeroArtworkPolicy.decodePoints(width: proxy.size.width, height: proxy.size.height, sourceRatio: sourceRatio)
             CachedAsyncImage(
-                url: HeroArtworkPolicy.backdropURL(url, pixelWidth: points * displayScale),
+                url: sourceRatio < 1
+                    ? HeroArtworkPolicy.posterURL(url, pixelWidth: points * sourceRatio * displayScale)
+                    : HeroArtworkPolicy.backdropURL(url, pixelWidth: points * displayScale),
                 maxPixelSize: points
             ) { phase in
                 if case let .success(image) = phase {

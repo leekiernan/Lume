@@ -3,6 +3,24 @@ import Foundation
 /// Composition and pixel sizing are independent of carousel/playback state.
 nonisolated enum HeroArtworkPolicy {
     static let landscapeRatio: CGFloat = 16 / 9
+    static let portraitRatio: CGFloat = 2 / 3
+
+    static func portraitURL(_ poster: URL?, width: CGFloat) -> URL? {
+        width < 600 ? poster : nil
+    }
+
+    static func posterURL(_ url: URL?, pixelWidth: CGFloat) -> URL? {
+        guard let url, url.host == "image.tmdb.org" else { return url }
+        var components = url.pathComponents
+        guard components.count == 5, components[1] == "t", components[2] == "p",
+              ["w92", "w154", "w185", "w342", "w500", "w780", "original"].contains(components[3]),
+              ["jpg", "jpeg", "png", "webp"].contains(url.pathExtension.lowercased())
+        else { return url }
+        components[3] = pixelWidth <= 342 ? "w342" : pixelWidth <= 500 ? "w500" : pixelWidth <= 780 ? "w780" : "original"
+        var result = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        result?.path = "/" + components.dropFirst().joined(separator: "/")
+        return result?.url ?? url
+    }
 
     /// Stable from the first layout pass, including the warm-start placeholder.
     static func heroHeight(width: CGFloat) -> CGFloat {

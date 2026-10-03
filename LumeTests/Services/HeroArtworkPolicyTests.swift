@@ -3,6 +3,27 @@ import Foundation
 import Testing
 
 struct HeroArtworkPolicyTests {
+    @Test func `only narrow heroes select portrait artwork`() throws {
+        let poster = try #require(URL(string: "https://image.tmdb.org/t/p/original/poster.jpg"))
+        #expect(HeroArtworkPolicy.portraitURL(poster, width: 390) == poster)
+        #expect(HeroArtworkPolicy.portraitURL(poster, width: 599) == poster)
+        #expect(HeroArtworkPolicy.portraitURL(poster, width: 600) == nil)
+        #expect(HeroArtworkPolicy.portraitURL(poster, width: 1920) == nil)
+        #expect(HeroArtworkPolicy.portraitURL(nil, width: 390) == nil)
+    }
+
+    @Test func `portrait download tiers use poster sizes and preserve identity`() throws {
+        let url = try #require(URL(string: "https://image.tmdb.org/t/p/original/poster.jpg?test=1"))
+        for (width, size) in [(342.0, "w342"), (343, "w500"), (500, "w500"), (501, "w780"), (780, "w780"), (781, "original")] {
+            let result = HeroArtworkPolicy.posterURL(url, pixelWidth: width)
+            #expect(result?.path == "/t/p/\(size)/poster.jpg")
+            #expect(result?.query == "test=1")
+        }
+        #expect(HeroArtworkPolicy.decodePoints(width: 390, height: 540, sourceRatio: HeroArtworkPolicy.portraitRatio) == 585)
+        let external = try #require(URL(string: "https://example.com/poster.jpg"))
+        #expect(HeroArtworkPolicy.posterURL(external, pixelWidth: 1000) == external)
+    }
+
     @Test func `compact artwork preserves landscape ratio without changing wide heroes`() {
         #expect(HeroArtworkPolicy.heroHeight(width: 390) == 540)
         #expect(HeroArtworkPolicy.heroHeight(width: 1024) == 800)

@@ -23,11 +23,13 @@ extension SectionFeed {
     }
 
     struct HeroPresentation {
+        let posterPath: String?
         let backdropPath: String?
         let logoPath: String?
         let overview: String?
 
         init(_ details: TMDBTitleDetails) {
+            posterPath = details.posterPath
             backdropPath = details.backdropPath
             logoPath = details.logoPath
             overview = details.overview
@@ -36,8 +38,12 @@ extension SectionFeed {
 
     /// Missing hero artwork is enriched in the background. The freshness
     /// window avoids repeatedly asking TMDB for artwork it does not have.
-    private static func heroNeedsArtwork(backdropPath: String?, logoPath: String?, enrichedAt: Date?) -> Bool {
-        guard (backdropPath ?? "").isEmpty || (logoPath ?? "").isEmpty else { return false }
+    static func heroNeedsArtwork(backdropPath: String?, posterPath: String?, posterCheckedAt: Date?, logoPath: String?, enrichedAt: Date?) -> Bool {
+        // Existing installations enriched before posters were retained need one
+        // backfill, even when their other metadata is still fresh. A checked
+        // timestamp also negative-caches titles with no poster.
+        if (posterPath ?? "").isEmpty, !TMDBFreshness.isFresh(posterCheckedAt) { return true }
+        guard (backdropPath ?? "").isEmpty || (posterPath ?? "").isEmpty || (logoPath ?? "").isEmpty else { return false }
         return !TMDBFreshness.isFresh(enrichedAt)
     }
 
@@ -121,9 +127,11 @@ extension SectionFeed {
         // stale fields; do not let a later feed loader issue the same request.
         guard heroPresentationOverrides[hero.id] == nil else { return nil }
         switch hero {
-        case let .movie(movie, _, _, _):
+        case let .movie(movie, _, _, _, _):
             guard Self.heroNeedsArtwork(
                 backdropPath: movie.backdropPath,
+                posterPath: movie.posterPath,
+                posterCheckedAt: movie.posterCheckedAt,
                 logoPath: movie.logoPath,
                 enrichedAt: movie.tmdbEnrichedAt
             ), let tmdbId = movie.tmdbId else { return nil }
@@ -134,9 +142,11 @@ extension SectionFeed {
                 kind: .movie,
                 needsBackdrop: (movie.backdropPath ?? "").isEmpty
             )
-        case let .series(series, _, _, _):
+        case let .series(series, _, _, _, _):
             guard Self.heroNeedsArtwork(
                 backdropPath: series.backdropPath,
+                posterPath: series.posterPath,
+                posterCheckedAt: series.posterCheckedAt,
                 logoPath: series.logoPath,
                 enrichedAt: series.tmdbEnrichedAt
             ), let tmdbId = series.tmdbId else { return nil }
