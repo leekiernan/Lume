@@ -374,6 +374,33 @@ enum SeriesWatchSplit {
         guard splits(kind) else { return [] }
         return series.map { "\($0.id)|\($0.lastWatchedDate?.timeIntervalSince1970 ?? 0)" }
     }
+
+    /// The split for a grid's loaded pages, loading further pages while it
+    /// would show nothing and the source has more. The pages come from the one
+    /// watched-series query and are split afterwards, and a grid asks for
+    /// another page only when its last card appears: a page wholly on the
+    /// other side of the split — Watch Again behind unfinished shows, Continue
+    /// Watching behind finished ones — would otherwise end the walk with an
+    /// empty grid. Stops at the end of the source, when a page adds nothing (a
+    /// failed fetch), and on cancellation, returning `nil` so the caller keeps
+    /// the split it has.
+    static func settle(
+        _ kind: LibraryCollection.Kind,
+        collection: PagedCollection<Series>,
+        progress: ([Series]) async -> ContinueWatchingLoader.Result,
+        loadNextPage: () -> Void
+    ) async -> ContinueWatchingLoader.Result? {
+        while true {
+            let result = await progress(collection.items)
+            guard !Task.isCancelled else { return nil }
+            guard shown(collection.items, for: kind, progress: result).isEmpty, collection.canLoadMore else {
+                return result
+            }
+            let loaded = collection.items.count
+            loadNextPage()
+            guard collection.items.count > loaded else { return result }
+        }
+    }
 }
 
 /// The full grid behind a Series collection's "Show All".
@@ -417,7 +444,13 @@ struct SeriesCollectionView: View {
         }
         .task(id: SeriesWatchSplit.key(collection.items, for: kind)) {
             guard SeriesWatchSplit.splits(kind) else { return }
-            progress = await ContinueWatchingLoader.load(collection.items, in: modelContext)
+            let settled = await SeriesWatchSplit.settle(
+                kind,
+                collection: collection,
+                progress: { await ContinueWatchingLoader.load($0, in: modelContext) },
+                loadNextPage: loadNextPage
+            )
+            if let settled { progress = settled }
         }
     }
 
