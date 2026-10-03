@@ -64,6 +64,9 @@ struct MainTabView: View {
     /// adding a playlist, when the app would otherwise look empty and broken.
     @State var syncQueue: [PlaylistSyncRequest] = []
     @State var activeSyncRequest: PlaylistSyncRequest?
+    /// Playlists refreshing an area the viewer can already browse, with no
+    /// cover — see `PlaylistSyncRequest.runsInBackground`.
+    @State var backgroundSyncIDs: Set<UUID> = []
     /// A viewer-requested refresh. Kept separate from the automatic queue so a
     /// confirmed TV remote action never advances or dismisses auto-sync work.
     @State private var manualSyncRequest: PlaylistSyncRequest?

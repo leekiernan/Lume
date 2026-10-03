@@ -7,6 +7,8 @@
 //  re-evaluation. Kept out of MainTabView, which composes the tabs.
 //
 
+import OSLog
+import SwiftData
 import SwiftUI
 
 extension MainTabView {
@@ -45,9 +47,31 @@ extension MainTabView {
         for playlist in candidates where !isQueued(playlist) {
             guard let request = syncRequest(for: playlist) else { continue }
             autoSyncAttempted.insert(playlist.id)
-            syncQueue.append(request)
+            if request.runsInBackground {
+                startBackgroundSync(request)
+            } else {
+                syncQueue.append(request)
+            }
         }
         promoteNextIfIdle()
+    }
+
+    /// Refreshes areas the viewer can already browse without covering them:
+    /// the rows on screen stay usable and update in place as the sync lands.
+    /// Failure is the sync's own to report (`Playlist.syncStatus`); the next
+    /// trigger after this session retries it.
+    func startBackgroundSync(_ request: PlaylistSyncRequest) {
+        let playlist = request.playlist
+        let plan = PlaylistSyncPlan(sourceType: playlist.sourceType, repairingAreas: request.repairingAreas)
+        let container = modelContext.container
+        backgroundSyncIDs.insert(playlist.id)
+        Logger.database.info(
+            "Refreshing \(plan.syncAreas.map(\.rawValue).sorted(), privacy: .public) in the background for playlist \(playlist.id)"
+        )
+        Task {
+            defer { backgroundSyncIDs.remove(playlist.id) }
+            try? await PlaylistSyncRun.perform(playlist, container: container, plan: plan)
+        }
     }
 
     /// iCloud brought new connection details for these playlists. Any whose
@@ -61,17 +85,21 @@ extension MainTabView {
     }
 
     func isQueued(_ playlist: Playlist) -> Bool {
-        activeSyncRequest?.id == playlist.id || syncQueue.contains { $0.id == playlist.id }
+        activeSyncRequest?.id == playlist.id
+            || syncQueue.contains { $0.id == playlist.id }
+            || backgroundSyncIDs.contains(playlist.id)
     }
 
     func syncRequest(for playlist: Playlist) -> PlaylistSyncRequest? {
         PlaylistSyncCoverage.bootstrapFromCatalogIfNeeded(
             playlistID: playlist.id,
+            lastSyncDate: playlist.lastSyncDate,
             context: modelContext
         )
         let missingAreas = PlaylistSyncCoverage.missingAreasForAutomaticRepair(
             playlistID: playlist.id,
-            disabledAreasRaw: disabledAreasRaw
+            disabledAreasRaw: disabledAreasRaw,
+            frequency: syncFrequency
         )
         let candidate = playlist.autoSyncCandidate(activeID: activePlaylistID)
         let isRegularlyDue = AutoSync.shouldSync(
@@ -79,9 +107,9 @@ extension MainTabView {
             frequency: syncFrequency,
             alreadyStarted: autoSyncAttempted.contains(playlist.id)
         )
-        // A repair also opens the blocking sync cover, so it follows the same
-        // rule as a regular sync: only the playlist on screen (or one just
-        // added) earns it; any other syncs when the viewer switches to it.
+        // A repair follows the same rule as a regular sync: only the playlist
+        // on screen (or one just added) earns it; any other syncs when the
+        // viewer switches to it.
         let needsCoverage = !missingAreas.isEmpty && playlist.syncEnabled && playlist.syncStatus != .syncing
             && (candidate.isActive || candidate.wasAddedThisSession)
         guard isRegularlyDue || needsCoverage else { return nil }
@@ -90,7 +118,12 @@ extension MainTabView {
         // Xtream playlist uses the narrow repair path; m3u and Stalker do not
         // expose independent per-area bulk imports.
         let repairingAreas = !isRegularlyDue && playlist.sourceType == .xtream ? missingAreas : nil
-        return PlaylistSyncRequest(playlist: playlist, repairingAreas: repairingAreas)
+        // Only an area with nothing to browse yet is worth blocking the
+        // screen for; one already in the catalog refreshes behind it.
+        let runsInBackground = repairingAreas.map {
+            $0.isSubset(of: PlaylistSyncCoverage.areasWithRows(playlistID: playlist.id, context: modelContext))
+        } ?? false
+        return PlaylistSyncRequest(playlist: playlist, repairingAreas: repairingAreas, runsInBackground: runsInBackground)
     }
 
     /// Whether the auto-sync queue holds anything, including the playlist in
@@ -112,6 +145,9 @@ extension MainTabView {
 struct PlaylistSyncRequest: Identifiable {
     let playlist: Playlist
     let repairingAreas: Set<AppArea>?
+    /// A repair of areas the catalog already has rows for, run without the
+    /// blocking cover.
+    var runsInBackground = false
 
     var id: UUID {
         playlist.id

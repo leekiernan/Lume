@@ -1,4 +1,5 @@
 import Foundation
+import OSLog
 import SwiftData
 
 /// Outcome of `bootstrapProfiles`, handed back to `ProfileManager` so the UI
@@ -66,11 +67,28 @@ extension CloudSyncEngine {
             // the export into the outgoing profile's mirrors and the catalog
             // reset — these each used to re-run the four catalog fetches,
             // tripling the work per switch.
+            // Each step timed, so a slow switch says where it went — and,
+            // against the caller's total, how long it queued behind a
+            // reconcile already running on this actor.
+            let clock = ContinuousClock()
+            let started = clock.now
             let localValues = try fetchLocalContentValues()
+            let fetched = clock.now
             try exportCatalogState(toProfile: from, localValues: localValues)
+            let exported = clock.now
             resetCatalogUserState(localValues: localValues)
+            let reset = clock.now
             try importProfileState(toID)
+            let imported = clock.now
             try saveProfileSwitchStores()
+            let saved = clock.now
+            Logger.sync.info("""
+            Profile switch stores: fetch \(Self.seconds(fetched - started), privacy: .public), \
+            export \(Self.seconds(exported - fetched), privacy: .public), \
+            reset \(Self.seconds(reset - exported), privacy: .public), \
+            import \(Self.seconds(imported - reset), privacy: .public), \
+            save \(Self.seconds(saved - imported), privacy: .public)
+            """)
 
             // Nothing below can throw: only after both stores are durable may
             // the previous profile's reconcile baseline stop describing the
@@ -96,6 +114,11 @@ extension CloudSyncEngine {
             }
             throw error
         }
+    }
+
+    /// A duration for the log, to a hundredth of a second.
+    nonisolated static func seconds(_ duration: Duration) -> String {
+        duration.formatted(.units(allowed: [.seconds], fractionalPart: .show(length: 2)))
     }
 
     /// Collapse duplicate profiles that CloudKit surfaced from another device.
