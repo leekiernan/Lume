@@ -35,7 +35,7 @@
                 } label: {
                     Label("Manage Teams", systemImage: "person.2.badge.plus")
                         .font(.title3.weight(.semibold))
-                        .padding(.horizontal, 44)
+                        .padding(.horizontal, TVSportsMetrics.actionLabelInset)
                         .padding(.vertical, 20)
                 }
                 .buttonStyle(TVCardButtonStyle(focusScale: 1.05))
@@ -52,7 +52,7 @@
                 } label: {
                     Text("Unlock Sports Hub")
                         .font(.title3.weight(.semibold))
-                        .padding(.horizontal, 44)
+                        .padding(.horizontal, TVSportsMetrics.actionLabelInset)
                         .padding(.vertical, 20)
                 }
                 .buttonStyle(TVCardButtonStyle(focusScale: 1.05))

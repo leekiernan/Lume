@@ -34,9 +34,9 @@
                     .font(.subheadline)
                     .fontWeight(.bold)
                     .foregroundStyle(.secondary)
-                    .padding(.horizontal, 60)
+                    .padding(.horizontal, TVSportsMetrics.railInset)
                 ScrollView(.horizontal, showsIndicators: false) {
-                    LazyHStack(spacing: 32) {
+                    LazyHStack(spacing: TVSportsMetrics.tallRailSpacing) {
                         ForEach(highlights) { highlight in
                             Button {
                                 onSelect(highlight.fixture)
@@ -58,7 +58,7 @@
                             .onLeadingEdgeLeft(event.id == firstID ? onLeadingLeft : nil)
                         }
                     }
-                    .padding(.horizontal, 60)
+                    .padding(.horizontal, TVSportsMetrics.railInset)
                     .padding(.vertical, 12)
                 }
                 .scrollClipDisabled()
@@ -241,7 +241,7 @@
                 actions
             }
             .foregroundStyle(.white)
-            .padding(.horizontal, 60)
+            .padding(.horizontal, TVSportsMetrics.railInset)
             .frame(maxWidth: .infinity, alignment: .leading)
             .focusSection()
         }

@@ -172,7 +172,7 @@
                     ScrollView {
                         LazyVStack(alignment: .leading, spacing: 36) {
                             if carousel.isEmpty {
-                                header.padding(.top, Self.headerTop)
+                                header.padding(.top, TVSportsMetrics.contentTop)
                             } else {
                                 TVSportsHeroShowcase(
                                     model: heroModel,
@@ -182,7 +182,7 @@
                                     onWatch: watch,
                                     onWatchFromStart: heroFromStart.map { media in { playback.play(media, afterSheet: false) } },
                                     onOpen: { selectedFixture = $0 },
-                                    header: { header.padding(.top, Self.headerTop) }
+                                    header: { header.padding(.top, TVSportsMetrics.contentTop) }
                                 )
                             }
                             if groups.isEmpty, carousel.isEmpty {
@@ -236,8 +236,6 @@
         }
 
         private static let carouselLimit = 8
-        /// Clear of the tab bar above, which the full-bleed page now sits under.
-        private static let headerTop: CGFloat = 110
 
         private var showcaseHeight: CGFloat {
             max(containerHeight - TVHomeMetrics.rowPeek, 0)
@@ -268,7 +266,7 @@
                         .foregroundStyle(.white.opacity(0.55))
                 }
             }
-            .padding(.horizontal, 60)
+            .padding(.horizontal, TVSportsMetrics.railInset)
         }
 
         // MARK: - Sections
@@ -283,7 +281,7 @@
                 rowHeader(for: group)
 
                 ScrollView(.horizontal, showsIndicators: false) {
-                    LazyHStack(spacing: 24) {
+                    LazyHStack(spacing: TVSportsMetrics.railSpacing) {
                         ForEach(group.fixtures) { fixture in
                             TVFixtureCard(
                                 fixture: fixture,
@@ -308,7 +306,7 @@
                             .buttonStyle(TVCardButtonStyle(focusScale: 1.05))
                         }
                     }
-                    .padding(.horizontal, 60)
+                    .padding(.horizontal, TVSportsMetrics.railInset)
                     .padding(.vertical, 8)
                 }
                 .scrollClipDisabled()
@@ -335,7 +333,7 @@
                     .fontWeight(.bold)
                     .foregroundStyle(.secondary)
             }
-            .padding(.horizontal, 60)
+            .padding(.horizontal, TVSportsMetrics.railInset)
         }
 
         private func hintRow(_ text: LocalizedStringKey, icon: String) -> some View {

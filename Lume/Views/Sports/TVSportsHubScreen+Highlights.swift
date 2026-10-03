@@ -41,7 +41,7 @@
                         onWatch: watch,
                         onOpen: { selectedFixture = first.fixture }
                     )
-                    .padding(.top, 100)
+                    .padding(.top, TVSportsMetrics.contentTop)
                     if highlightsLoad.result.highlights.count > 1 || !highlightsLoad.result.payPerView.isEmpty {
                         TVSportsHighlightsSection(
                             highlights: Array(highlightsLoad.result.highlights.dropFirst()),
@@ -56,11 +56,11 @@
                     } label: {
                         Label("Follow Your Teams", systemImage: "person.2.badge.plus")
                             .font(.title3.weight(.semibold))
-                            .padding(.horizontal, 44)
+                            .padding(.horizontal, TVSportsMetrics.actionLabelInset)
                             .padding(.vertical, 20)
                     }
                     .buttonStyle(TVCardButtonStyle(focusScale: 1.05))
-                    .padding(.horizontal, 60)
+                    .padding(.horizontal, TVSportsMetrics.railInset)
                     .padding(.bottom, 60)
                 }
             }

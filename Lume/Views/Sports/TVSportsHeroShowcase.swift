@@ -42,7 +42,7 @@
                         onOpen: { onOpen(hero) },
                         onPage: model.items.count > 1 ? { model.page($0) } : nil
                     )
-                    .padding(.horizontal, 60)
+                    .padding(.horizontal, TVSportsMetrics.railInset)
                     .opacity(model.infoOpacity)
                 }
                 TVHeroPageDots(model: model)
