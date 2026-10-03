@@ -107,9 +107,9 @@ struct MainTabView: View {
     /// The two id sets are cheap to rebuild and compare; the digest is not.
     private var contentRestriction: ContentRestriction {
         restrictionMemo.restriction(
-            isActive: profileManager?.activeProfileIsChild ?? false,
-            restricted: Set(restrictedCategories.map(\.id)),
-            hidden: Set(hiddenCategories.map(\.id))
+            isChild: profileManager?.activeProfileIsChild,
+            restrictedIDs: restrictedCategories.map(\.id),
+            hiddenIDs: hiddenCategories.map(\.id)
         )
     }
 
