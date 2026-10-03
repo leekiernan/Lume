@@ -29,14 +29,6 @@ import SwiftUI
                 .environment(\.defaultMinListRowHeight, 40)
                 .toggleStyle(.switch)
                 .controlSize(.regular)
-                .toolbar {
-                    ToolbarItem(placement: .primaryAction) {
-                        Button("Done", action: window.close)
-                            .buttonStyle(.bordered)
-                            .controlSize(.regular)
-                            .padding(.horizontal, 8)
-                    }
-                }
                 .background(MacWindowAccessor { window.window = $0 })
                 .onAppear { window.dismiss = dismiss }
                 .frame(minWidth: 540, idealWidth: 650, minHeight: 500, idealHeight: 680)

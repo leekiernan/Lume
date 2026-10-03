@@ -14,6 +14,7 @@ import SwiftUI
         @Environment(\.dismiss) private var dismiss
         @Environment(\.isPresented) private var isPresented
         @Environment(\.macSettingsNavigation) private var settings
+        @Environment(\.macSettingsWindowController) private var settingsWindow
         @State private var active = false
 
         private var canGoBack: Bool {
@@ -35,13 +36,22 @@ import SwiftUI
         func body(content: Content) -> some View {
             content
                 .navigationBarBackButtonHidden(settings && rootAction == nil && isPresented)
-                .toolbar {
-                    if settings, rootAction == nil, isPresented {
-                        ToolbarItem(placement: .navigation) {
-                            Button(action: back) { Label("Back", systemImage: "chevron.left") }
-                                .buttonStyle(.bordered)
-                                .controlSize(.regular)
+                .safeAreaInset(edge: .top, spacing: 0) {
+                    if settings {
+                        HStack {
+                            if rootAction == nil, isPresented {
+                                Button(action: back) { Label("Back", systemImage: "chevron.left") }
+                            }
+                            Spacer(minLength: 20)
+                            Button("Done") { settingsWindow?.close() }
                         }
+                        .buttonStyle(.bordered)
+                        .controlSize(.regular)
+                        .frame(maxWidth: .infinity)
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 12)
+                        .background(.bar)
+                        .overlay(alignment: .bottom) { Divider() }
                     }
                 }
                 .background {
