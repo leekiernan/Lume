@@ -37,7 +37,7 @@ struct MoviesView: View {
     @AppStorage(CustomHomeSections.storageKey(.movies)) private var customSectionsRaw = ""
     @State private var heroWarmStart = HeroWarmStartState(surface: .movies)
 
-    @AppStorage(SortStorageKey.movieCategories) private var categorySortRaw: String = CategorySortOption.playlist.rawValue
+    private let categorySortRaw: String = CategorySortOption.playlist.rawValue
 
     private var categorySort: CategorySortOption {
         CategorySortOption(rawValue: categorySortRaw) ?? .playlist

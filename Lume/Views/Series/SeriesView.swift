@@ -43,7 +43,7 @@ struct SeriesView: View {
     /// read, to key the resume lookup — see `seriesResumeKey`.
     @Query private var newestWatchedSeries: [Series]
 
-    @AppStorage(SortStorageKey.seriesCategories) private var categorySortRaw: String = CategorySortOption.playlist.rawValue
+    private let categorySortRaw: String = CategorySortOption.playlist.rawValue
 
     private var categorySort: CategorySortOption {
         CategorySortOption(rawValue: categorySortRaw) ?? .playlist

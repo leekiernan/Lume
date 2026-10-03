@@ -266,7 +266,7 @@ struct MovieGenreView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.contentRestriction) private var restriction
 
-    @AppStorage(SortStorageKey.movieContent) private var contentSortRaw: String = ContentSortOption.playlist.rawValue
+    private let contentSortRaw: String = ContentSortOption.playlist.rawValue
     @State private var movies: [Movie] = []
     @State private var pagination = PaginationMachine()
 
@@ -288,7 +288,6 @@ struct MovieGenreView: View {
             emptyTitle: "No Movies",
             emptyIcon: "film.stack",
             emptyDescription: "No movies in this genre",
-            sortRaw: $contentSortRaw,
             onLoadMore: { loadNextPage() },
             card: { MovieCardView(movie: $0, fillsWidth: true) }
         )
@@ -347,7 +346,7 @@ struct SeriesGenreView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.contentRestriction) private var restriction
 
-    @AppStorage(SortStorageKey.seriesContent) private var contentSortRaw: String = ContentSortOption.playlist.rawValue
+    private let contentSortRaw: String = ContentSortOption.playlist.rawValue
     @State private var series: [Series] = []
     @State private var pagination = PaginationMachine()
 
@@ -366,7 +365,6 @@ struct SeriesGenreView: View {
             emptyTitle: "No Series",
             emptyIcon: "tv.fill",
             emptyDescription: "No series in this genre",
-            sortRaw: $contentSortRaw,
             onLoadMore: { loadNextPage() },
             card: { SeriesCardView(series: $0, fillsWidth: true) }
         )

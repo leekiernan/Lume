@@ -25,10 +25,8 @@
 
         @Environment(\.modelContext) private var modelContext
         @Environment(\.contentRestriction) private var restriction
-        @AppStorage(SortStorageKey.liveCategories)
-        private var categorySortRaw: String = CategorySortOption.playlist.rawValue
-        @AppStorage(SortStorageKey.liveContent)
-        private var contentSortRaw: String = ContentSortOption.playlist.rawValue
+        private let categorySortRaw: String = CategorySortOption.playlist.rawValue
+        private let contentSortRaw: String = ContentSortOption.playlist.rawValue
 
         @State private var playlists: [Playlist] = []
         @State private var selectedPlaylistID: UUID?

@@ -45279,65 +45279,6 @@
         }
       }
     },
-    "Release Date (Newest First)" : {
-      "comment" : "Category grid sort: release date, not provider added date.",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Veröffentlichungsdatum (Neueste zuerst)"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Release Date (Newest First)"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Fecha de estreno (más recientes primero)"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Date de sortie (plus récentes d’abord)"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Data di uscita (più recenti prima)"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "公開日（新しい順）"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "출시일 (최신순)"
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Data de lançamento (mais recentes primeiro)"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "发行日期（最新优先）"
-          }
-        }
-      }
-    },
     "Released" : {
       "extractionState" : "stale",
       "localizations" : {

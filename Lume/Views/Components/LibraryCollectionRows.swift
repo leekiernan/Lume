@@ -239,8 +239,6 @@ struct MovieCollectionView: View {
             emptyTitle: kind.title,
             emptyIcon: kind.emptyIcon,
             emptyDescription: emptyDescription,
-            sortRaw: .constant(""),
-            showsSortMenu: false,
             onLoadMore: loadNextPage,
             card: { MovieCardView(movie: $0, fillsWidth: true) }
         )
@@ -410,8 +408,6 @@ struct SeriesCollectionView: View {
             emptyTitle: kind.title,
             emptyIcon: kind.emptyIcon,
             emptyDescription: emptyDescription,
-            sortRaw: .constant(""),
-            showsSortMenu: false,
             onLoadMore: loadNextPage,
             card: { SeriesCardView(series: $0, fillsWidth: true) }
         )

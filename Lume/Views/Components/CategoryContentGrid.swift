@@ -18,11 +18,6 @@ struct CategoryContentGrid<Item: Identifiable & Hashable & WatchlistFavoritable,
     let emptyTitle: LocalizedStringKey
     let emptyIcon: String
     let emptyDescription: LocalizedStringKey
-    @Binding var sortRaw: String
-    /// Whether to surface the content sort menu. Categories are user-sortable;
-    /// the Favorites / Recently Watched collections have an intrinsic order
-    /// (alphabetical / most-recent-first) and pass `false` to hide it.
-    var showsSortMenu: Bool = true
     /// Called when the last item appears, so a paginating caller can fetch the
     /// next page. Nil callers load their full set up front (unchanged behavior).
     var onLoadMore: (() -> Void)?
@@ -60,16 +55,6 @@ struct CategoryContentGrid<Item: Identifiable & Hashable & WatchlistFavoritable,
                 .padding()
             }
         }
-        // Keep the existing tvOS grid layout without a navigation toolbar.
-        #if !os(tvOS)
-        .toolbar {
-            if showsSortMenu {
-                ToolbarItem(placement: .automatic) {
-                    ContentSortMenu(sortRaw: $sortRaw)
-                }
-            }
-        }
-        #endif
     }
 }
 
@@ -113,7 +98,7 @@ struct MovieCategoryView: View {
     var animationNamespace: Namespace.ID?
     @Environment(\.modelContext) private var modelContext
 
-    @AppStorage(SortStorageKey.movieContent) private var contentSortRaw: String = ContentSortOption.playlist.rawValue
+    private let contentSortRaw: String = ContentSortOption.playlist.rawValue
 
     @State private var movies: [Movie] = []
     @State private var pagination = PaginationMachine()
@@ -161,7 +146,6 @@ struct MovieCategoryView: View {
             emptyTitle: "No Movies",
             emptyIcon: "film.stack",
             emptyDescription: "This category has no movies",
-            sortRaw: $contentSortRaw,
             onLoadMore: { loadNextPage() },
             card: { MovieCardView(movie: $0, fillsWidth: true) }
         )

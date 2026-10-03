@@ -94,8 +94,8 @@ struct LiveTVView: View {
     @State private var showingPaywall = false
     @State private var premium = PremiumManager.shared
 
-    @AppStorage(SortStorageKey.liveCategories) private var categorySortRaw: String = CategorySortOption.playlist.rawValue
-    @AppStorage(SortStorageKey.liveContent) private var contentSortRaw: String = ContentSortOption.playlist.rawValue
+    private let categorySortRaw: String = CategorySortOption.playlist.rawValue
+    private let contentSortRaw: String = ContentSortOption.playlist.rawValue
     @AppStorage(LiveTVLayoutMode.storageKey) private var layoutModeRaw: String = LiveTVLayoutMode.list.rawValue
 
     private var categorySort: CategorySortOption {

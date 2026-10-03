@@ -86,27 +86,6 @@ struct SortOptionTests {
 
     // MARK: - ContentSortOption - Series Descriptors
 
-    @Test func `release date sort ignores provider added date and puts unknown dates last`() {
-        let movies = makeUnsortedMovies()
-        movies[0].releaseDate = "2020-01-01"
-        movies[1].releaseDate = "2025-04-03"
-        movies[2].releaseDate = nil
-        let sorted = movies.sorted(using: ContentSortOption.releaseDate.movieDescriptors)
-        #expect(sorted.map(\.releaseDate) == ["2025-04-03", "2020-01-01", nil])
-    }
-
-    @Test func `series release date sort is deterministic for tied and unknown dates`() {
-        let series = makeUnsortedSeries()
-        for item in series {
-            item.releaseDate = nil
-        }
-        series[0].releaseDate = "2025-01-01"
-        series[1].releaseDate = "2025-01-01"
-        let sorted = series.sorted(using: ContentSortOption.releaseDate.seriesDescriptors)
-        #expect(sorted.prefix(2).map(\.id) == [series[0].id, series[1].id].sorted())
-        #expect(sorted.dropFirst(2).allSatisfy { $0.releaseDate == nil })
-    }
-
     @Test func `series sort playlist order`() {
         let series = makeUnsortedSeries()
         let sorted = series.sorted(using: ContentSortOption.playlist.seriesDescriptors)

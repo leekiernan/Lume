@@ -36,10 +36,8 @@
         @Environment(\.contentRestriction) private var restriction
         /// The same sort choices the Live TV browse screen uses, so the browser
         /// mirrors the order the viewer knows from the channel list.
-        @AppStorage(SortStorageKey.liveCategories)
-        private var categorySortRaw: String = CategorySortOption.playlist.rawValue
-        @AppStorage(SortStorageKey.liveContent)
-        private var contentSortRaw: String = ContentSortOption.playlist.rawValue
+        private let categorySortRaw: String = CategorySortOption.playlist.rawValue
+        private let contentSortRaw: String = ContentSortOption.playlist.rawValue
 
         @State private var sections: [LiveTVSection] = []
         /// The section whose channels fill the middle column.
