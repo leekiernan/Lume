@@ -75,11 +75,9 @@ struct MainTabView: View {
     /// launch / switch / foreground triggers don't re-present the cover for one
     /// that's already been handled.
     @State var autoSyncAttempted: Set<UUID> = []
-    /// Areas each playlist has had an automatic repair for this session. A
-    /// profile switch may still repair an area the launch refresh skipped, but
-    /// never the same one twice, so one that fails doesn't retry on every
-    /// trigger.
-    @State var repairsAttempted: [UUID: Set<AppArea>] = [:]
+    /// Areas each playlist has had an automatic repair for this session —
+    /// see `AutoSync.RepairLedger`.
+    @State var repairLedger = AutoSync.RepairLedger()
 
     /// Memo behind `contentRestriction` — see `ContentRestrictionMemo`.
     @State private var restrictionMemo = ContentRestrictionMemo()
