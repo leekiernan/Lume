@@ -68,6 +68,7 @@ extension ContentSyncManager {
             playlist.maxConnections = authResponse.userInfo.maxConnections
             playlist.activeConnections = authResponse.userInfo.activeCons
             playlist.expDate = authResponse.userInfo.expDate
+            playlist.allowedOutputFormats = authResponse.userInfo.allowedOutputFormats
             playlist.serverTimezone = authResponse.serverInfo.timezone
             playlist.lastUpdated = Date()
         }
