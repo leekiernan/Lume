@@ -116,7 +116,7 @@ struct HeroCarousel<Item: Identifiable, Backdrop: View, Info: View>: View where 
     }
 
     var body: some View {
-        HeroCarouselFrame {
+        HeroCarouselFrame(portraitComposition: portraitURL != nil) {
             GeometryReader { proxy in
                 let width = proxy.size.width
                 let isCompact = width < compactWidthThreshold
@@ -193,7 +193,8 @@ struct HeroCarousel<Item: Identifiable, Backdrop: View, Info: View>: View where 
             let poster = HeroArtworkPolicy.portraitURL(portraitURL?(items[neighbour]), width: artworkSize.width)
             let ratio = poster == nil ? HeroArtworkPolicy.landscapeRatio : HeroArtworkPolicy.portraitRatio
             let height = poster == nil ? HeroArtworkPolicy.artworkHeight(width: artworkSize.width, heroHeight: artworkSize.height) : artworkSize.height
-            let pixels = HeroArtworkPolicy.decodePoints(width: artworkSize.width, height: height, sourceRatio: ratio) * displayScale
+            let zoom = poster == nil ? 1 : HeroArtworkPolicy.portraitZoom
+            let pixels = HeroArtworkPolicy.decodePoints(width: artworkSize.width, height: height, sourceRatio: ratio) * zoom * displayScale
             let url = poster.map { HeroArtworkPolicy.posterURL($0, pixelWidth: pixels * ratio) }
                 ?? HeroArtworkPolicy.backdropURL(imageURL(items[neighbour]), pixelWidth: pixels)
             if let url { Task { await ImagePipeline.shared.prefetch([url], maxPixelSize: pixels) } }
@@ -363,7 +364,7 @@ struct HomeHeroWarmStart: View {
     var posterURL: URL?
 
     var body: some View {
-        HeroCarouselFrame {
+        HeroCarouselFrame(portraitComposition: true) {
             ZStack(alignment: .bottomLeading) {
                 HeroArtworkRegion(managesComposition: true) {
                     HeroBackdrop(url: backdropURL, posterURL: posterURL)
@@ -382,9 +383,10 @@ struct HomeHeroWarmStart: View {
 
 /// Width-aware geometry without a measurement/update loop or first-frame jump.
 private struct HeroCarouselFrame: Layout {
+    var portraitComposition = false
     func sizeThatFits(proposal: ProposedViewSize, subviews _: Subviews, cache _: inout ()) -> CGSize {
         let width = proposal.width ?? 600
-        return CGSize(width: width, height: HeroArtworkPolicy.heroHeight(width: width))
+        return CGSize(width: width, height: HeroArtworkPolicy.heroHeight(width: width, portraitComposition: portraitComposition))
     }
 
     func placeSubviews(in bounds: CGRect, proposal _: ProposedViewSize, subviews: Subviews, cache _: inout ()) {
@@ -480,6 +482,7 @@ private struct HeroBackdrop: View {
                 HeroArtworkImage(
                     url: poster ?? url,
                     sourceRatio: poster == nil ? HeroArtworkPolicy.landscapeRatio : HeroArtworkPolicy.portraitRatio,
+                    zoom: poster == nil ? 1 : HeroArtworkPolicy.portraitZoom,
                     onFailure: { if let poster { failedPosterURL = poster } }
                 )
                 .frame(height: height)

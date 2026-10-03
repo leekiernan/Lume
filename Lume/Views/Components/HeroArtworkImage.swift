@@ -4,12 +4,13 @@ import SwiftUI
 struct HeroArtworkImage: View {
     let url: URL?
     var sourceRatio = HeroArtworkPolicy.landscapeRatio
+    var zoom: CGFloat = 1
     var onFailure: (() -> Void)?
     @Environment(\.displayScale) private var displayScale
 
     var body: some View {
         GeometryReader { proxy in
-            let points = HeroArtworkPolicy.decodePoints(width: proxy.size.width, height: proxy.size.height, sourceRatio: sourceRatio)
+            let points = HeroArtworkPolicy.decodePoints(width: proxy.size.width, height: proxy.size.height, sourceRatio: sourceRatio) * zoom
             CachedAsyncImage(
                 url: sourceRatio < 1
                     ? HeroArtworkPolicy.posterURL(url, pixelWidth: points * sourceRatio * displayScale)
@@ -25,6 +26,7 @@ struct HeroArtworkImage: View {
                 }
             }
             .frame(width: proxy.size.width, height: proxy.size.height)
+            .scaleEffect(zoom)
             .clipped()
         }
     }

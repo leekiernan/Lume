@@ -4,6 +4,7 @@ import Foundation
 nonisolated enum HeroArtworkPolicy {
     static let landscapeRatio: CGFloat = 16 / 9
     static let portraitRatio: CGFloat = 2 / 3
+    static let portraitZoom: CGFloat = 1.25
 
     static func portraitURL(_ poster: URL?, width: CGFloat) -> URL? {
         width < 600 ? poster : nil
@@ -23,8 +24,10 @@ nonisolated enum HeroArtworkPolicy {
     }
 
     /// Stable from the first layout pass, including the warm-start placeholder.
-    static func heroHeight(width: CGFloat) -> CGFloat {
-        width < 600 ? max(540, width / landscapeRatio + 320) : 800
+    static func heroHeight(width: CGFloat, portraitComposition: Bool = false) -> CGFloat {
+        guard width < 600 else { return 800 }
+        let baseline = max(540, width / landscapeRatio + 320)
+        return portraitComposition ? min(780, baseline * portraitZoom) : baseline
     }
 
     /// Preserve the complete landscape composition above compact hero copy.

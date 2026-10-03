@@ -3,6 +3,15 @@ import Foundation
 import Testing
 
 struct HeroArtworkPolicyTests {
+    @Test func `zoomed compact movie heroes gain height without changing sports or wide layouts`() {
+        #expect(HeroArtworkPolicy.portraitZoom == 1.25)
+        #expect(HeroArtworkPolicy.heroHeight(width: 390, portraitComposition: true) == 675)
+        #expect(HeroArtworkPolicy.heroHeight(width: 390) == 540)
+        #expect(HeroArtworkPolicy.heroHeight(width: 599, portraitComposition: true) == 780)
+        #expect(HeroArtworkPolicy.heroHeight(width: 600, portraitComposition: true) == 800)
+        #expect(HeroArtworkPolicy.heroHeight(width: 1920, portraitComposition: true) == 800)
+    }
+
     @Test func `only narrow heroes select portrait artwork`() throws {
         let poster = try #require(URL(string: "https://image.tmdb.org/t/p/original/poster.jpg"))
         #expect(HeroArtworkPolicy.portraitURL(poster, width: 390) == poster)
