@@ -17,25 +17,6 @@
 import SwiftData
 import SwiftUI
 
-/// A day window, for the league screen's own Yesterday / Today / Upcoming.
-enum SportsHubSegment: String, CaseIterable, Identifiable {
-    case yesterday
-    case today
-    case upcoming
-
-    var id: String {
-        rawValue
-    }
-
-    var title: LocalizedStringKey {
-        switch self {
-        case .yesterday: "Yesterday"
-        case .today: "Today"
-        case .upcoming: "Upcoming"
-        }
-    }
-}
-
 struct SportsHubView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.contentRestriction) private var restriction
@@ -120,10 +101,9 @@ struct SportsHubView: View {
                     SportsBrowseSidebar(
                         isPresented: $showingBrowse,
                         entries: grouping.sidebarEntries,
-                        scope: scope,
-                        onSelect: { value in
+                        onSelect: { key in
                             showingBrowse = false
-                            if case let .follow(key) = value { open(follow: key) }
+                            open(follow: key)
                         },
                         onManageTeams: {
                             showingBrowse = false
@@ -480,40 +460,6 @@ struct SportsHubView: View {
     static func leagueId(fromTeamKey key: String) -> String? {
         guard let separator = key.lastIndex(of: ":"), separator > key.startIndex else { return nil }
         return String(key[..<separator])
-    }
-
-    /// The half-open date interval a segment covers, relative to `now`.
-    static func dateRange(for segment: SportsHubSegment, now: Date, calendar: Calendar = .current) -> Range<Date> {
-        let startOfToday = calendar.startOfDay(for: now)
-        switch segment {
-        case .yesterday:
-            let start = calendar.date(byAdding: .day, value: -1, to: startOfToday) ?? startOfToday
-            return start ..< startOfToday
-        case .today:
-            let end = calendar.date(byAdding: .day, value: 1, to: startOfToday) ?? startOfToday
-            return startOfToday ..< end
-        case .upcoming:
-            let end = calendar.date(byAdding: .day, value: 7, to: startOfToday) ?? startOfToday
-            return now ..< end
-        }
-    }
-
-    /// Whether a fixture belongs under a segment. Today claims what is live or
-    /// on at any point today, so an event that started last night and runs past
-    /// midnight stays in Today; the other segments go by start.
-    static func fixture(
-        _ fixture: SportsFixture,
-        isIn segment: SportsHubSegment,
-        now: Date,
-        calendar: Calendar = .current
-    ) -> Bool {
-        let range = dateRange(for: segment, now: now, calendar: calendar)
-        switch segment {
-        case .today:
-            return fixture.isInProgress || fixture.isOn(during: range)
-        case .yesterday, .upcoming:
-            return range.contains(fixture.headlineDate)
-        }
     }
 }
 

@@ -16,8 +16,10 @@
             SportsBrowseSidebar(
                 isPresented: $showingBrowse,
                 entries: SportsHubGrouping(scope: scope, follows: follows.follows, store: .shared).sidebarEntries,
-                scope: scope,
-                onSelect: selectScope,
+                onSelect: { key in
+                    showingBrowse = false
+                    open(follow: key)
+                },
                 onManageTeams: {
                     showingBrowse = false
                     showManageTeams = true
@@ -36,17 +38,6 @@
         func openBrowse() {
             browseReturnFocus = focus
             showingBrowse = true
-        }
-
-        /// My Sports is the hub itself; a follow opens its own page.
-        func selectScope(_ value: SportsHubScope) {
-            showingBrowse = false
-            switch value {
-            case .all:
-                returnFromBrowse()
-            case let .follow(key):
-                open(follow: key)
-            }
         }
 
         /// Focus back where the panel was opened from.

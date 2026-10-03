@@ -314,7 +314,7 @@ struct SportsHubGrouping {
     }
 
     var scopeTitle: String {
-        guard let follow = scopedFollow else { return String(localized: "My Sports") }
+        guard let follow = scopedFollow else { return String(localized: "Sports") }
         return title(of: follow)
     }
 }

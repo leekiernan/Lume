@@ -43,35 +43,35 @@ struct SportsDayWindowTests {
     @Test func `a fight card that started last night is still today after midnight`() {
         let card = fixture(sport: "mma", start: at(day: 3, hour: 23), state: .scheduled)
 
-        #expect(SportsHubView.fixture(card, isIn: .today, now: now, calendar: calendar))
-        #expect(SportsHubView.fixture(card, isIn: .yesterday, now: now, calendar: calendar))
+        #expect(SportsDayWindow.today.contains(card, now: now, calendar: calendar))
+        #expect(SportsDayWindow.yesterday.contains(card, now: now, calendar: calendar))
     }
 
     @Test func `a finished card that ran past midnight stays in today`() {
         let card = fixture(sport: "mma", start: at(day: 3, hour: 23), state: .final)
 
-        #expect(SportsHubView.fixture(card, isIn: .today, now: now, calendar: calendar))
+        #expect(SportsDayWindow.today.contains(card, now: now, calendar: calendar))
     }
 
     @Test func `yesterday afternoon's match is not today`() {
         let match = fixture(sport: "soccer", start: at(day: 3, hour: 15), state: .final)
 
-        #expect(!SportsHubView.fixture(match, isIn: .today, now: now, calendar: calendar))
-        #expect(SportsHubView.fixture(match, isIn: .yesterday, now: now, calendar: calendar))
+        #expect(!SportsDayWindow.today.contains(match, now: now, calendar: calendar))
+        #expect(SportsDayWindow.yesterday.contains(match, now: now, calendar: calendar))
     }
 
     @Test func `anything the provider calls live is today`() {
         let longGame = fixture(sport: "cricket", start: at(day: 2, hour: 10), state: .inProgress)
 
-        #expect(SportsHubView.fixture(longGame, isIn: .today, now: now, calendar: calendar))
+        #expect(SportsDayWindow.today.contains(longGame, now: now, calendar: calendar))
     }
 
     @Test func `upcoming still goes by start`() {
         let later = fixture(sport: "soccer", start: at(day: 4, hour: 16), state: .scheduled)
         let started = fixture(sport: "mma", start: at(day: 3, hour: 23), state: .scheduled)
 
-        #expect(SportsHubView.fixture(later, isIn: .upcoming, now: now, calendar: calendar))
-        #expect(!SportsHubView.fixture(started, isIn: .upcoming, now: now, calendar: calendar))
+        #expect(SportsDayWindow.upcoming.contains(later, now: now, calendar: calendar))
+        #expect(!SportsDayWindow.upcoming.contains(started, now: now, calendar: calendar))
     }
 
     @Test func `an expanded race session uses the session's own length`() {
@@ -81,6 +81,6 @@ struct SportsDayWindowTests {
         )
 
         // 21:00 + 2.5 h ends before midnight.
-        #expect(!SportsHubView.fixture(session, isIn: .today, now: now, calendar: calendar))
+        #expect(!SportsDayWindow.today.contains(session, now: now, calendar: calendar))
     }
 }

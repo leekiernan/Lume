@@ -34,7 +34,7 @@ struct LeagueDetailView: View {
     @State private var follows = SportsFollowService.shared
     @State private var epg = EPGSyncService.shared
 
-    @State private var segment: SportsHubSegment = .today
+    @State private var segment: SportsDayWindow = .today
     @State private var resolved: [String: [ResolvedChannel]] = [:]
     @State private var fetchedFixtures: [SportsFixture] = []
     @State private var fetchedStandings: [SportsStandingRow] = []
@@ -79,7 +79,7 @@ struct LeagueDetailView: View {
 
     private var rangePicker: some View {
         Picker("Range", selection: $segment) {
-            ForEach(SportsHubSegment.allCases) { segment in
+            ForEach(SportsDayWindow.allCases) { segment in
                 Text(segment.title).tag(segment)
             }
         }
@@ -218,7 +218,7 @@ struct LeagueDetailView: View {
         // Saturday's race shows under Saturday, not under Thursday's practice.
         return snapshotFixtures
             .flatMap { $0.expandedBySession(now: now) }
-            .filter { SportsHubView.fixture($0, isIn: segment, now: now) }
+            .filter { segment.contains($0, now: now) }
             .sorted(by: SportsFixture.displayOrder)
     }
 
@@ -360,5 +360,15 @@ private extension View {
         #else
             self
         #endif
+    }
+}
+
+extension SportsDayWindow {
+    var title: LocalizedStringKey {
+        switch self {
+        case .yesterday: "Yesterday"
+        case .today: "Today"
+        case .upcoming: "Upcoming"
+        }
     }
 }
