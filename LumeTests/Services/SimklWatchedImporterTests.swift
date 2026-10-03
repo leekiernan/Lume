@@ -56,6 +56,35 @@ struct SimklWatchedImporterTests {
         )
     }
 
+    @Test func `old remote completion cannot erase newer local movie intent`() throws {
+        let context = try makeContext()
+        let movie = makeMovie(id: "rewatch", tmdbId: 100)
+        movie.lastWatchedDate = ISO8601DateFormatter().date(from: "2026-10-03T12:00:00Z")
+        movie.watchProgress = 120
+        context.insert(movie)
+        let summary = SimklWatchedImporter.apply(
+            movies: [watchedMovie(tmdb: 100, lastWatchedAt: "2014-10-11T17:00:54Z")], shows: [], in: context
+        )
+        #expect(summary.moviesMarked == 0)
+        #expect(!movie.isWatched)
+        #expect(movie.watchProgress == 120)
+    }
+
+    @Test func `old remote completion cannot erase newer local episode intent`() throws {
+        let context = try makeContext()
+        let series = Series(id: "rewatch-show", seriesId: 1, name: "Show")
+        series.tmdbId = 300
+        let episode = Episode(id: "rewatch-episode", episodeId: "2", title: "Episode", containerExtension: "mkv", seasonNum: 1, episodeNum: 2)
+        episode.lastWatchedDate = ISO8601DateFormatter().date(from: "2026-10-03T12:00:00Z")
+        episode.watchProgress = 90
+        episode.series = series
+        series.episodes = [episode]
+        context.insert(series)
+        let summary = SimklWatchedImporter.apply(movies: [], shows: [showProgress()], in: context)
+        #expect(summary.episodesMarked == 0)
+        #expect(!episode.isWatched)
+    }
+
     @Test func `marks matching movies watched and leaves the rest untouched`() throws {
         let context = try makeContext()
         let match = makeMovie(id: "a", tmdbId: 100)

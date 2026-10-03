@@ -97,6 +97,9 @@ nonisolated enum SimklWatchedImporter {
         var count = 0
         for movie in candidates where !movie.isWatched {
             guard let tmdb = movie.tmdbId, watchedIDs.contains(tmdb) else { continue }
+            // A rewatch or local unwatched decision made after the remote play
+            // must survive the import, as on Trakt.
+            if let local = movie.lastWatchedDate, (dates[tmdb] ?? .distantPast) <= local { continue }
             movie.isWatched = true
             movie.watchProgress = Double(movie.durationSecs ?? 0)
             if let date = dates[tmdb] {
@@ -236,6 +239,7 @@ nonisolated enum SimklWatchedImporter {
         for episode in series.episodes where !episode.isWatched {
             let key = SeasonEpisode(season: episode.seasonNum, episode: episode.episodeNum)
             guard let date = progress.dates[key] else { continue }
+            if let local = episode.lastWatchedDate, (date ?? .distantPast) <= local { continue }
             episode.isWatched = true
             episode.watchProgress = Double(episode.durationSecs ?? 0)
             if let date {

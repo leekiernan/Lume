@@ -287,12 +287,7 @@ final class TraktService {
         lastImport = nil
         defer { isImporting = false }
 
-        let profileID = ActiveProfileStore.current
-        let account = mutations.account
-        await mutations.flush()
-        guard !Task.isCancelled, mutations.pendingCount == 0,
-              mutations.account == account, ActiveProfileStore.current == profileID
-        else {
+        guard let scope = await TrackerImportScope.begin(after: mutations), !Task.isCancelled else {
             Logger.network.info("Trakt history import deferred: pending local changes or changed scope")
             return
         }
@@ -307,12 +302,12 @@ final class TraktService {
             // What's paused part-way, for Continue Watching. Best effort: the
             // watched history stands if this fails.
             let paused = try? await client.playback(accessToken: accessToken)
-            guard !Task.isCancelled, isConnected, mutations.account == account,
-                  mutations.pendingCount == 0, ActiveProfileStore.current == profileID
+            guard !Task.isCancelled,
+                  scope.isCurrent(isConnected: isConnected, account: mutations.account, pendingCount: mutations.pendingCount)
             else { return }
             lastImport = await Self.applyImport(
                 movies: watched.movies, shows: watched.shows, paused: paused, container: context.container,
-                profileID: profileID
+                profileID: scope.profileID
             )
             if let summary = lastImport {
                 Logger.network.info("Trakt history imported: movies \(summary.moviesMarked), episodes \(summary.episodesMarked), paused \(summary.inProgress), failed \(summary.failed)")

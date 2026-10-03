@@ -17,6 +17,7 @@
 //
 
 import Foundation
+import OSLog
 import SwiftData
 import SwiftUI
 
@@ -257,13 +258,22 @@ final class SimklService {
         lastImport = nil
         defer { isImporting = false }
 
+        // Same scope rule as Trakt: local changes go up first, and the history
+        // is applied only to the account and profile it was fetched for.
+        guard let scope = await TrackerImportScope.begin(after: mutations), !Task.isCancelled else {
+            Logger.network.info("Simkl history import deferred: pending local changes or changed scope")
+            return
+        }
         guard let accessToken = await session.validAccessToken() else {
             lastImport = .failure
             return
         }
         do {
             let items = try await client.watchedItems(accessToken: accessToken)
-            lastImport = await Self.applyImport(items: items, container: context.container)
+            guard !Task.isCancelled,
+                  scope.isCurrent(isConnected: isConnected, account: mutations.account, pendingCount: mutations.pendingCount)
+            else { return }
+            lastImport = await Self.applyImport(items: items, container: context.container, profileID: scope.profileID)
         } catch {
             lastImport = .failure
         }
@@ -271,8 +281,9 @@ final class SimklService {
 
     /// Off the main actor, on a context of its own — see `TraktService`.
     @concurrent
-    private static func applyImport(items: SimklAllItems, container: ModelContainer) async -> SimklImportSummary {
-        SimklWatchedImporter.apply(items: items, in: ModelContext(container))
+    private static func applyImport(items: SimklAllItems, container: ModelContainer, profileID: UUID?) async -> SimklImportSummary {
+        guard ActiveProfileStore.current == profileID else { return .failure }
+        return SimklWatchedImporter.apply(items: items, in: ModelContext(container))
     }
 }
 
