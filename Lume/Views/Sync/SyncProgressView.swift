@@ -131,29 +131,14 @@ struct SyncProgressView: View {
         syncError = nil
         phase = .syncing
 
-        // Reported to the guide refresh so the two never share the provider's
-        // connection allowance: it stands aside (or is cut short) while this
-        // runs, and catches up once nothing else is pending — see
-        // `EPGRefreshGate`. Every start is paired with exactly one finish.
-        let epgSync = EPGSyncService.shared
-        epgSync.contentSyncDidStart()
         syncTask = Task {
-            var succeeded = false
-            var refreshedLiveTV = false
-            defer { epgSync.contentSyncDidFinish(succeeded: succeeded, refreshedLiveTV: refreshedLiveTV) }
             do {
-                let syncManager = ContentSyncManager(modelContainer: modelContext.container)
-                try await BackgroundActivity.perform("Playlist sync") {
-                    try await syncManager.syncPlaylist(
-                        playlist,
-                        progress: progress,
-                        full: full,
-                        repairingAreas: repairingAreas,
-                        syncAreas: plan.syncAreas
-                    )
-                }
-                succeeded = true
-                refreshedLiveTV = plan.refreshesGuide
+                try await PlaylistSyncRun.perform(
+                    playlist,
+                    container: modelContext.container,
+                    plan: plan,
+                    progress: progress
+                )
                 await MainActor.run {
                     if !autoStart {
                         PlaylistSyncCoverage.deferAutomaticRepair(
@@ -161,12 +146,6 @@ struct SyncProgressView: View {
                             playlistID: playlist.id
                         )
                     }
-                    // Newly synced titles need indexing; the launch-time pass
-                    // may already be finished, so kick a fresh one — but hold it
-                    // off a few seconds so loading the embedding model and the
-                    // per-chunk saves don't fight the first browse of the catalog
-                    // the user just synced.
-                    ContentIndexingService.shared.kick(after: .seconds(3))
                     finishedAt = Date()
                     sawGuideRunning = epg.isSyncing
                     phase = .finished

@@ -148,11 +148,7 @@ actor ContentSyncManager {
             try doneContext.save()
         }
         // A failed/cancelled run leaves prior coverage intact so its retry is not suppressed.
-        if repairingAreas == nil {
-            PlaylistSyncCoverage.record(syncedAreas, playlistID: playlistId)
-        } else {
-            PlaylistSyncCoverage.recordMerging(syncedAreas, playlistID: playlistId)
-        }
+        PlaylistSyncCoverage.record(syncedAreas, playlistID: playlistId)
     }
 
     /// Runs the pipeline for `playlist`'s source type, returning the content
