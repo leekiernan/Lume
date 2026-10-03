@@ -11,6 +11,26 @@ import OSLog
 import VLCKit
 
 extension VLCPlayerCoordinator {
+    /// Live HLS timestamps can freeze or jump even while video is displayed.
+    /// Sample only during startup, in release as well as debug. Capturing the
+    /// media prevents counters from a replaced stream proving the new load.
+    func startStartupFrameSampling() {
+        startupFrameTimer?.invalidate()
+        startupFrameTimer = nil
+        guard !hasStartedPlayback, let media = mediaPlayer.media else { return }
+        let timer = Timer(timeInterval: 0.25, repeats: true) { [weak self, weak media] timer in
+            guard let self, let media, mediaPlayer.media === media, !hasStartedPlayback else {
+                timer.invalidate()
+                return
+            }
+            let stats = media.statistics
+            noteDisplayedFrames(stats.displayedPictures)
+        }
+        timer.tolerance = 0.05
+        RunLoop.main.add(timer, forMode: .common)
+        startupFrameTimer = timer
+    }
+
     // MARK: - State logging
 
     /// Log player state transitions. Buffering is no longer a discrete state in

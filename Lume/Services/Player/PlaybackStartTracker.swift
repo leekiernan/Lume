@@ -26,7 +26,7 @@ import Foundation
 
 /// Decides, once per stream, that playback has started.
 ///
-/// Started means either of:
+/// Started means one of:
 /// - **The engine's own signal** (`noteEngineStarted`) — KSPlayer's
 ///   `.bufferFinished`, VLC's `.playing`, AVPlayer's `.playing`, LumeEngine's
 ///   `.playing`. An engine whose callbacks can be stale (KSPlayer) passes
@@ -37,6 +37,8 @@ import Foundation
 ///   the stream a swap replaced can still report first; a forward jump of more
 ///   than `maxSampleStep` between two samples re-bases too, because that is a
 ///   seek (a resume, a stale sample from another position), not playback.
+/// - **Displayed frames advancing** (`noteDisplayedFrames`) on the current
+///   media. VLC's live clock can freeze while frames continue to display.
 ///
 /// Each note returns the `Proof` exactly once per stream — on the call that
 /// flips it to started — so the caller runs its first-frame side effects
@@ -52,6 +54,8 @@ nonisolated struct PlaybackStartTracker: Equatable {
         case engine
         /// The playhead advanced on this stream.
         case playhead
+        /// The current media's displayed-frame counter advanced.
+        case displayedFrames
     }
 
     /// How far the playhead must advance on one stream before that alone
@@ -80,6 +84,7 @@ nonisolated struct PlaybackStartTracker: Equatable {
     private var baseline: TimeInterval?
     /// The previous sample, for the jump check; `nil` until the first sample.
     private var lastSample: TimeInterval?
+    private var lastDisplayedFrames: UInt64?
 
     init(proofAdvance: TimeInterval = Self.defaultProofAdvance) {
         self.proofAdvance = proofAdvance
@@ -92,6 +97,7 @@ nonisolated struct PlaybackStartTracker: Equatable {
     mutating func beginStream() {
         hasStarted = false
         isEngineReady = false
+        lastDisplayedFrames = nil
         discardSamples()
     }
 
@@ -100,6 +106,7 @@ nonisolated struct PlaybackStartTracker: Equatable {
     /// playhead baseline belong to the connection that just went away.
     mutating func beginReconnect() {
         isEngineReady = false
+        lastDisplayedFrames = nil
         discardSamples()
     }
 
@@ -148,6 +155,16 @@ nonisolated struct PlaybackStartTracker: Equatable {
         }
         guard position - baseline >= proofAdvance else { return nil }
         return markStarted(.playhead)
+    }
+
+    /// The first sample establishes a baseline, even if nonzero. A reset or
+    /// wrap establishes a new baseline too; only a subsequent increase proves
+    /// frames are being displayed on this stream, independent of its clock.
+    @discardableResult
+    mutating func noteDisplayedFrames(_ count: UInt64) -> Proof? {
+        defer { lastDisplayedFrames = count }
+        guard let previous = lastDisplayedFrames, count > previous else { return nil }
+        return markStarted(.displayedFrames)
     }
 
     private mutating func markStarted(_ proof: Proof) -> Proof? {

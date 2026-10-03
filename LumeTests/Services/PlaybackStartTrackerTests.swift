@@ -179,6 +179,46 @@ struct PlaybackStartTrackerTests {
 
     // MARK: - Stream boundaries
 
+    @Test func `displayed frames prove startup despite jumping then frozen HLS time`() {
+        var tracker = PlaybackStartTracker()
+        #expect(feed(&tracker, [1071.4, 32.1, 59.5, 59.5]).isEmpty)
+        #expect(tracker.noteDisplayedFrames(86) == nil)
+        #expect(tracker.noteDisplayedFrames(178) == .displayedFrames)
+        #expect(tracker.hasStarted)
+        #expect(tracker.noteDisplayedFrames(285) == nil)
+        #expect(tracker.noteEngineStarted() == nil)
+    }
+
+    @Test func `a frozen frame count leaves startup detection armed`() {
+        var tracker = PlaybackStartTracker()
+        for count in [UInt64(0), 86] {
+            // Reset for each frozen run, including an initially nonzero counter.
+            tracker.beginStream()
+            #expect(tracker.noteDisplayedFrames(count) == nil)
+            #expect(tracker.noteDisplayedFrames(count) == nil)
+            #expect(!tracker.hasStarted)
+        }
+    }
+
+    @Test func `frame counters rebase at stream and reconnect boundaries`() {
+        var tracker = PlaybackStartTracker()
+        #expect(tracker.noteDisplayedFrames(100) == nil)
+        tracker.beginStream()
+        #expect(tracker.noteDisplayedFrames(101) == nil)
+        tracker.beginReconnect()
+        #expect(tracker.noteDisplayedFrames(102) == nil)
+        #expect(!tracker.hasStarted)
+        #expect(tracker.noteDisplayedFrames(103) == .displayedFrames)
+    }
+
+    @Test func `a decreasing or wrapped frame counter does not prove startup`() {
+        var tracker = PlaybackStartTracker()
+        #expect(tracker.noteDisplayedFrames(UInt64.max) == nil)
+        #expect(tracker.noteDisplayedFrames(0) == nil)
+        #expect(!tracker.hasStarted)
+        #expect(tracker.noteDisplayedFrames(1) == .displayedFrames)
+    }
+
     @Test
     func `a new stream starts from scratch`() {
         var tracker = PlaybackStartTracker()
