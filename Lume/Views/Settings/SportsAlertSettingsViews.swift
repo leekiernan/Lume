@@ -149,6 +149,7 @@ enum SportsAlertSettingsModel {
                                 }
                             }
                             .navigationTitle(SportsAlertSettingsModel.name(of: sport))
+                            .macNavigationBack()
                         }
                     }
                 }

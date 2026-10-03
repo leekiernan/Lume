@@ -134,6 +134,7 @@ struct PlaylistDetailView: View {
             .formStyle(.grouped)
             #endif
             .navigationTitle(playlist.name)
+            .macNavigationBack()
             #if os(iOS)
                 .navigationBarTitleDisplayMode(.inline)
             #endif

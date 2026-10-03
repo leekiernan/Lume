@@ -80,10 +80,7 @@ extension KSPlayerEngineView {
 
     func closePlayer() {
         #if os(macOS)
-            if let window = NSApp.keyWindow, window.styleMask.contains(.fullScreen) {
-                window.toggleFullScreen(nil)
-            }
-            dismissWindow(id: "player")
+            MacPlayerWindowRouter.shared.close()
         #else
             dismiss()
         #endif

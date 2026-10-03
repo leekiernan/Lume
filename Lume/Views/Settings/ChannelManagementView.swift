@@ -170,6 +170,7 @@ struct ChannelManagementView: View {
             #endif
             .searchable(text: $searchText, prompt: Text("Search Channels"))
             .navigationTitle(category.name)
+            .macNavigationBack()
             #if os(iOS)
                 .navigationBarTitleDisplayMode(.inline)
             #endif

@@ -67,6 +67,7 @@ struct SectionCollectionView: View {
         .browseActivity()
         #if !os(tvOS)
             .navigationTitle(selection.title)
+            .macNavigationBack()
         #endif
             .task(id: selection.section.token) {
                 prepare()

@@ -76,6 +76,15 @@ import SwiftUI
         func adopt(_ window: NSWindow, title: String) {
             self.window = window
             window.title = title
+            window.collectionBehavior.insert(.fullScreenPrimary)
+        }
+
+        func toggleFullScreen() {
+            window?.toggleFullScreen(nil)
+        }
+
+        func close() {
+            window?.performClose(nil)
         }
     }
 
@@ -86,7 +95,7 @@ import SwiftUI
     /// library in the meantime, and it resolved to whichever window was frontmost
     /// — which then had its title rewritten on every in-player swap. A view can
     /// only ever be in one window, so it asks its own.
-    struct PlayerWindowAccessor: NSViewRepresentable {
+    struct MacWindowAccessor: NSViewRepresentable {
         let onResolve: (NSWindow) -> Void
 
         func makeNSView(context _: Context) -> NSView {
@@ -129,7 +138,10 @@ import SwiftUI
 
         func body(content: Content) -> some View {
             content
-                .background(PlayerWindowAccessor { window in
+                .background {
+                    MacPlayerKeyboardCommands()
+                }
+                .background(MacWindowAccessor { window in
                     // Adopt this player's own window. It opens as a window, the
                     // way a Mac app should — going full screen is the viewer's
                     // call — and SwiftUI's frame autosave brings it back at the
@@ -144,6 +156,50 @@ import SwiftUI
                     router.pendingMedia = nil
                     onRetarget(media)
                 }
+        }
+    }
+
+    /// Always mounted, unlike each engine's auto-hiding controls. Native key
+    /// equivalents work even when the video renderer owns keyboard focus.
+    private struct MacPlayerKeyboardCommands: View {
+        private func acceptsShortcut() -> Bool {
+            guard let window = NSApp.keyWindow else { return false }
+            return MacWindowShortcutPolicy.accepts(isEditingText: window.firstResponder is NSTextView,
+                                                   hasPresentedSheet: window.attachedSheet != nil)
+        }
+
+        var body: some View {
+            HStack {
+                Button("Close player") {
+                    if acceptsShortcut() { MacPlayerWindowRouter.shared.close() }
+                }
+                .keyboardShortcut(.cancelAction)
+                Button("Full Screen") {
+                    if acceptsShortcut() { MacPlayerWindowRouter.shared.toggleFullScreen() }
+                }
+                .keyboardShortcut("f", modifiers: [])
+            }
+            .frame(width: 0, height: 0)
+            .opacity(0)
+            .accessibilityHidden(true)
+        }
+    }
+
+    struct MacPlayerFullScreenButton: View {
+        var body: some View {
+            Button {
+                MacPlayerWindowRouter.shared.toggleFullScreen()
+            } label: {
+                Image(systemName: "arrow.up.left.and.arrow.down.right")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Circle())
+                    .glassEffectCompat(.regularInteractive, in: Circle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Full Screen")
+            .help("Full Screen")
         }
     }
 

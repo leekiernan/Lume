@@ -213,6 +213,7 @@ struct FavoriteManagementView: View {
             .listStyle(.inset(alternatesRowBackgrounds: true))
             #endif
             .navigationTitle("Favorites")
+            .macNavigationBack()
             #if os(iOS)
                 .navigationBarTitleDisplayMode(.inline)
             #endif

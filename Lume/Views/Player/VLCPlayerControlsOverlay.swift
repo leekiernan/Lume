@@ -89,6 +89,10 @@ import VLCKit
 
                 pipButton
 
+                #if os(macOS)
+                    MacPlayerFullScreenButton()
+                #endif
+
                 Spacer()
 
                 AirPlayRouteButton()

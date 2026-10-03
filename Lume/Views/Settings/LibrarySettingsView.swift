@@ -21,6 +21,7 @@
 
     struct LibrarySettingsView: View {
         @AppStorage(AppAreaSettings.disabledAreasKey) private var disabledAreasRaw = ""
+        @AppStorage(SportsSyncService.enabledKey) private var sportsEnabled = SportsSyncService.enabledDefault
 
         var body: some View {
             List {
@@ -29,10 +30,8 @@
                         row(for: area)
                     }
 
-                    NavigationLink {
+                    areaRow(title: "Sports", systemImage: "sportscourt", enabled: $sportsEnabled) {
                         SportsSettingsView()
-                    } label: {
-                        Label("Sports", systemImage: "sportscourt")
                     }
                 } header: {
                     Text("Areas")
@@ -46,29 +45,39 @@
                 }
             }
             .platformNavigationTitle("Library")
+            .onChange(of: sportsEnabled) { _, _ in
+                SportsSyncService.shared.availabilityDidChange()
+                SportsFollowService.shared.reload()
+            }
         }
 
         /// An area's row: the drill-in on the left, its on/off switch on the
         /// right. The switch is a separate control rather than a swipe action so
         /// it reads the same as the per-row switches inside.
         private func row(for area: AppArea) -> some View {
-            let enabled = AppAreaSettings.isEnabled(area, disabledRaw: disabledAreasRaw)
-            return HStack {
-                NavigationLink {
-                    LibraryAreaSettingsView(area: area)
-                } label: {
-                    Label(area.title, systemImage: area.systemImage)
-                        .foregroundStyle(enabled ? .primary : .secondary)
-                }
-
-                // Labelled (not `Toggle("")`) so VoiceOver reads the area's name
-                // and no empty key lands in the string catalog.
-                Toggle(area.title, isOn: enabledBinding(for: area))
-                    .labelsHidden()
-                    // The last area standing can't be switched off — there would
-                    // be no navigation left.
-                    .disabled(!AppAreaSettings.canDisable(area, disabledRaw: disabledAreasRaw))
+            areaRow(title: area.title, systemImage: area.systemImage,
+                    enabled: enabledBinding(for: area), canDisable: AppAreaSettings.canDisable(area, disabledRaw: disabledAreasRaw))
+            {
+                LibraryAreaSettingsView(area: area)
             }
+        }
+
+        private func areaRow(title: LocalizedStringKey, systemImage: String, enabled: Binding<Bool>,
+                             canDisable: Bool = true, @ViewBuilder destination: () -> some View) -> some View
+        {
+            HStack(spacing: 16) {
+                NavigationLink(destination: destination) {
+                    Label(title, systemImage: systemImage)
+                        .foregroundStyle(enabled.wrappedValue ? .primary : .secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                Toggle(title, isOn: enabled)
+                    .labelsHidden()
+                    .fixedSize()
+                    .disabled(!canDisable)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
 
         private func enabledBinding(for area: AppArea) -> Binding<Bool> {

@@ -100,6 +100,10 @@ import SwiftUI
 
                 pipButton
 
+                #if os(macOS)
+                    MacPlayerFullScreenButton()
+                #endif
+
                 Spacer()
 
                 AirPlayRouteButton()

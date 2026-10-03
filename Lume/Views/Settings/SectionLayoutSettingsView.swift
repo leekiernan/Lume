@@ -132,10 +132,15 @@
             switch ref {
             case let .builtin(section):
                 HStack {
-                    Toggle(isOn: enabledBinding(for: section)) {
-                        rowLabel(for: section)
-                    }
+                    rowLabel(for: section)
+                    Spacer(minLength: 12)
                     promoteButton(for: ref, name: section.displayName)
+                        .frame(width: 24)
+                    Toggle(isOn: enabledBinding(for: section)) {
+                        Text(section.title)
+                    }
+                    .labelsHidden()
+                    .fixedSize()
                 }
             case let .custom(id):
                 if let section = customSections.first(where: { $0.id == id }) {
@@ -150,22 +155,19 @@
         /// the row, and the whole row also gets a context-menu shortcut.
         private func customRow(_ section: CustomHomeSection) -> some View {
             HStack {
-                Toggle(isOn: enabledBinding(for: .custom(section.id))) {
-                    Label {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(verbatim: section.title)
-                            Text(verbatim: section.provider?.displayName ?? section.sourceURL)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
-                                .truncationMode(.middle)
-                        }
-                    } icon: {
-                        Image(systemName: "list.bullet.rectangle")
+                Label {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(verbatim: section.title)
+                        Text(verbatim: section.provider?.displayName ?? section.sourceURL)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
                     }
+                } icon: {
+                    Image(systemName: "list.bullet.rectangle")
                 }
-
-                promoteButton(for: .custom(section.id), name: section.title)
+                Spacer(minLength: 12)
 
                 Button {
                     editorMode = .edit(section)
@@ -174,6 +176,16 @@
                 }
                 .buttonStyle(.borderless)
                 .accessibilityLabel("Edit \(section.title)")
+                .frame(width: 24)
+
+                promoteButton(for: .custom(section.id), name: section.title)
+                    .frame(width: 24)
+
+                Toggle(isOn: enabledBinding(for: .custom(section.id))) {
+                    Text(verbatim: section.title)
+                }
+                .labelsHidden()
+                .fixedSize()
             }
             .contextMenu {
                 Button("Edit", systemImage: "pencil") { editorMode = .edit(section) }

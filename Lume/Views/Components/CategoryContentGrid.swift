@@ -87,6 +87,7 @@ struct CategoryPage<Content: View>: View {
         .browseActivity()
         #if !os(tvOS)
             .navigationTitle(title)
+            .macNavigationBack()
         #endif
     }
 }

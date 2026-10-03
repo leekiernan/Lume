@@ -35,9 +35,6 @@ struct FullScreenPlayerView: View {
     /// completion. Non-private so `completeActiveEpisode` in
     /// `FullScreenPlayerView+Navigation` can claim the ref before swapping.
     @State var completedRef: PlayableMedia.ContentRef?
-    #if os(macOS)
-        @Environment(\.dismissWindow) private var dismissWindow
-    #endif
 
     /// The user's ordered engine fallback list, read once when the player opens.
     /// Settings changes don't reshuffle a session already in flight; reopening
@@ -514,11 +511,7 @@ struct FullScreenPlayerView: View {
 
     private func closePlayer() {
         #if os(macOS)
-            // Exit fullscreen first so the window animation is graceful, then close.
-            if let window = NSApp.keyWindow, window.styleMask.contains(.fullScreen) {
-                window.toggleFullScreen(nil)
-            }
-            dismissWindow(id: "player")
+            MacPlayerWindowRouter.shared.close()
         #else
             dismiss()
         #endif
