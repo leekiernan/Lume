@@ -42,6 +42,13 @@ nonisolated struct SportsHeroSelectionMachine: Equatable {
         }
     }
 
+    /// The `.task(id:)` identity for reconciling: the context and every
+    /// candidate's id, tier and availability.
+    static func reconcileKey(context: String, candidates: [Candidate]) -> String {
+        let token = candidates.map { "\($0.id):\($0.tier.rawValue):\($0.isAvailable)" }.joined(separator: ",")
+        return "\(context)|\(token)"
+    }
+
     private(set) var selectedID: String?
     private var context: String?
 

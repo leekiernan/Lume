@@ -46,7 +46,11 @@
         /// The scope panel, and where focus was when it opened.
         @State var showingBrowse = false
         @State var browseReturnFocus: TVSportsFocus?
-        @State var resolved: [String: [ResolvedChannel]] = [:]
+        @State var resolution = SportsFixtureResolutionMachine()
+        var resolved: [String: [ResolvedChannel]] {
+            resolution.resolved
+        }
+
         @State private var heroSelection = SportsHeroSelectionMachine()
         @State var selectedFixture: SportsFixture?
         @State var showManageTeams = false
@@ -395,39 +399,21 @@
         }
 
         func resolveKey(_ fixtures: [SportsFixture]) -> String {
-            fixtures.map(\.id).joined(separator: ",") + "|" + String(epg.isSyncing)
+            SportsFixtureResolutionMachine.requestKey(for: fixtures, refreshingOn: [epg.isSyncing])
         }
 
         func runResolve(_ fixtures: [SportsFixture]) async {
-            guard !fixtures.isEmpty else {
-                resolved = [:]
-                return
-            }
-            await SportsChannelResolver.resolveSoonestFirst(
-                container: modelContext.container,
-                fixtures: fixtures,
-                restriction: restriction,
-                publish: { resolved = $0 }
+            await SportsFixtureResolution.run(
+                $resolution, fixtures: fixtures, container: modelContext.container, restriction: restriction
             )
         }
 
         var heroSelectionContext: String {
-            let scopeToken = switch scope {
-            case .all: "all"
-            case let .follow(key): "follow:\(key)"
-            }
-            let followsToken = follows.follows
-                .map { "\($0.kind.rawValue):\($0.key)" }
-                .sorted()
-                .joined(separator: ",")
-            return "\(scopeToken)|\(followsToken)"
+            grouping.heroSelectionContext
         }
 
         func heroSelectionKey(for candidates: [SportsHeroSelectionMachine.Candidate]) -> String {
-            let candidatesToken = candidates
-                .map { "\($0.id):\($0.tier.rawValue):\($0.isAvailable)" }
-                .joined(separator: ",")
-            return "\(heroSelectionContext)|\(candidatesToken)"
+            SportsHeroSelectionMachine.reconcileKey(context: heroSelectionContext, candidates: candidates)
         }
 
         // MARK: - Follow

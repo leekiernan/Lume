@@ -28,7 +28,11 @@ import SwiftUI
         @State private var follows = SportsFollowService.shared
         @State private var epg = EPGSyncService.shared
 
-        @State private var resolved: [String: [ResolvedChannel]] = [:]
+        @State private var resolution = SportsFixtureResolutionMachine()
+        private var resolved: [String: [ResolvedChannel]] {
+            resolution.resolved
+        }
+
         @State private var selectedFixture: SportsFixture?
         @State private var showManageTeams = false
         @State private var showPaywall = false
@@ -191,24 +195,15 @@ import SwiftUI
         /// the same key as the phone rail's; it never waits for a sync to end.
         private var resolveKey: String {
             guard premium.isPremium else { return "idle" }
-            return railFixtures.map(\.id).joined(separator: ",") + "|" + String(epg.isSyncing) + "|" + String(isSyncBusy)
+            return SportsFixtureResolutionMachine.requestKey(for: railFixtures, refreshingOn: [epg.isSyncing, isSyncBusy])
         }
 
         private func runResolve() async {
             guard premium.isPremium else { return }
-            let fixtures = railFixtures
-            guard !fixtures.isEmpty else {
-                resolved = [:]
-                return
-            }
-            let result = await SportsChannelResolver.resolve(
-                container: modelContext.container,
-                fixtures: fixtures,
-                restriction: restriction
+            await SportsFixtureResolution.run(
+                $resolution, fixtures: railFixtures, container: modelContext.container, restriction: restriction,
+                soonestFirst: false
             )
-            // A resolve superseded by a newer `.task(id:)` pass must not overwrite it.
-            guard !Task.isCancelled else { return }
-            resolved = result
         }
 
         // MARK: - Playback

@@ -313,6 +313,17 @@ struct SportsHubGrouping {
         return byID.values.sorted { $0.headlineDate < $1.headlineDate }
     }
 
+    /// What a hero selection belongs to: the scope and the follows. A change
+    /// of either starts the selection afresh.
+    var heroSelectionContext: String {
+        let scopeToken = switch scope {
+        case .all: "all"
+        case let .follow(key): "follow:\(key)"
+        }
+        let followsToken = follows.map { "\($0.kind.rawValue):\($0.key)" }.sorted().joined(separator: ",")
+        return "\(scopeToken)|\(followsToken)"
+    }
+
     var scopeTitle: String {
         guard let follow = scopedFollow else { return String(localized: "Sports") }
         return title(of: follow)

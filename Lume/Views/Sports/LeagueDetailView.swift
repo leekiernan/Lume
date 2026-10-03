@@ -35,7 +35,11 @@ struct LeagueDetailView: View {
     @State private var epg = EPGSyncService.shared
 
     @State private var segment: SportsDayWindow = .today
-    @State private var resolved: [String: [ResolvedChannel]] = [:]
+    @State private var resolution = SportsFixtureResolutionMachine()
+    private var resolved: [String: [ResolvedChannel]] {
+        resolution.resolved
+    }
+
     @State private var fetchedFixtures: [SportsFixture] = []
     @State private var fetchedStandings: [SportsStandingRow] = []
     @State private var isLoading = false
@@ -287,20 +291,12 @@ struct LeagueDetailView: View {
     // MARK: - Resolve
 
     private var resolveKey: String {
-        visibleFixtures.map(\.id).joined(separator: ",") + "|" + String(epg.isSyncing)
+        SportsFixtureResolutionMachine.requestKey(for: visibleFixtures, refreshingOn: [epg.isSyncing])
     }
 
     private func runResolve() async {
-        let fixtures = visibleFixtures
-        guard !fixtures.isEmpty else {
-            resolved = [:]
-            return
-        }
-        await SportsChannelResolver.resolveSoonestFirst(
-            container: modelContext.container,
-            fixtures: fixtures,
-            restriction: restriction,
-            publish: { resolved = $0 }
+        await SportsFixtureResolution.run(
+            $resolution, fixtures: visibleFixtures, container: modelContext.container, restriction: restriction
         )
     }
 

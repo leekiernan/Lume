@@ -52,7 +52,11 @@ struct SportsHomeRail: View {
         @State private var follows = SportsFollowService.shared
         @State private var epg = EPGSyncService.shared
 
-        @State private var resolved: [String: [ResolvedChannel]] = [:]
+        @State private var resolution = SportsFixtureResolutionMachine()
+        private var resolved: [String: [ResolvedChannel]] {
+            resolution.resolved
+        }
+
         @State private var selectedFixture: SportsFixture?
         @State private var pickerFixture: SportsFixture?
         @State private var showManageTeams = false
@@ -266,23 +270,15 @@ struct SportsHomeRail: View {
         /// while the hub, which never waited, showed them.
         private func resolveKey(_ fixtures: [SportsFixture]) -> String {
             guard premium.isPremium else { return "idle" }
-            return fixtures.map(\.id).joined(separator: ",") + "|" + String(epg.isSyncing) + "|" + String(isSyncBusy)
+            return SportsFixtureResolutionMachine.requestKey(for: fixtures, refreshingOn: [epg.isSyncing, isSyncBusy])
         }
 
         private func runResolve(_ fixtures: [SportsFixture]) async {
             guard premium.isPremium else { return }
-            guard !fixtures.isEmpty else {
-                resolved = [:]
-                return
-            }
-            let result = await SportsChannelResolver.resolve(
-                container: modelContext.container,
-                fixtures: fixtures,
-                restriction: restriction
+            await SportsFixtureResolution.run(
+                $resolution, fixtures: fixtures, container: modelContext.container, restriction: restriction,
+                soonestFirst: false
             )
-            // A resolve superseded by a newer `.task(id:)` pass must not overwrite it.
-            guard !Task.isCancelled else { return }
-            resolved = result
         }
 
         // MARK: - Playback
