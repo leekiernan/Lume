@@ -56,6 +56,13 @@
                 }
                 .frame(height: 150, alignment: .leading)
                 actions
+                // Under the buttons, not between them. The line is kept on
+                // every slide, empty where there's nothing to say, so the
+                // buttons never move as the carousel pages.
+                Text(verbatim: moreChannelsLine ?? " ")
+                    .font(.system(size: 24))
+                    .foregroundStyle(.white.opacity(0.7))
+                    .accessibilityHidden(moreChannelsLine == nil)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .focusSection()
@@ -127,9 +134,17 @@
 
         // MARK: - Actions
 
+        /// "2 more on your channels", when Watch picked one of several.
+        private var moreChannelsLine: String? {
+            guard fixture.isInProgress, onWatchFromStart == nil, case let .available(count, _) = availability, count > 1 else {
+                return nil
+            }
+            return String(localized: "\(count - 1) more on your channels")
+        }
+
         private var actions: some View {
             HStack(spacing: 24) {
-                if fixture.isInProgress, case let .available(count, best) = availability {
+                if fixture.isInProgress, case let .available(_, best) = availability {
                     if let onWatchFromStart {
                         Button(action: onWatchFromStart) {
                             Label {
@@ -171,11 +186,6 @@
                         .frame(width: 720)
                         .focused(watchFocus, equals: .heroWatch)
                         .onCarouselEdge(.left, onPage)
-                    }
-                    if count > 1, onWatchFromStart == nil {
-                        Text("\(count - 1) more on your channels")
-                            .font(.system(size: 24))
-                            .foregroundStyle(.white.opacity(0.7))
                     }
                 }
                 if fixture.status.state == .scheduled {
