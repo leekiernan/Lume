@@ -114,11 +114,20 @@ struct MainTabView: View {
     }
 
     private func isOn(_ area: AppArea) -> Bool {
-        AppAreaSettings.isEnabled(area, disabledRaw: disabledAreasRaw)
+        tabSelection.libraryAreas.contains(area)
     }
 
     private var showsSportsTab: Bool {
         sportsEnabled && sportsTabEnabled && SportsSyncService.isEnabled
+    }
+
+    private var tabSelection: AppTabSelection {
+        #if os(tvOS)
+            let showsSettings = true
+        #else
+            let showsSettings = false
+        #endif
+        return AppTabSelection(disabledAreasRaw: disabledAreasRaw, showsSports: showsSportsTab, showsSettings: showsSettings)
     }
 
     #if os(macOS)
@@ -130,18 +139,11 @@ struct MainTabView: View {
         }
     #endif
 
-    /// Move off a tab the user has just switched off, so the selection can
-    /// never point at a tab that is no longer in the bar.
+    /// Keep router state in step with the resolved binding, on launch and when
+    /// a profile or layout changes. Never change a valid user-selected tab.
     private func repairSelectionIfNeeded() {
-        if router.selectedTab == .sports, !showsSportsTab {
-            router.selectedTab = AppAreaSettings.enabledAreas(disabledRaw: disabledAreasRaw).first?.tab ?? .home
-            return
-        }
-        guard let area = AppArea.allCases.first(where: { $0.tab == router.selectedTab }),
-              !isOn(area),
-              let fallback = AppAreaSettings.enabledAreas(disabledRaw: disabledAreasRaw).first
-        else { return }
-        router.selectedTab = fallback.tab
+        let resolved = tabSelection.resolved(router.selectedTab)
+        if router.selectedTab != resolved { router.selectedTab = resolved }
     }
 
     /// Home's local rails are bounded queries, and the Movies/Series category
@@ -154,8 +156,12 @@ struct MainTabView: View {
     }
 
     var body: some View {
-        @Bindable var router = router
-        return tabView(selection: $router.selectedTab)
+        let policy = tabSelection
+        let selection = Binding(
+            get: { policy.resolved(router.selectedTab) },
+            set: { router.selectedTab = policy.resolved($0) }
+        )
+        return tabView(selection: selection)
         // Profile-scoped preferences bind when tab contents are rebuilt; the
         // router remains outside this identity, so navigation paths survive.
         #if os(macOS)
@@ -163,16 +169,15 @@ struct MainTabView: View {
         #else
             .id(activeProfileToken)
         #endif
+            .onChange(of: policy, initial: true) { _, _ in repairSelectionIfNeeded() }
+            .onChange(of: activeProfileToken) { _, _ in repairSelectionIfNeeded() }
             .onChange(of: disabledAreasRaw) { _, _ in
-                repairSelectionIfNeeded()
                 SportsSyncService.shared.availabilityDidChange()
                 SportsFollowService.shared.reload()
             }
             .onChange(of: sportsEnabled) { _, _ in
-                repairSelectionIfNeeded()
                 SportsSyncService.shared.availabilityDidChange()
             }
-            .onChange(of: sportsTabEnabled) { _, _ in repairSelectionIfNeeded() }
         #if os(tvOS)
             .disabled(blockingOverlayOwnsScreen || router.isQuickSwitchPresented)
             .background(
@@ -184,7 +189,7 @@ struct MainTabView: View {
             .fullScreenCover(item: $manualSyncRequest) { request in
                 SyncProgressView(playlist: request.playlist, repairingAreas: request.repairingAreas)
             }
-            .launchSplash(homeShown: router.selectedTab == .home)
+            .launchSplash(homeShown: selection.wrappedValue == .home)
         #endif
             .environment(router)
             .environment(\.contentRestriction, contentRestriction)
