@@ -83,6 +83,11 @@ extension KSPlayerEngineView {
             markPlaybackStarted(proof)
             setBuffering(false)
         }
+        // `.bufferFinished` comes before the first frame is drawn; a held
+        // zap frame waits until the new stream's playhead really moves.
+        if zapFrame != nil, hasStartedPlayback, tick.lastPlayhead >= 0, current > tick.lastPlayhead {
+            releaseZapFrame(fading: true)
+        }
         guard isBuffering, tick.lastPlayhead >= 0, current > tick.lastPlayhead else { return }
         // A single tick of progress while ready is the engine playing, even
         // without its `.bufferFinished`; still gated on this stream's
@@ -322,6 +327,7 @@ extension KSPlayerEngineView {
             onPlaybackFailed?()
             return
         }
+        releaseZapFrame()
         withAnimation(.easeInOut(duration: 0.25)) {
             isBuffering = false
             loadFailed = true
