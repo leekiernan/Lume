@@ -20,7 +20,7 @@ import Foundation
 actor SportsArtwork {
     static let shared = SportsArtwork()
 
-    enum Size {
+    enum Size: Hashable {
         /// Behind a hero: the original (typically 1280 px wide).
         case hero
         /// Behind a card: TheSportsDB's 500 px preview.
@@ -66,6 +66,10 @@ actor SportsArtwork {
         "hockey": "Ice Hockey", "baseball": "Baseball", "rugby": "Rugby", "australian-football": "Australian Football"
     ]
 
+    /// Event poster lookup must not broaden the team-search path: individual
+    /// competitors (tennis players, fighters) aren't entries in searchteams.
+    private static let posterSportNames = sportNames.merging(["racing": "Motorsport", "mma": "Fighting"]) { _, new in new }
+
     private var entries: [String: Entry]
     /// Each cache key owns its request until it has resolved. A backdrop can be
     /// requested by the hero, card rail and detail view at once; making those
@@ -104,6 +108,32 @@ actor SportsArtwork {
         return Self.sportImages[fixture.sport].flatMap { URL(string: "https://www.thesportsdb.com/images/sports/\($0).jpg") }
     }
 
+    /// Optional compact-hero enhancement; wide heroes and cards do no event searches.
+    func portraitArt(for fixture: SportsFixture) async -> URL? {
+        if let leagueID = Self.leagueIds[fixture.leagueId], let sport = Self.posterSportNames[fixture.sport] {
+            let title: String? = if let home = fixture.home?.team.name, let away = fixture.away?.team.name {
+                "\(home)_vs_\(away)"
+            } else {
+                fixture.name
+            }
+            if let title, !title.isEmpty {
+                let date = SportsPosterLookup.day(fixture.startDate)
+                let url = await cached("event-poster:\(fixture.id):\(date):\(title)") {
+                    let response: EventsResponse? = await self.fetch("searchevents.php", [
+                        URLQueryItem(name: "e", value: title), URLQueryItem(name: "d", value: date)
+                    ])
+                    return SportsPosterLookup.poster(in: response?.event ?? [], fixture: fixture, leagueID: leagueID, sport: sport)
+                }
+                if let url { return url }
+            }
+        }
+        guard let leagueID = Self.leagueIds[fixture.leagueId] else { return nil }
+        return await cached("league-poster:\(fixture.leagueId)") {
+            let response: LeaguesResponse? = await self.fetch("lookupleague.php", [URLQueryItem(name: "id", value: leagueID)])
+            return SportsPosterLookup.imageURL(response?.leagues?.first?.strPoster)
+        }
+    }
+
     func teamArt(_ team: SportsTeam) async -> URL? {
         guard let sport = Self.sportNames[sport(of: team.leagueId)] else { return nil }
         return await cached("team:\(team.id)") {
@@ -126,7 +156,7 @@ actor SportsArtwork {
 
     private func cached(_ key: String, fetch: @escaping @Sendable () async -> URL?) async -> URL? {
         if let entry = entries[key] {
-            let lifetime = entry.url == nil ? Self.missLifetime : Self.hitLifetime
+            let lifetime = Self.lifetime(key: key, entry: entry)
             if Date().timeIntervalSince(entry.fetchedAt) < lifetime { return entry.url }
         }
 
@@ -142,10 +172,15 @@ actor SportsArtwork {
     }
 
     private static func prunedEntries(_ entries: [String: Entry], now: Date = Date()) -> [String: Entry] {
-        entries.filter { _, entry in
-            let lifetime = entry.url == nil ? Self.missLifetime : Self.hitLifetime
-            return now.timeIntervalSince(entry.fetchedAt) < lifetime
+        entries.filter { key, entry in
+            now.timeIntervalSince(entry.fetchedAt) < lifetime(key: key, entry: entry)
         }
+    }
+
+    private static func lifetime(key: String, entry: Entry) -> TimeInterval {
+        // Posters may arrive just before kickoff; retry misses sooner than fanart.
+        if key.hasPrefix("event-poster:") { return entry.url == nil ? 6 * 3600 : 7 * 86400 }
+        return entry.url == nil ? missLifetime : hitLifetime
     }
 
     private func persist() {
@@ -210,7 +245,12 @@ actor SportsArtwork {
         let leagues: [League]?
     }
 
+    private struct EventsResponse: Decodable {
+        let event: [SportsPosterLookup.Event]?
+    }
+
     private struct League: Decodable {
+        let strPoster: String?
         let strFanart1: String?
         let strFanart2: String?
         let strFanart3: String?

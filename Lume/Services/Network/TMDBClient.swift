@@ -154,7 +154,9 @@ nonisolated struct TMDBClient {
     }
 
     static var heroBackdropSize: String {
-        "w1920"
+        // A supported baseline for metadata/warm-start URLs. Hero rendering
+        // selects a larger original or a smaller rendition from its geometry.
+        "w1280"
     }
 
     static var heroLogoSize: String {

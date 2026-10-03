@@ -1,0 +1,49 @@
+import Foundation
+@testable import Lume
+import Testing
+
+struct HeroArtworkPolicyTests {
+    @Test func `compact artwork preserves landscape ratio without changing wide heroes`() {
+        #expect(HeroArtworkPolicy.heroHeight(width: 390) == 540)
+        #expect(HeroArtworkPolicy.heroHeight(width: 1024) == 800)
+        let landscapeHeight: CGFloat = 390 * 9 / 16
+        #expect(HeroArtworkPolicy.artworkHeight(width: 390, heroHeight: 800) == landscapeHeight)
+        #expect(HeroArtworkPolicy.artworkHeight(width: 1024, heroHeight: 800) == 800)
+        #expect(HeroArtworkPolicy.artworkHeight(width: 1920, heroHeight: 1080) == 1080)
+        #expect(HeroArtworkPolicy.artworkHeight(width: 390, heroHeight: 100) == 100)
+    }
+
+    @Test func `output pixels distinguish HD and UHD without device identity`() throws {
+        let points = HeroArtworkPolicy.decodePoints(width: 1920, height: 1080)
+        #expect(points == 1920)
+        #expect(points * 2 == 3840)
+        let url = try #require(URL(string: "https://image.tmdb.org/t/p/w1920/hero.jpg"))
+        #expect(HeroArtworkPolicy.backdropURL(url, pixelWidth: points)?.path == "/t/p/original/hero.jpg")
+        #expect(HeroArtworkPolicy.backdropURL(url, pixelWidth: points * 2)?.path == "/t/p/original/hero.jpg")
+        // Both need original bytes; decoding is bounded separately at 1920/3840.
+    }
+
+    @Test func `download tiers preserve artwork identity and query`() throws {
+        let url = try #require(URL(string: "https://image.tmdb.org/t/p/original/hero.jpg?test=1"))
+        for (pixels, size) in [(300.0, "w300"), (301, "w780"), (780, "w780"), (781, "w1280"), (1280, "w1280"), (1281, "original")] {
+            let result = HeroArtworkPolicy.backdropURL(url, pixelWidth: pixels)
+            #expect(result?.path == "/t/p/\(size)/hero.jpg")
+            #expect(result?.query == "test=1")
+        }
+    }
+
+    @Test func `external artwork and logos are not rewritten`() throws {
+        for raw in ["https://www.thesportsdb.com/images/fanart.jpg", "https://image.tmdb.org/t/p/w500/poster.jpg", "https://image.tmdb.org/t/p/original/logo.svg"] {
+            let url = try #require(URL(string: raw))
+            #expect(HeroArtworkPolicy.backdropURL(url, pixelWidth: 4000) == url)
+        }
+        #expect(HeroArtworkPolicy.backdropURL(nil, pixelWidth: 1000) == nil)
+    }
+
+    @Test func `decode sizing accounts for the fill crop on wide artwork regions`() {
+        let landscapeHeight: CGFloat = 390 * 9 / 16
+        let croppedWidth: CGFloat = 800 * 16 / 9
+        #expect(HeroArtworkPolicy.decodePoints(width: 390, height: landscapeHeight) == 390)
+        #expect(abs(HeroArtworkPolicy.decodePoints(width: 600, height: 800) - croppedWidth) < 0.001)
+    }
+}

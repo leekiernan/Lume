@@ -137,6 +137,7 @@
         let model: TVHeroCarouselModel<HeroItem>
         let belowFold: Bool
         let warmStartBackdropURL: URL?
+        @Environment(\.displayScale) private var displayScale
 
         private var backdropURL: URL? {
             model.currentHero?.imageURL ?? warmStartBackdropURL
@@ -147,27 +148,20 @@
                 Color.black
 
                 if let backdropURL {
-                    CachedAsyncImage(url: backdropURL) { phase in
-                        // The placeholder must be a REAL view: lifecycle
-                        // modifiers (CachedAsyncImage's internal `.task`) never
-                        // fire on EmptyView, so an empty `.empty` branch means
-                        // the image load never starts.
-                        if case let .success(image) = phase {
-                            image
-                                .resizable()
-                                .aspectRatio(contentMode: .fill)
-                        } else {
-                            Color.black
-                        }
-                    }
-                    // Keyed by slide so a page change swaps views, and the
-                    // opacity transition (driven by the model's animated index
-                    // change) reads as a crossfade.
-                    .id(backdropURL.absoluteString)
-                    .transition(.opacity)
+                    HeroArtworkImage(url: backdropURL)
+                        // Keyed by slide so a page change swaps views, and the
+                        // opacity transition (driven by the model's animated index
+                        // change) reads as a crossfade.
+                        .id(backdropURL.absoluteString)
+                        .transition(.opacity)
                 }
             }
             .tvHeroBackdropTreatment(belowFold: belowFold)
+            .onGeometryChange(for: CGFloat.self) { proxy in
+                HeroArtworkPolicy.decodePoints(width: proxy.size.width, height: proxy.size.height) * displayScale
+            } action: { pixels in
+                model.setArtworkPixels(pixels)
+            }
         }
     }
 

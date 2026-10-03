@@ -269,7 +269,7 @@ struct SportsHubView: View {
             HeroCarousel(
                 items: candidates,
                 imageURL: { _ in nil },
-                backdrop: { SportsArtworkBackdrop(fixture: $0.fixture, size: .hero) },
+                backdrop: { SportsArtworkBackdrop(fixture: $0.fixture, size: .hero, prefersPortrait: true) },
                 info: { candidate, isCompact in
                     SportsHeroInfo(
                         fixture: candidate.fixture,
@@ -278,7 +278,8 @@ struct SportsHubView: View {
                         onWatch: watch,
                         onOpen: { selectedFixture = candidate.fixture }
                     )
-                }
+                },
+                managesArtworkComposition: true
             )
         }
     }
