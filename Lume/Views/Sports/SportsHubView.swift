@@ -41,7 +41,6 @@ struct SportsHubView: View {
     }
 
     @State private var heroSelection = SportsHeroSelectionMachine()
-    @State private var heroCarouselID: String?
     @State private var highlightsLoad = SportsHighlightsLoadMachine()
     @State private var selectedFixture: SportsFixture?
     @State private var pickerFixture: SportsFixture?
@@ -212,35 +211,35 @@ struct SportsHubView: View {
         let hero = heroSelection.displayed(in: candidates, context: heroSelectionContext)?.fixture
         let carouselCandidates = Array(heroSelection.carouselCandidates(in: candidates, context: heroSelectionContext).prefix(5))
         let carouselFixtureIDs = Set(carouselCandidates.map(\.id))
-        return VStack(spacing: 0) {
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 20) {
-                    statusHints
-                        .padding(.horizontal)
-                    heroCarousel(carouselCandidates)
-                    SportsSectionsView(
-                        // Carousel pages lead on their own, not again below.
-                        groups: grouping.groups(for: fixtures.filter { !carouselFixtureIDs.contains($0.id) }),
-                        resolved: resolved,
-                        isFollowed: isFollowed,
-                        onOpenDetail: { selectedFixture = $0 },
-                        onWatch: watch,
-                        onFollowToggle: toggleFollow,
-                        onPickChannel: { pickerFixture = $0 },
-                        onSelectFollow: { open(follow: $0) }
-                    )
+        // Movies' structure: the hero opens the scroll view and runs under the
+        // bar; the rows follow.
+        return ScrollView {
+            LazyVStack(alignment: .leading, spacing: 20) {
+                heroCarousel(carouselCandidates)
+                statusHints
                     .padding(.horizontal)
-                    if scope == .all {
-                        highlightsRail(excluding: carouselFixtureIDs)
-                            .padding(.horizontal)
-                    }
+                SportsSectionsView(
+                    // Carousel pages lead on their own, not again below.
+                    groups: grouping.groups(for: fixtures.filter { !carouselFixtureIDs.contains($0.id) }),
+                    resolved: resolved,
+                    isFollowed: isFollowed,
+                    onOpenDetail: { selectedFixture = $0 },
+                    onWatch: watch,
+                    onFollowToggle: toggleFollow,
+                    onPickChannel: { pickerFixture = $0 },
+                    onSelectFollow: { open(follow: $0) }
+                )
+                .padding(.horizontal)
+                if scope == .all {
+                    highlightsRail(excluding: carouselFixtureIDs)
+                        .padding(.horizontal)
                 }
-                .padding(.vertical)
             }
+            // The hero fills the top inset itself when it's showing.
+            .padding(.top, carouselCandidates.isEmpty ? PosterCardMetrics.sectionVerticalPadding : 0)
+            .padding(.bottom, PosterCardMetrics.sectionVerticalPadding)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        // Behind the page, never sizing it.
-        .background(alignment: .top) { heroBackdrop(carouselCandidates) }
+        .ignoresSafeArea(edges: carouselCandidates.isEmpty ? [] : .top)
         // A headline from later in the week isn't on screen, but still wants
         // its channel once the guide reaches it.
         .task(id: resolveKey(fixtures + offScreen(hero, in: fixtures))) {
@@ -259,24 +258,25 @@ struct SportsHubView: View {
         )
     }
 
+    /// The shared hero carousel Home, Movies and Series use, with a game's
+    /// artwork and copy.
     @ViewBuilder
     private func heroCarousel(_ candidates: [SportsHeroSelectionMachine.Candidate]) -> some View {
         if !candidates.isEmpty {
-            SportsHubHeroCarousel(
-                candidates: candidates,
-                currentID: $heroCarouselID,
-                availability: heroAvailability,
-                onWatch: watch,
-                onOpen: { selectedFixture = $0 }
+            HeroCarousel(
+                items: candidates,
+                imageURL: { _ in nil },
+                backdrop: { SportsArtworkBackdrop(fixture: $0.fixture, size: .hero) },
+                info: { candidate, isCompact in
+                    SportsHeroInfo(
+                        fixture: candidate.fixture,
+                        isCompact: isCompact,
+                        availability: heroAvailability(candidate.fixture),
+                        onWatch: watch,
+                        onOpen: { selectedFixture = candidate.fixture }
+                    )
+                }
             )
-        }
-    }
-
-    @ViewBuilder
-    private func heroBackdrop(_ candidates: [SportsHeroSelectionMachine.Candidate]) -> some View {
-        if let fixture = candidates.first(where: { $0.id == heroCarouselID })?.fixture ?? candidates.first?.fixture {
-            SportsHubHeroBackdrop(fixture: fixture)
-                .ignoresSafeArea(edges: [.top, .horizontal])
         }
     }
 

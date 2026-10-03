@@ -333,12 +333,12 @@ extension SportsKnockoutStep {
 
 // MARK: - Hero
 
-/// The iPhone / iPad / Mac hub's headliner — the same game the tvOS hub leads
-/// with (`SportsHeroSelectionMachine`): fan art behind the crests and
-/// score, and Watch on the channel that suits this viewer, or Remind Me for a
-/// game the guide doesn't reach yet.
-struct SportsHubHeroCard: View {
+/// A Sports slide's copy in the shared `HeroCarousel`, where `HeroInfo` sits
+/// for a movie: when and what, the crests and score, and Watch on the channel
+/// that suits this viewer — or Remind Me for a game the guide doesn't reach yet.
+struct SportsHeroInfo: View {
     let fixture: SportsFixture
+    let isCompact: Bool
     let availability: SportsChannelAvailability
     let onWatch: (ResolvedChannel) -> Void
     let onOpen: () -> Void
@@ -412,11 +412,19 @@ struct SportsHubHeroCard: View {
                 }
                 Button("Match Centre", action: onOpen)
                     .buttonStyle(.bordered)
+                    .tint(.white)
                     .font(.subheadline.weight(.semibold))
             }
+            .controlSize(.large)
         }
         .foregroundStyle(.white)
-        .padding(18)
+        .shadow(radius: 4)
+        // `HeroInfo`'s insets and column, so the copy sits where a movie's does
+        // and clears the page dots.
+        .padding(.top, isCompact ? 16 : 24)
+        .padding(.horizontal, isCompact ? 16 : 24)
+        .padding(.bottom, 56)
+        .frame(maxWidth: isCompact ? .infinity : 640, alignment: .leading)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
