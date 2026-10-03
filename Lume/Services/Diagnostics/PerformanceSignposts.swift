@@ -114,9 +114,21 @@ nonisolated extension PerfSignpost {
     /// The off-main batch fixture→channel resolve (`SportsChannelResolver`): two
     /// bounded catalog fetches plus the in-Swift match.
     static let sportsChannelResolve = PerfSignpost("SportsChannelResolve")
-    /// A `SportsSyncService` fixture/standings/teams refresh for a followed
-    /// league.
+    /// A `SportsSyncService` fixture/standings/teams refresh of the followed
+    /// leagues, one interval per batch.
     static let sportsFixtureRefresh = PerfSignpost("SportsFixtureRefresh")
+
+    // Profiles
+    /// A whole profile switch, from the request to the re-projected catalog.
+    /// Wraps `profileSwitchStores`; the gap between them is the time the swap
+    /// queued behind a reconcile already running on the sync engine.
+    static let profileSwitch = PerfSignpost("ProfileSwitch")
+    static let profileSwitchStores = PerfSignpost("ProfileSwitchStores")
+    static let profileSwitchFetch = PerfSignpost("ProfileSwitchFetch")
+    static let profileSwitchExport = PerfSignpost("ProfileSwitchExport")
+    static let profileSwitchReset = PerfSignpost("ProfileSwitchReset")
+    static let profileSwitchImport = PerfSignpost("ProfileSwitchImport")
+    static let profileSwitchSave = PerfSignpost("ProfileSwitchSave")
 
     // Player
     static let playerStartup = PerfSignpost("PlayerStartup")
