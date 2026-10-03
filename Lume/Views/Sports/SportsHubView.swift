@@ -59,11 +59,9 @@ struct SportsHubView: View {
     @State private var showingSync = false
     @State private var showingSettings = false
     @State private var localPath = NavigationPath()
-    #if os(iOS) || os(visionOS)
-        @State private var playingMedia: PlayableMedia?
-        /// Playback queued behind a dismissing sheet; see `present(_:afterSheet:)`.
-        @State private var pendingMedia: PlayableMedia?
-    #endif
+    /// The player, and media waiting for a closing sheet. Unused on macOS,
+    /// where playback opens a window.
+    @State private var playback = SportsPlaybackPresentation()
 
     init(pageKey: String? = nil) {
         self.pageKey = pageKey
@@ -140,7 +138,7 @@ struct SportsHubView: View {
         .paywall(isPresented: $showPaywall, highlight: .sportsHub)
         .payPerViewConfirmation($pendingEvent, onWatch: playEvent)
         #if os(iOS) || os(visionOS)
-            .fullScreenCover(item: $playingMedia) { media in
+            .fullScreenCover(item: $playback.playing) { media in
                 FullScreenPlayerView(media: media)
             }
         #endif
@@ -393,19 +391,15 @@ struct SportsHubView: View {
             MacPlayerWindowRouter.shared.play(media, using: openWindow)
         #elseif os(iOS) || os(visionOS)
             if afterSheet {
-                pendingMedia = media
+                playback.play(media, afterSheet: true)
             } else {
-                playingMedia = media
+                playback.play(media, afterSheet: false)
             }
         #endif
     }
 
     private func presentPendingMedia() {
-        #if os(iOS) || os(visionOS)
-            guard let media = pendingMedia else { return }
-            pendingMedia = nil
-            playingMedia = media
-        #endif
+        playback.sheetDidDismiss()
     }
 
     // MARK: - Follow toggle

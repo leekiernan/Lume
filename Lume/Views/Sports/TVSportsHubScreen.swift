@@ -56,9 +56,8 @@
         @State var showManageTeams = false
         @State var showPaywall = false
         @State var pendingEvent: SportsPayPerView.Event?
-        @State private var playingMedia: PlayableMedia?
-        /// Playback queued behind the dismissing detail cover; see `watch`.
-        @State private var pendingMedia: PlayableMedia?
+        /// The player, and media waiting for a closing sheet (`SportsPlaybackPresentation`).
+        @State private var playback = SportsPlaybackPresentation()
         @AppStorage(SportsSyncService.hideScoresKey) private var hidesScores = false
         /// The headlined game from its first minute, when Hide Scores is on and
         /// the channel can replay it — worked out once per game, not per render.
@@ -107,7 +106,7 @@
             .fullScreenCover(item: $selectedFixture, onDismiss: presentPendingMedia) { fixture in
                 TVGameDetailSheet(fixture: fixture, resolved: resolved[fixture.id] ?? [], onWatch: watch)
             }
-            .fullScreenCover(item: $playingMedia) { media in
+            .fullScreenCover(item: $playback.playing) { media in
                 FullScreenPlayerView(media: media)
             }
             .paywall(isPresented: $showPaywall, highlight: .sportsHub)
@@ -180,7 +179,7 @@
                                     showsScore: { $0.showsScore(hidingScores: hidesScores, reveal: SportsScoreReveal.shared) },
                                     focus: $focus,
                                     onWatch: watch,
-                                    onWatchFromStart: heroFromStart.map { media in { playingMedia = media } },
+                                    onWatchFromStart: heroFromStart.map { media in { playback.play(media, afterSheet: false) } },
                                     onOpen: { selectedFixture = $0 },
                                     header: { header.padding(.top, Self.headerTop) }
                                 )
@@ -354,10 +353,10 @@
                 // while another is still animating out is torn down and
                 // re-presented, opening the stream twice and tripping the
                 // provider's connection cap. See `presentPendingMedia`.
-                pendingMedia = media
+                playback.play(media, afterSheet: true)
                 selectedFixture = nil
             } else {
-                playingMedia = media
+                playback.play(media, afterSheet: false)
             }
         }
 
@@ -373,7 +372,7 @@
 
         func playEvent(_ event: SportsPayPerView.Event) {
             guard let media = SportsPlayback.media(for: event, in: modelContext) else { return }
-            playingMedia = media
+            playback.play(media, afterSheet: false)
         }
 
         /// Catch-up from kickoff for a live game under Hide Scores.
@@ -383,9 +382,7 @@
         }
 
         private func presentPendingMedia() {
-            guard let media = pendingMedia else { return }
-            pendingMedia = nil
-            playingMedia = media
+            playback.sheetDidDismiss()
         }
     }
 

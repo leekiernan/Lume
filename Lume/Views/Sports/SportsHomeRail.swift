@@ -62,11 +62,9 @@ struct SportsHomeRail: View {
         @State private var showManageTeams = false
         @State private var showPaywall = false
         @State private var showHub = false
-        #if os(iOS) || os(visionOS)
-            @State private var playingMedia: PlayableMedia?
-            /// Playback queued behind a dismissing sheet; see `present(_:afterSheet:)`.
-            @State private var pendingMedia: PlayableMedia?
-        #endif
+        /// The player, and media waiting for a closing sheet. Unused on macOS,
+        /// where playback opens a window.
+        @State private var playback = SportsPlaybackPresentation()
 
         private static let cardWidth: CGFloat = 320
 
@@ -84,7 +82,7 @@ struct SportsHomeRail: View {
                     .sheet(isPresented: $showHub) { hubSheet }
                     .paywall(isPresented: $showPaywall, highlight: .sportsHub)
                 #if os(iOS) || os(visionOS)
-                    .fullScreenCover(item: $playingMedia) { media in
+                    .fullScreenCover(item: $playback.playing) { media in
                         FullScreenPlayerView(media: media)
                     }
                 #endif
@@ -303,19 +301,15 @@ struct SportsHomeRail: View {
                 MacPlayerWindowRouter.shared.play(media, using: openWindow)
             #elseif os(iOS) || os(visionOS)
                 if afterSheet {
-                    pendingMedia = media
+                    playback.play(media, afterSheet: true)
                 } else {
-                    playingMedia = media
+                    playback.play(media, afterSheet: false)
                 }
             #endif
         }
 
         private func presentPendingMedia() {
-            #if os(iOS) || os(visionOS)
-                guard let media = pendingMedia else { return }
-                pendingMedia = nil
-                playingMedia = media
-            #endif
+            playback.sheetDidDismiss()
         }
 
         // MARK: - Follow

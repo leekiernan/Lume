@@ -37,9 +37,9 @@ import SwiftUI
         @State private var showManageTeams = false
         @State private var showPaywall = false
 
-        @State private var playingMedia: PlayableMedia?
-        /// Playback queued behind the dismissing detail cover; see `watch`.
-        @State private var pendingMedia: PlayableMedia?
+        // The player, and media waiting for a closing sheet (`SportsPlaybackPresentation`).
+
+        @State private var playback = SportsPlaybackPresentation()
 
         var body: some View {
             Group {
@@ -49,7 +49,7 @@ import SwiftUI
             .fullScreenCover(item: $selectedFixture, onDismiss: presentPendingMedia) { fixture in
                 TVGameDetailSheet(fixture: fixture, resolved: resolved[fixture.id] ?? [], onWatch: watch)
             }
-            .fullScreenCover(item: $playingMedia) { media in
+            .fullScreenCover(item: $playback.playing) { media in
                 FullScreenPlayerView(media: media)
             }
             .paywall(isPresented: $showPaywall, highlight: .sportsHub)
@@ -216,17 +216,15 @@ import SwiftUI
                 // while another is still animating out is torn down and
                 // re-presented, opening the stream twice and tripping the
                 // provider's connection cap. See `presentPendingMedia`.
-                pendingMedia = media
+                playback.play(media, afterSheet: true)
                 selectedFixture = nil
             } else {
-                playingMedia = media
+                playback.play(media, afterSheet: false)
             }
         }
 
         private func presentPendingMedia() {
-            guard let media = pendingMedia else { return }
-            pendingMedia = nil
-            playingMedia = media
+            playback.sheetDidDismiss()
         }
 
         // MARK: - Follow

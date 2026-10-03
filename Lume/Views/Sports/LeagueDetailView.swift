@@ -47,9 +47,8 @@ struct LeagueDetailView: View {
     @State private var pickerFixture: SportsFixture?
     /// Unused on macOS (playback opens a window), but declared on every platform
     /// so the shared `leagueDetailPlayer(media:)` chrome has a binding to take.
-    @State private var playingMedia: PlayableMedia?
-    /// Playback queued behind a dismissing sheet; see `present(_:afterSheet:)`.
-    @State private var pendingMedia: PlayableMedia?
+    /// The player, and media waiting for a closing sheet (`SportsPlaybackPresentation`).
+    @State private var playback = SportsPlaybackPresentation()
 
     private var isF1: Bool {
         league.sport == "racing"
@@ -76,7 +75,7 @@ struct LeagueDetailView: View {
         .sheet(item: $pickerFixture, onDismiss: presentPendingMedia) { fixture in
             ChannelPickerSheet(fixture: fixture, resolved: resolved[fixture.id] ?? [], onWatch: watch)
         }
-        .leagueDetailPlayer(media: $playingMedia)
+        .leagueDetailPlayer(media: $playback.playing)
     }
 
     // MARK: - Range picker
@@ -326,19 +325,15 @@ struct LeagueDetailView: View {
             MacPlayerWindowRouter.shared.play(media, using: openWindow)
         #elseif os(iOS) || os(visionOS)
             if afterSheet {
-                pendingMedia = media
+                playback.play(media, afterSheet: true)
             } else {
-                playingMedia = media
+                playback.play(media, afterSheet: false)
             }
         #endif
     }
 
     private func presentPendingMedia() {
-        #if os(iOS) || os(visionOS)
-            guard let media = pendingMedia else { return }
-            pendingMedia = nil
-            playingMedia = media
-        #endif
+        playback.sheetDidDismiss()
     }
 }
 
