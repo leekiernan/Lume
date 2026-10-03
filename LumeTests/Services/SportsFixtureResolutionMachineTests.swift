@@ -57,8 +57,43 @@ struct SportsFixtureResolutionMachineTests {
     }
 
     @Test func `the request key follows the fixtures and the refresh signals`() {
-        let key = SportsFixtureResolutionMachine.requestKey(for: [fixture("a"), fixture("b")], refreshingOn: [false])
-        #expect(key == "a,b|false")
-        #expect(key != SportsFixtureResolutionMachine.requestKey(for: [fixture("a"), fixture("b")], refreshingOn: [true]))
+        let key = SportsFixtureResolutionMachine.requestKey(for: [fixture("a"), fixture("b")], visibilityToken: "parent", refreshingOn: [false])
+        #expect(key == "parent|a,b|false")
+        #expect(key != SportsFixtureResolutionMachine.requestKey(for: [fixture("a"), fixture("b")], visibilityToken: "parent", refreshingOn: [true]))
+        #expect(key != SportsFixtureResolutionMachine.requestKey(for: [fixture("a"), fixture("b")], visibilityToken: "child", refreshingOn: [false]))
+    }
+
+    @Test func `visibility changes hide previous answers before the replacement task starts`() throws {
+        var machine = SportsFixtureResolutionMachine()
+        let begun = machine.begin([fixture("a")], visibilityToken: "parent")
+        let request = try #require(begun)
+        machine.publish(request, answer("a"))
+        #expect(machine.resolved(for: "parent").keys.sorted() == ["a"])
+        #expect(machine.resolved(for: "child").isEmpty)
+    }
+
+    @Test func `visibility changes clear answers and reject the prior scope's late pass`() throws {
+        var machine = SportsFixtureResolutionMachine()
+        let begun = machine.begin([fixture("a")], visibilityToken: "parent")
+        let old = try #require(begun)
+        machine.publish(old, answer("a"))
+        let replacement = machine.begin([fixture("a")], visibilityToken: "child")
+        let current = try #require(replacement)
+        #expect(machine.resolved.isEmpty)
+        let late = machine.publish(old, answer("a"))
+        #expect(!late)
+        #expect(machine.resolved(for: "child").isEmpty)
+        machine.publish(current, answer("a"))
+        #expect(machine.resolved(for: "child").keys.sorted() == ["a"])
+        #expect(machine.resolved(for: "parent").isEmpty)
+    }
+
+    @Test func `refreshing the same visibility scope keeps its answer while loading`() throws {
+        var machine = SportsFixtureResolutionMachine()
+        let begun = machine.begin([fixture("a")], visibilityToken: "parent")
+        let request = try #require(begun)
+        machine.publish(request, answer("a"))
+        _ = machine.begin([fixture("a")], visibilityToken: "parent")
+        #expect(machine.resolved(for: "parent").keys.sorted() == ["a"])
     }
 }

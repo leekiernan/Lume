@@ -30,7 +30,7 @@ import SwiftUI
 
         @State private var resolution = SportsFixtureResolutionMachine()
         private var resolved: [String: [ResolvedChannel]] {
-            resolution.resolved
+            resolution.resolved(for: restriction.visibilityToken)
         }
 
         @State private var selectedFixture: SportsFixture?
@@ -195,7 +195,7 @@ import SwiftUI
         /// the same key as the phone rail's; it never waits for a sync to end.
         private var resolveKey: String {
             guard premium.isPremium else { return "idle" }
-            return SportsFixtureResolutionMachine.requestKey(for: railFixtures, refreshingOn: [epg.isSyncing, isSyncBusy])
+            return SportsFixtureResolutionMachine.requestKey(for: railFixtures, visibilityToken: restriction.visibilityToken, refreshingOn: [epg.isSyncing, isSyncBusy])
         }
 
         private func runResolve() async {

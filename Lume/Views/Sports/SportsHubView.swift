@@ -37,11 +37,15 @@ struct SportsHubView: View {
     @AppStorage(SportsHubLayout.hiddenKey) private var hiddenFollowsRaw = ""
     @State private var resolution = SportsFixtureResolutionMachine()
     private var resolved: [String: [ResolvedChannel]] {
-        resolution.resolved
+        resolution.resolved(for: restriction.visibilityToken)
     }
 
     @State private var heroSelection = SportsHeroSelectionMachine()
     @State private var highlightsLoad = SportsHighlightsLoadMachine()
+    private var highlightsResult: SportsHighlightsLoadMachine.Result {
+        highlightsLoad.result(for: restriction.visibilityToken)
+    }
+
     @State private var selectedFixture: SportsFixture?
     @State private var pickerFixture: SportsFixture?
     @State private var showManageTeams = false
@@ -160,7 +164,7 @@ struct SportsHubView: View {
                 followedContent(fixtures)
             }
         }
-        .task(id: follows.follows.map(\.key)) {
+        .task(id: [restriction.visibilityToken] + follows.follows.map(\.key)) {
             if pageKey == nil { await loadHighlights() }
         }
     }
@@ -168,7 +172,7 @@ struct SportsHubView: View {
     /// Big this week, less the fixtures already offered by the hero carousel.
     @ViewBuilder
     private func highlightsRail(excluding fixtureIDs: Set<String> = []) -> some View {
-        let highlights = highlightsLoad.result
+        let highlights = highlightsResult
         let picks = highlights.highlights.filter { !fixtureIDs.contains($0.fixture.id) }
         if !picks.isEmpty || !highlights.payPerView.isEmpty {
             SportsHighlightsRail(
@@ -184,7 +188,7 @@ struct SportsHubView: View {
     }
 
     private func loadHighlights() async {
-        let request = highlightsLoad.begin()
+        let request = highlightsLoad.begin(visibilityToken: restriction.visibilityToken)
         let followedTeams = Set(follows.follows.filter { $0.kind == .team }.map(\.key))
         let result = await SportsHighlightsPipeline.run(
             container: modelContext.container, restriction: restriction, followedTeamIds: followedTeams,
@@ -197,7 +201,7 @@ struct SportsHubView: View {
 
     private var heroAvailableIDs: Set<String> {
         Set(
-            (resolved.merging(highlightsLoad.result.resolved) { current, cached in current.isEmpty ? cached : current })
+            (resolved.merging(highlightsResult.resolved) { current, cached in current.isEmpty ? cached : current })
                 .filter { !$0.value.isEmpty }
                 .map(\.key)
         )
@@ -205,7 +209,7 @@ struct SportsHubView: View {
 
     private func followedContent(_ fixtures: [SportsFixture]) -> some View {
         let candidates = grouping.heroCandidates(
-            in: fixtures, highlights: highlightsLoad.result.highlights.map(\.fixture), availableIDs: heroAvailableIDs
+            in: fixtures, highlights: highlightsResult.highlights.map(\.fixture), availableIDs: heroAvailableIDs
         )
         let hero = heroSelection.displayed(in: candidates, context: heroSelectionContext)?.fixture
         let carouselCandidates = Array(heroSelection.carouselCandidates(in: candidates, context: heroSelectionContext).prefix(5))
@@ -251,7 +255,7 @@ struct SportsHubView: View {
 
     private func heroAvailability(_ fixture: SportsFixture) -> SportsChannelAvailability {
         SportsChannelAvailability(
-            resolved[fixture.id] ?? highlightsLoad.result.resolved[fixture.id],
+            resolved[fixture.id] ?? highlightsResult.resolved[fixture.id],
             startDate: fixture.headlineDate,
             preference: .current
         )
@@ -335,7 +339,7 @@ struct SportsHubView: View {
     }
 
     private func resolveKey(_ fixtures: [SportsFixture]) -> String {
-        SportsFixtureResolutionMachine.requestKey(for: fixtures, refreshingOn: [epg.isSyncing])
+        SportsFixtureResolutionMachine.requestKey(for: fixtures, visibilityToken: restriction.visibilityToken, refreshingOn: [epg.isSyncing])
     }
 
     private var heroSelectionContext: String {

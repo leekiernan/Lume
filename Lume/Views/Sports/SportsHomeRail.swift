@@ -54,7 +54,7 @@ struct SportsHomeRail: View {
 
         @State private var resolution = SportsFixtureResolutionMachine()
         private var resolved: [String: [ResolvedChannel]] {
-            resolution.resolved
+            resolution.resolved(for: restriction.visibilityToken)
         }
 
         @State private var selectedFixture: SportsFixture?
@@ -268,7 +268,7 @@ struct SportsHomeRail: View {
         /// while the hub, which never waited, showed them.
         private func resolveKey(_ fixtures: [SportsFixture]) -> String {
             guard premium.isPremium else { return "idle" }
-            return SportsFixtureResolutionMachine.requestKey(for: fixtures, refreshingOn: [epg.isSyncing, isSyncBusy])
+            return SportsFixtureResolutionMachine.requestKey(for: fixtures, visibilityToken: restriction.visibilityToken, refreshingOn: [epg.isSyncing, isSyncBusy])
         }
 
         private func runResolve(_ fixtures: [SportsFixture]) async {

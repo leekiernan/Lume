@@ -14,7 +14,7 @@
 
     extension TVSportsHubScreen {
         func loadHighlights() async {
-            let request = highlightsLoad.begin()
+            let request = highlightsLoad.begin(visibilityToken: restriction.visibilityToken)
             let followedTeams = Set(follows.follows.filter { $0.kind == .team }.map(\.key))
             let result = await SportsHighlightsPipeline.run(
                 container: modelContext.container, restriction: restriction, followedTeamIds: followedTeams,
@@ -27,7 +27,7 @@
 
         func highlightAvailability(_ fixture: SportsFixture) -> SportsChannelAvailability {
             SportsChannelAvailability(
-                highlightsLoad.result.resolved[fixture.id], startDate: fixture.headlineDate, preference: .current
+                highlightsResult.resolved[fixture.id], startDate: fixture.headlineDate, preference: .current
             )
         }
 
@@ -42,10 +42,10 @@
                         onOpen: { selectedFixture = first.fixture }
                     )
                     .padding(.top, TVSportsMetrics.contentTop)
-                    if highlightsLoad.result.highlights.count > 1 || !highlightsLoad.result.payPerView.isEmpty {
+                    if highlightsResult.highlights.count > 1 || !highlightsResult.payPerView.isEmpty {
                         TVSportsHighlightsSection(
-                            highlights: Array(highlightsLoad.result.highlights.dropFirst()),
-                            payPerView: highlightsLoad.result.payPerView,
+                            highlights: Array(highlightsResult.highlights.dropFirst()),
+                            payPerView: highlightsResult.payPerView,
                             availability: highlightAvailability,
                             onSelect: { selectedFixture = $0 },
                             onWatchEvent: watchEvent

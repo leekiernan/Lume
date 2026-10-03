@@ -48,7 +48,7 @@
         @State var browseReturnFocus: TVSportsFocus?
         @State var resolution = SportsFixtureResolutionMachine()
         var resolved: [String: [ResolvedChannel]] {
-            resolution.resolved
+            resolution.resolved(for: restriction.visibilityToken)
         }
 
         @State private var heroSelection = SportsHeroSelectionMachine()
@@ -67,6 +67,9 @@
         @State var seasonLoad = SportsTeamSeasonLoadMachine()
         /// "Big this week", and the channels its near-term games resolved to.
         @State var highlightsLoad = SportsHighlightsLoadMachine()
+        var highlightsResult: SportsHighlightsLoadMachine.Result {
+            highlightsLoad.result(for: restriction.visibilityToken)
+        }
 
         /// The headline carousel, and where the page sits against its fold.
         @State private var heroModel = TVSportsHeroModel()
@@ -121,7 +124,7 @@
         private var hub: some View {
             Group {
                 if follows.follows.isEmpty {
-                    if let first = highlightsLoad.result.highlights.first {
+                    if let first = highlightsResult.highlights.first {
                         highlightsHub(first)
                     } else {
                         onboardingState
@@ -133,7 +136,7 @@
                         .overlay(alignment: .leading) { browseSidebar }
                 }
             }
-            .task(id: follows.follows.map(\.key)) {
+            .task(id: [restriction.visibilityToken] + follows.follows.map(\.key)) {
                 if pageKey == nil { await loadHighlights() }
             }
         }
@@ -147,18 +150,18 @@
             let fixtures = grouping.visibleFixtures
             let preference = SportsChannelPreference.Context.current
             let availableIDs = Set(
-                (resolved.merging(highlightsLoad.result.resolved) { current, cached in current.isEmpty ? cached : current })
+                (resolved.merging(highlightsResult.resolved) { current, cached in current.isEmpty ? cached : current })
                     .filter { !$0.value.isEmpty }
                     .map(\.key)
             )
             let candidates = grouping.heroCandidates(
-                in: fixtures, highlights: highlightsLoad.result.highlights.map(\.fixture), availableIDs: availableIDs
+                in: fixtures, highlights: highlightsResult.highlights.map(\.fixture), availableIDs: availableIDs
             )
             let carousel = Array(heroSelection.carouselCandidates(in: candidates, context: heroSelectionContext).prefix(Self.carouselLimit))
             let carouselIDs = Set(carousel.map(\.id))
             let hero = heroModel.displayedHero?.fixture
             // Big this week leaves out whatever the carousel already shows.
-            let highlights = highlightsLoad.result.highlights.filter { !carouselIDs.contains($0.fixture.id) }
+            let highlights = highlightsResult.highlights.filter { !carouselIDs.contains($0.fixture.id) }
             // The carousel's games lead the page on their own, not again in a rail.
             let groups = grouping.groups(for: fixtures.filter { !carouselIDs.contains($0.id) })
             let heroAvailability = hero.map { availability(of: $0, preference: preference) }
@@ -192,10 +195,10 @@
                                     section(for: group, preference: preference)
                                 }
                             }
-                            if scope == .all, !highlights.isEmpty || !highlightsLoad.result.payPerView.isEmpty {
+                            if scope == .all, !highlights.isEmpty || !highlightsResult.payPerView.isEmpty {
                                 TVSportsHighlightsSection(
                                     highlights: highlights,
-                                    payPerView: highlightsLoad.result.payPerView,
+                                    payPerView: highlightsResult.payPerView,
                                     availability: highlightAvailability,
                                     onSelect: { selectedFixture = $0 },
                                     onWatchEvent: watchEvent,
@@ -243,7 +246,7 @@
 
         private func availability(of fixture: SportsFixture, preference: SportsChannelPreference.Context) -> SportsChannelAvailability {
             SportsChannelAvailability(
-                resolved[fixture.id] ?? highlightsLoad.result.resolved[fixture.id], startDate: fixture.headlineDate, preference: preference
+                resolved[fixture.id] ?? highlightsResult.resolved[fixture.id], startDate: fixture.headlineDate, preference: preference
             )
         }
 
@@ -395,7 +398,7 @@
         }
 
         func resolveKey(_ fixtures: [SportsFixture]) -> String {
-            SportsFixtureResolutionMachine.requestKey(for: fixtures, refreshingOn: [epg.isSyncing])
+            SportsFixtureResolutionMachine.requestKey(for: fixtures, visibilityToken: restriction.visibilityToken, refreshingOn: [epg.isSyncing])
         }
 
         func runResolve(_ fixtures: [SportsFixture]) async {

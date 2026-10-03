@@ -21,7 +21,7 @@ enum SportsFixtureResolution {
         restriction: ContentRestriction,
         soonestFirst: Bool = true
     ) async {
-        guard let request = machine.wrappedValue.begin(fixtures) else { return }
+        guard let request = machine.wrappedValue.begin(fixtures, visibilityToken: restriction.visibilityToken) else { return }
         if soonestFirst {
             await SportsChannelResolver.resolveSoonestFirst(
                 container: container,
@@ -31,6 +31,7 @@ enum SportsFixtureResolution {
             )
         } else {
             let answer = await SportsChannelResolver.resolve(container: container, fixtures: fixtures, restriction: restriction)
+            guard !Task.isCancelled else { return }
             machine.wrappedValue.publish(request, answer)
         }
     }

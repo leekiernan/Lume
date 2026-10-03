@@ -22,6 +22,13 @@ nonisolated struct SportsHighlightsLoadMachine: Equatable {
 
     private var generation: UInt = 0
     private var state: State = .idle
+    private var visibilityToken: String?
+
+    /// A previous visibility scope must not supply channels or PPV actions
+    /// while the replacement task is waiting to start.
+    func result(for visibilityToken: String) -> Result {
+        self.visibilityToken == visibilityToken ? result : Result(highlights: [], resolved: [:])
+    }
 
     var result: Result {
         switch state {
@@ -41,10 +48,12 @@ nonisolated struct SportsHighlightsLoadMachine: Equatable {
 
     /// Starts a new request. A fresh generation intentionally replaces an older
     /// in-flight request: a profile/follow change must not wait for stale work.
-    mutating func begin() -> Request {
+    mutating func begin(visibilityToken: String = "") -> Request {
         generation &+= 1
         let request = Request(generation: generation)
-        state = .loading(request, result)
+        let previous = self.visibilityToken == visibilityToken ? result : nil
+        self.visibilityToken = visibilityToken
+        state = .loading(request, previous)
         return request
     }
 

@@ -20,20 +20,31 @@ nonisolated struct SportsFixtureResolutionMachine: Equatable {
 
     private var generation: UInt = 0
     private var active: Request?
+    private var visibilityToken: String?
     /// Fixture id → the channels carrying it, as last published.
     private(set) var resolved: [String: [ResolvedChannel]] = [:]
 
     /// The `.task(id:)` identity for resolving `fixtures`: the set shown, and
     /// whatever else should prompt a fresh pass — a guide sync starting or
     /// ending, a catalog sync settling.
-    static func requestKey(for fixtures: [SportsFixture], refreshingOn signals: [Bool] = []) -> String {
-        ([fixtures.map(\.id).joined(separator: ",")] + signals.map { String($0) }).joined(separator: "|")
+    static func requestKey(for fixtures: [SportsFixture], visibilityToken: String, refreshingOn signals: [Bool] = []) -> String {
+        ([visibilityToken, fixtures.map(\.id).joined(separator: ",")] + signals.map { String($0) }).joined(separator: "|")
+    }
+
+    /// Hides the previous viewer's answers immediately, even before SwiftUI
+    /// starts the task for the new visibility scope.
+    func resolved(for visibilityToken: String) -> [String: [ResolvedChannel]] {
+        self.visibilityToken == visibilityToken ? resolved : [:]
     }
 
     /// Starts a request for `fixtures`, superseding any in flight. With none
     /// to show, clears the answer and returns `nil`: there is nothing to run.
-    mutating func begin(_ fixtures: [SportsFixture]) -> Request? {
+    mutating func begin(_ fixtures: [SportsFixture], visibilityToken: String = "") -> Request? {
         generation &+= 1
+        if self.visibilityToken != visibilityToken {
+            resolved = [:]
+        }
+        self.visibilityToken = visibilityToken
         guard !fixtures.isEmpty else {
             active = nil
             resolved = [:]

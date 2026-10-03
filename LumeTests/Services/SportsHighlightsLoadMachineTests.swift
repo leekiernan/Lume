@@ -7,6 +7,22 @@
 import Testing
 
 struct SportsHighlightsLoadMachineTests {
+    @Test func `a changed visibility scope hides old channels and rejects late results`() {
+        var machine = SportsHighlightsLoadMachine()
+        let old = machine.begin(visibilityToken: "parent")
+        let result = SportsHighlightsPipeline.Result(highlights: [], resolved: ["fixture": []])
+        machine.finish(old, result: result)
+        #expect(machine.result(for: "parent") == result)
+        #expect(machine.result(for: "child").resolved.isEmpty)
+        let current = machine.begin(visibilityToken: "child")
+        #expect(machine.result.resolved.isEmpty)
+        let late = machine.finish(old, result: result)
+        #expect(!late)
+        machine.finish(current, result: result)
+        #expect(machine.result(for: "child") == result)
+        #expect(machine.result(for: "parent").resolved.isEmpty)
+    }
+
     @Test func `keeps the previous rail visible while refreshing`() {
         var machine = SportsHighlightsLoadMachine()
         let first = machine.begin()
