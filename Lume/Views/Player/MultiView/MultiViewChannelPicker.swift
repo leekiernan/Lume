@@ -28,7 +28,7 @@ struct MultiViewChannelPicker: View {
     @Query(filter: #Predicate<Category> { $0.typeRaw == "live" && $0.isHidden == false })
     private var categories: [Category]
 
-    @AppStorage(SortStorageKey.liveCategories) private var categorySortRaw: String = CategorySortOption.playlist.rawValue
+    private let categorySortRaw: String = CategorySortOption.playlist.rawValue
 
     @State private var playlistID: UUID?
     @State private var search = ""
@@ -239,7 +239,7 @@ private struct MultiViewPickerCategoryChannels: View {
 
     @Environment(\.modelContext) private var modelContext
     @Environment(\.contentRestriction) private var restriction
-    @AppStorage(SortStorageKey.liveContent) private var contentSortRaw: String = ContentSortOption.playlist.rawValue
+    private let contentSortRaw: String = ContentSortOption.playlist.rawValue
 
     @State private var channels: [LiveStream] = []
 

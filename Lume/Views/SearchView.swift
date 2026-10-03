@@ -210,7 +210,6 @@ struct SearchView: View {
                 animationNamespace: animationNamespace,
                 emptyTitle: "Search", emptyIcon: "magnifyingglass",
                 emptyDescription: "Search for movies, series, or live TV channels",
-                sortRaw: .constant(""), showsSortMenu: false,
                 card: { MovieCardView(movie: $0, fillsWidth: true) }
             )
         case .series:
@@ -220,7 +219,6 @@ struct SearchView: View {
                 animationNamespace: animationNamespace,
                 emptyTitle: "Search", emptyIcon: "magnifyingglass",
                 emptyDescription: "Search for movies, series, or live TV channels",
-                sortRaw: .constant(""), showsSortMenu: false,
                 card: { SeriesCardView(series: $0, fillsWidth: true) }
             )
         case .nowPlaying, .upcoming:

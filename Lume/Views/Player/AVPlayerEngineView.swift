@@ -92,8 +92,7 @@ struct AVPlayerEngineView: View {
         @FocusState private var catcherFocused: Bool
         /// Live-content sort the channel browser uses — so in-player channel
         /// surfing follows the same order the viewer saw in the list.
-        @AppStorage(SortStorageKey.liveContent)
-        private var liveContentSortRaw: String = ContentSortOption.playlist.rawValue
+        private let liveContentSortRaw: String = ContentSortOption.playlist.rawValue
         @Environment(\.modelContext) private var modelContext
         /// Keeps channel surfing inside what this viewer may watch — a child
         /// profile must not be able to rock up/down, or recall the last channel,

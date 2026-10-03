@@ -156,8 +156,7 @@ struct FullScreenPlayerView: View {
 
     /// The sort the viewer's channel list was in, and what they may watch. Read
     /// in the host, not in each engine view: neighbours resolve once per stream.
-    @AppStorage(SortStorageKey.liveContent)
-    private var liveContentSortRaw: String = ContentSortOption.playlist.rawValue
+    private let liveContentSortRaw: String = ContentSortOption.playlist.rawValue
     @Environment(\.contentRestriction) private var contentRestriction
 
     init(media: PlayableMedia) {

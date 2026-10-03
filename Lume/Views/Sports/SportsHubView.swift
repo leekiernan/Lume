@@ -58,8 +58,6 @@ struct SportsHubView: View {
     // The library toolbar every area carries: playlist, sort, sync, settings.
     @Query private var playlists: [Playlist]
     @AppStorage(PlaylistSelectionStore.key) private var selectedPlaylistID: String = ""
-    @AppStorage(SortStorageKey.sportsCategories) private var categorySortRaw: String = CategorySortOption.playlist.rawValue
-    @AppStorage(SortStorageKey.sportsContent) private var contentSortRaw: String = ContentSortOption.playlist.rawValue
     @State private var showingSync = false
     @State private var showingSettings = false
     @State private var localPath = NavigationPath()
@@ -85,8 +83,6 @@ struct SportsHubView: View {
                     .libraryToolbar(config: LibraryToolbarConfiguration(
                         playlists: playlists,
                         selectedPlaylistID: $selectedPlaylistID,
-                        categorySortRaw: $categorySortRaw,
-                        contentSortRaw: $contentSortRaw,
                         showingSync: $showingSync,
                         showingSettings: $showingSettings,
                         activePlaylist: playlists.active(for: selectedPlaylistID)

@@ -17,7 +17,7 @@ struct SeriesCategoryView: View {
     var animationNamespace: Namespace.ID?
     @Environment(\.modelContext) private var modelContext
 
-    @AppStorage(SortStorageKey.seriesContent) private var contentSortRaw: String = ContentSortOption.playlist.rawValue
+    private let contentSortRaw: String = ContentSortOption.playlist.rawValue
 
     @State private var series: [Series] = []
     @State private var pagination = PaginationMachine()
@@ -65,7 +65,6 @@ struct SeriesCategoryView: View {
             emptyTitle: "No Series",
             emptyIcon: "tv.fill",
             emptyDescription: "This category has no series",
-            sortRaw: $contentSortRaw,
             onLoadMore: { loadNextPage() },
             card: { SeriesCardView(series: $0, fillsWidth: true) }
         )
