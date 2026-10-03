@@ -28,11 +28,11 @@ struct SportsTodayWindowTests {
         calendar.date(from: DateComponents(year: 2026, month: 10, day: day, hour: hour)) ?? Date()
     }
 
-    /// The rail's rule: live, or on at some point today.
+    /// Calls the production rail rule rather than duplicating it in this test.
     private func isToday(_ fixture: SportsFixture) -> Bool {
         let start = calendar.startOfDay(for: now)
         let end = calendar.date(byAdding: .day, value: 1, to: start) ?? start
-        return fixture.isInProgress || fixture.isOn(during: start ..< end)
+        return SportsRailPlanner.isInWindow(fixture, start: start, end: end)
     }
 
     private func fixture(sport: String, start: Date, state: SportsFixtureState) -> SportsFixture {

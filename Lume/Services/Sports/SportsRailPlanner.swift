@@ -96,7 +96,10 @@ enum SportsRailPlanner {
         return false
     }
 
-    private static func isInWindow(_ fixture: SportsFixture, start: Date, end: Date) -> Bool {
+    /// Whether a fixture belongs in a rail date window. Kept here, rather than
+    /// repeated by callers, because an event crossing midnight is still part of
+    /// the following day's rail.
+    static func isInWindow(_ fixture: SportsFixture, start: Date, end: Date) -> Bool {
         // Live, or on at some point in the window — a card that started last
         // night and ran past midnight still counts for today.
         fixture.isInProgress || fixture.isOn(during: start ..< end)
