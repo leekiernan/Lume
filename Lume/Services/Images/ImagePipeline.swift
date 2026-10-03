@@ -24,6 +24,7 @@
 //
 
 import Foundation
+import OSLog
 import SwiftUI
 
 actor ImagePipeline {
@@ -57,6 +58,8 @@ actor ImagePipeline {
     /// again. Without it a dead poster URL is re-fetched on every scroll pass, and
     /// for the retryable statuses pays ~2.8 s of backoff before failing again.
     private var retryAfter: [String: Date] = [:]
+    /// Four source-policy outcomes at most; never log once per missing poster.
+    private var reportedPosterSourceIssues: Set<String> = []
 
     private let maxRetries = 3
 
@@ -154,6 +157,12 @@ actor ImagePipeline {
     /// otherwise posters that failed a minute earlier stay blank right after it.
     func forgetFailures() {
         retryAfter.removeAll()
+        reportedPosterSourceIssues.removeAll()
+    }
+
+    func notePosterSourceIssue(_ diagnostic: String) {
+        guard reportedPosterSourceIssues.insert(diagnostic).inserted else { return }
+        Logger.network.notice("Poster artwork: \(diagnostic, privacy: .public)")
     }
 
     // MARK: - In-flight table
@@ -236,6 +245,22 @@ actor ImagePipeline {
     /// short window so an offline moment doesn't blank the catalog for minutes.
     private func noteFailure(_ error: Error, for url: URL) {
         guard !Self.isCancellation(error) else { return }
+        // Report once per URL's freeze-out, not once per cell or decoded size.
+        // Hash the full URL: provider image URLs can contain account credentials.
+        if (retryAfter[url.absoluteString] ?? .distantPast) <= .now {
+            let reason = if let error = error as? ImagePipelineError {
+                switch error {
+                case .decodingFailed: "decoding failed"
+                case let .httpStatus(code): "HTTP \(code)"
+                case .recentlyFailed: "recently failed"
+                }
+            } else if let error = error as? URLError {
+                "URL error \(error.code.rawValue)"
+            } else {
+                "load failed"
+            }
+            Logger.network.notice("Image load failed: \(reason, privacy: .public), URL \(url.absoluteString, privacy: .private(mask: .hash))")
+        }
         let delay = Self.isTransientFailure(error) ? transientRetryDelay : deadURLRetryDelay
         retryAfter[url.absoluteString] = Date.now.addingTimeInterval(delay)
         pruneFailuresIfNeeded()
