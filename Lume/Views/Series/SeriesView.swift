@@ -91,7 +91,6 @@ struct SeriesView: View {
                     sections
                 }
             }
-            .platformNavigationTitle("Series")
             .profileMenuToolbar()
             .libraryToolbar(config: LibraryToolbarConfiguration(
                 playlists: playlists,
@@ -103,16 +102,6 @@ struct SeriesView: View {
                 activePlaylist: activePlaylist
             ))
             .browseSidebarToolbar(isPresented: $showingBrowse, isEnabled: !sortedCategories.isEmpty)
-            .overlay(alignment: .leading) {
-                LibraryBrowseSidebar(
-                    isPresented: $showingBrowse,
-                    categories: sortedCategories,
-                    genres: genres,
-                    type: .series,
-                    onSelectCategory: { open($0) },
-                    onSelectGenre: { open(genre: $0) }
-                )
-            }
             .navigationDestination(for: Category.self) { category in
                 SeriesCategoryView(category: category, animationNamespace: animationNamespace)
             }
@@ -135,6 +124,18 @@ struct SeriesView: View {
                     .navigationTransition(.zoom(sourceID: series.id, in: animationNamespace))
                 #endif
             }
+        }
+        // Above the stack, so the panel covers the navigation bar too — the
+        // bar draws over anything inside the stack.
+        .overlay(alignment: .leading) {
+            LibraryBrowseSidebar(
+                isPresented: $showingBrowse,
+                categories: sortedCategories,
+                genres: genres,
+                type: .series,
+                onSelectCategory: { open($0) },
+                onSelectGenre: { open(genre: $0) }
+            )
         }
     }
 

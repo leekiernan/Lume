@@ -31,12 +31,20 @@ struct FixtureCard: View {
     var onWatch: (ResolvedChannel) -> Void
     var onFollowToggle: (SportsTeam) -> Void
     var onPickChannel: () -> Void
+    /// Whether the viewer's channels carry it — the card's channel line.
+    var availability: SportsChannelAvailability = .unknown
 
     /// Two crest rows — the tallest thing a card's middle can hold — so an event
     /// card (a race, a fight night) with its two text lines stands as tall as a
     /// two-team card beside it in the Home rail.
     @ScaledMetric(relativeTo: .subheadline) private var contentMinHeight: CGFloat = 52
-    @AppStorage(SportsSyncService.hideScoresKey) private var hidesScores = false
+    @AppStorage(SportsSyncService.hideScoresKey) private var hideScoresSetting = false
+    @State private var reveal = SportsScoreReveal.shared
+
+    /// Hide Scores, unless this one game has been revealed.
+    private var hidesScores: Bool {
+        hideScoresSetting && !reveal.isRevealed(fixture.id)
+    }
 
     /// The lone confident channel a live card offers one-tap playback for.
     private var confidentChannel: ResolvedChannel? {
@@ -71,17 +79,22 @@ struct FixtureCard: View {
             statusColumn
                 .frame(width: 64)
 
-            if fixture.hasTeams {
-                teamRows
-            } else {
-                eventRow
+            VStack(alignment: .leading, spacing: 6) {
+                if fixture.hasTeams {
+                    teamRows
+                } else {
+                    eventRow
+                }
+                channelLine
             }
 
             Spacer(minLength: 0)
 
             trailing
         }
-        .frame(maxWidth: .infinity, minHeight: contentMinHeight)
+        // Fills the height a row offers, so cards side by side in a rail match;
+        // in a list it takes its natural height.
+        .frame(maxWidth: .infinity, minHeight: contentMinHeight, maxHeight: .infinity)
         .padding(.vertical, 12)
         .padding(.horizontal, 14)
         .background(gradient, in: RoundedRectangle(cornerRadius: 16))
@@ -325,10 +338,28 @@ struct FixtureCard: View {
         fixture.setsLine ?? String(localized: "\(fixture.home?.displayScore ?? "0") to \(fixture.away?.displayScore ?? "0")")
     }
 
+    /// "On 3 of your channels" — for games not yet over.
+    @ViewBuilder
+    private var channelLine: some View {
+        if fixture.status.state != .final, let label = availability.label {
+            Label(label, systemImage: "tv")
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(availability.isAvailable ? Color.lumeAccent : .secondary)
+                .lineLimit(1)
+        }
+    }
+
     // MARK: - Context menu
 
     @ViewBuilder
     private var menu: some View {
+        if hidesScores, fixture.status.state == .final, fixture.hasTeams {
+            Button {
+                reveal.reveal(fixture.id)
+            } label: {
+                Label("Reveal score", systemImage: "eye")
+            }
+        }
         if let confidentChannel {
             Button {
                 onWatch(confidentChannel)

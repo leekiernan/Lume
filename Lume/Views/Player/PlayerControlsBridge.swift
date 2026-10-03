@@ -13,6 +13,9 @@
 //    rather than the engine's invisible tap-catcher, and a direction pressed
 //    on it raises the controls just as the catcher would
 //    (`episodeButtonFocusHandoff`).
+//  - tvOS remote claims: overlays the host layers above the engine (a sports
+//    alert, the way back from a detour) take a Play/Pause press, or the Back
+//    press that would close the player, before the engine acts on it.
 //
 
 import SwiftUI
@@ -30,9 +33,23 @@ final class PlayerControlsBridge {
     /// Bumped when an episode button holding focus over a bare picture hears a
     /// direction: the viewer wants the controls, as they would from the catcher.
     private(set) var controlsRequests = 0
+    /// Whether the engine's controls are on screen, as the engine reports it.
+    var controlsVisible = false
+    /// Asked before an engine toggles play/pause; `true` takes the press.
+    @ObservationIgnored var playPauseClaim: (() -> Bool)?
+    /// Asked before Back would close the player; `true` takes the press.
+    @ObservationIgnored var backClaim: (() -> Bool)?
 
     func requestControls() {
         controlsRequests += 1
+    }
+
+    func claimsPlayPause() -> Bool {
+        playPauseClaim?() ?? false
+    }
+
+    func claimsBack() -> Bool {
+        backClaim?() ?? false
     }
 }
 

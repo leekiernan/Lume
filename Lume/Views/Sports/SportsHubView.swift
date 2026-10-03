@@ -9,37 +9,13 @@
 //  Data comes from `SportsStore` (cached snapshots), the followed set from
 //  `SportsFollowService`, and channel resolution from `SportsChannelResolver` —
 //  run once per visible fixture set off the main thread, never per card. The
-//  scope Menu switches between "My Teams" and a single followed league; the
-//  segmented control walks Yesterday / Today / Upcoming.
+//  page is what's live and coming, a row per follow in the viewer's order
+//  (`SportsHubGrouping`); the browse panel narrows it to one follow, and a
+//  team's page adds its club season.
 //
 
 import SwiftData
 import SwiftUI
-
-/// What the hub is scoped to: every followed league/team, or one league.
-enum SportsHubScope: Hashable {
-    case myTeams
-    case league(String)
-}
-
-/// The time window the segmented control selects.
-enum SportsHubSegment: String, CaseIterable, Identifiable {
-    case yesterday
-    case today
-    case upcoming
-
-    var id: String {
-        rawValue
-    }
-
-    var title: LocalizedStringKey {
-        switch self {
-        case .yesterday: "Yesterday"
-        case .today: "Today"
-        case .upcoming: "Upcoming"
-        }
-    }
-}
 
 struct SportsHubView: View {
     @Environment(\.modelContext) private var modelContext
@@ -54,123 +30,273 @@ struct SportsHubView: View {
     @State private var follows = SportsFollowService.shared
     @State private var epg = EPGSyncService.shared
 
-    @State private var scope: SportsHubScope = .myTeams
-    @State private var segment: SportsHubSegment = .today
-    @State private var resolved: [String: [ResolvedChannel]] = [:]
+    @State private var scope: SportsHubScope
+    /// Set on a team's own page, pushed from the hub; `nil` on the hub.
+    private let pageKey: String?
+    /// Follows taken off the hub in Settings ▸ Sports.
+    @AppStorage(SportsHubLayout.hiddenKey) private var hiddenFollowsRaw = ""
+    @State private var resolution = SportsFixtureResolutionMachine()
+    private var resolved: [String: [ResolvedChannel]] {
+        resolution.resolved(for: restriction.visibilityToken)
+    }
+
+    @State private var heroSelection = SportsHeroSelectionMachine()
+    @State private var highlightsLoad = SportsHighlightsLoadMachine()
+    private var highlightsResult: SportsHighlightsLoadMachine.Result {
+        highlightsLoad.result(for: restriction.visibilityToken)
+    }
+
     @State private var selectedFixture: SportsFixture?
     @State private var pickerFixture: SportsFixture?
     @State private var showManageTeams = false
+    @State private var showingBrowse = false
     @State private var showPaywall = false
+    @State private var pendingEvent: SportsPayPerView.Event?
+    /// A team page's season: drawn below its games, and the source of the
+    /// games it has beyond the followed competition.
+    @State private var seasonLoad = SportsTeamSeasonLoadMachine()
+    // The library toolbar every area carries: playlist, sort, sync, settings.
+    @Query private var playlists: [Playlist]
+    @AppStorage(PlaylistSelectionStore.key) private var selectedPlaylistID: String = ""
+    @AppStorage(SortStorageKey.sportsCategories) private var categorySortRaw: String = CategorySortOption.playlist.rawValue
+    @AppStorage(SortStorageKey.sportsContent) private var contentSortRaw: String = ContentSortOption.playlist.rawValue
+    @State private var showingSync = false
+    @State private var showingSettings = false
     @State private var localPath = NavigationPath()
-    #if os(iOS) || os(visionOS)
-        @State private var playingMedia: PlayableMedia?
-        /// Playback queued behind a dismissing sheet; see `present(_:afterSheet:)`.
-        @State private var pendingMedia: PlayableMedia?
-    #endif
+    /// The player, and media waiting for a closing sheet. Unused on macOS,
+    /// where playback opens a window.
+    @State private var playback = SportsPlaybackPresentation()
 
-    var body: some View {
-        let fixtures = premium.isPremium ? visibleFixtures : []
-        NavigationStack(path: pathBinding) {
-            Group {
-                if premium.isPremium {
-                    hubContent(fixtures)
-                } else {
-                    lockedState
-                }
-            }
-            .platformNavigationTitle("Sports")
-            .hubInlineNavigationTitle()
-            .navigationDestination(for: SportsLeague.self) { league in
-                LeagueDetailView(league: league)
-            }
-            .toolbar { if premium.isPremium { hubToolbar } }
-            .sheet(isPresented: $showManageTeams) { ManageTeamsSheet() }
-            .sheet(item: $selectedFixture, onDismiss: presentPendingMedia) { fixture in
-                GameDetailSheet(fixture: fixture, resolved: resolved[fixture.id] ?? [], onWatch: watch)
-            }
-            .sheet(item: $pickerFixture, onDismiss: presentPendingMedia) { fixture in
-                ChannelPickerSheet(fixture: fixture, resolved: resolved[fixture.id] ?? [], onWatch: watch)
-            }
-            .paywall(isPresented: $showPaywall, highlight: .sportsHub)
-            #if os(iOS) || os(visionOS)
-                .fullScreenCover(item: $playingMedia) { media in
-                    FullScreenPlayerView(media: media)
-                }
-            #endif
-        }
-        .profileMenuToolbar()
-        .onAppear(perform: onAppear)
-        .onDisappear { SportsSyncService.shared.endLivePolling() }
+    init(pageKey: String? = nil) {
+        self.pageKey = pageKey
+        _scope = State(initialValue: pageKey.map { .follow($0) } ?? .all)
     }
 
-    // MARK: - Toolbar
-
-    @ToolbarContentBuilder
-    private var hubToolbar: some ToolbarContent {
-        ToolbarItem(placement: .principal) {
-            Menu {
-                Picker("Scope", selection: $scope) {
-                    Label("My Teams", systemImage: "star.fill").tag(SportsHubScope.myTeams)
-                    ForEach(followedLeagues) { league in
-                        Text(league.name).tag(SportsHubScope.league(league.id))
+    /// The hub owns the stack its follows' pages push onto, as Movies'
+    /// landing page does for its categories; a page is the same screen, fixed
+    /// to one follow.
+    var body: some View {
+        if pageKey == nil {
+            NavigationStack(path: pathBinding) {
+                screen
+                    // The same title and toolbar as Movies, Series and Live TV,
+                    // in the same order — item order in the bar follows it.
+                    .profileMenuToolbar()
+                    .libraryToolbar(config: LibraryToolbarConfiguration(
+                        playlists: playlists,
+                        selectedPlaylistID: $selectedPlaylistID,
+                        categorySortRaw: $categorySortRaw,
+                        contentSortRaw: $contentSortRaw,
+                        showingSync: $showingSync,
+                        showingSettings: $showingSettings,
+                        activePlaylist: playlists.active(for: selectedPlaylistID)
+                    ))
+                    .browseSidebarToolbar(isPresented: $showingBrowse, isEnabled: premium.isPremium)
+                    .navigationDestination(for: SportsFollowRoute.self) { route in
+                        SportsHubView(pageKey: route.key)
                     }
-                }
-            } label: {
-                HStack(spacing: 4) {
-                    Text(scopeTitle).font(.headline)
-                    Image(systemName: "chevron.down").font(.caption2.weight(.bold))
+            }
+            // Above the stack, so the panel covers the navigation bar too — the
+            // bar draws over anything inside the stack.
+            .overlay(alignment: .leading) {
+                if premium.isPremium {
+                    SportsBrowseSidebar(
+                        isPresented: $showingBrowse,
+                        entries: grouping.sidebarEntries,
+                        onSelect: { key in
+                            showingBrowse = false
+                            open(follow: key)
+                        },
+                        onManageTeams: {
+                            showingBrowse = false
+                            showManageTeams = true
+                        }
+                    )
                 }
             }
+        } else {
+            screen
         }
-        ToolbarItem(placement: .primaryAction) {
-            Button {
-                showManageTeams = true
-            } label: {
-                Label("Manage Teams", systemImage: "person.2.badge.plus")
+    }
+
+    private var screen: some View {
+        let fixtures = premium.isPremium ? visibleFixtures : []
+        return Group {
+            if premium.isPremium {
+                hubContent(fixtures)
+            } else {
+                lockedState
             }
         }
+        .sheet(isPresented: $showManageTeams) { ManageTeamsSheet() }
+        .sheet(item: $selectedFixture, onDismiss: presentPendingMedia) { fixture in
+            GameDetailSheet(fixture: fixture, resolved: resolved[fixture.id] ?? [], onWatch: watch)
+        }
+        .sheet(item: $pickerFixture, onDismiss: presentPendingMedia) { fixture in
+            ChannelPickerSheet(fixture: fixture, resolved: resolved[fixture.id] ?? [], onWatch: watch)
+        }
+        .paywall(isPresented: $showPaywall, highlight: .sportsHub)
+        .payPerViewConfirmation($pendingEvent, onWatch: playEvent)
+        #if os(iOS) || os(visionOS)
+            .fullScreenCover(item: $playback.playing) { media in
+                FullScreenPlayerView(media: media)
+            }
+        #endif
+            .onAppear(perform: onAppear)
+            .onDisappear { SportsSyncService.shared.endLivePolling() }
     }
 
     // MARK: - Content
 
-    @ViewBuilder
     private func hubContent(_ fixtures: [SportsFixture]) -> some View {
-        if follows.follows.isEmpty {
-            SportsOnboardingCard { showManageTeams = true }
-        } else {
-            VStack(spacing: 0) {
-                Picker("Range", selection: $segment) {
-                    ForEach(SportsHubSegment.allCases) { segment in
-                        Text(segment.title).tag(segment)
-                    }
-                }
-                .hubSegmentedPickerStyle()
-                .padding(.horizontal)
-                .padding(.bottom, 8)
-
+        Group {
+            if follows.follows.isEmpty {
                 ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 20) {
-                        if epg.isSyncing {
-                            hint("Updating guide…", icon: "arrow.triangle.2.circlepath")
-                        }
-                        if store.refreshError {
-                            hint("Scores unavailable — showing your saved data.", icon: "wifi.slash")
-                        }
-                        SportsSectionsView(
-                            groups: grouping.groups(for: fixtures),
-                            resolved: resolved,
-                            isFollowed: isFollowed,
-                            onOpenDetail: { selectedFixture = $0 },
-                            onWatch: watch,
-                            onFollowToggle: toggleFollow,
-                            onPickChannel: { pickerFixture = $0 },
-                            onSelectLeague: { scope = .league($0) }
-                        )
+                    VStack(alignment: .leading, spacing: 24) {
+                        SportsOnboardingCard { showManageTeams = true }
+                        highlightsRail()
                     }
                     .padding()
                 }
+            } else if pageKey != nil {
+                followPage(grouping.pageFixtures(season: grouping.scopedTeam.flatMap { seasonLoad.season(for: $0.id) }))
+            } else {
+                followedContent(fixtures)
             }
-            .task(id: resolveKey(fixtures)) { await runResolve(fixtures) }
+        }
+        .task(id: [restriction.visibilityToken] + follows.follows.map(\.key)) {
+            if pageKey == nil { await loadHighlights() }
+        }
+    }
+
+    /// Big this week, less the fixtures already offered by the hero carousel.
+    @ViewBuilder
+    private func highlightsRail(excluding fixtureIDs: Set<String> = []) -> some View {
+        let highlights = highlightsResult
+        let picks = highlights.highlights.filter { !fixtureIDs.contains($0.fixture.id) }
+        if !picks.isEmpty || !highlights.payPerView.isEmpty {
+            SportsHighlightsRail(
+                highlights: picks,
+                payPerView: highlights.payPerView,
+                availability: { fixture in
+                    SportsChannelAvailability(highlights.resolved[fixture.id], startDate: fixture.headlineDate, preference: .current)
+                },
+                onOpen: { selectedFixture = $0 },
+                onWatchEvent: watchEvent
+            )
+        }
+    }
+
+    private func loadHighlights() async {
+        let request = highlightsLoad.begin(visibilityToken: restriction.visibilityToken)
+        let followedTeams = Set(follows.follows.filter { $0.kind == .team }.map(\.key))
+        let result = await SportsHighlightsPipeline.run(
+            container: modelContext.container, restriction: restriction, followedTeamIds: followedTeams,
+            overrides: SportsFlagshipOverrides.shared.marks
+        )
+        // A superseded request's result is ignored by the machine, so one that
+        // lands as the view goes away still counts.
+        highlightsLoad.finish(request, result: result)
+    }
+
+    private var heroAvailableIDs: Set<String> {
+        Set(
+            (resolved.merging(highlightsResult.resolved) { current, cached in current.isEmpty ? cached : current })
+                .filter { !$0.value.isEmpty }
+                .map(\.key)
+        )
+    }
+
+    private func followedContent(_ fixtures: [SportsFixture]) -> some View {
+        let candidates = grouping.heroCandidates(
+            in: fixtures, highlights: highlightsResult.highlights.map(\.fixture), availableIDs: heroAvailableIDs
+        )
+        let hero = heroSelection.displayed(in: candidates, context: heroSelectionContext)?.fixture
+        let carouselCandidates = Array(heroSelection.carouselCandidates(in: candidates, context: heroSelectionContext).prefix(5))
+        let carouselFixtureIDs = Set(carouselCandidates.map(\.id))
+        // Movies' structure: the hero opens the scroll view and runs under the
+        // bar; the rows follow.
+        return ScrollView {
+            LazyVStack(alignment: .leading, spacing: 20) {
+                heroCarousel(carouselCandidates)
+                statusHints
+                    .padding(.horizontal)
+                SportsSectionsView(
+                    // Carousel pages lead on their own, not again below.
+                    groups: grouping.groups(for: fixtures.filter { !carouselFixtureIDs.contains($0.id) }),
+                    resolved: resolved,
+                    isFollowed: isFollowed,
+                    onOpenDetail: { selectedFixture = $0 },
+                    onWatch: watch,
+                    onFollowToggle: toggleFollow,
+                    onPickChannel: { pickerFixture = $0 },
+                    onSelectFollow: { open(follow: $0) }
+                )
+                .padding(.horizontal)
+                if scope == .all {
+                    highlightsRail(excluding: carouselFixtureIDs)
+                        .padding(.horizontal)
+                }
+            }
+            // The hero fills the top inset itself when it's showing.
+            .padding(.top, carouselCandidates.isEmpty ? PosterCardMetrics.sectionVerticalPadding : 0)
+            .padding(.bottom, PosterCardMetrics.sectionVerticalPadding)
+        }
+        .ignoresSafeArea(edges: carouselCandidates.isEmpty ? [] : .top)
+        // A headline from later in the week isn't on screen, but still wants
+        // its channel once the guide reaches it.
+        .task(id: resolveKey(fixtures + offScreen(hero, in: fixtures))) {
+            await runResolve(fixtures + offScreen(hero, in: fixtures))
+        }
+        .task(id: heroSelectionKey(for: candidates)) {
+            heroSelection.reconcile(candidates: candidates, context: heroSelectionContext)
+        }
+    }
+
+    private func heroAvailability(_ fixture: SportsFixture) -> SportsChannelAvailability {
+        SportsChannelAvailability(
+            resolved[fixture.id] ?? highlightsResult.resolved[fixture.id],
+            startDate: fixture.headlineDate,
+            preference: .current
+        )
+    }
+
+    /// The shared hero carousel Home, Movies and Series use, with a game's
+    /// artwork and copy.
+    @ViewBuilder
+    private func heroCarousel(_ candidates: [SportsHeroSelectionMachine.Candidate]) -> some View {
+        if !candidates.isEmpty {
+            HeroCarousel(
+                items: candidates,
+                imageURL: { _ in nil },
+                backdrop: { SportsArtworkBackdrop(fixture: $0.fixture, size: .hero) },
+                info: { candidate, isCompact in
+                    SportsHeroInfo(
+                        fixture: candidate.fixture,
+                        isCompact: isCompact,
+                        availability: heroAvailability(candidate.fixture),
+                        onWatch: watch,
+                        onOpen: { selectedFixture = candidate.fixture }
+                    )
+                }
+            )
+        }
+    }
+
+    /// Guide sync, a failed refresh, and how old the scores are.
+    @ViewBuilder
+    private var statusHints: some View {
+        if epg.isSyncing {
+            hint("Updating guide…", icon: "arrow.triangle.2.circlepath")
+        }
+        if store.refreshError {
+            hint("Scores unavailable — showing your saved data.", icon: "wifi.slash")
+        }
+        if let fetchedAt = store.newestSnapshotDate(in: displayLeagueIds) {
+            SportsFreshnessLabel(fetchedAt: fetchedAt)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
@@ -196,15 +322,6 @@ struct SportsHubView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    // MARK: - Navigation path
-
-    private var pathBinding: Binding<NavigationPath> {
-        if let router {
-            return Binding(get: { router.sportsPath }, set: { router.sportsPath = $0 })
-        }
-        return $localPath
-    }
-
     // MARK: - Lifecycle
 
     private func onAppear() {
@@ -216,20 +333,26 @@ struct SportsHubView: View {
     /// Resolves the currently visible fixtures to the viewer's channels in one
     /// off-main pass, re-running when the fixture set changes or an EPG refresh
     /// finishes (fresh sub-titles sharpen matching).
+    private func offScreen(_ hero: SportsFixture?, in fixtures: [SportsFixture]) -> [SportsFixture] {
+        guard let hero, !fixtures.contains(where: { $0.id == hero.id }) else { return [] }
+        return [hero]
+    }
+
     private func resolveKey(_ fixtures: [SportsFixture]) -> String {
-        fixtures.map(\.id).joined(separator: ",") + "|" + String(epg.isSyncing)
+        SportsFixtureResolutionMachine.requestKey(for: fixtures, visibilityToken: restriction.visibilityToken, refreshingOn: [epg.isSyncing])
+    }
+
+    private var heroSelectionContext: String {
+        grouping.heroSelectionContext
+    }
+
+    private func heroSelectionKey(for candidates: [SportsHeroSelectionMachine.Candidate]) -> String {
+        SportsHeroSelectionMachine.reconcileKey(context: heroSelectionContext, candidates: candidates)
     }
 
     private func runResolve(_ fixtures: [SportsFixture]) async {
-        guard !fixtures.isEmpty else {
-            resolved = [:]
-            return
-        }
-        await SportsChannelResolver.resolveSoonestFirst(
-            container: modelContext.container,
-            fixtures: fixtures,
-            restriction: restriction,
-            publish: { resolved = $0 }
+        await SportsFixtureResolution.run(
+            $resolution, fixtures: fixtures, container: modelContext.container, restriction: restriction
         )
     }
 
@@ -244,6 +367,20 @@ struct SportsHubView: View {
         present(media, afterSheet: hadSheet)
     }
 
+    /// Plays a pay-per-view channel while its event is on; asks first before.
+    private func watchEvent(_ event: SportsPayPerView.Event) {
+        guard event.isLive(at: Date()) else {
+            pendingEvent = event
+            return
+        }
+        playEvent(event)
+    }
+
+    private func playEvent(_ event: SportsPayPerView.Event) {
+        guard let media = SportsPlayback.media(for: event, in: modelContext) else { return }
+        present(media, afterSheet: false)
+    }
+
     /// A sheet's dismissal is not done when its binding drops to `nil`, and a
     /// `fullScreenCover` presented while it is still animating out is torn down
     /// and re-presented by UIKit once the sheet has gone — two player instances,
@@ -255,19 +392,15 @@ struct SportsHubView: View {
             MacPlayerWindowRouter.shared.play(media, using: openWindow)
         #elseif os(iOS) || os(visionOS)
             if afterSheet {
-                pendingMedia = media
+                playback.play(media, afterSheet: true)
             } else {
-                playingMedia = media
+                playback.play(media, afterSheet: false)
             }
         #endif
     }
 
     private func presentPendingMedia() {
-        #if os(iOS) || os(visionOS)
-            guard let media = pendingMedia else { return }
-            pendingMedia = nil
-            playingMedia = media
-        #endif
+        playback.sheetDidDismiss()
     }
 
     // MARK: - Follow toggle
@@ -284,15 +417,13 @@ struct SportsHubView: View {
 
     /// The shared selection/grouping rules; the phone hub keeps only its chrome.
     private var grouping: SportsHubGrouping {
-        SportsHubGrouping(scope: scope, segment: segment, follows: follows.follows, store: store)
+        SportsHubGrouping(
+            scope: scope, follows: follows.follows, store: store, hiddenKeys: SportsHubLayout.hidden(hiddenFollowsRaw)
+        )
     }
 
     private var displayLeagueIds: [String] {
         grouping.displayLeagueIds
-    }
-
-    private var followedLeagues: [SportsLeague] {
-        grouping.followedLeagues
     }
 
     private var visibleFixtures: [SportsFixture] {
@@ -311,25 +442,68 @@ struct SportsHubView: View {
         guard let separator = key.lastIndex(of: ":"), separator > key.startIndex else { return nil }
         return String(key[..<separator])
     }
-
-    /// The half-open date interval a segment covers, relative to `now`.
-    static func dateRange(for segment: SportsHubSegment, now: Date, calendar: Calendar = .current) -> Range<Date> {
-        let startOfToday = calendar.startOfDay(for: now)
-        switch segment {
-        case .yesterday:
-            let start = calendar.date(byAdding: .day, value: -1, to: startOfToday) ?? startOfToday
-            return start ..< startOfToday
-        case .today:
-            let end = calendar.date(byAdding: .day, value: 1, to: startOfToday) ?? startOfToday
-            return startOfToday ..< end
-        case .upcoming:
-            let end = calendar.date(byAdding: .day, value: 7, to: startOfToday) ?? startOfToday
-            return now ..< end
-        }
-    }
 }
 
 #Preview {
     SportsHubView()
         .modelContainer(for: Playlist.self, inMemory: true)
+}
+
+private extension SportsHubView {
+    // MARK: - Navigation path
+
+    private var pathBinding: Binding<NavigationPath> {
+        if let router {
+            return Binding(get: { router.sportsPath }, set: { router.sportsPath = $0 })
+        }
+        return $localPath
+    }
+
+    /// A follow's own page — team or league alike, the hub's screen fixed to it.
+    private func open(follow key: String) {
+        pathBinding.wrappedValue.append(SportsFollowRoute(key: key))
+    }
+
+    /// A team's or league's own page, framed like a Movies category: its
+    /// title, then every game it has live or coming in a grid — no hero, no
+    /// day switch — and a club's season below.
+    func followPage(_ fixtures: [SportsFixture]) -> some View {
+        CategoryPage(title: scopeTitle) {
+            if fixtures.isEmpty {
+                SportsNoGamesView()
+            } else {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 320), spacing: 12)], spacing: 12) {
+                    ForEach(fixtures) { fixture in
+                        FixtureCard(
+                            fixture: fixture,
+                            resolved: resolved[fixture.id] ?? [],
+                            isFollowed: isFollowed,
+                            showsLeagueMark: grouping.scopedFollow?.kind == .team,
+                            onOpenDetail: { selectedFixture = fixture },
+                            onWatch: watch,
+                            onFollowToggle: toggleFollow,
+                            onPickChannel: { pickerFixture = fixture },
+                            availability: SportsChannelAvailability(
+                                resolved[fixture.id], startDate: fixture.headlineDate, preference: .current
+                            )
+                        )
+                    }
+                }
+                .padding()
+            }
+            if let team = grouping.scopedTeam, SportsTeamSeasonLoader.supports(team) {
+                SportsTeamSeasonPanel(team: team, season: seasonLoad.season(for: team.id), isLoading: seasonLoad.isLoading(team.id))
+                    .padding(.horizontal)
+            }
+        }
+        .task(id: resolveKey(fixtures)) { await runResolve(fixtures) }
+        // The team's games across all its competitions, not only the one it
+        // was followed from.
+        .task(id: grouping.scopedTeam?.id) {
+            guard let team = grouping.scopedTeam, SportsTeamSeasonLoader.supports(team) else { return }
+            let request = seasonLoad.begin(teamId: team.id)
+            let loaded = await SportsTeamSeasonLoader.load(team: team)
+            seasonLoad.finish(request, season: loaded)
+        }
+    }
 }

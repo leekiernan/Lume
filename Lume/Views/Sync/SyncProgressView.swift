@@ -32,6 +32,11 @@ struct SyncProgressView: View {
     @State private var phase: Phase
     @State private var syncError: String?
     @State private var syncTask: Task<Void, Never>?
+    /// The guide refresh that follows the sync, which the screen reports and
+    /// never waits for (`SyncGuideStatus`).
+    @State private var epg = EPGSyncService.shared
+    @State private var finishedAt: Date?
+    @State private var sawGuideRunning = false
 
     init(
         playlist: Playlist,
@@ -72,6 +77,22 @@ struct SyncProgressView: View {
             #endif
         }
         .retryingSync(of: playlist.id, failed: phase == .failed, retry: startSync)
+        .onChange(of: epg.isSyncing) { _, running in
+            if running, finishedAt != nil { sawGuideRunning = true }
+        }
+    }
+
+    /// Where the post-sync guide refresh is; shown only when the sync brings
+    /// in Live TV, which is what owes one.
+    private var guideStatus: SyncGuideStatus? {
+        guard plan.refreshesGuide else { return nil }
+        return SyncGuideStatus.status(
+            syncFinished: phase == .finished,
+            syncFailed: phase == .failed,
+            guideRunning: epg.isSyncing,
+            sawGuideRunning: sawGuideRunning,
+            guideUpdatedSinceSync: finishedAt.map { (EPGSyncSchedule.lastSyncDate ?? .distantPast) > $0 } ?? false
+        )
     }
 
     // MARK: - Shared header content
@@ -146,6 +167,8 @@ struct SyncProgressView: View {
                     // per-chunk saves don't fight the first browse of the catalog
                     // the user just synced.
                     ContentIndexingService.shared.kick(after: .seconds(3))
+                    finishedAt = Date()
+                    sawGuideRunning = epg.isSyncing
                     phase = .finished
                     // Auto-sync gets out of the way as soon as it succeeds so the
                     // user can start browsing; the manual flow waits for Done.
@@ -198,6 +221,7 @@ struct SyncProgressView: View {
                                     fraction: progress.currentStep == step ? progress.stepFraction : 0
                                 )
                             }
+                            if let guideStatus { SyncGuideRow(status: guideStatus) }
                         }
                         .padding()
                     }
@@ -325,77 +349,6 @@ struct SyncProgressView: View {
         }
     }
 
-    // MARK: - Step Row
-
-    private struct StepRowView: View {
-        let step: SyncStep
-        let state: SyncStepState
-        let detail: String
-        let fraction: Double
-
-        var body: some View {
-            HStack(alignment: .top, spacing: 14) {
-                statusIcon
-                    .frame(width: 28, height: 28)
-
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack {
-                        Text(step.title)
-                            .font(.subheadline)
-                            .fontWeight(state == .active ? .semibold : .regular)
-                            .foregroundStyle(titleColor)
-
-                        Spacer()
-
-                        if state == .active, !detail.isEmpty {
-                            Text(detail)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .monospacedDigit()
-                        }
-                    }
-
-                    if state == .active, fraction > 0 {
-                        ProgressView(value: fraction)
-                            .progressViewStyle(.linear)
-                            .tint(.lumeAccent)
-                    }
-                }
-            }
-            .padding(.vertical, 6)
-        }
-
-        @ViewBuilder
-        private var statusIcon: some View {
-            switch state {
-            case .pending:
-                Image(systemName: "circle")
-                    .font(.title3)
-                    .foregroundStyle(.tertiary)
-            case .active:
-                ZStack {
-                    Circle()
-                        .stroke(Color.lumeAccent.opacity(0.25), lineWidth: 2)
-                    ProgressView()
-                        .controlSize(.small)
-                }
-            case .completed:
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.title3)
-                    .foregroundStyle(.green)
-                    .symbolRenderingMode(.hierarchical)
-            }
-        }
-
-        private var titleColor: Color {
-            switch state {
-            case .pending: .secondary
-            case .active: .primary
-            case .completed: .primary
-            }
-        }
-    }
-
 #endif
 
 // MARK: - tvOS layout
@@ -473,6 +426,7 @@ struct SyncProgressView: View {
                         fraction: progress.currentStep == step ? progress.stepFraction : 0
                     )
                 }
+                if let guideStatus { TVSyncGuideRow(status: guideStatus) }
             }
         }
 
@@ -542,59 +496,5 @@ struct SyncProgressView: View {
     }
 
     // MARK: - tvOS Step Row
-
-    private struct TVStepRow: View {
-        let step: SyncStep
-        let state: SyncStepState
-        let detail: String
-        let fraction: Double
-
-        var body: some View {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(spacing: 22) {
-                    statusIcon
-                        .frame(width: 40, height: 40)
-
-                    Text(step.title)
-                        .font(.system(size: 28, weight: state == .active ? .semibold : .regular))
-                        .foregroundStyle(state == .pending ? .secondary : .primary)
-
-                    Spacer(minLength: 16)
-
-                    if state == .active, !detail.isEmpty {
-                        Text(verbatim: detail)
-                            .font(.system(size: 22))
-                            .foregroundStyle(.secondary)
-                            .monospacedDigit()
-                    }
-                }
-
-                if state == .active, fraction > 0 {
-                    ProgressView(value: fraction)
-                        .progressViewStyle(.linear)
-                        .tint(.white)
-                        .padding(.leading, 62)
-                }
-            }
-            .padding(.vertical, 6)
-        }
-
-        @ViewBuilder
-        private var statusIcon: some View {
-            switch state {
-            case .pending:
-                Image(systemName: "circle")
-                    .font(.system(size: 30))
-                    .foregroundStyle(.tertiary)
-            case .active:
-                ProgressView()
-            case .completed:
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 34))
-                    .foregroundStyle(.green)
-                    .symbolRenderingMode(.hierarchical)
-            }
-        }
-    }
 
 #endif

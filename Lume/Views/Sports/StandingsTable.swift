@@ -24,10 +24,6 @@ struct StandingsTable: View {
     /// Matched against each row's raw provider id via a colon-anchored suffix so
     /// the raw `teamId` on a standing row lines up with a full follow key.
     let followedTeamIds: Set<String>
-    /// Non-nil turns the whole table into a tap target; the caller appends the
-    /// league to `DeepLinkRouter.sportsPath`. `nil` on the league screen itself,
-    /// where there is nowhere further to go.
-    var onSelectLeague: (() -> Void)?
     /// tvOS renders a long table as several focusable chunks; only the first
     /// carries the column header.
     var showsHeader = true
@@ -35,12 +31,10 @@ struct StandingsTable: View {
     init(
         rows: [SportsStandingRow],
         followedTeamIds: Set<String>,
-        onSelectLeague: (() -> Void)? = nil,
         showsHeader: Bool = true
     ) {
         self.rows = rows
         self.followedTeamIds = followedTeamIds
-        self.onSelectLeague = onSelectLeague
         self.showsHeader = showsHeader
     }
 
@@ -64,8 +58,6 @@ struct StandingsTable: View {
             }
         }
         .font(.subheadline)
-        .contentShape(Rectangle())
-        .modifier(TapToSelect(action: onSelectLeague))
         .accessibilityElement(children: .contain)
     }
 
@@ -194,7 +186,6 @@ struct StandingsTable: View {
 struct GroupedStandingsTable: View {
     let rows: [SportsStandingRow]
     let followedTeamIds: Set<String>
-    var onSelectLeague: (() -> Void)?
 
     var body: some View {
         let groups = SportsStandingRow.grouped(rows)
@@ -207,7 +198,7 @@ struct GroupedStandingsTable: View {
                             .foregroundStyle(.secondary)
                             .padding(.horizontal, 8)
                     }
-                    StandingsTable(rows: group.rows, followedTeamIds: followedTeamIds, onSelectLeague: onSelectLeague)
+                    StandingsTable(rows: group.rows, followedTeamIds: followedTeamIds)
                 }
             }
         }
@@ -247,16 +238,5 @@ func standingsRowHighlight(_ followed: Bool) -> some View {
     }
 }
 
-/// Adds a tap gesture only when an action is supplied, so a read-only table
-/// stays non-interactive rather than swallowing scroll gestures.
-private struct TapToSelect: ViewModifier {
-    let action: (() -> Void)?
-
-    func body(content: Content) -> some View {
-        if let action {
-            content.onTapGesture(perform: action)
-        } else {
-            content
-        }
-    }
-}
+// Adds a tap gesture only when an action is supplied, so a read-only table
+// stays non-interactive rather than swallowing scroll gestures.

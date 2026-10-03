@@ -69,7 +69,9 @@ nonisolated enum ProfileScopedPreferences {
             (RecommendationSettings.baseEnabledKey, .bool(default: .fixed(RecommendationSettings.enabledDefault))),
             (SportsSyncService.baseEnabledKey, .bool(default: .fixed(SportsSyncService.enabledDefault))),
             (SportsSyncService.baseTabEnabledKey, .bool(default: .sportsTab)),
-            (SportsSyncService.baseHideScoresKey, .bool(default: .fixed(false)))
+            (SportsSyncService.baseHideScoresKey, .bool(default: .fixed(false))),
+            (SportsAlertSettings.baseKey, .string),
+            (SportsHubLayout.baseHiddenKey, .string)
         ]
         for surface in SectionSurface.allCases {
             keys.append((HomeLayoutSettings.baseSectionOrderKey(surface), .string))

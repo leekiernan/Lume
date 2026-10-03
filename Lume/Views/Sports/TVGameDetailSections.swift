@@ -47,6 +47,7 @@
                 )
             }
             .buttonStyle(TVCardButtonStyle(focusScale: 1.03))
+            .contextMenu { MainChannelMenuItem(channelName: channel.stream.name) }
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(Text("Watch on \(channel.stream.name)"))
         }

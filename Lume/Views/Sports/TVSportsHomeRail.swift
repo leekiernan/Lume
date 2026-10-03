@@ -28,14 +28,18 @@ import SwiftUI
         @State private var follows = SportsFollowService.shared
         @State private var epg = EPGSyncService.shared
 
-        @State private var resolved: [String: [ResolvedChannel]] = [:]
+        @State private var resolution = SportsFixtureResolutionMachine()
+        private var resolved: [String: [ResolvedChannel]] {
+            resolution.resolved(for: restriction.visibilityToken)
+        }
+
         @State private var selectedFixture: SportsFixture?
         @State private var showManageTeams = false
         @State private var showPaywall = false
 
-        @State private var playingMedia: PlayableMedia?
-        /// Playback queued behind the dismissing detail cover; see `watch`.
-        @State private var pendingMedia: PlayableMedia?
+        // The player, and media waiting for a closing sheet (`SportsPlaybackPresentation`).
+
+        @State private var playback = SportsPlaybackPresentation()
 
         var body: some View {
             Group {
@@ -45,7 +49,7 @@ import SwiftUI
             .fullScreenCover(item: $selectedFixture, onDismiss: presentPendingMedia) { fixture in
                 TVGameDetailSheet(fixture: fixture, resolved: resolved[fixture.id] ?? [], onWatch: watch)
             }
-            .fullScreenCover(item: $playingMedia) { media in
+            .fullScreenCover(item: $playback.playing) { media in
                 FullScreenPlayerView(media: media)
             }
             .paywall(isPresented: $showPaywall, highlight: .sportsHub)
@@ -191,24 +195,15 @@ import SwiftUI
         /// the same key as the phone rail's; it never waits for a sync to end.
         private var resolveKey: String {
             guard premium.isPremium else { return "idle" }
-            return railFixtures.map(\.id).joined(separator: ",") + "|" + String(epg.isSyncing) + "|" + String(isSyncBusy)
+            return SportsFixtureResolutionMachine.requestKey(for: railFixtures, visibilityToken: restriction.visibilityToken, refreshingOn: [epg.isSyncing, isSyncBusy])
         }
 
         private func runResolve() async {
             guard premium.isPremium else { return }
-            let fixtures = railFixtures
-            guard !fixtures.isEmpty else {
-                resolved = [:]
-                return
-            }
-            let result = await SportsChannelResolver.resolve(
-                container: modelContext.container,
-                fixtures: fixtures,
-                restriction: restriction
+            await SportsFixtureResolution.run(
+                $resolution, fixtures: railFixtures, container: modelContext.container, restriction: restriction,
+                soonestFirst: false
             )
-            // A resolve superseded by a newer `.task(id:)` pass must not overwrite it.
-            guard !Task.isCancelled else { return }
-            resolved = result
         }
 
         // MARK: - Playback
@@ -221,17 +216,15 @@ import SwiftUI
                 // while another is still animating out is torn down and
                 // re-presented, opening the stream twice and tripping the
                 // provider's connection cap. See `presentPendingMedia`.
-                pendingMedia = media
+                playback.play(media, afterSheet: true)
                 selectedFixture = nil
             } else {
-                playingMedia = media
+                playback.play(media, afterSheet: false)
             }
         }
 
         private func presentPendingMedia() {
-            guard let media = pendingMedia else { return }
-            pendingMedia = nil
-            playingMedia = media
+            playback.sheetDidDismiss()
         }
 
         // MARK: - Follow

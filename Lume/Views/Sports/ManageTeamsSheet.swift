@@ -3,7 +3,8 @@
 //  Lume
 //
 //  Follow and reorder leagues and teams. The "Following" list reorders the
-//  active profile's follows (the first few lead the Home shelf) and unfollows
+//  active profile's follows (the hub's rows follow it; the first few lead the
+//  Home shelf) and unfollows
 //  with a ★ tap; a search field filters the whole catalogue and every cached
 //  team; below it the curated leagues are grouped by region, each with a ★
 //  toggle and a chevron drilling into `LeagueTeamsView`. All follow reads/writes
@@ -79,7 +80,7 @@ struct ManageTeamsSheet: View {
             } header: {
                 Text("Following")
             } footer: {
-                Text("Drag to reorder — the first few lead the Home shelf.")
+                Text("Drag to reorder — the Sports hub's rows follow this order, and the first few lead the Home shelf.")
             }
         }
     }

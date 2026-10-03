@@ -37,6 +37,7 @@ struct ChannelPickerSheet: View {
                                 SportsChannelRow(channel: channel)
                             }
                             .buttonStyle(.plain)
+                            .contextMenu { MainChannelMenuItem(channelName: channel.stream.name) }
                         }
                     }
                 }

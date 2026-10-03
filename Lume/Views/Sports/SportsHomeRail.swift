@@ -52,17 +52,19 @@ struct SportsHomeRail: View {
         @State private var follows = SportsFollowService.shared
         @State private var epg = EPGSyncService.shared
 
-        @State private var resolved: [String: [ResolvedChannel]] = [:]
+        @State private var resolution = SportsFixtureResolutionMachine()
+        private var resolved: [String: [ResolvedChannel]] {
+            resolution.resolved(for: restriction.visibilityToken)
+        }
+
         @State private var selectedFixture: SportsFixture?
         @State private var pickerFixture: SportsFixture?
         @State private var showManageTeams = false
         @State private var showPaywall = false
         @State private var showHub = false
-        #if os(iOS) || os(visionOS)
-            @State private var playingMedia: PlayableMedia?
-            /// Playback queued behind a dismissing sheet; see `present(_:afterSheet:)`.
-            @State private var pendingMedia: PlayableMedia?
-        #endif
+        /// The player, and media waiting for a closing sheet. Unused on macOS,
+        /// where playback opens a window.
+        @State private var playback = SportsPlaybackPresentation()
 
         private static let cardWidth: CGFloat = 320
 
@@ -80,7 +82,7 @@ struct SportsHomeRail: View {
                     .sheet(isPresented: $showHub) { hubSheet }
                     .paywall(isPresented: $showPaywall, highlight: .sportsHub)
                 #if os(iOS) || os(visionOS)
-                    .fullScreenCover(item: $playingMedia) { media in
+                    .fullScreenCover(item: $playback.playing) { media in
                         FullScreenPlayerView(media: media)
                     }
                 #endif
@@ -115,7 +117,7 @@ struct SportsHomeRail: View {
             VStack(alignment: .leading, spacing: 12) {
                 header(showSeeAll: true)
                 ScrollView(.horizontal, showsIndicators: false) {
-                    LazyHStack(spacing: 12) {
+                    HStack(spacing: 12) {
                         ForEach(fixtures) { fixture in
                             FixtureCard(
                                 fixture: fixture,
@@ -129,6 +131,8 @@ struct SportsHomeRail: View {
                             .frame(width: Self.cardWidth)
                         }
                     }
+                    // Every card takes the tallest one's height.
+                    .fixedSize(horizontal: false, vertical: true)
                     .padding(.horizontal)
                     .padding(.vertical, 4)
                 }
@@ -264,23 +268,15 @@ struct SportsHomeRail: View {
         /// while the hub, which never waited, showed them.
         private func resolveKey(_ fixtures: [SportsFixture]) -> String {
             guard premium.isPremium else { return "idle" }
-            return fixtures.map(\.id).joined(separator: ",") + "|" + String(epg.isSyncing) + "|" + String(isSyncBusy)
+            return SportsFixtureResolutionMachine.requestKey(for: fixtures, visibilityToken: restriction.visibilityToken, refreshingOn: [epg.isSyncing, isSyncBusy])
         }
 
         private func runResolve(_ fixtures: [SportsFixture]) async {
             guard premium.isPremium else { return }
-            guard !fixtures.isEmpty else {
-                resolved = [:]
-                return
-            }
-            let result = await SportsChannelResolver.resolve(
-                container: modelContext.container,
-                fixtures: fixtures,
-                restriction: restriction
+            await SportsFixtureResolution.run(
+                $resolution, fixtures: fixtures, container: modelContext.container, restriction: restriction,
+                soonestFirst: false
             )
-            // A resolve superseded by a newer `.task(id:)` pass must not overwrite it.
-            guard !Task.isCancelled else { return }
-            resolved = result
         }
 
         // MARK: - Playback
@@ -305,19 +301,15 @@ struct SportsHomeRail: View {
                 MacPlayerWindowRouter.shared.play(media, using: openWindow)
             #elseif os(iOS) || os(visionOS)
                 if afterSheet {
-                    pendingMedia = media
+                    playback.play(media, afterSheet: true)
                 } else {
-                    playingMedia = media
+                    playback.play(media, afterSheet: false)
                 }
             #endif
         }
 
         private func presentPendingMedia() {
-            #if os(iOS) || os(visionOS)
-                guard let media = pendingMedia else { return }
-                pendingMedia = nil
-                playingMedia = media
-            #endif
+            playback.sheetDidDismiss()
         }
 
         // MARK: - Follow

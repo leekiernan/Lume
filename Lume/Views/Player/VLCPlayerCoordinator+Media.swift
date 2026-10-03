@@ -25,6 +25,7 @@ extension VLCPlayerCoordinator {
             ?? PlexPlaybackAuth.authenticatedURL(url, headers: httpHeaders) ?? url)
         applyMediaOptions(to: media, isLive: isLive)
         mediaPlayer.media = media
+        startStartupFrameSampling()
         didApplyPreferredLanguages = false
     }
 

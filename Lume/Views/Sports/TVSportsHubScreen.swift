@@ -2,12 +2,12 @@
 //  TVSportsHubScreen.swift
 //  Lume
 //
-//  The tvOS Sports Hub. The phone hub's segmented control and toolbar do not
-//  read on a remote, so this is a purpose-built 10-foot screen: one scrolling
-//  page whose header is the scope menu drawn as the page title, a compact
-//  Yesterday / Today / Upcoming switch and an icon-only Manage Teams button,
-//  then full-width horizontal rails of `TVFixtureLogoCard`s, one focus section
-//  per group. The header scrolls with the page — a pinned bar over an unclipped
+//  The tvOS Sports Hub: a purpose-built 10-foot screen. Home's immersive hero
+//  carousel with the page title over it — the scope, which opens the browse
+//  panel — then full-width horizontal rails of `TVFixtureCard`s: Live Now and
+//  a row per follow in the viewer's order (`SportsHubGrouping`), one focus
+//  section per row. A team's row ends with its club season; narrowed to the
+//  team, the page carries that season below its games. The header scrolls with the page — a pinned bar over an unclipped
 //  scroll view had the cards sliding underneath it. It shares the hub's data
 //  plumbing — `SportsStore` snapshots, `SportsFollowService` follows, off-main
 //  `SportsChannelResolver` — and reuses `SportsHubView`'s static date/assembly
@@ -19,44 +19,86 @@
     import SwiftData
     import SwiftUI
 
-    /// Focus targets on the hub, so Menu (exit) from a card can return focus to
-    /// the filter row rather than dropping to the tab bar mid-browse.
-    private enum TVSportsFocus: Hashable {
-        case scope
-        case segment(SportsHubSegment)
-        case manage
+    /// Focus targets on the hub: the default landing, and where the browse
+    /// panel hands focus back to.
+    enum TVSportsFocus: Hashable {
+        case heroWatch
+        case heroDetail
         case card(String)
     }
 
-    /// The filters are one lazy-stack child. Their individual buttons may be
-    /// released while a lower rail is focused, so return focus via this stable
-    /// container rather than an individual segment's identity.
-    private enum TVSportsScrollTarget: Hashable {
-        case filters
-    }
-
     struct TVSportsHubScreen: View {
-        @Environment(\.modelContext) private var modelContext
-        @Environment(\.contentRestriction) private var restriction
+        @Environment(\.modelContext) var modelContext
+        @Environment(\.contentRestriction) var restriction
+        @Environment(DeepLinkRouter.self) var router: DeepLinkRouter?
 
         @State private var premium = PremiumManager.shared
         @State private var store = SportsStore.shared
-        @State private var follows = SportsFollowService.shared
+        @State var follows = SportsFollowService.shared
         @State private var epg = EPGSyncService.shared
 
-        @State private var scope: SportsHubScope = .myTeams
-        @State private var segment: SportsHubSegment = .today
-        @State private var resolved: [String: [ResolvedChannel]] = [:]
-        @State private var selectedFixture: SportsFixture?
-        @State private var showManageTeams = false
-        @State private var showPaywall = false
-        @State private var playingMedia: PlayableMedia?
-        /// Playback queued behind the dismissing detail cover; see `watch`.
-        @State private var pendingMedia: PlayableMedia?
+        @State var scope: SportsHubScope
+        /// Set on a follow's own page, pushed from the hub; `nil` on the hub.
+        let pageKey: String?
+        @State var localPath = NavigationPath()
+        /// Follows taken off the hub in Settings ▸ Sports.
+        @AppStorage(SportsHubLayout.hiddenKey) private var hiddenFollowsRaw = ""
+        /// The scope panel, and where focus was when it opened.
+        @State var showingBrowse = false
+        @State var browseReturnFocus: TVSportsFocus?
+        @State var resolution = SportsFixtureResolutionMachine()
+        var resolved: [String: [ResolvedChannel]] {
+            resolution.resolved(for: restriction.visibilityToken)
+        }
 
-        @FocusState private var focus: TVSportsFocus?
+        @State private var heroSelection = SportsHeroSelectionMachine()
+        @State var selectedFixture: SportsFixture?
+        @State var showManageTeams = false
+        @State var showPaywall = false
+        @State var pendingEvent: SportsPayPerView.Event?
+        /// The player, and media waiting for a closing sheet (`SportsPlaybackPresentation`).
+        @State private var playback = SportsPlaybackPresentation()
+        @AppStorage(SportsSyncService.hideScoresKey) private var hidesScores = false
+        /// The headlined game from its first minute, when Hide Scores is on and
+        /// the channel can replay it — worked out once per game, not per render.
+        @State private var heroFromStart: PlayableMedia?
+        /// A team page's season: drawn below its games, and the source of the
+        /// games it has beyond the followed competition.
+        @State var seasonLoad = SportsTeamSeasonLoadMachine()
+        /// "Big this week", and the channels its near-term games resolved to.
+        @State var highlightsLoad = SportsHighlightsLoadMachine()
+        var highlightsResult: SportsHighlightsLoadMachine.Result {
+            highlightsLoad.result(for: restriction.visibilityToken)
+        }
 
+        /// The headline carousel, and where the page sits against its fold.
+        @State private var heroModel = TVSportsHeroModel()
+        @State private var heroZone: TVHomeZone = .expanded
+        @State private var containerHeight: CGFloat = 0
+
+        @FocusState var focus: TVSportsFocus?
+
+        init(pageKey: String? = nil) {
+            self.pageKey = pageKey
+            _scope = State(initialValue: pageKey.map { .follow($0) } ?? .all)
+        }
+
+        /// The hub owns the stack its follows' pages push onto, as Movies'
+        /// landing page does for its categories.
         var body: some View {
+            if pageKey == nil {
+                NavigationStack(path: pathBinding) {
+                    screen
+                        .navigationDestination(for: SportsFollowRoute.self) { route in
+                            TVSportsHubScreen(pageKey: route.key)
+                        }
+                }
+            } else {
+                screen
+            }
+        }
+
+        private var screen: some View {
             Group {
                 if premium.isPremium {
                     hub
@@ -68,198 +110,206 @@
             .fullScreenCover(item: $selectedFixture, onDismiss: presentPendingMedia) { fixture in
                 TVGameDetailSheet(fixture: fixture, resolved: resolved[fixture.id] ?? [], onWatch: watch)
             }
-            .fullScreenCover(item: $playingMedia) { media in
+            .fullScreenCover(item: $playback.playing) { media in
                 FullScreenPlayerView(media: media)
             }
             .paywall(isPresented: $showPaywall, highlight: .sportsHub)
+            .payPerViewConfirmation($pendingEvent, onWatch: playEvent)
             .onAppear(perform: onAppear)
             .onDisappear { SportsSyncService.shared.endLivePolling() }
         }
 
         // MARK: - Hub
 
-        @ViewBuilder
         private var hub: some View {
-            if follows.follows.isEmpty {
-                onboardingState
-            } else {
-                content
+            Group {
+                if follows.follows.isEmpty {
+                    if let first = highlightsResult.highlights.first {
+                        highlightsHub(first)
+                    } else {
+                        onboardingState
+                    }
+                } else if pageKey != nil {
+                    followPage
+                } else {
+                    content
+                        .overlay(alignment: .leading) { browseSidebar }
+                }
+            }
+            .task(id: [restriction.visibilityToken] + follows.follows.map(\.key)) {
+                if pageKey == nil { await loadHighlights() }
             }
         }
 
-        /// The whole hub is one scrolling page so the header can never sit over
-        /// the cards: title-style scope menu on the left, the day switch and the
-        /// Manage Teams button on the right, then the rails.
+        /// Home's immersive layout: the slide's artwork fixed full-screen
+        /// behind one scrolling page, which opens with the showcase — header at
+        /// its top, the headline carousel at its foot — then the rails.
         private var content: some View {
             // One grouping pass per render: the fixtures and groups feed the
             // rails, the default focus and the resolve key alike.
             let fixtures = grouping.visibleFixtures
-            let groups = grouping.groups(for: fixtures)
-            return ScrollViewReader { scrollProxy in
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 36) {
-                        header
-                        if groups.isEmpty {
-                            noGamesState
-                        } else {
-                            ForEach(groups) { group in
-                                section(for: group, scrollProxy: scrollProxy)
+            let preference = SportsChannelPreference.Context.current
+            let availableIDs = Set(
+                (resolved.merging(highlightsResult.resolved) { current, cached in current.isEmpty ? cached : current })
+                    .filter { !$0.value.isEmpty }
+                    .map(\.key)
+            )
+            let candidates = grouping.heroCandidates(
+                in: fixtures, highlights: highlightsResult.highlights.map(\.fixture), availableIDs: availableIDs
+            )
+            let carousel = Array(heroSelection.carouselCandidates(in: candidates, context: heroSelectionContext).prefix(Self.carouselLimit))
+            let carouselIDs = Set(carousel.map(\.id))
+            let hero = heroModel.displayedHero?.fixture
+            // Big this week leaves out whatever the carousel already shows.
+            let highlights = highlightsResult.highlights.filter { !carouselIDs.contains($0.fixture.id) }
+            // The carousel's games lead the page on their own, not again in a rail.
+            let groups = grouping.groups(for: fixtures.filter { !carouselIDs.contains($0.id) })
+            let heroAvailability = hero.map { availability(of: $0, preference: preference) }
+            // Slides from later in the week aren't on screen, but still want
+            // their channels once the guide reaches them.
+            let toResolve = fixtures + carousel.map(\.fixture).filter { slide in !fixtures.contains { $0.id == slide.id } }
+            return ScrollViewReader { _ in
+                ZStack {
+                    TVSportsHeroBackdrop(fixture: hero, belowFold: heroZone != .expanded)
+                        .animation(.easeInOut(duration: 0.8), value: hero?.id)
+                    ScrollView {
+                        LazyVStack(alignment: .leading, spacing: 36) {
+                            if carousel.isEmpty {
+                                header.padding(.top, TVSportsMetrics.contentTop)
+                            } else {
+                                TVSportsHeroShowcase(
+                                    model: heroModel,
+                                    availability: { availability(of: $0, preference: preference) },
+                                    showsScore: { $0.showsScore(hidingScores: hidesScores, reveal: SportsScoreReveal.shared) },
+                                    focus: $focus,
+                                    onWatch: watch,
+                                    onWatchFromStart: heroFromStart.map { media in { playback.play(media, afterSheet: false) } },
+                                    onOpen: { selectedFixture = $0 },
+                                    header: { header.padding(.top, TVSportsMetrics.contentTop) }
+                                )
+                            }
+                            if groups.isEmpty, carousel.isEmpty {
+                                noGamesState
+                            } else {
+                                ForEach(groups) { group in
+                                    section(for: group, preference: preference)
+                                }
+                            }
+                            if scope == .all, !highlights.isEmpty || !highlightsResult.payPerView.isEmpty {
+                                TVSportsHighlightsSection(
+                                    highlights: highlights,
+                                    payPerView: highlightsResult.payPerView,
+                                    availability: highlightAvailability,
+                                    onSelect: { selectedFixture = $0 },
+                                    onWatchEvent: watchEvent,
+                                    onLeadingLeft: browseOpener(leading: true)
+                                )
+                                .padding(.top, 24)
                             }
                         }
+                        .padding(.bottom, 40)
                     }
-                    // The native tab chrome is the next focus target above
-                    // this screen. Match Settings' top breathing room so an
-                    // exit from the filters has an unambiguous spatial route
-                    // to it; at 20pt the controls sat inside that region and
-                    // trapped focus inside the scroll view.
-                    .padding(.top, 72)
-                    .padding(.bottom, 40)
+                    .scrollIndicators(.hidden)
+                    .scrollClipDisabled()
+                    .scrollTargetBehavior(TVHomeFoldBehavior(zone: heroZone, showcaseHeight: carousel.isEmpty ? 0 : showcaseHeight))
+                    .onScrollGeometryChange(for: TVHomeZone.self) { geometry in
+                        TVHomeZone(
+                            offset: geometry.contentOffset.y + geometry.contentInsets.top,
+                            showcaseHeight: carousel.isEmpty ? 0 : showcaseHeight
+                        )
+                    } action: { _, newZone in
+                        guard newZone != heroZone else { return }
+                        withAnimation(.easeInOut(duration: 0.5)) { heroZone = newZone }
+                    }
                 }
-                .scrollClipDisabled()
-                .defaultFocus($focus, groups.first?.fixtures.first.map { TVSportsFocus.card($0.id) })
-                .task(id: resolveKey(fixtures)) { await runResolve(fixtures) }
+                // Full-bleed vertically, like Home: the backdrop and the
+                // showcase span the real screen; rows keep their side inset.
+                .ignoresSafeArea(edges: .vertical)
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { containerHeight = $0 }
+                .onChange(of: heroZone) { _, zone in heroModel.isPaused = zone != .expanded }
+                .onChange(of: carousel.map(\.id), initial: true) { _, _ in heroModel.configure(items: carousel) }
+                .task(id: resolveKey(toResolve)) { await runResolve(toResolve) }
+                .task(id: heroSelectionKey(for: candidates)) {
+                    heroSelection.reconcile(candidates: candidates, context: heroSelectionContext)
+                }
+                .task(id: "\(hero?.id ?? "")|\(hidesScores)|\(heroAvailability?.isAvailable ?? false)") {
+                    heroFromStart = hero.flatMap { hero in heroAvailability.flatMap { fromStartMedia(hero, availability: $0) } }
+                }
             }
+        }
+
+        private static let carouselLimit = 8
+
+        private var showcaseHeight: CGFloat {
+            max(containerHeight - TVHomeMetrics.rowPeek, 0)
+        }
+
+        private func availability(of fixture: SportsFixture, preference: SportsChannelPreference.Context) -> SportsChannelAvailability {
+            SportsChannelAvailability(
+                resolved[fixture.id] ?? highlightsResult.resolved[fixture.id], startDate: fixture.headlineDate, preference: preference
+            )
         }
 
         // MARK: - Header
 
-        /// The scope menu reads as the page title; the controls to its right
-        /// stay quiet at rest — only the active day carries a fill — so the row
-        /// reads as a heading, not a toolbar. Status hints sit under the title.
+        /// Status hints over the hero. No title: like Home, the tab names the
+        /// page, and the browse panel opens with a left press from the leading
+        /// edge of the hero or any row.
         private var header: some View {
             VStack(alignment: .leading, spacing: 10) {
-                HStack(alignment: .center, spacing: 24) {
-                    scopeMenu
-                    Spacer(minLength: 24)
-                    segmentedControl
-                    manageButton
-                }
                 if epg.isSyncing {
                     hintRow("Updating guide…", icon: "arrow.triangle.2.circlepath")
                 }
                 if store.refreshError {
                     hintRow("Scores unavailable — showing your saved data.", icon: "wifi.slash")
                 }
-            }
-            .padding(.horizontal, 60)
-            .focusSection()
-            .id(TVSportsScrollTarget.filters)
-        }
-
-        // MARK: - Filter controls
-
-        private var segmentedControl: some View {
-            HStack(spacing: 4) {
-                ForEach(SportsHubSegment.allCases) { segment in
-                    segmentButton(segment)
+                if let fetchedAt = store.newestSnapshotDate(in: displayLeagueIds) {
+                    SportsFreshnessLabel(fetchedAt: fetchedAt)
+                        .font(.callout)
+                        .foregroundStyle(.white.opacity(0.55))
                 }
             }
-            .padding(4)
-            .background(
-                RoundedRectangle(cornerRadius: 16, style: .continuous).fill(.white.opacity(0.08))
-            )
-        }
-
-        private func segmentButton(_ value: SportsHubSegment) -> some View {
-            let isActive = segment == value
-            let isItemFocused = focus == .segment(value)
-            return Button {
-                segment = value
-            } label: {
-                TVSportsPillLabel(
-                    title: value.title,
-                    font: .callout.weight(.semibold),
-                    isFocused: isItemFocused,
-                    isActive: isActive,
-                    horizontalPadding: 22,
-                    verticalPadding: 12,
-                    cornerRadius: 12
-                )
-            }
-            .buttonStyle(TVCardButtonStyle(focusScale: 1.03))
-            .focused($focus, equals: .segment(value))
-            .animation(.easeOut(duration: 0.18), value: isItemFocused)
-        }
-
-        private var scopeMenu: some View {
-            Menu {
-                Picker("Scope", selection: $scope) {
-                    Label("My Teams", systemImage: "star.fill").tag(SportsHubScope.myTeams)
-                    ForEach(followedLeagues) { league in
-                        Text(verbatim: league.name).tag(SportsHubScope.league(league.id))
-                    }
-                }
-            } label: {
-                TVSportsTitleChrome {
-                    HStack(alignment: .firstTextBaseline, spacing: 14) {
-                        Text(verbatim: scopeTitle)
-                            .font(.system(size: 34, weight: .bold))
-                            .lineLimit(1)
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 18, weight: .bold))
-                            .foregroundStyle(.white.opacity(0.55))
-                    }
-                }
-            }
-            .buttonStyle(TVCardButtonStyle(focusScale: 1.02))
-            .focused($focus, equals: .scope)
-            .accessibilityLabel(Text(verbatim: scopeTitle))
-        }
-
-        private var manageButton: some View {
-            Button {
-                showManageTeams = true
-            } label: {
-                TVSportsCircleChrome {
-                    Image(systemName: "person.2.badge.plus")
-                        .font(.system(size: 26, weight: .semibold))
-                }
-            }
-            .buttonStyle(TVCardButtonStyle(focusScale: 1.06))
-            .focused($focus, equals: .manage)
-            .accessibilityLabel(Text("Manage Teams"))
+            .padding(.horizontal, TVSportsMetrics.railInset)
         }
 
         // MARK: - Sections
 
         /// The heading matches `HomeRow`'s — subheadline, bold, secondary — so
         /// the hub's rails read like every other rail on the tvOS Home.
-        private func section(for group: SportsFixtureGroup, scrollProxy: ScrollViewProxy) -> some View {
+        private func section(
+            for group: SportsFixtureGroup,
+            preference: SportsChannelPreference.Context
+        ) -> some View {
             VStack(alignment: .leading, spacing: 12) {
-                HStack(spacing: 10) {
-                    if let logoURL = group.logoURL {
-                        CachedAsyncImage(url: logoURL, maxPixelSize: 40) { phase in
-                            if case let .success(image) = phase {
-                                image.resizable().scaledToFit()
-                            } else {
-                                Color.clear
-                            }
-                        }
-                        .frame(width: 22, height: 22)
-                        .accessibilityHidden(true)
-                    }
-                    Text(verbatim: group.title)
-                        .font(.subheadline)
-                        .fontWeight(.bold)
-                        .foregroundStyle(.secondary)
-                }
-                .padding(.horizontal, 60)
+                rowHeader(for: group)
 
                 ScrollView(.horizontal, showsIndicators: false) {
-                    LazyHStack(spacing: 24) {
+                    LazyHStack(spacing: TVSportsMetrics.railSpacing) {
                         ForEach(group.fixtures) { fixture in
-                            TVFixtureLogoCard(fixture: fixture, showsLeagueMark: !group.isSingleLeague) {
+                            TVFixtureCard(
+                                fixture: fixture,
+                                availability: SportsChannelAvailability(
+                                    resolved[fixture.id], startDate: fixture.headlineDate, preference: preference
+                                ),
+                                showsLeagueName: !group.isSingleLeague
+                            ) {
                                 selectedFixture = fixture
                             }
                             .focused($focus, equals: .card(fixture.id))
-                            // A card owns the first Menu press: return to the
-                            // filters and make their lazy header visible again.
-                            // The filters deliberately have no exit handler, so
-                            // their next Menu press can bubble to the tab bar.
-                            .onExitCommand { returnFocusToFilter(using: scrollProxy) }
+                            .onLeadingEdgeLeft(browseOpener(leading: fixture.id == group.fixtures.first?.id))
+                        }
+                        // A followed club's row ends at its season: the page
+                        // narrowed to the team, its table and players below.
+                        if let team = seasonTeam(forFollow: group.followKey) {
+                            Button {
+                                open(follow: team.id)
+                            } label: {
+                                TVClubSeasonCard(team: team)
+                            }
+                            .buttonStyle(TVCardButtonStyle(focusScale: 1.05))
                         }
                     }
-                    .padding(.horizontal, 60)
+                    .padding(.horizontal, TVSportsMetrics.railInset)
                     .padding(.vertical, 8)
                 }
                 .scrollClipDisabled()
@@ -267,74 +317,26 @@
             .focusSection()
         }
 
-        // MARK: - States
-
-        private var onboardingState: some View {
-            fullScreenState(
-                title: "Follow Your Teams",
-                message: "Add leagues and teams to see fixtures, live scores and standings, with one tap to the channel carrying the game."
-            ) {
-                Button {
-                    showManageTeams = true
-                } label: {
-                    Label("Manage Teams", systemImage: "person.2.badge.plus")
-                        .font(.title3.weight(.semibold))
-                        .padding(.horizontal, 44)
-                        .padding(.vertical, 20)
+        /// A row's crest and name, styled like `HomeRow`'s heading.
+        private func rowHeader(for group: SportsFixtureGroup) -> some View {
+            HStack(spacing: 10) {
+                if let logoURL = group.logoURL {
+                    CachedAsyncImage(url: logoURL, maxPixelSize: 40) { phase in
+                        if case let .success(image) = phase {
+                            image.resizable().scaledToFit()
+                        } else {
+                            Color.clear
+                        }
+                    }
+                    .frame(width: 22, height: 22)
+                    .accessibilityHidden(true)
                 }
-                .buttonStyle(TVCardButtonStyle(focusScale: 1.05))
+                Text(verbatim: group.title)
+                    .font(.subheadline)
+                    .fontWeight(.bold)
+                    .foregroundStyle(.secondary)
             }
-        }
-
-        private var lockedState: some View {
-            fullScreenState(
-                title: PremiumFeature.sportsHub.title,
-                message: PremiumFeature.sportsHub.subtitle
-            ) {
-                Button {
-                    showPaywall = true
-                } label: {
-                    Text("Unlock Sports Hub")
-                        .font(.title3.weight(.semibold))
-                        .padding(.horizontal, 44)
-                        .padding(.vertical, 20)
-                }
-                .buttonStyle(TVCardButtonStyle(focusScale: 1.05))
-            }
-        }
-
-        private var noGamesState: some View {
-            VStack(spacing: 24) {
-                Image(systemName: "sportscourt")
-                    .font(.system(size: 64))
-                    .foregroundStyle(.white.opacity(0.35))
-                Text("No games")
-                    .font(.title.weight(.semibold))
-                    .foregroundStyle(.white.opacity(0.6))
-            }
-            .frame(maxWidth: .infinity, minHeight: 560)
-        }
-
-        private func fullScreenState(
-            title: LocalizedStringResource,
-            message: LocalizedStringResource,
-            @ViewBuilder action: () -> some View
-        ) -> some View {
-            VStack(spacing: 24) {
-                Image(systemName: "sportscourt")
-                    .font(.system(size: 80))
-                    .foregroundStyle(.white.opacity(0.5))
-                Text(title)
-                    .font(.largeTitle.weight(.bold))
-                    .foregroundStyle(.white)
-                Text(message)
-                    .font(.title3)
-                    .foregroundStyle(.white.opacity(0.6))
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: 820)
-                action()
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(.horizontal, TVSportsMetrics.railInset)
         }
 
         private func hintRow(_ text: LocalizedStringKey, icon: String) -> some View {
@@ -343,48 +345,9 @@
                 .foregroundStyle(.white.opacity(0.55))
         }
 
-        // MARK: - Focus
-
-        private func returnFocusToFilter(using scrollProxy: ScrollViewProxy) {
-            Task { @MainActor in
-                await landTVFocus(
-                    $focus,
-                    on: .segment(segment),
-                    scrollingTo: scrollProxy,
-                    scrollTarget: TVSportsScrollTarget.filters,
-                    scrollAnchor: .top
-                )
-            }
-        }
-
-        // MARK: - Lifecycle
-
-        private func onAppear() {
-            store.loadCached(leagueIds: displayLeagueIds)
-            SportsSyncService.shared.refreshIfStale()
-            SportsSyncService.shared.beginLivePolling()
-        }
-
-        private func resolveKey(_ fixtures: [SportsFixture]) -> String {
-            fixtures.map(\.id).joined(separator: ",") + "|" + String(epg.isSyncing)
-        }
-
-        private func runResolve(_ fixtures: [SportsFixture]) async {
-            guard !fixtures.isEmpty else {
-                resolved = [:]
-                return
-            }
-            await SportsChannelResolver.resolveSoonestFirst(
-                container: modelContext.container,
-                fixtures: fixtures,
-                restriction: restriction,
-                publish: { resolved = $0 }
-            )
-        }
-
         // MARK: - Playback
 
-        private func watch(_ channel: ResolvedChannel) {
+        func watch(_ channel: ResolvedChannel) {
             guard let media = SportsPlayback.media(for: channel, in: modelContext) else { return }
 
             if selectedFixture != nil {
@@ -392,21 +355,66 @@
                 // while another is still animating out is torn down and
                 // re-presented, opening the stream twice and tripping the
                 // provider's connection cap. See `presentPendingMedia`.
-                pendingMedia = media
+                playback.play(media, afterSheet: true)
                 selectedFixture = nil
             } else {
-                playingMedia = media
+                playback.play(media, afterSheet: false)
             }
         }
 
+        /// A pay-per-view or event channel, straight from its card.
+        /// Plays a pay-per-view channel while its event is on; asks first before.
+        func watchEvent(_ event: SportsPayPerView.Event) {
+            guard event.isLive(at: Date()) else {
+                pendingEvent = event
+                return
+            }
+            playEvent(event)
+        }
+
+        func playEvent(_ event: SportsPayPerView.Event) {
+            guard let media = SportsPlayback.media(for: event, in: modelContext) else { return }
+            playback.play(media, afterSheet: false)
+        }
+
+        /// Catch-up from kickoff for a live game under Hide Scores.
+        private func fromStartMedia(_ fixture: SportsFixture, availability: SportsChannelAvailability) -> PlayableMedia? {
+            guard hidesScores, fixture.isInProgress, case let .available(_, best) = availability else { return nil }
+            return SportsPlayback.fromStartMedia(for: best, fixture: fixture, in: modelContext)
+        }
+
         private func presentPendingMedia() {
-            guard let media = pendingMedia else { return }
-            pendingMedia = nil
-            playingMedia = media
+            playback.sheetDidDismiss()
         }
     }
 
     private extension TVSportsHubScreen {
+        // MARK: - Lifecycle
+
+        func onAppear() {
+            store.loadCached(leagueIds: displayLeagueIds)
+            SportsSyncService.shared.refreshIfStale()
+            SportsSyncService.shared.beginLivePolling()
+        }
+
+        func resolveKey(_ fixtures: [SportsFixture]) -> String {
+            SportsFixtureResolutionMachine.requestKey(for: fixtures, visibilityToken: restriction.visibilityToken, refreshingOn: [epg.isSyncing])
+        }
+
+        func runResolve(_ fixtures: [SportsFixture]) async {
+            await SportsFixtureResolution.run(
+                $resolution, fixtures: fixtures, container: modelContext.container, restriction: restriction
+            )
+        }
+
+        var heroSelectionContext: String {
+            grouping.heroSelectionContext
+        }
+
+        func heroSelectionKey(for candidates: [SportsHeroSelectionMachine.Candidate]) -> String {
+            SportsHeroSelectionMachine.reconcileKey(context: heroSelectionContext, candidates: candidates)
+        }
+
         // MARK: - Follow
 
         private func isFollowed(_ team: SportsTeam) -> Bool {
@@ -417,53 +425,104 @@
 
         /// The shared selection/grouping rules; the tvOS hub keeps only its chrome.
         private var grouping: SportsHubGrouping {
-            SportsHubGrouping(scope: scope, segment: segment, follows: follows.follows, store: store)
+            SportsHubGrouping(
+                scope: scope, follows: follows.follows, store: store, hiddenKeys: SportsHubLayout.hidden(hiddenFollowsRaw)
+            )
         }
 
         private var displayLeagueIds: [String] {
             grouping.displayLeagueIds
         }
 
-        private var followedLeagues: [SportsLeague] {
-            grouping.followedLeagues
-        }
-
         private var scopeTitle: String {
             grouping.scopeTitle
         }
-    }
 
-    /// The page-title chrome for the scope menu: bare white text at rest, a soft
-    /// wash when focused. A solid white fill here would turn the heading into a
-    /// button and shout over the cards.
-    private struct TVSportsTitleChrome<Content: View>: View {
-        @ViewBuilder var content: () -> Content
-        @Environment(\.isFocused) private var isFocused
+        // MARK: - A follow's page
 
-        var body: some View {
-            content()
-                .foregroundStyle(.white)
-                .padding(.horizontal, 18)
-                .padding(.vertical, 8)
-                .background(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .fill(.white.opacity(isFocused ? 0.16 : 0))
-                )
-                .animation(.easeOut(duration: 0.15), value: isFocused)
+        /// A team's or league's own page, framed like a Movies category: the
+        /// heading, every game it has live or coming in a grid — no hero, no
+        /// title button, no rows — and a club's season below. Menu goes back.
+        var followPage: some View {
+            let season = seasonTeam.flatMap { seasonLoad.season(for: $0.id) }
+            let fixtures = grouping.pageFixtures(season: season)
+            let preference = SportsChannelPreference.Context.current
+            return ScrollViewReader { proxy in
+                CategoryPage(title: scopeTitle) {
+                    Color.clear.frame(height: 0).id(Self.pageTop)
+                    if fixtures.isEmpty {
+                        // A line, not a screenful: the season sits just below.
+                        Text("No games")
+                            .font(.title3)
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal)
+                            .padding(.vertical, 24)
+                    } else {
+                        // Four across: the width the hub's rows show, where Movies'
+                        // narrower posters fit six.
+                        LazyVGrid(
+                            columns: Array(repeating: GridItem(.flexible(), spacing: PosterCardMetrics.gridSpacing), count: 4),
+                            alignment: .leading,
+                            spacing: PosterCardMetrics.gridSpacing
+                        ) {
+                            ForEach(fixtures) { fixture in
+                                TVFixtureCard(
+                                    fixture: fixture,
+                                    availability: SportsChannelAvailability(
+                                        resolved[fixture.id], startDate: fixture.headlineDate, preference: preference
+                                    ),
+                                    showsLeagueName: grouping.scopedFollow?.kind == .team,
+                                    fillsWidth: true
+                                ) {
+                                    selectedFixture = fixture
+                                }
+                            }
+                        }
+                        .padding(.horizontal)
+                        .padding(.vertical, 24)
+                    }
+                    if let team = seasonTeam {
+                        TVTeamSeasonSection(
+                            team: team,
+                            season: season,
+                            isLoading: seasonLoad.isLoading(team.id),
+                            // With games above, up reaches them; without, the
+                            // season's first row is the page's top.
+                            onMoveUpFromTop: fixtures.isEmpty
+                                ? { withAnimation { proxy.scrollTo(Self.pageTop, anchor: .top) } }
+                                : nil
+                        )
+                        .padding(.top, 24)
+                        .padding(.bottom, 60)
+                    }
+                }
+            }
+            .task(id: resolveKey(fixtures)) { await runResolve(fixtures) }
+            // The team's games across all its competitions, not only the one
+            // it was followed from.
+            .task(id: seasonTeam?.id) {
+                guard let team = seasonTeam else { return }
+                let request = seasonLoad.begin(teamId: team.id)
+                let loaded = await SportsTeamSeasonLoader.load(team: team)
+                seasonLoad.finish(request, season: loaded)
+            }
         }
-    }
 
-    /// A round icon-only control that shares the pills' rest wash and white
-    /// focus fill, for actions that need no label at rest.
-    private struct TVSportsCircleChrome<Content: View>: View {
-        @ViewBuilder var content: () -> Content
-        @Environment(\.isFocused) private var isFocused
+        static let pageTop = "followPage.top"
 
-        var body: some View {
-            content()
-                .foregroundStyle(isFocused ? .black : .white)
-                .frame(width: 64, height: 64)
-                .background(Circle().fill(isFocused ? AnyShapeStyle(.white) : AnyShapeStyle(.white.opacity(0.1))))
+        /// The team the page is narrowed to, when its season can be shown.
+        var seasonTeam: SportsTeam? {
+            grouping.scopedTeam.flatMap { SportsTeamSeasonLoader.supports($0) ? $0 : nil }
+        }
+
+        /// A followed team's season, when it can be shown — what a team row's
+        /// closing card opens.
+        func seasonTeam(forFollow key: String?) -> SportsTeam? {
+            guard let key, let team = store.team(by: key), follows.follows.contains(where: { $0.key == key && $0.kind == .team }),
+                  SportsTeamSeasonLoader.supports(team)
+            else { return nil }
+            return team
         }
     }
 

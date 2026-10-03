@@ -94,6 +94,21 @@ struct SportsChannelResolverTests {
 
     // MARK: - Tests
 
+    @Test func `fight-card guide window centres on the main card`() {
+        let earlyPrelims = Date(timeIntervalSince1970: 1_800_000_000)
+        let mainCard = earlyPrelims.addingTimeInterval(4 * 3600)
+        let card = SportsFixture(
+            id: "ufc", leagueId: "espn:mma/ufc", leagueName: "UFC", leagueAbbreviation: "UFC",
+            startDate: earlyPrelims, status: SportsFixtureStatus(state: .scheduled),
+            name: "UFC 332", mainCardDate: mainCard
+        )
+
+        let window = SportsChannelResolver.guideWindows(for: [card])
+        #expect(window == [
+            mainCard.addingTimeInterval(-SportsMatcher.leadTime) ... mainCard.addingTimeInterval(SportsMatcher.lateStart)
+        ])
+    }
+
     @Test func `single EPG match resolves to one confident channel`() async throws {
         let container = try makeContainer()
         let context = ModelContext(container)

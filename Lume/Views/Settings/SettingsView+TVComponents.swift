@@ -156,6 +156,12 @@ import SwiftUI
         @AppStorage(SportsSyncService.hideScoresKey) private var hideScores = false
         @State private var sync = SportsSyncService.shared
         @State private var showManageTeams = false
+        @State private var follows = SportsFollowService.shared
+        @State private var isReordering = false
+        @AppStorage(SportsHubLayout.hiddenKey) private var hiddenRaw = ""
+        /// The settings column's scroll view, which the sections list scrolls
+        /// to keep a lifted row on screen.
+        let proxy: ScrollViewProxy
 
         var body: some View {
             VStack(alignment: .leading, spacing: 36) {
@@ -190,6 +196,14 @@ import SwiftUI
                         TVOptionToggleRow(title: "Show Sports Tab", isOn: $tabEnabled)
                         TVOptionToggleRow(title: "Hide Scores", isOn: $hideScores)
                     }
+                }
+
+                if enabled, !follows.follows.isEmpty {
+                    sectionsList
+                }
+
+                if enabled {
+                    TVSportsAlertSettingsSection()
                 }
 
                 if enabled {
@@ -234,6 +248,33 @@ import SwiftUI
                 return last.formatted(.relative(presentation: .named))
             }
             return String(localized: "Never")
+        }
+
+        /// The hub's rows, one per follow: eye to take one off the hub (it stays
+        /// followed), select to lift and move — Content Management's list. The
+        /// order is the follow list's, so it also leads the Home shelf.
+        private var sectionsList: some View {
+            VStack(alignment: .leading, spacing: 8) {
+                TVSettingsSectionLabel("Sections")
+                TVReorderableContentList(
+                    items: follows.follows,
+                    title: sectionTitle,
+                    isHidden: { SportsHubLayout.hidden(hiddenRaw).contains($0.key) },
+                    onToggleHidden: { hiddenRaw = SportsHubLayout.toggling($0.key, in: hiddenRaw) },
+                    onCommitOrder: { follows.setOrder($0) },
+                    isReordering: $isReordering,
+                    scrollProxy: proxy
+                )
+                Text("Hide a team or league to take its row off the Sports hub — it stays followed. Select a row to lift it, then move up or down and select again to place.")
+                    .font(.system(size: 20))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, TVSettingsMetrics.rowHPadding)
+                    .padding(.top, 4)
+            }
+        }
+
+        private func sectionTitle(_ follow: SportsFollow) -> String {
+            SportsHubGrouping(scope: .all, follows: [follow], store: .shared).sidebarEntries.first?.title ?? follow.key
         }
     }
 

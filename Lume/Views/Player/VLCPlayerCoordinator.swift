@@ -33,9 +33,7 @@ final class VLCPlayerCoordinator: NSObject, ObservableObject {
     /// to decide whether a failure is an initial-load failure (eligible for
     /// engine fallback) or a mid-stream drop.
     @Published private(set) var hasStartedPlayback = false
-    /// Decides when the current stream started: VLC's `.playing`, or its
-    /// playhead advancing — VLC doesn't re-emit `.playing` when a new media is
-    /// loaded into a player that is already playing (a catch-up seek).
+    /// Startup proof from engine state, playhead or displayed frames.
     private var startTracker = PlaybackStartTracker()
     /// True from a (re)load until the stream plays, so the host can show a
     /// loading indicator (parity with the other engines).
@@ -115,6 +113,7 @@ final class VLCPlayerCoordinator: NSObject, ObservableObject {
     private var pipController: (any VLCPictureInPictureWindowControlling)?
 
     var statsTimer: Timer?
+    var startupFrameTimer: Timer?
     var lastStats: VLCMedia.Stats?
     /// Internal so `logStateChange()` can live in the +Diagnostics file, which
     /// exists to keep this one under the project's 600-line cap.
@@ -138,9 +137,7 @@ final class VLCPlayerCoordinator: NSObject, ObservableObject {
     /// drop.
     private var isReloading = false
 
-    /// Fires `onPlaybackFailure` if the stream produces no first frame within
-    /// `startupTimeout` — covers a stream that hangs in `opening`/`buffering`
-    /// forever without ever emitting `.error`.
+    /// Reports startup timeout even when the engine never emits an error.
     private var startupWatchdog: Task<Void, Never>?
     /// Guards `onPlaybackFailure` so a failure is reported at most once per load.
     private var didReportFailure = false
@@ -259,11 +256,8 @@ final class VLCPlayerCoordinator: NSObject, ObservableObject {
                 }
             }
         case .error:
-            // A hard error before the first frame means this engine can't open
-            // the stream — report it straight away so the host can fall back,
-            // unless this is the last engine, where a bounded retry is all that
-            // is left (`PlaybackPolicy`). After playback has started, fall back
-            // on the bounded reconnect and only report once it's exhausted.
+            // Startup errors fall back immediately unless this is the last
+            // engine; errors after startup use the bounded reconnect budget.
             if !hasStartedPlayback, !retriesStartupErrors {
                 reportFailure()
             } else {
@@ -285,10 +279,18 @@ final class VLCPlayerCoordinator: NSObject, ObservableObject {
     private func markPlaybackStarted(_ proof: PlaybackStartTracker.Proof?) {
         guard let proof else { return }
         if proof == .playhead { Logger.player.info("VLC: first frame proven by playhead progress") }
+        if proof == .displayedFrames { Logger.player.info("VLC: first frame proven by displayed frames") }
         hasStartedPlayback = true
         setBuffering(false)
         PlaybackQoE.shared.noteFirstFrame()
         cancelStartupWatchdog()
+    }
+
+    /// Called only for the active media by the startup sampler.
+    func noteDisplayedFrames(_ count: UInt64) {
+        let seconds = (mediaPlayer.time.value?.doubleValue ?? 0) / 1000
+        guard isResumeSettled(currentSeconds: seconds) else { return }
+        markPlaybackStarted(startTracker.noteDisplayedFrames(count))
     }
 
     /// Arm the startup watchdog. Cancelled once the first frame renders.
@@ -306,11 +308,11 @@ final class VLCPlayerCoordinator: NSObject, ObservableObject {
     private func cancelStartupWatchdog() {
         startupWatchdog?.cancel()
         startupWatchdog = nil
+        startupFrameTimer?.invalidate()
+        startupFrameTimer = nil
     }
 
-    /// Report a stream that couldn't be started. Fires `onPlaybackFailure` at
-    /// most once per load; the engine view decides whether to fall back or show
-    /// the failure overlay.
+    /// Reports failure at most once per load, for fallback or the error overlay.
     private func reportFailure() {
         guard !didReportFailure else { return }
         didReportFailure = true
@@ -373,9 +375,7 @@ final class VLCPlayerCoordinator: NSObject, ObservableObject {
         didSeekResume = true
     }
 
-    /// Whether playback time may be reported to the UI yet. While a resume
-    /// seek is pending we withhold updates so the clock doesn't briefly
-    /// show (and persist) the pre-seek position.
+    /// Withholds time updates until the resume seek lands.
     private func isResumeSettled(currentSeconds: TimeInterval) -> Bool {
         guard needsResume else { return true }
         if resumeLanded { return true }

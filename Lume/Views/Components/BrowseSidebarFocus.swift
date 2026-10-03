@@ -2,8 +2,8 @@
 //  BrowseSidebarFocus.swift
 //  Lume
 //
-//  tvOS focus behaviour shared by the two browse panels — `LibraryBrowseSidebar`
-//  (Movies, Series) and `LiveTVBrowseSidebar`. A panel that slides in over the
+//  tvOS focus behaviour of `BrowseSidebarPanel`, the browse panel Movies,
+//  Series, Live TV and Sports share. A panel that slides in over the
 //  page has to *take* focus, or the page underneath stays live: the user keeps
 //  navigating a list they can no longer read, and neither Menu nor a press to
 //  the right reaches the panel, so there is no way back out of it.

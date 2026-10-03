@@ -33,7 +33,13 @@ struct GameDetailSheet: View {
     @State private var detailLoad = SportsEventDetailLoadMachine()
     @State private var fetchedStandings: [SportsStandingRow] = []
     @State private var selfResolved: [ResolvedChannel] = []
-    @AppStorage(SportsSyncService.hideScoresKey) private var hidesScores = false
+    @AppStorage(SportsSyncService.hideScoresKey) private var hideScoresSetting = false
+    @State private var reveal = SportsScoreReveal.shared
+
+    /// Hide Scores, unless this one game has been revealed.
+    private var hidesScores: Bool {
+        hideScoresSetting && !reveal.isRevealed(fixture.id)
+    }
 
     private var channels: [ResolvedChannel] {
         resolved.isEmpty ? selfResolved : resolved
@@ -44,10 +50,14 @@ struct GameDetailSheet: View {
             ScrollView {
                 VStack(spacing: 24) {
                     header
+                    GameDetailMarkets(detail: detailLoad.detail, fixture: fixture, hidesScores: hidesScores)
                     if fixture.status.state != .final {
                         watchCard
                     }
                     detailTabs
+                    if fixture.sport == "racing", !hidesScores {
+                        RacingSeasonCard(fixture: fixture)
+                    }
                 }
                 .padding()
                 .frame(maxWidth: .infinity)
@@ -174,9 +184,16 @@ struct GameDetailSheet: View {
                 let isCurrent = session.kind == fixture.sessionKind
                 if index > 0 { Divider().opacity(0.35) }
                 HStack {
-                    Text(session.kind.displayName)
-                        .font(.subheadline.weight(isCurrent ? .bold : .medium))
-                        .foregroundStyle(isCurrent ? AnyShapeStyle(.tint) : AnyShapeStyle(.primary))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(session.kind.displayName)
+                            .font(.subheadline.weight(isCurrent ? .bold : .medium))
+                            .foregroundStyle(isCurrent ? AnyShapeStyle(.tint) : AnyShapeStyle(.primary))
+                        if !hidesScores, let podium = session.podiumLine {
+                            Text(verbatim: podium)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
                     Spacer()
                     Text(session.date, format: .dateTime.weekday(.abbreviated).month(.abbreviated).day())
                         .font(.subheadline)
@@ -246,7 +263,7 @@ struct GameDetailSheet: View {
                 }
             }
         case .scheduled, .postponed:
-            Text(fixture.startDate, format: fixture.startTimeIsTentative == true
+            Text(fixture.headlineDate, format: fixture.startTimeIsTentative == true
                 ? .dateTime.weekday(.abbreviated).day().month(.abbreviated)
                 : .dateTime.hour().minute())
                 .font(.system(size: 34, weight: .semibold, design: .rounded))
@@ -386,7 +403,7 @@ struct GameDetailSheet: View {
                 Text("Table")
                     .font(.headline)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                GroupedStandingsTable(rows: rows, followedTeamIds: follows.followedKeys, onSelectLeague: selectLeague)
+                GroupedStandingsTable(rows: rows, followedTeamIds: follows.followedKeys)
             }
             .padding()
             .frame(maxWidth: .infinity)
@@ -428,12 +445,6 @@ struct GameDetailSheet: View {
 
     private var expectsEventDetail: Bool {
         fixture.status.state == .inProgress || fixture.status.state == .final
-    }
-
-    private func selectLeague() {
-        guard let league = SportsCatalog.league(id: fixture.leagueId) else { return }
-        dismiss()
-        router?.sportsPath.append(league)
     }
 
     // MARK: - Derived

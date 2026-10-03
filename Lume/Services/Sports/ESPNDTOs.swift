@@ -30,9 +30,16 @@ nonisolated struct ESPNFlexibleValue: Codable, Hashable {
             stringValue = String(int)
         } else if let double = try? container.decode(Double.self) {
             stringValue = String(double)
+        } else if let object = try? decoder.container(keyedBy: ObjectKeys.self) {
+            // A team schedule's score: `{ "value": 2.0, "displayValue": "2" }`.
+            stringValue = try? object.decode(String.self, forKey: .displayValue)
         } else {
             stringValue = nil
         }
+    }
+
+    private enum ObjectKeys: String, CodingKey {
+        case displayValue
     }
 }
 
@@ -108,6 +115,18 @@ nonisolated struct ESPNEvent: Codable, Hashable {
     /// its matches; tennis events carry no `competitions` of their own.
     let groupings: [ESPNGrouping]?
     let venue: ESPNVenue?
+    /// A team schedule's round: "League Phase", "Third Round", "Quarterfinals".
+    let seasonType: ESPNSeasonType?
+    /// The stage, keyed: `{ "slug": "final" }`.
+    let season: ESPNEventSeason?
+}
+
+nonisolated struct ESPNEventSeason: Codable, Hashable {
+    let slug: String?
+}
+
+nonisolated struct ESPNSeasonType: Codable, Hashable {
+    let name: String?
 }
 
 nonisolated struct ESPNGrouping: Codable, Hashable {
@@ -192,6 +211,8 @@ nonisolated struct ESPNCompetitor: Codable, Hashable {
     let athlete: ESPNAthlete?
     /// A tennis player's games per set.
     let linescores: [ESPNLinescore]?
+    /// A race session's finishing (or grid) position.
+    let order: Int?
 }
 
 nonisolated struct ESPNLinescore: Codable, Hashable {
@@ -246,6 +267,13 @@ nonisolated struct ESPNStandingsEntry: Codable, Hashable {
     let team: ESPNTeam?
     let athlete: ESPNAthlete?
     let stats: [ESPNStat]?
+    /// What the row's place earns — "Qualifies for round of 16" — and its colour.
+    let note: ESPNStandingNote?
+}
+
+nonisolated struct ESPNStandingNote: Codable, Hashable {
+    let description: String?
+    let color: String?
 }
 
 nonisolated struct ESPNStat: Codable, Hashable {
@@ -287,6 +315,11 @@ nonisolated struct ESPNSummaryResponse: Codable, Hashable {
     let boxscore: ESPNBoxscore?
     let rosters: [ESPNRoster]?
     let keyEvents: [ESPNKeyEvent]?
+    /// Bookmaker lines, best provider first (ESPNDTOs+Summary.swift).
+    let pickcenter: [ESPNPickcenter]?
+    /// One entry per play, oldest first; US sports only.
+    let winprobability: [ESPNWinProbability]?
+    let header: ESPNSummaryHeader?
 }
 
 nonisolated struct ESPNBoxscore: Codable, Hashable {

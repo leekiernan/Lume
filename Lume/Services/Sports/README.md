@@ -32,7 +32,19 @@ Services/Sports/
 ├── SportsChannelResolver.swift  Fixture → channel resolve (below)
 ├── SportsChannelResolver+Racing.swift  Race sessions: series + session words
 ├── SportsChannelResolver+Competition.swift  Tour-wide blocks (tennis)
-└── SportsChannelPicks.swift  Device-local remembered channel picks
+├── SportsChannelPicks.swift  Device-local remembered channel picks
+├── SportsChannelAvailability.swift  A card's "On 3 of your channels" line
+├── SportsChannelPreference.swift    Which channel Play opens (language, screen)
+├── SportsFixture+Window.swift       Running time: which days an event is on
+├── SportsMarkets.swift + ESPNClient+Markets.swift  Odds, win probability, periods
+├── SportsScoreReveal.swift   Hide Scores: one game revealed at a time
+├── SportsAlertMachine.swift  Pure: which in-player alerts a poll raises
+├── SportsAlertSettings.swift Per-profile alert mode + events per sport
+├── SportsAlertCoordinator.swift  The alert feed and queue during playback
+├── SportsReminders.swift     "Remind me": a kick-off toast through the player
+├── SportsTeamSeason.swift + SportsTeamSeasonLoader.swift  A team's competitions
+├── SportsHighlights.swift + SportsHighlightsLoader.swift  "Big this week"
+└── SportsRacingSeason.swift  A series' wins / poles / podiums and title gap
 ```
 
 Data model decisions that outrank first instincts:
@@ -205,6 +217,36 @@ is honoured whether or not anything else matched.
 single channel holds the strongest matched tier alone. If two or more channels
 tie at the best rank, none is confident. This is the one case a live card offers
 one-tap playback (a play glyph); otherwise the card opens a channel picker.
+
+## Who owns what (the hub, alerts and the player)
+
+The rule from `_NOTES/state-machines.md` — enum state, a pure transition,
+effects out, one owner — applied to what the Apple TV redesign added:
+
+- **Pure, no state:** `SportsHighlights.rank`, `SportsTeamSeasonBuilder`,
+  `SportsRacingSeason.build`, `SportsChannelPreference.ordered`,
+  `SportsChannelAvailability`, `SportsHubGrouping.heroCandidates`. Unit-tested.
+- **Machines:** `SportsAlertMachine` (what a poll raises; memory per game,
+  raised ids), `SportsHeroSelectionMachine` (stable hero identity across
+  score/guide partial results), and `PlayerDetourMachine` (the way back to a
+  film, and when its pill shows). Both pure values; their owners perform the
+  effects.
+- **Owners:** `SportsAlertCoordinator` owns the alert machine, the 30 s feed
+  and the toast queue for the life of a playback session; it is reset when
+  playback ends so the next session starts from a baseline. The player's
+  `PlayerSportsAlertsLayer` owns the detour machine (through a small
+  observable the remote claim reads synchronously) — never the engines, which
+  only ask `PlayerControlsBridge` before acting on Play/Pause or closing.
+- **Stores:** `SportsScoreReveal`, `SportsReminders` (device-local,
+  `UserDefaults`, self-expiring); alert settings live in a profile-scoped key
+  and sync with the profile.
+- **Feeds:** `SportsTeamSeasonLoader`, `SportsHighlightsLoader`,
+  `SportsRacingSeasonLoader` — fetched on demand, kept in memory behind a
+  `Mutex` for 30–60 minutes, never written to disk or into `SportsStore`.
+
+During playback nothing here writes to disk or SwiftData: the regular Sports
+refresh stays paused (its snapshot writes stall KSPlayer), and the alert feed
+only fetches.
 
 ## Adding a second provider
 

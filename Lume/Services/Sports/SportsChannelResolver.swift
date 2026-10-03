@@ -228,7 +228,7 @@ nonisolated enum SportsChannelResolver {
     /// The kickoff windows the guide has to cover, merged where they overlap.
     nonisolated static func guideWindows(for fixtures: [SportsFixture]) -> [ClosedRange<Date>] {
         let windows = fixtures
-            .map { $0.startDate.addingTimeInterval(-SportsMatcher.leadTime) ... $0.startDate.addingTimeInterval(SportsMatcher.lateStart) }
+            .map { $0.headlineDate.addingTimeInterval(-SportsMatcher.leadTime) ... $0.headlineDate.addingTimeInterval(SportsMatcher.lateStart) }
             .sorted { $0.lowerBound < $1.lowerBound }
         var merged: [ClosedRange<Date>] = []
         for window in windows {
@@ -405,7 +405,7 @@ nonisolated enum SportsChannelResolver {
         let isRace = !fixture.hasTeams && !SportsRaceMatcher.seriesPhrases(leagueId: fixture.leagueId).isEmpty
         if isRace {
             let race = resolveRace(fixture: fixture, channels: channels, guide: guide, pickIndex: index.pickIndex)
-            if !race.isEmpty { return ranked(race, kickoff: fixture.startDate) }
+            if !race.isEmpty { return ranked(race, kickoff: fixture.headlineDate) }
         }
         // With nothing to match by (a half-known pairing, a nameless event) the
         // fixture still offers the channels pinned for its competition.
@@ -413,7 +413,7 @@ nonisolated enum SportsChannelResolver {
         let context = FixtureMatchContext(
             competitionKey: fixture.leagueId,
             target: target,
-            kickoff: fixture.startDate,
+            kickoff: fixture.headlineDate,
             fixture: fixture
         )
 

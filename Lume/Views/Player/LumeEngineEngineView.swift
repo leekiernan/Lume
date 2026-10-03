@@ -75,6 +75,7 @@ struct LumeEngineEngineView: View {
     /// Drives bounded backoff reconnects when the stream drops mid-playback.
     @State private var reconnector = PlaybackRetryController()
     @State private var isControlsVisible = true
+    @Environment(PlayerControlsBridge.self) private var remoteBridge: PlayerControlsBridge?
     /// Presents the OpenSubtitles browser. Held here rather than in the controls
     /// overlay: the overlay is removed when the controls auto-hide, which would
     /// take a sheet anchored there down with it mid-search.
@@ -264,33 +265,38 @@ struct LumeEngineEngineView: View {
         .onMenuPress { handleMenuPress() }
         // The Siri Remote's dedicated Play/Pause button is a distinct press type
         // from a click-pad Select, so the on-screen button never sees it.
-        .onPlayPausePress { togglePlay() }
+        .onPlayPausePress {
+            if remoteBridge?.claimsPlayPause() != true { togglePlay() }
+        }
+        .onChange(of: isControlsVisible, initial: true) { _, visible in
+            remoteBridge?.controlsVisible = visible
+        }
         #if os(macOS)
-            .onContinuousHover(coordinateSpace: .local) { phase in
-                switch phase {
-                case .active:
-                    if !isControlsVisible {
-                        withAnimation(.easeInOut(duration: 0.2)) { isControlsVisible = true }
-                    }
-                    resetHideTimer()
-                    hoverHideTask?.cancel()
-                case .ended:
-                    hoverHideTask?.cancel()
-                    hoverHideTask = Task { @MainActor in
-                        try? await Task.sleep(nanoseconds: 600_000_000)
-                        guard !Task.isCancelled else { return }
-                        withAnimation(.easeInOut(duration: 0.2)) { isControlsVisible = false }
-                    }
+        .onContinuousHover(coordinateSpace: .local) { phase in
+            switch phase {
+            case .active:
+                if !isControlsVisible {
+                    withAnimation(.easeInOut(duration: 0.2)) { isControlsVisible = true }
+                }
+                resetHideTimer()
+                hoverHideTask?.cancel()
+            case .ended:
+                hoverHideTask?.cancel()
+                hoverHideTask = Task { @MainActor in
+                    try? await Task.sleep(nanoseconds: 600_000_000)
+                    guard !Task.isCancelled else { return }
+                    withAnimation(.easeInOut(duration: 0.2)) { isControlsVisible = false }
                 }
             }
-            .onKeyPress(.leftArrow) { coordinator.skip(by: -media.skipInterval(default: 15)); resetHideTimer(); return .handled }
-            .onKeyPress(.rightArrow) { coordinator.skip(by: media.skipInterval(default: 15)); resetHideTimer(); return .handled }
-            .liveChannelKeyNavigation(
-                neighbours: itemNeighbours, swapper: mediaSwapper,
-                onSelect: { onSelectMedia?($0) }, onResetHideTimer: resetHideTimer
-            )
-            .onKeyPress(.space) { togglePlay(); return .handled }
-            .onKeyPress(.escape) { closePlayer(); return .handled }
+        }
+        .onKeyPress(.leftArrow) { coordinator.skip(by: -media.skipInterval(default: 15)); resetHideTimer(); return .handled }
+        .onKeyPress(.rightArrow) { coordinator.skip(by: media.skipInterval(default: 15)); resetHideTimer(); return .handled }
+        .liveChannelKeyNavigation(
+            neighbours: itemNeighbours, swapper: mediaSwapper,
+            onSelect: { onSelectMedia?($0) }, onResetHideTimer: resetHideTimer
+        )
+        .onKeyPress(.space) { togglePlay(); return .handled }
+        .onKeyPress(.escape) { closePlayer(); return .handled }
         #endif
     }
 
@@ -492,7 +498,7 @@ struct LumeEngineEngineView: View {
             panelCloseToken += 1
         } else if isControlsVisible {
             hideControls()
-        } else {
+        } else if remoteBridge?.claimsBack() != true {
             closePlayer()
         }
     }

@@ -51,7 +51,9 @@ struct ProfileScopedPreferencesTests {
                 RecommendationSettings.enabledKey,
                 SportsSyncService.enabledKey,
                 SportsSyncService.tabEnabledKey,
-                SportsSyncService.hideScoresKey
+                SportsSyncService.hideScoresKey,
+                ProfileScopedPreferences.key(SportsAlertSettings.baseKey),
+                SportsHubLayout.hiddenKey
             ]
             for surface in SectionSurface.allCases {
                 expected.insert(HomeLayoutSettings.sectionOrderKey(surface))
@@ -67,14 +69,16 @@ struct ProfileScopedPreferencesTests {
 
     /// The one key table drives the key list, the boolean subset and each
     /// boolean's default; pin them to the values the three hand-kept lists had,
-    /// plus the Sports hide-scores switch added since.
+    /// plus the Sports hide-scores switch and alert settings added since.
     @Test func `key table derives the historical lists`() {
         var expectedBases = [
             AppAreaSettings.baseDisabledAreasKey,
             RecommendationSettings.baseEnabledKey,
             SportsSyncService.baseEnabledKey,
             SportsSyncService.baseTabEnabledKey,
-            SportsSyncService.baseHideScoresKey
+            SportsSyncService.baseHideScoresKey,
+            SportsAlertSettings.baseKey,
+            SportsHubLayout.baseHiddenKey
         ]
         for surface in SectionSurface.allCases {
             expectedBases.append(HomeLayoutSettings.baseSectionOrderKey(surface))

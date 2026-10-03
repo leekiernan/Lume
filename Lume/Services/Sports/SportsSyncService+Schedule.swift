@@ -12,6 +12,27 @@
 import Foundation
 
 extension SportsSyncService {
+    /// Results are useful briefly (Yesterday and a late-running fixture), while
+    /// schedules need enough runway to bridge the next month boundary. Keeping
+    /// every completed fixture ever seen made the derived JSON cache grow for a
+    /// whole season even though no Sports surface could display those rows.
+    nonisolated static let finishedFixtureRetention: TimeInterval = 14 * 24 * 60 * 60
+    nonisolated static let upcomingFixtureRetention: TimeInterval = 45 * 24 * 60 * 60
+
+    nonisolated static func retainedFixtures(_ fixtures: [SportsFixture], now: Date = Date()) -> [SportsFixture] {
+        fixtures.filter { fixture in
+            switch fixture.status.state {
+            case .inProgress:
+                true
+            case .final:
+                fixture.expectedEnd >= now.addingTimeInterval(-finishedFixtureRetention)
+            case .scheduled, .postponed:
+                fixture.expectedEnd >= now.addingTimeInterval(-finishedFixtureRetention)
+                    && fixture.startDate <= now.addingTimeInterval(upcomingFixtureRetention)
+            }
+        }
+    }
+
     /// Whether a league's snapshot is recent enough to skip a full refresh.
     nonisolated static func isFresh(_ snapshot: SportsLeagueSnapshot?, now: Date) -> Bool {
         guard let snapshot else { return false }

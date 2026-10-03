@@ -2,9 +2,9 @@
 //  TVFixtureLogoCard.swift
 //  Lume
 //
-//  The one tvOS fixture card, on the Home rail and in the hub: the two crests
-//  with the kickoff time or the score between them — a 10-foot glance, not a
-//  line of text. Team names live on the detail screen. The team gradient stays
+//  The Home rail's tvOS fixture card: the two crests with the kickoff (and its
+//  weekday when not today) or the score between them — a 10-foot glance, not a
+//  line of text. The hub uses the fuller `TVFixtureCard`. The team gradient stays
 //  at rest; focus is a scale lift (TVCardButtonStyle) plus a white ring, since
 //  the system white-fill idiom would paint the gradient over.
 //
@@ -181,10 +181,19 @@
                         .font(.system(size: 30, weight: .semibold, design: .rounded))
                         .foregroundStyle(.white.opacity(0.7))
                 } else {
-                    Text(fixture.startDate, format: .dateTime.hour().minute())
-                        .font(.system(size: 30, weight: .semibold, design: .rounded))
-                        .monospacedDigit()
-                        .foregroundStyle(.white)
+                    // The weekday above the time unless it is today: a 7-day
+                    // rail of bare times read every game as today's.
+                    VStack(spacing: 2) {
+                        if !fixture.headlineIsToday {
+                            Text(fixture.headlineDate, format: .dateTime.weekday(.abbreviated))
+                                .font(.system(size: 20, weight: .semibold))
+                                .foregroundStyle(.white.opacity(0.7))
+                        }
+                        Text(fixture.headlineDate, format: .dateTime.hour().minute())
+                            .font(.system(size: 30, weight: .semibold, design: .rounded))
+                            .monospacedDigit()
+                            .foregroundStyle(.white)
+                    }
                 }
             }
         }

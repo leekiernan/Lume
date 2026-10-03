@@ -2,10 +2,12 @@
 //  HomeHeroCarousel.swift
 //  Lume
 //
-//  A Netflix / Apple TV-style hero carousel for the top of the home screen on
-//  iOS and macOS. (tvOS uses the immersive `TVHomeScreen` instead.) Features
-//  trending movies the user owns using wide TMDB backdrop artwork,
-//  auto-advancing every few seconds while honouring manual swipes.
+//  A Netflix / Apple TV-style hero carousel for the top of a browse page on
+//  iOS and macOS — Home, Movies, Series and Sports. (tvOS uses the immersive
+//  `TVHomeScreen` instead.) Wide artwork, auto-advancing every few seconds
+//  while honouring manual swipes, with the loading-bar page dots centred at
+//  the foot. `HeroCarousel` is generic over the slide; each page supplies its
+//  artwork and its copy, and `HomeHeroCarousel` is the movies-and-series one.
 //
 //  The artwork lives in a paging ScrollView (`scrollTargetBehavior(.paging)` +
 //  `scrollPosition`) so it works on macOS too. The title / overview / buttons
@@ -16,8 +18,28 @@
 import SwiftData
 import SwiftUI
 
+/// The movies-and-series hero of Home, Movies and Series.
 struct HomeHeroCarousel: View {
     let items: [HeroItem]
+
+    var body: some View {
+        HeroCarousel(
+            items: items,
+            imageURL: \.imageURL,
+            backdrop: { HeroBackdrop(url: $0.imageURL) },
+            info: { HeroInfo(hero: $0, isCompact: $1) }
+        )
+    }
+}
+
+struct HeroCarousel<Item: Identifiable, Backdrop: View, Info: View>: View where Item.ID == String {
+    let items: [Item]
+    /// The artwork to warm for a slide's neighbours, when it is known up front.
+    let imageURL: (Item) -> URL?
+    /// A slide's artwork, filling the page.
+    @ViewBuilder let backdrop: (Item) -> Backdrop
+    /// The fixed copy over the artwork; `true` when the hero is narrow.
+    @ViewBuilder let info: (Item, Bool) -> Info
 
     @State private var currentID: String?
     @State private var isInteracting = false
@@ -28,7 +50,7 @@ struct HomeHeroCarousel: View {
     /// The auto-advance clock, which the page dots render as a loading bar.
     /// Read only by `HeroClockIndicator`: held as plain `@State` it was read by
     /// this body, which re-rendered the whole carousel — artwork, gradient and
-    /// copy — at the clock's 20 Hz tick. The same split as tvOS's `TVHeroModel`.
+    /// copy — at the clock's 20 Hz tick. The same split as tvOS's `TVHeroCarouselModel`.
     @State private var clock = HeroClock()
 
     /// Which hero the overlay is showing. Deliberately LAGS the scroll position:
@@ -43,8 +65,13 @@ struct HomeHeroCarousel: View {
 
     /// Sentinel scroll ids for the boundary clones, so `currentID` can tell a
     /// clone apart from the real page it mirrors (see `normaliseClonePosition()`).
-    private static let headCloneID = "hero-clone-head"
-    private static let tailCloneID = "hero-clone-tail"
+    private static var headCloneID: String {
+        "hero-clone-head"
+    }
+
+    private static var tailCloneID: String {
+        "hero-clone-tail"
+    }
 
     private let heroHeight = HomeHeroMetrics.height
 
@@ -52,7 +79,7 @@ struct HomeHeroCarousel: View {
     /// at the front and the FIRST at the back. Paging onto a clone is one slide;
     /// once settled there `normaliseClonePosition()` silently re-seats to the
     /// real page, so looping never scrolls back through every slide in between.
-    private var slots: [HeroSlot] {
+    private var slots: [HeroSlot<Item>] {
         guard items.count > 1, let first = items.first, let last = items.last else {
             return items.map { HeroSlot(id: $0.id, item: $0) }
         }
@@ -69,7 +96,7 @@ struct HomeHeroCarousel: View {
         return slots.first { $0.id == currentID }?.item.id ?? currentID
     }
 
-    private var currentHero: HeroItem? {
+    private var currentHero: Item? {
         items.first { $0.id == currentItemID } ?? items.first
     }
 
@@ -80,7 +107,7 @@ struct HomeHeroCarousel: View {
 
     /// The hero whose copy is in the overlay. Lags `currentHero` so the outgoing
     /// title fades out before the next fades in; falls back before the first swap.
-    private var displayedHero: HeroItem? {
+    private var displayedHero: Item? {
         items.first { $0.id == displayedID } ?? currentHero
     }
 
@@ -102,7 +129,7 @@ struct HomeHeroCarousel: View {
                 if let hero = displayedHero {
                     // Fixed overlay — no `.id`/`.transition` so a stable view can
                     // fade out/in via `infoOpacity` rather than cross-dissolving.
-                    HeroInfo(hero: hero, isCompact: isCompact)
+                    info(hero, isCompact)
                         .opacity(infoOpacity)
                 }
 
@@ -152,7 +179,7 @@ struct HomeHeroCarousel: View {
         guard count > 1 else { return }
         // Wrap the neighbours so the loop targets (last⇄first) are warm too.
         let neighbours = [(index - 1 + count) % count, (index + 1) % count]
-            .compactMap { items[$0].imageURL }
+            .compactMap { imageURL(items[$0]) }
         guard !neighbours.isEmpty else { return }
         Task { await ImagePipeline.shared.prefetch(neighbours, maxPixelSize: nil) }
     }
@@ -165,8 +192,9 @@ struct HomeHeroCarousel: View {
             ScrollView(.horizontal) {
                 LazyHStack(spacing: 0) {
                     ForEach(slots) { slot in
-                        HeroBackdrop(url: slot.item.imageURL)
+                        backdrop(slot.item)
                             .frame(width: width, height: heroHeight)
+                            .clipped()
                             .id(slot.id)
                     }
                 }
@@ -354,12 +382,12 @@ private struct HeroClockIndicator: View {
     }
 }
 
-/// One rendered page in the carousel. Real items use their own `HeroItem.id`;
+/// One rendered page in the carousel. Real items use their own id;
 /// boundary clones reuse a mirrored item but carry a sentinel id so the scroll
 /// position can distinguish a clone from the page it duplicates.
-private struct HeroSlot: Identifiable {
+private struct HeroSlot<Item>: Identifiable {
     let id: String
-    let item: HeroItem
+    let item: Item
 }
 
 // MARK: - Preview

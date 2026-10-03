@@ -139,6 +139,7 @@ nonisolated extension SportsCatalog {
         soccer("uefa.wchampions", "UEFA Women's Champions League", "UWCL", .womensFootball),
         soccer("eng.w.1", "Women's Super League", "WSL", .womensFootball),
         soccer("eng.w.fa", "Women's FA Cup", "WFA CUP", .womensFootball),
+        soccer("eng.w.league_cup", "Women's League Cup", "WLC", .womensFootball),
         soccer("esp.w.1", "Liga F", "LIGA F", .womensFootball),
         soccer("esp.copa_de_la_reina", "Copa de la Reina", "COPA REINA", .womensFootball),
         soccer("fra.w.1", "Première Ligue", "D1 F", .womensFootball),
