@@ -19,17 +19,6 @@
 import SwiftData
 import SwiftUI
 
-/// What the results area is showing. Shared by both layouts so the two can't
-/// drift on which state wins, and unit-testable without a view.
-nonisolated enum SubtitleSearchStatus: Equatable {
-    case searching
-    case failed(String)
-    /// The stream isn't something OpenSubtitles indexes (a live channel).
-    case unsupported
-    case empty
-    case results
-}
-
 struct SubtitleSearchView: View {
     let media: PlayableMedia
     /// Handed the downloaded file; the caller loads it into its engine and the
@@ -41,13 +30,13 @@ struct SubtitleSearchView: View {
     @Environment(\.dismiss) var dismiss
 
     @State var service = OpenSubtitlesService.shared
-    @State var query: OpenSubtitlesQuery?
-    @State var results: [OnlineSubtitle] = []
-    @State var isSearching = false
-    @State var errorMessage: String?
-    /// The result currently being downloaded, so its row can show progress and
-    /// a second tap can't spend two downloads from the daily quota.
-    @State var downloadingID: String?
+    @State private var machine = SubtitleSearchMachine()
+    @State private var downloadTask: Task<Void, Never>?
+
+    private struct SearchKey: Equatable {
+        let mediaID: String
+        let languages: [String]
+    }
 
     var body: some View {
         Group {
@@ -57,21 +46,34 @@ struct SubtitleSearchView: View {
                 standardBody
             #endif
         }
-        .task(id: media.id) { await runSearch() }
-        // Re-run when the viewer changes languages; the API filters server-side,
-        // so a new selection is a new search rather than a local filter.
-        .onChange(of: service.preferredLanguages) { _, _ in
-            Task { await runSearch() }
+        .task(id: SearchKey(mediaID: media.id, languages: service.preferredLanguages)) { await runSearch() }
+        .onDisappear {
+            machine.invalidate()
+            downloadTask?.cancel()
+            downloadTask = nil
         }
     }
 
     // MARK: - Shared state
 
     var status: SubtitleSearchStatus {
-        if isSearching { return .searching }
-        if let errorMessage { return .failed(errorMessage) }
-        if query == nil { return .unsupported }
-        return results.isEmpty ? .empty : .results
+        machine.status
+    }
+
+    var results: [OnlineSubtitle] {
+        machine.results
+    }
+
+    var downloadingID: String? {
+        machine.downloadingID
+    }
+
+    var isSearching: Bool {
+        machine.isSearching
+    }
+
+    var downloadError: String? {
+        machine.downloadError
     }
 
     var languageSummary: String {
@@ -82,33 +84,30 @@ struct SubtitleSearchView: View {
     // MARK: - Actions
 
     func runSearch() async {
-        errorMessage = nil
-        results = []
         // Resolving the ids touches SwiftData on the main actor; the fetch that
         // follows is off it.
-        guard let resolved = SubtitleSearchQuery.resolve(for: media.contentRef, in: modelContext) else {
-            query = nil
-            return
-        }
-        query = resolved
-        isSearching = true
-        defer { isSearching = false }
+        let resolved = SubtitleSearchQuery.resolve(for: media.contentRef, in: modelContext)
+        let request = machine.begin(mediaID: media.id, supported: resolved != nil)
+        guard let resolved else { return }
         do {
-            results = try await service.search(resolved)
+            let results = try await service.search(resolved)
+            guard !Task.isCancelled else { return }
+            machine.finish(request, results: results)
         } catch let error as OpenSubtitlesError {
-            errorMessage = String(localized: error.message)
+            guard !Task.isCancelled else { return }
+            machine.fail(request, message: String(localized: error.message))
         } catch {
-            errorMessage = error.localizedDescription
+            guard !Task.isCancelled else { return }
+            machine.fail(request, message: error.localizedDescription)
         }
     }
 
     func pick(_ subtitle: OnlineSubtitle) {
-        guard downloadingID == nil else { return }
-        downloadingID = subtitle.id
-        Task {
-            defer { downloadingID = nil }
+        guard let request = machine.beginDownload(subtitle) else { return }
+        downloadTask = Task {
             do {
                 let fileURL = try await service.download(subtitle)
+                guard !Task.isCancelled, machine.finishDownload(request) else { return }
                 onPick(ExternalSubtitle(
                     id: subtitle.id,
                     label: "\(subtitle.languageName) · OpenSubtitles",
@@ -116,9 +115,11 @@ struct SubtitleSearchView: View {
                 ))
                 dismiss()
             } catch let error as OpenSubtitlesError {
-                errorMessage = String(localized: error.message)
+                guard !Task.isCancelled else { return }
+                machine.finishDownload(request, error: String(localized: error.message))
             } catch {
-                errorMessage = error.localizedDescription
+                guard !Task.isCancelled else { return }
+                machine.finishDownload(request, error: error.localizedDescription)
             }
         }
     }
@@ -162,6 +163,12 @@ struct SubtitleSearchView: View {
 
         private var resultsSection: some View {
             Section {
+                if isSearching, !results.isEmpty {
+                    ProgressView("Searching…")
+                }
+                if let downloadError {
+                    Text(downloadError).foregroundStyle(.red)
+                }
                 switch status {
                 case .searching:
                     HStack(spacing: 10) {
@@ -243,26 +250,6 @@ struct SubtitleSearchView: View {
         }
     }
 #endif
-
-// MARK: - Row badges
-
-/// The at-a-glance marks on a result: hearing-impaired, uploader-trusted, and
-/// machine/AI-translated. Shared by both layouts so the two agree on which
-/// glyph means what.
-nonisolated struct SubtitleBadge: Identifiable {
-    let id: String
-    let systemImage: String
-}
-
-extension OnlineSubtitle {
-    var badges: [SubtitleBadge] {
-        var badges: [SubtitleBadge] = []
-        if isHearingImpaired { badges.append(SubtitleBadge(id: "cc", systemImage: "captions.bubble")) }
-        if isFromTrusted { badges.append(SubtitleBadge(id: "trusted", systemImage: "checkmark.seal")) }
-        if isMachineTranslated { badges.append(SubtitleBadge(id: "machine", systemImage: "wand.and.stars")) }
-        return badges
-    }
-}
 
 // MARK: - Language picker
 

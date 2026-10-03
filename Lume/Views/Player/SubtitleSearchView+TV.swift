@@ -85,6 +85,15 @@
             VStack(alignment: .leading, spacing: 8) {
                 TVSettingsSectionLabel("Results")
 
+                if isSearching, !results.isEmpty {
+                    ProgressView("Searching…")
+                        .tvSettingsSecondaryText()
+                }
+                if let downloadError {
+                    Text(verbatim: downloadError)
+                        .foregroundStyle(.red)
+                }
+
                 switch status {
                 case .searching:
                     HStack(spacing: 16) {
