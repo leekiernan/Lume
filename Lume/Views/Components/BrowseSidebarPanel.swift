@@ -143,16 +143,15 @@ struct BrowseSidebarPanel: View {
                     .transition(.move(edge: .leading).combined(with: .opacity))
             }
         }
-        #if os(iOS)
-        // Above the navigation bar now, so it keeps clear of the status bar
-        // and notch; it may run under the floating tab bar at the foot.
-        .ignoresSafeArea(edges: .bottom)
-        #else
+        #if !os(iOS)
         // Escapes the safe area so the panel hugs the display the way the
         // Apple TV browse panel does, rather than floating inside the
         // title-safe box.
         .ignoresSafeArea()
         #endif
+        // On iOS the panel respects the bottom safe area supplied by TabView,
+        // including its expanded/minimized navigation. Only the scrim extends
+        // beyond it, so the final browse row stays visible and tappable.
         .animation(.snappy(duration: 0.28), value: isPresented)
     }
 
