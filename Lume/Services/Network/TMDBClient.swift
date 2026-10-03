@@ -20,7 +20,6 @@ enum TMDBError: Error {
     case decodingError(Error)
 }
 
-/// Read-only TMDB API client. Only the endpoints the home screen needs are implemented (trending)
 nonisolated struct TMDBClient {
     static let shared = TMDBClient()
 
@@ -188,6 +187,10 @@ nonisolated struct TMDBClient {
     }
 
     // MARK: - Title details
+
+    func posterPath(_ id: Int, isMovie: Bool) async throws -> String? {
+        try await (get("/\(isMovie ? "movie" : "tv")/\(id)") as TMDBPosterResponse).posterPath
+    }
 
     /// Full detail payload for a movie, with credits, similar titles and the
     /// US content rating folded in via `append_to_response`.

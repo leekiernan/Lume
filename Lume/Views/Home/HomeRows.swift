@@ -94,14 +94,17 @@ private struct HomeItemCell: View {
             switch item {
             case let .movie(movie):
                 NavigationLink(value: movie) {
-                    HomePosterCard(title: item.title, imageURL: item.imageURL, posterPath: movie.posterPath, progress: progress)
+                    HomePosterCard(title: item.title, imageURL: item.imageURL, posterPath: movie.posterPath, request: .init(kind: .movie, id: movie.id, categoryID: movie.categoryId), progress: progress)
                         .matchedTransitionSourceIfAvailable(id: movie.id, in: animationNamespace)
                 }
                 .posterCardButtonStyle()
             case let .series(series):
                 NavigationLink(value: series) {
-                    HomePosterCard(title: item.title, imageURL: item.imageURL, posterPath: series.posterPath, progress: progress, isSeries: true)
-                        .matchedTransitionSourceIfAvailable(id: series.id, in: animationNamespace)
+                    HomePosterCard(
+                        title: item.title, imageURL: item.imageURL, posterPath: series.posterPath,
+                        request: .init(kind: .series, id: series.id, categoryID: series.categoryId), progress: progress, isSeries: true
+                    )
+                    .matchedTransitionSourceIfAvailable(id: series.id, in: animationNamespace)
                 }
                 .posterCardButtonStyle()
             case let .live(stream):
@@ -230,6 +233,7 @@ private struct HomePosterCard: View {
     let title: String
     let imageURL: URL?
     var posterPath: String?
+    var request: PosterArtworkRequest?
     var progress: Double?
     var isLive: Bool = false
     /// Picks the series fallback symbol, matching `SeriesCardView`.
@@ -242,7 +246,7 @@ private struct HomePosterCard: View {
                     if isLive {
                         CachedAsyncImage(url: imageURL, maxPixelSize: PosterCardMetrics.posterHeight, content: artworkContent)
                     } else {
-                        PosterArtworkView(provider: imageURL?.absoluteString, posterPath: posterPath, maxPixelSize: PosterCardMetrics.posterHeight, content: artworkContent)
+                        PosterArtworkView(provider: imageURL?.absoluteString, posterPath: posterPath, request: request, maxPixelSize: PosterCardMetrics.posterHeight, content: artworkContent)
                     }
                 }
                 .frame(width: PosterCardMetrics.posterWidth, height: PosterCardMetrics.posterHeight)

@@ -16,7 +16,10 @@ struct SeriesCardView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: PosterCardMetrics.titleSpacing) {
             // Cover
-            PosterArtworkView(provider: series.cover, posterPath: series.posterPath, maxPixelSize: PosterCardMetrics.posterHeight) { phase in
+            PosterArtworkView(
+                provider: series.cover, posterPath: series.posterPath,
+                request: .init(kind: .series, id: series.id, categoryID: series.categoryId), maxPixelSize: PosterCardMetrics.posterHeight
+            ) { phase in
                 switch phase {
                 case .empty:
                     Rectangle()
