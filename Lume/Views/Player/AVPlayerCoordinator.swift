@@ -227,6 +227,9 @@ final class AVPlayerCoordinator: NSObject, ObservableObject {
         audioTrackOptions = []
         textTrackOptions = []
         isBuffering = true
+        // `reconnecting`, not `reconnect`: a startup error retried before the
+        // first frame is the same stream, and must not refill its budget.
+        retry.handle(reconnecting ? .reconnect : .newStream)
         if reconnect {
             startTracker.beginReconnect()
         } else {
@@ -295,6 +298,7 @@ final class AVPlayerCoordinator: NSObject, ObservableObject {
             PlaybackQoE.shared.noteStartupFailure()
         }
         cancelStartupWatchdog()
+        retry.handle(.terminalFailure)
         Logger.player.error("AVPlayer playback failure reported")
         onPlaybackFailure?()
     }
@@ -302,7 +306,7 @@ final class AVPlayerCoordinator: NSObject, ObservableObject {
     /// Re-prepare the current stream after a failure (the Try Again button).
     func retryAfterFailure() {
         guard let currentMedia else { return }
-        retry.reset()
+        retry.handle(.manualRetry)
         load(media: currentMedia)
     }
 
@@ -312,7 +316,7 @@ final class AVPlayerCoordinator: NSObject, ObservableObject {
         teardownItemObservers()
         trackLoadTask?.cancel()
         cancelStartupWatchdog()
-        retry.cancel()
+        retry.handle(.teardown)
         PlaybackQoE.shared.endSession(owner: self)
         pipController?.stopPictureInPicture()
         pipController = nil

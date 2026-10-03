@@ -173,7 +173,7 @@ final class VLCPlayerCoordinator: NSObject, ObservableObject {
         mediaURL = media.url
         httpHeaders = media.httpHeaders
         catchup.load(media)
-        retry.reset()
+        retry.handle(.newStream)
         hasStartedPlayback = false
         startTracker.beginStream()
         setBuffering(true)
@@ -218,7 +218,7 @@ final class VLCPlayerCoordinator: NSObject, ObservableObject {
         httpHeaders = media.httpHeaders
         catchup.load(media)
         lastKnownTime = 0
-        retry.reset()
+        retry.handle(.newStream)
         hasStartedPlayback = false
         startTracker.beginStream()
         setBuffering(true)
@@ -320,7 +320,7 @@ final class VLCPlayerCoordinator: NSObject, ObservableObject {
             PlaybackQoE.shared.noteStartupFailure()
         }
         cancelStartupWatchdog()
-        retry.cancel()
+        retry.handle(.terminalFailure)
         Logger.player.error("playback failure reported")
         onPlaybackFailure?()
     }
@@ -333,7 +333,7 @@ final class VLCPlayerCoordinator: NSObject, ObservableObject {
         startTracker.beginStream()
         setBuffering(true)
         didReportFailure = false
-        retry.reset()
+        retry.handle(.manualRetry)
         startStartupWatchdog()
 
         installMedia(mediaURL, isLive: isLive)
@@ -388,7 +388,7 @@ final class VLCPlayerCoordinator: NSObject, ObservableObject {
 
     func tearDown() {
         stopStatsLogging()
-        retry.cancel()
+        retry.handle(.teardown)
         cancelStartupWatchdog()
         PlaybackQoE.shared.endSession(owner: self)
         Logger.player.log("tearDown")
