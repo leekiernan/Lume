@@ -125,9 +125,6 @@ struct LumeEngineEngineView: View {
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
-    #if os(macOS)
-        @Environment(\.dismissWindow) private var dismissWindow
-    #endif
 
     private let autoHideInterval: TimeInterval = 4
 
@@ -529,10 +526,7 @@ struct LumeEngineEngineView: View {
 
     private func closePlayer() {
         #if os(macOS)
-            if let window = NSApp.keyWindow, window.styleMask.contains(.fullScreen) {
-                window.toggleFullScreen(nil)
-            }
-            dismissWindow(id: "player")
+            MacPlayerWindowRouter.shared.close()
         #else
             dismiss()
         #endif

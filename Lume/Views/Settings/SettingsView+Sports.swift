@@ -36,6 +36,7 @@ import SwiftUI
                 }
             }
             .navigationTitle("Sports")
+            .macNavigationBack()
             #if os(iOS)
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {

@@ -72,6 +72,7 @@ struct EPGSettingsView: View {
             .formStyle(.grouped)
             #endif
             .navigationTitle("TV Guide")
+            .macNavigationBack()
             #if os(iOS)
                 .navigationBarTitleDisplayMode(.inline)
             #endif

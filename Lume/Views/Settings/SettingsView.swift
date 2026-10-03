@@ -195,24 +195,22 @@ struct SettingsView: View {
                     diagnosticsSection
                 }
                 #if os(macOS)
-                .listStyle(.inset(alternatesRowBackgrounds: true))
-                .toolbar {
-                    ToolbarItem(placement: .confirmationAction) {
-                        Button("Done") { dismiss() }
-                    }
-                }
+                .listStyle(.inset)
                 #endif
-                .platformNavigationTitle("Settings")
-                .paywall(isPresented: $showPaywall, highlight: paywallHighlight)
-                .sheet(isPresented: $showingAddPlaylist) {
-                    LoginView(isModal: true)
-                }
-                .playlistDeletionConfirmation(isPresented: confirmingPlaylistDeletion) {
-                    confirmPlaylistDeletion()
-                }
+                .platformNavigationTitle("Settings", handlesMacBack: false)
+                #if os(macOS)
+                    .macSettingsRootEscape()
+                #endif
+                    .paywall(isPresented: $showPaywall, highlight: paywallHighlight)
+                    .sheet(isPresented: $showingAddPlaylist) {
+                        LoginView(isModal: true)
+                    }
+                    .playlistDeletionConfirmation(isPresented: confirmingPlaylistDeletion) {
+                        confirmPlaylistDeletion()
+                    }
             }
             #if os(macOS)
-            .frame(minWidth: 480, idealWidth: 540, minHeight: 480, idealHeight: 600)
+            .macSettingsPresentation()
             #endif
         }
 
