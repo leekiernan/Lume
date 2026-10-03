@@ -206,8 +206,8 @@ struct LiveTVView: View {
     /// toolbar consistently.
     @ViewBuilder
     private func rootContent(sections: [LiveTVSection]?) -> some View {
+        // No title, like Home: the tab names the area.
         contentState(sections: sections)
-            .platformNavigationTitle("Live TV")
         #if os(iOS)
             // Keep the compact content controls visually attached to the
             // navigation bar when the channel list is overscrolled.

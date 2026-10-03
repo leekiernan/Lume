@@ -91,7 +91,6 @@ struct SeriesView: View {
                     sections
                 }
             }
-            .platformNavigationTitle("Series")
             .profileMenuToolbar()
             .libraryToolbar(config: LibraryToolbarConfiguration(
                 playlists: playlists,

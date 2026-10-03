@@ -77,7 +77,6 @@ struct SportsHubView: View {
                 screen
                     // The same title and toolbar as Movies, Series and Live TV,
                     // in the same order — item order in the bar follows it.
-                    .platformNavigationTitle("Sports")
                     .profileMenuToolbar()
                     .libraryToolbar(config: LibraryToolbarConfiguration(
                         playlists: playlists,

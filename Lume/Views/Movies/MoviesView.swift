@@ -79,7 +79,6 @@ struct MoviesView: View {
                     sections
                 }
             }
-            .platformNavigationTitle("Movies")
             .profileMenuToolbar()
             .libraryToolbar(config: LibraryToolbarConfiguration(
                 playlists: playlists,
