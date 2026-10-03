@@ -74,56 +74,14 @@
         }
 
         private func deviceCode(_ code: TraktDeviceCode) -> some View {
-            HStack(alignment: .top, spacing: 48) {
-                VStack(alignment: .leading, spacing: 18) {
-                    Text("On your phone or computer, go to")
-                        .font(.system(size: 24))
-                        .foregroundStyle(.secondary)
-                    Text("trakt.tv/activate")
-                        .font(.system(size: 30, weight: .semibold))
-
-                    Text("Enter this code")
-                        .font(.system(size: 24))
-                        .foregroundStyle(.secondary)
-                        .padding(.top, 8)
-                    Text(code.userCode)
-                        .font(.system(size: 56, weight: .bold, design: .monospaced))
-                        .tracking(6)
-
-                    HStack(spacing: 12) {
-                        ProgressView()
-                        Text("Waiting for authorization…")
-                            .font(.system(size: 22))
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(.top, 8)
-
-                    Button("Cancel") {
-                        trakt.cancelConnect()
-                    }
-                    .buttonStyle(TVSettingsActionButtonStyle())
-                    .padding(.top, 8)
-                }
-
-                if let url = TraktClient.activationURL(for: code.userCode) {
-                    VStack(spacing: 12) {
-                        QRCodeView(string: url.absoluteString)
-                            .frame(width: 240, height: 240)
-                            .background(.white)
-                            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                        Text("Scan to open")
-                            .font(.system(size: 20))
-                            .foregroundStyle(.secondary)
-                    }
-                }
+            TrackerDeviceCodePanel(provider: .trakt, code: code.userCode, activationURL: TraktClient.activationURL(for: code.userCode)) {
+                trakt.cancelConnect()
             }
-            .padding(.horizontal, TVSettingsMetrics.rowHPadding)
-            .padding(.top, 8)
         }
 
         private var connected: some View {
             VStack(alignment: .leading, spacing: 16) {
-                TVSettingsValueRow("Connected", value: trakt.username.map { "@\($0)" } ?? "—")
+                TrackerConnectedAccount(username: trakt.username)
 
                 Text("Watched movies and episodes sync to your Trakt history. Import marks titles you've already watched on Trakt as watched here.")
                     .font(.system(size: 22))
@@ -189,24 +147,10 @@
         }
 
         private func importStatus(_ summary: TraktImportSummary) -> some View {
-            VStack(alignment: .leading, spacing: 4) {
-                if summary.failed {
-                    Text("Couldn't import from Trakt. Please try again.")
-                } else if summary.markedNothing {
-                    Text("Your watched history is already up to date.")
-                } else {
-                    Text("Imported \(summary.moviesMarked) movies and \(summary.episodesMarked) episodes.")
-                    if summary.inProgress > 0 {
-                        Text("\(summary.inProgress) titles in progress.")
-                    }
-                    if summary.showsQueued > 0 {
-                        Text("\(summary.showsQueued) shows will be marked the first time you open them.")
-                    }
-                }
-            }
-            .font(.system(size: 22))
-            .foregroundStyle(summary.failed ? .red : .green)
-            .padding(.horizontal, TVSettingsMetrics.rowHPadding)
+            TrackerImportStatus(
+                provider: .trakt, movies: summary.moviesMarked, episodes: summary.episodesMarked,
+                queuedShows: summary.showsQueued, inProgress: summary.inProgress, failed: summary.failed
+            )
         }
     }
 
