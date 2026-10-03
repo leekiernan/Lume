@@ -47,7 +47,7 @@ import SwiftUI
                 step,
                 in: itemNeighbours,
                 onCompleteCurrentItem: { onCompleteCurrentItem?() },
-                select: { onSelectMedia?($0) }
+                select: { selectMedia($0) }
             )
         }
 

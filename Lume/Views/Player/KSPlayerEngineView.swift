@@ -87,6 +87,10 @@ struct KSPlayerEngineView: View {
     /// playback was paused and needed a press. The controls stay suppressed and
     /// a loading indicator shows until the stream first reaches `.bufferFinished`.
     @State var hasStartedPlayback = false
+    /// The outgoing channel's last frame, held over the video while a new
+    /// channel starts (see `selectMedia(_:)`).
+    @State var zapFrame: CGImage?
+    @State var zapFrameToken = 0
     /// True while the engine is preparing or (re)buffering, so the spinner shows
     /// both on first open and on a mid-stream stall.
     @State var isBuffering = true
@@ -266,6 +270,8 @@ struct KSPlayerEngineView: View {
                     }
                     .ignoresSafeArea()
 
+                zapFrameOverlay
+
                 // KSPlayer decodes the selected subtitle into
                 // `subtitleModel.parts`, but the bare `KSVideoPlayer` above draws
                 // only video — this overlay renders those parts on screen.
@@ -284,7 +290,7 @@ struct KSPlayerEngineView: View {
                         panelCloseToken: panelCloseToken,
                         onTogglePlay: { togglePlay() },
                         onResetHideTimer: { resetHideTimer() },
-                        onSelectMedia: { onSelectMedia?($0) },
+                        onSelectMedia: { selectMedia($0) },
                         onPanelOpenChange: { setPanelOpen($0) },
                         onSwitchChannel: { switchLiveChannel($0) },
                         mediaSwapper: mediaSwapper, onCompleteCurrentItem: { onCompleteCurrentItem?() },
@@ -468,6 +474,8 @@ struct KSPlayerEngineView: View {
                     }
                     .ignoresSafeArea()
 
+                zapFrameOverlay
+
                 // KSPlayer decodes the selected subtitle into
                 // `subtitleModel.parts`, but the bare `KSVideoPlayer` above draws
                 // only video — this overlay renders those parts on screen.
@@ -561,7 +569,7 @@ struct KSPlayerEngineView: View {
             .onKeyPress(.rightArrow) { skip(by: media.skipInterval(default: 15)); resetHideTimer(); return .handled }
             .liveChannelKeyNavigation(
                 neighbours: itemNeighbours, swapper: mediaSwapper,
-                onSelect: { onSelectMedia?($0) }, onResetHideTimer: resetHideTimer
+                onSelect: { selectMedia($0) }, onResetHideTimer: resetHideTimer
             )
             .onKeyPress(.space) { togglePlay(); return .handled }
             .onKeyPress(.escape) { closePlayer(); return .handled }
