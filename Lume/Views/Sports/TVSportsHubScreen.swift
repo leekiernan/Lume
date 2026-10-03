@@ -214,7 +214,6 @@
                         guard newZone != heroZone else { return }
                         withAnimation(.easeInOut(duration: 0.5)) { heroZone = newZone }
                     }
-                    .defaultFocus($focus, defaultFocus(hero: hero, availability: heroAvailability, groups: groups))
                 }
                 // Full-bleed vertically, like Home: the backdrop and the
                 // showcase span the real screen; rows keep their side inset.
@@ -339,25 +338,6 @@
             Label(text, systemImage: icon)
                 .font(.callout)
                 .foregroundStyle(.white.opacity(0.55))
-        }
-
-        // MARK: - Focus
-
-        /// Use the hero's leading action: Watch when a channel is known,
-        /// Remind Me when a scheduled fixture is not yet in the guide; else its
-        /// Match Centre, then the first card.
-        private func defaultFocus(
-            hero: SportsFixture?,
-            availability: SportsChannelAvailability?,
-            groups: [SportsFixtureGroup]
-        ) -> TVSportsFocus? {
-            if let hero {
-                if availability?.isAvailable == true || hero.status.state == .scheduled {
-                    return .heroWatch
-                }
-                return .heroDetail
-            }
-            return groups.first?.fixtures.first.map { TVSportsFocus.card($0.id) }
         }
 
         // MARK: - Playback

@@ -21,7 +21,9 @@
         /// the page scrolls to its top, where the tab bar can be reached.
         var onMoveUpFromTop: (() -> Void)?
 
-        private static let rowVerticalInset: CGFloat = 36
+        /// A 440 pt card lifted by 4 % grows ~9 pt each way, and its shadow
+        /// reaches ~30 pt below; this clears both with room to spare.
+        private static let rowVerticalInset: CGFloat = 48
         @State private var selectedId: String?
         @State private var season: SportsTeamSeason?
         @State private var isLoading = false
