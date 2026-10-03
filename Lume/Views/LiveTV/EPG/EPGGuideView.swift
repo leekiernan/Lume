@@ -21,8 +21,8 @@ struct EPGGuideView: View {
     let onPlayCatchup: (LiveStream, EPGProgramCell) -> Void
     /// Seeds Multi-View from a channel's long-press menu in the column.
     let onStartMultiView: (LiveStream) -> Void
-    /// tvOS: non-zero asks the guide to take real focus (a rail category was
-    /// just activated); `onDidClaimFocus` resets it once claimed.
+    /// tvOS: non-zero asks the guide to take real focus (a category was just
+    /// picked in the browse panel); `onDidClaimFocus` resets it once claimed.
     let focusToken: Int
     let onDidClaimFocus: () -> Void
     /// tvOS: opens the category sidebar from the guide's channel hub.
@@ -56,7 +56,6 @@ struct EPGGuideView: View {
     init(
         scope: LiveChannelScope,
         playlistPrefix: String,
-        sort: ContentSortOption,
         onPlay: @escaping (LiveStream) -> Void,
         onPlayCatchup: @escaping (LiveStream, EPGProgramCell) -> Void = { _, _ in },
         onStartMultiView: @escaping (LiveStream) -> Void = { _ in },
@@ -81,7 +80,7 @@ struct EPGGuideView: View {
         )
         self.timeline = timeline
 
-        _streams = Query(LiveChannelQuery.descriptor(for: scope, sort: sort))
+        _streams = Query(LiveChannelQuery.descriptor(for: scope, sort: .playlist))
     }
 
     private var scopedStreams: [LiveStream] {
@@ -248,7 +247,7 @@ struct EPGGuideView: View {
         }
 
         var body: some View {
-            EPGGuideView(scope: .category(category.id), playlistPrefix: "", sort: .playlist) { _ in }
+            EPGGuideView(scope: .category(category.id), playlistPrefix: "") { _ in }
                 .modelContainer(container)
                 .frame(minHeight: 520)
         }

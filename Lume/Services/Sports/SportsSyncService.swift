@@ -328,6 +328,8 @@ final class SportsSyncService {
     @discardableResult
     private func performRefresh(leagueIds: [String], months: [DateComponents]) async -> Set<String> {
         guard Self.isEnabled else { return [] }
+        let interval = Perf.begin(.sportsFixtureRefresh)
+        defer { Perf.end(interval) }
         let leagues = leagueIds.compactMap { SportsCatalog.league(id: $0) }
         let startedAt = Date()
         for league in leagues {

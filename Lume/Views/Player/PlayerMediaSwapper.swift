@@ -88,7 +88,6 @@ final class PlayerMediaSwapper {
     extension PlayerMediaSwapper {
         /// What the channel lookup needs from the host it was pressed in.
         struct LiveLookup {
-            let sortRaw: String
             let restriction: ContentRestriction
             let context: ModelContext
             /// The host's resolved transport neighbours. When they belong to the
@@ -125,10 +124,9 @@ final class PlayerMediaSwapper {
                     target = surf.movesForward(in: mode) ? neighbours.next : neighbours.previous
                 } else {
                     // Pressed before the host finished resolving this channel.
-                    let sort = ContentSortOption(rawValue: lookup.sortRaw) ?? .playlist
                     target = LiveChannelNavigator.adjacentMedia(
                         for: media, surfing: surf, mode: mode,
-                        sort: sort, restriction: lookup.restriction, in: lookup.context
+                        sort: .playlist, restriction: lookup.restriction, in: lookup.context
                     )
                 }
             case .right:

@@ -17,8 +17,6 @@ struct SeriesCategoryView: View {
     var animationNamespace: Namespace.ID?
     @Environment(\.modelContext) private var modelContext
 
-    private let contentSortRaw: String = ContentSortOption.playlist.rawValue
-
     @State private var series: [Series] = []
     @State private var pagination = PaginationMachine()
     /// True while a Stalker category's content is being fetched from the portal
@@ -28,10 +26,6 @@ struct SeriesCategoryView: View {
     /// page at a time and load the next as the grid nears the end, rather than
     /// hydrating the whole category into memory at once.
     private let pageSize = 100
-
-    private var contentSort: ContentSortOption {
-        ContentSortOption(rawValue: contentSortRaw) ?? .playlist
-    }
 
     /// The playlist when it's a Stalker portal, whose categories are imported
     /// on demand rather than synced whole.
@@ -47,8 +41,8 @@ struct SeriesCategoryView: View {
                     ProgressView("Loading…")
                 }
             }
-            .task(id: contentSortRaw) {
-                guard pagination.prepare(for: contentSortRaw) else { return }
+            .task(id: category.id) {
+                guard pagination.prepare(for: category.id) else { return }
                 series = []
                 await importStalkerContentIfNeeded()
                 loadNextPage()
@@ -85,7 +79,7 @@ struct SeriesCategoryView: View {
         let categoryId = category.id
         var descriptor = FetchDescriptor<Series>(
             predicate: #Predicate { $0.categoryId == categoryId },
-            sortBy: contentSort.seriesDescriptors
+            sortBy: ContentSortOption.playlist.seriesDescriptors
         )
         descriptor.fetchOffset = request.offset
         descriptor.fetchLimit = pageSize
@@ -130,7 +124,7 @@ struct SeriesCategoryView: View {
         let categoryId = category.id
         var descriptor = FetchDescriptor<Series>(
             predicate: #Predicate { $0.categoryId == categoryId },
-            sortBy: contentSort.seriesDescriptors
+            sortBy: ContentSortOption.playlist.seriesDescriptors
         )
         let window = max(series.count, pageSize)
         descriptor.fetchLimit = window

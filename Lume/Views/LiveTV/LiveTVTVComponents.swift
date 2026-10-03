@@ -60,7 +60,6 @@
         init(
             scope: LiveChannelScope,
             playlistPrefix: String,
-            sort: ContentSortOption,
             onLeadingLeft: @escaping (String?) -> Void,
             sourceType: PlaylistSourceType?,
             onStartMultiView: @escaping (LiveStream) -> Void,
@@ -80,7 +79,7 @@
             self.focusToken = focusToken
             self.focusTarget = focusTarget
             self.onDidClaimFocus = onDidClaimFocus
-            _streams = Query(LiveChannelQuery.descriptor(for: scope, sort: sort))
+            _streams = Query(LiveChannelQuery.descriptor(for: scope, sort: .playlist))
         }
 
         private var scopedStreams: [LiveStream] {
@@ -366,7 +365,6 @@
     struct TVLiveTVScreen: View {
         let displayedSection: LiveTVSection?
         @Binding var layoutModeRaw: String
-        let contentSort: ContentSortOption
         let onOpenBrowse: (String?) -> Void
         let onPlay: (LiveStream) -> Void
         /// Plays a programme from catch-up — a guide cell, or a list row's
@@ -416,7 +414,6 @@
                     EPGGuideView(
                         scope: section.scope,
                         playlistPrefix: playlistPrefix,
-                        sort: contentSort,
                         onPlay: onPlay,
                         onPlayCatchup: { onPlayCatchup($0, EPGSlot($1)) },
                         onStartMultiView: onStartMultiView,
@@ -424,13 +421,12 @@
                         onDidClaimFocus: { contentFocusToken = 0 },
                         onLeadingLeft: { onOpenBrowse(nil) }
                     )
-                    .id("\(section.id)-\(contentSort.rawValue)-guide")
+                    .id("\(section.id)-guide")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 case .list:
                     TVChannelsList(
                         scope: section.scope,
                         playlistPrefix: playlistPrefix,
-                        sort: contentSort,
                         onLeadingLeft: onOpenBrowse,
                         sourceType: sourceType,
                         onStartMultiView: onStartMultiView,
@@ -440,7 +436,7 @@
                         focusTarget: contentFocusTarget,
                         onDidClaimFocus: { contentFocusToken = 0 }
                     )
-                    .id("\(section.id)-\(contentSort.rawValue)-list")
+                    .id("\(section.id)-list")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             } else {

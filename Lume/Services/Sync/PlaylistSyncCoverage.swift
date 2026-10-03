@@ -89,19 +89,8 @@ nonisolated enum PlaylistSyncCoverage {
         defaults.removeObject(forKey: deferredKey(playlistID: playlistID))
     }
 
-    /// Enabled content areas this device has never fetched for the playlist.
-    /// Home has no catalog phase of its own.
-    static func missingEnabledAreas(
-        playlistID: UUID,
-        disabledAreasRaw: String,
-        defaults: UserDefaults = .standard
-    ) -> Set<AppArea> {
-        let required = AppAreaSettings.enabledContentAreas(disabledRaw: disabledAreasRaw)
-        return required.subtracting(areas(playlistID: playlistID, defaults: defaults))
-    }
-
     /// Enabled areas owed a refresh by their own date: never fetched, or last
-    /// fetched longer ago than `frequency`. The playlist's `lastSyncDate` is
+    /// fetched longer ago than `frequency`. Home has no catalog phase of its own. The playlist's `lastSyncDate` is
     /// device-wide and moves with any profile's sync, so it can't speak for
     /// an area that sync skipped.
     static func staleEnabledAreas(

@@ -172,17 +172,6 @@ struct SortOptionTests {
         #expect(CategorySortOption.nameAscending.icon == "textformat.abc")
     }
 
-    // MARK: - SortStorageKeys
-
-    @Test func `storage key constants`() {
-        #expect(SortStorageKey.liveCategories == "lume.sort.live.categories")
-        #expect(SortStorageKey.liveContent == "lume.sort.live.content")
-        #expect(SortStorageKey.movieCategories == "lume.sort.movies.categories")
-        #expect(SortStorageKey.movieContent == "lume.sort.movies.content")
-        #expect(SortStorageKey.seriesCategories == "lume.sort.series.categories")
-        #expect(SortStorageKey.seriesContent == "lume.sort.series.content")
-    }
-
     // MARK: - Helpers
 
     private func makeUnsortedCategories() -> [Lume.Category] {

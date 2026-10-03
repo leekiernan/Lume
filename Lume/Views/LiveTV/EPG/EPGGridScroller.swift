@@ -349,8 +349,6 @@ struct EPGGridScroller: View {
             virtualFocus?.rowIndex == 0
         }
 
-        /// Menu steps back one level: from a programme it collapses to the
-        /// channel hub; from the hub it opens the category sidebar.
         /// Menu steps out of a programme back to the channel column it belongs
         /// to. On the column itself there is nothing further to step back to, so
         /// the press is left unhandled and reaches the tab bar — which is what

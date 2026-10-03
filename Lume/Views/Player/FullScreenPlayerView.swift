@@ -151,9 +151,8 @@ struct FullScreenPlayerView: View {
     /// can run several player scenes, which are genuinely independent.
     @State var mediaSwapper = PlayerMediaSwapper()
 
-    /// The sort the viewer's channel list was in, and what they may watch. Read
-    /// in the host, not in each engine view: neighbours resolve once per stream.
-    private let liveContentSortRaw: String = ContentSortOption.playlist.rawValue
+    /// What the viewer may watch. Read in the host, not in each engine view:
+    /// neighbours resolve once per stream.
     @Environment(\.contentRestriction) private var contentRestriction
 
     init(media: PlayableMedia) {
@@ -327,7 +326,7 @@ struct FullScreenPlayerView: View {
             nextUpMedia = nil
             skipSegments = nil
             let request = StreamExtrasRequest(
-                media: media, lookup: segmentLookup(for: media), sortRaw: liveContentSortRaw,
+                media: media, lookup: segmentLookup(for: media),
                 restriction: contentRestriction, container: modelContext.container
             )
             await Self.loadStreamExtras(

@@ -253,25 +253,6 @@ final nonisolated class XtreamClient: Sendable {
         return list.items
     }
 
-    /// 3. Get Live Streams
-    func getLiveStreams(playlist: Playlist, categoryId: String? = nil) async throws -> [XtreamLiveStream] {
-        var queryItems = [
-            URLQueryItem(name: "username", value: playlist.username),
-            URLQueryItem(name: "password", value: playlist.password),
-            URLQueryItem(name: "action", value: "get_live_streams")
-        ]
-        if let categoryId {
-            queryItems.append(URLQueryItem(name: "category_id", value: categoryId))
-        }
-
-        guard let url = buildURL(serverURL: playlist.serverURL, path: "player_api.php", queryItems: queryItems) else {
-            throw XtreamError.invalidURL
-        }
-
-        let list: XtreamList<XtreamLiveStream> = try await request(url, action: "get_live_streams", phases: RequestPhases(fetch: .xtreamFetchLiveStreams, decode: .xtreamDecodeLiveStreams))
-        return list.items
-    }
-
     /// 4. Get VOD Categories
     func getVODCategories(playlist: Playlist) async throws -> [XtreamCategory] {
         let queryItems = [
@@ -288,25 +269,6 @@ final nonisolated class XtreamClient: Sendable {
         return list.items
     }
 
-    /// 5. Get VOD Streams
-    func getVODStreams(playlist: Playlist, categoryId: String? = nil) async throws -> [XtreamVODStream] {
-        var queryItems = [
-            URLQueryItem(name: "username", value: playlist.username),
-            URLQueryItem(name: "password", value: playlist.password),
-            URLQueryItem(name: "action", value: "get_vod_streams")
-        ]
-        if let categoryId {
-            queryItems.append(URLQueryItem(name: "category_id", value: categoryId))
-        }
-
-        guard let url = buildURL(serverURL: playlist.serverURL, path: "player_api.php", queryItems: queryItems) else {
-            throw XtreamError.invalidURL
-        }
-
-        let list: XtreamList<XtreamVODStream> = try await request(url, action: "get_vod_streams", phases: RequestPhases(fetch: .xtreamFetchMovies, decode: .xtreamDecodeMovies))
-        return list.items
-    }
-
     /// 6. Get Series Categories
     func getSeriesCategories(playlist: Playlist) async throws -> [XtreamCategory] {
         let queryItems = [
@@ -320,25 +282,6 @@ final nonisolated class XtreamClient: Sendable {
         }
 
         let list: XtreamList<XtreamCategory> = try await request(url, action: "get_series_categories")
-        return list.items
-    }
-
-    /// 7. Get Series
-    func getSeries(playlist: Playlist, categoryId: String? = nil) async throws -> [XtreamSeries] {
-        var queryItems = [
-            URLQueryItem(name: "username", value: playlist.username),
-            URLQueryItem(name: "password", value: playlist.password),
-            URLQueryItem(name: "action", value: "get_series")
-        ]
-        if let categoryId {
-            queryItems.append(URLQueryItem(name: "category_id", value: categoryId))
-        }
-
-        guard let url = buildURL(serverURL: playlist.serverURL, path: "player_api.php", queryItems: queryItems) else {
-            throw XtreamError.invalidURL
-        }
-
-        let list: XtreamList<XtreamSeries> = try await request(url, action: "get_series", phases: RequestPhases(fetch: .xtreamFetchSeries, decode: .xtreamDecodeSeries))
         return list.items
     }
 

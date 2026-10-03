@@ -49,7 +49,6 @@ struct ChannelsList: View {
     init(
         scope: LiveChannelScope,
         playlistPrefix: String,
-        sort: ContentSortOption,
         onStartMultiView: @escaping (LiveStream) -> Void,
         onWatchFromStart: @escaping (LiveStream, EPGSlot) -> Void,
         onPlay: @escaping (LiveStream) -> Void
@@ -59,7 +58,7 @@ struct ChannelsList: View {
         self.onStartMultiView = onStartMultiView
         self.onWatchFromStart = onWatchFromStart
         self.onPlay = onPlay
-        _streams = Query(LiveChannelQuery.descriptor(for: scope, sort: sort))
+        _streams = Query(LiveChannelQuery.descriptor(for: scope, sort: .playlist))
     }
 
     private var scopedStreams: [LiveStream] {

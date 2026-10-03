@@ -25,13 +25,12 @@ extension FullScreenPlayerView {
     /// as each stream starts, while the engine opens it.
     static func resolveNeighbours(
         for media: PlayableMedia,
-        sortRaw: String,
         restriction: ContentRestriction,
         container: ModelContainer
     ) async -> PlayerItemNavigation.Neighbours {
         await PlayerItemNavigation.resolveNeighbours(
             for: media,
-            sort: ContentSortOption(rawValue: sortRaw) ?? .playlist,
+            sort: .playlist,
             restriction: restriction,
             container: container
         )
@@ -45,7 +44,6 @@ extension FullScreenPlayerView {
     struct StreamExtrasRequest {
         let media: PlayableMedia
         let lookup: IntroSkipResolver.Lookup?
-        let sortRaw: String
         let restriction: ContentRestriction
         let container: ModelContainer
     }
@@ -56,7 +54,7 @@ extension FullScreenPlayerView {
         onNeighbours: (PlayerItemNavigation.Neighbours) -> Void,
         onSegments: (IntroSegments?) -> Void
     ) async {
-        let media = request.media, sortRaw = request.sortRaw
+        let media = request.media
         let restriction = request.restriction, container = request.container
         enum Arrival {
             case neighbours(PlayerItemNavigation.Neighbours)
@@ -64,7 +62,7 @@ extension FullScreenPlayerView {
         }
         await withTaskGroup(of: Arrival.self) { group in
             group.addTask {
-                await .neighbours(resolveNeighbours(for: media, sortRaw: sortRaw, restriction: restriction, container: container))
+                await .neighbours(resolveNeighbours(for: media, restriction: restriction, container: container))
             }
             if let lookup = request.lookup {
                 group.addTask { await .segments(IntroSkipResolver.segments(for: lookup, playhead: playhead)) }

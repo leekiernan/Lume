@@ -183,11 +183,20 @@ enum AutoSync {
         alreadyStarted: Bool,
         now: Date = Date()
     ) -> Bool {
+        isEligible(candidate, alreadyStarted: alreadyStarted)
+            && frequency.isDue(lastSyncDate: candidate.lastSyncDate, now: now)
+    }
+
+    /// Whether automatic work may run for this playlist at all, due or not: it
+    /// syncs, isn't already syncing, hasn't been tried this session, and is
+    /// the one on screen (or was just added). A repair passes `alreadyStarted:
+    /// false` — a profile switch can need one after the launch refresh ran —
+    /// and is limited per area by its caller instead.
+    static func isEligible(_ candidate: Candidate, alreadyStarted: Bool) -> Bool {
         candidate.syncEnabled
             && candidate.status != .syncing
             && !alreadyStarted
             && (candidate.isActive || candidate.wasAddedThisSession)
-            && frequency.isDue(lastSyncDate: candidate.lastSyncDate, now: now)
     }
 }
 

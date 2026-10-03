@@ -28,8 +28,6 @@ struct MultiViewChannelPicker: View {
     @Query(filter: #Predicate<Category> { $0.typeRaw == "live" && $0.isHidden == false })
     private var categories: [Category]
 
-    private let categorySortRaw: String = CategorySortOption.playlist.rawValue
-
     @State private var playlistID: UUID?
     @State private var search = ""
     /// Search hits across the selected playlist. Empty while not searching.
@@ -51,7 +49,7 @@ struct MultiViewChannelPicker: View {
     private var scopedCategories: [Category] {
         guard let playlist = selectedPlaylist else { return [] }
         let prefix = "\(playlist.id.uuidString)-"
-        let sort = CategorySortOption(rawValue: categorySortRaw) ?? .playlist
+        let sort = CategorySortOption.playlist
         return sort.sort(LiveChannelQuery.visibleCategories(categories, playlistPrefix: prefix, restriction: restriction))
     }
 
@@ -239,7 +237,6 @@ private struct MultiViewPickerCategoryChannels: View {
 
     @Environment(\.modelContext) private var modelContext
     @Environment(\.contentRestriction) private var restriction
-    private let contentSortRaw: String = ContentSortOption.playlist.rawValue
 
     @State private var channels: [LiveStream] = []
 
@@ -263,11 +260,11 @@ private struct MultiViewPickerCategoryChannels: View {
             }
         }
         .navigationTitle(category.name)
-        .task(id: "\(category.id)-\(contentSortRaw)") { load() }
+        .task(id: category.id) { load() }
     }
 
     private func load() {
-        let sort = ContentSortOption(rawValue: contentSortRaw) ?? .playlist
+        let sort = ContentSortOption.playlist
         let descriptor = LiveChannelQuery.descriptor(for: .category(category.id), sort: sort)
         channels = ((try? modelContext.fetch(descriptor)) ?? []).excludingRestricted(restriction)
     }

@@ -94,17 +94,7 @@ struct LiveTVView: View {
     @State private var showingPaywall = false
     @State private var premium = PremiumManager.shared
 
-    private let categorySortRaw: String = CategorySortOption.playlist.rawValue
-    private let contentSortRaw: String = ContentSortOption.playlist.rawValue
     @AppStorage(LiveTVLayoutMode.storageKey) private var layoutModeRaw: String = LiveTVLayoutMode.list.rawValue
-
-    private var categorySort: CategorySortOption {
-        CategorySortOption(rawValue: categorySortRaw) ?? .playlist
-    }
-
-    private var contentSort: ContentSortOption {
-        ContentSortOption(rawValue: contentSortRaw) ?? .playlist
-    }
 
     private var layoutMode: LiveTVLayoutMode {
         LiveTVLayoutMode(rawValue: layoutModeRaw) ?? .list
@@ -121,51 +111,36 @@ struct LiveTVView: View {
         .labelsHidden()
     }
 
-    /// The channel detail area for the selected section, honouring the current
-    /// layout mode. Shared by every platform's layout.
-    private func detail(for section: LiveTVSection) -> some View {
-        Group {
-            if layoutMode == .guide {
-                EPGGuideView(
-                    scope: section.scope,
-                    playlistPrefix: playlistPrefix,
-                    sort: contentSort,
-                    onPlay: { playChannel($0, scope: section.scope) },
-                    onPlayCatchup: { playCatchup($0, programme: EPGSlot($1)) },
-                    onStartMultiView: { startMultiView(with: $0) }
-                )
-            } else {
-                channelList(for: section)
+    #if !os(tvOS)
+        /// The channel detail area for the selected section, honouring the
+        /// current layout mode. tvOS builds its own in `TVLiveTVScreen`.
+        private func detail(for section: LiveTVSection) -> some View {
+            Group {
+                if layoutMode == .guide {
+                    EPGGuideView(
+                        scope: section.scope,
+                        playlistPrefix: playlistPrefix,
+                        onPlay: { playChannel($0, scope: section.scope) },
+                        onPlayCatchup: { playCatchup($0, programme: EPGSlot($1)) },
+                        onStartMultiView: { startMultiView(with: $0) }
+                    )
+                } else {
+                    channelList(for: section)
+                }
             }
+            .id("\(section.id)-\(layoutModeRaw)")
         }
-        .id("\(section.id)-\(contentSort.rawValue)-\(layoutModeRaw)")
-    }
 
-    @ViewBuilder
-    private func channelList(for section: LiveTVSection) -> some View {
-        #if os(tvOS)
-            TVChannelsList(
-                scope: section.scope,
-                playlistPrefix: playlistPrefix,
-                sort: contentSort,
-                onLeadingLeft: { openBrowse(from: $0) },
-                sourceType: activePlaylist?.knownSourceType,
-                onStartMultiView: { startMultiView(with: $0) },
-                onWatchFromStart: { playCatchup($0, programme: $1) },
-                onPlay: { playChannel($0, scope: section.scope) }
-            )
-            .frame(maxWidth: .infinity)
-        #else
+        private func channelList(for section: LiveTVSection) -> some View {
             ChannelsList(
                 scope: section.scope,
                 playlistPrefix: playlistPrefix,
-                sort: contentSort,
                 onStartMultiView: { startMultiView(with: $0) },
                 onWatchFromStart: { playCatchup($0, programme: $1) },
                 onPlay: { playChannel($0, scope: section.scope) }
             )
-        #endif
-    }
+        }
+    #endif
 
     var body: some View {
         NavigationStack {
@@ -325,7 +300,6 @@ struct LiveTVView: View {
             TVLiveTVScreen(
                 displayedSection: displayed,
                 layoutModeRaw: $layoutModeRaw,
-                contentSort: contentSort,
                 onOpenBrowse: { openBrowse(from: $0) },
                 onPlay: { playChannel($0, scope: displayed?.scope) },
                 onPlayCatchup: { playCatchup($0, programme: $1) },
@@ -403,7 +377,7 @@ struct LiveTVView: View {
         categoryMemo.sections(
             categories: categories,
             playlistPrefix: playlistPrefix,
-            sort: categorySort,
+            sort: .playlist,
             restriction: restriction
         )
     }

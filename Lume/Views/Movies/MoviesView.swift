@@ -37,12 +37,6 @@ struct MoviesView: View {
     @AppStorage(CustomHomeSections.storageKey(.movies)) private var customSectionsRaw = ""
     @State private var heroWarmStart = HeroWarmStartState(surface: .movies)
 
-    private let categorySortRaw: String = CategorySortOption.playlist.rawValue
-
-    private var categorySort: CategorySortOption {
-        CategorySortOption(rawValue: categorySortRaw) ?? .playlist
-    }
-
     /// The playlist scope and the viewer's hidden/restricted categories are
     /// passed in by `MainTabView`, as for `HomeView`: a `@Query` can't read view
     /// state, but it can be built from init arguments, so the category list is
@@ -59,7 +53,7 @@ struct MoviesView: View {
     var body: some View {
         // Sorted once per pass: the empty check, the sidebar toggle and the
         // sidebar itself all read it.
-        let sortedCategories = categorySort.sort(categories)
+        let sortedCategories = CategorySortOption.playlist.sort(categories)
         NavigationStack(path: navigationPath) {
             Group {
                 if playlists.isEmpty {
