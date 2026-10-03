@@ -172,14 +172,14 @@ struct SportsHubGrouping {
         guard !fixtures.isEmpty else { return [] }
         if let follow = scopedFollow {
             return [SportsFixtureGroup(
-                id: "scope", title: scopeTitle, logoURL: logoURL(of: follow, in: fixtures), leagueId: nil,
+                id: "scope", title: scopeTitle, logoURL: logoURL(of: follow, in: fixtures),
                 fixtures: fixtures, isSingleLeague: follow.kind == .league
             )]
         }
         var groups: [SportsFixtureGroup] = []
         let live = fixtures.filter(\.isInProgress)
         if !live.isEmpty {
-            groups.append(SportsFixtureGroup(id: "live", title: String(localized: "Live now"), logoURL: nil, leagueId: nil, fixtures: live))
+            groups.append(SportsFixtureGroup(id: "live", title: String(localized: "Live now"), logoURL: nil, fixtures: live))
         }
         var claimed = Set(live.map(\.id))
         for follow in follows where !hiddenKeys.contains(follow.key) {
@@ -193,7 +193,6 @@ struct SportsHubGrouping {
                 id: follow.key,
                 title: title(of: follow),
                 logoURL: logoURL(of: follow, in: rowFixtures),
-                leagueId: follow.kind == .league ? follow.key : nil,
                 fixtures: rowFixtures,
                 isSingleLeague: follow.kind == .league,
                 followKey: follow.key

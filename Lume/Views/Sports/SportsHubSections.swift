@@ -11,53 +11,19 @@
 
 import SwiftUI
 
-/// One rendered section: a league (with a chevron to scope the hub to it), the
-/// "My Teams" band, or a day in the Upcoming list.
+/// One rendered row on the hub: Live now, or a follow's games.
 struct SportsFixtureGroup: Identifiable {
     let id: String
     let title: String
     let logoURL: URL?
-    /// Non-nil for a league group — the chevron scopes the hub to this league.
-    let leagueId: String?
     let fixtures: [SportsFixture]
     /// True when every card in the group belongs to one competition the header
-    /// already names, so the cards drop their own league crest as noise. The
-    /// "My Teams" band and the Upcoming days mix leagues and keep it.
+    /// already names, so the cards drop their own league crest as noise. Live
+    /// now and a team's row mix competitions and keep it.
     var isSingleLeague = false
-    /// True for a group under a day header (Today / Tomorrow / "Saturday, 27 Sep"),
-    /// where the cards drop their own date line as noise.
-    var isGroupedByDay = false
-    /// The follow this row is — a team's row ends with its club's season.
+    /// The follow this row is — its header opens the follow's page, and a
+    /// team's row ends with its club's season.
     var followKey: String?
-
-    /// Groups fixtures by calendar day, newest header first, for the Upcoming
-    /// list. Each group's title is Today / Tomorrow / a "weekday, d MMM" line.
-    static func byDay(_ fixtures: [SportsFixture], calendar: Calendar = .current) -> [SportsFixtureGroup] {
-        let grouped = Dictionary(grouping: fixtures) { calendar.startOfDay(for: $0.headlineDate) }
-        return grouped.keys.sorted().map { day in
-            SportsFixtureGroup(
-                id: ISO8601DateFormatter.dayKey(day),
-                title: Self.dayLabel(day, calendar: calendar),
-                logoURL: nil,
-                leagueId: nil,
-                fixtures: (grouped[day] ?? []).sorted(by: SportsFixture.displayOrder),
-                isGroupedByDay: true
-            )
-        }
-    }
-
-    static func dayLabel(_ date: Date, calendar: Calendar = .current) -> String {
-        if calendar.isDateInToday(date) { return String(localized: "Today") }
-        if calendar.isDateInTomorrow(date) { return String(localized: "Tomorrow") }
-        if calendar.isDateInYesterday(date) { return String(localized: "Yesterday") }
-        return date.formatted(.dateTime.weekday(.wide).day().month(.abbreviated))
-    }
-}
-
-private extension ISO8601DateFormatter {
-    static func dayKey(_ date: Date) -> String {
-        String(Int(date.timeIntervalSince1970))
-    }
 }
 
 // MARK: - Sections
@@ -96,7 +62,6 @@ struct SportsSectionsView: View {
             resolved: resolved[fixture.id] ?? [],
             isFollowed: isFollowed,
             showsLeagueMark: !group.isSingleLeague,
-            showsDate: !group.isGroupedByDay,
             onOpenDetail: { onOpenDetail(fixture) },
             onWatch: onWatch,
             onFollowToggle: onFollowToggle,

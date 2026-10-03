@@ -3,7 +3,7 @@
 //  Lume
 //
 //  `.pickerStyle(.segmented)` is unavailable on tvOS, but the shared iOS/macOS
-//  hub screens (SportsHubView, LeagueDetailView, GameDetailSections) still have
+//  game detail (GameDetailSections) and match centre still have
 //  to compile for the tvOS target — at runtime tvOS uses the purpose-built
 //  `TVSportsHubScreen` instead. This one modifier keeps that `#if` in a single
 //  place so it does not sit inline in a modifier chain (which SwiftFormat would

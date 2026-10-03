@@ -403,7 +403,7 @@ struct GameDetailSheet: View {
                 Text("Table")
                     .font(.headline)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                GroupedStandingsTable(rows: rows, followedTeamIds: follows.followedKeys, onSelectLeague: selectLeague)
+                GroupedStandingsTable(rows: rows, followedTeamIds: follows.followedKeys)
             }
             .padding()
             .frame(maxWidth: .infinity)
@@ -445,12 +445,6 @@ struct GameDetailSheet: View {
 
     private var expectsEventDetail: Bool {
         fixture.status.state == .inProgress || fixture.status.state == .final
-    }
-
-    private func selectLeague() {
-        guard let league = SportsCatalog.league(id: fixture.leagueId) else { return }
-        dismiss()
-        router?.sportsPath.append(league)
     }
 
     // MARK: - Derived

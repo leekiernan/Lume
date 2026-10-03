@@ -1,10 +1,10 @@
 //
-//  SportsDayWindowTests.swift
+//  SportsTodayWindowTests.swift
 //  LumeTests
 //
-//  Today claims what is on today, not only what started today: a US event in
-//  UK time that starts before midnight and runs past it must not drop into
-//  Yesterday while it is still on.
+//  The Home rail's Today claims what is on today, not only what started
+//  today: a US event in UK time that starts before midnight and runs past it
+//  must still count while it is on (`SportsRailPlanner`'s window rule).
 //
 
 import Foundation
@@ -12,7 +12,7 @@ import Foundation
 import Testing
 
 @MainActor
-struct SportsDayWindowTests {
+struct SportsTodayWindowTests {
     private var calendar: Calendar {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(identifier: "Europe/London") ?? .gmt
@@ -26,6 +26,13 @@ struct SportsDayWindowTests {
 
     private func at(day: Int, hour: Int) -> Date {
         calendar.date(from: DateComponents(year: 2026, month: 10, day: day, hour: hour)) ?? Date()
+    }
+
+    /// The rail's rule: live, or on at some point today.
+    private func isToday(_ fixture: SportsFixture) -> Bool {
+        let start = calendar.startOfDay(for: now)
+        let end = calendar.date(byAdding: .day, value: 1, to: start) ?? start
+        return fixture.isInProgress || fixture.isOn(during: start ..< end)
     }
 
     private func fixture(sport: String, start: Date, state: SportsFixtureState) -> SportsFixture {
@@ -43,35 +50,25 @@ struct SportsDayWindowTests {
     @Test func `a fight card that started last night is still today after midnight`() {
         let card = fixture(sport: "mma", start: at(day: 3, hour: 23), state: .scheduled)
 
-        #expect(SportsDayWindow.today.contains(card, now: now, calendar: calendar))
-        #expect(SportsDayWindow.yesterday.contains(card, now: now, calendar: calendar))
+        #expect(isToday(card))
     }
 
     @Test func `a finished card that ran past midnight stays in today`() {
         let card = fixture(sport: "mma", start: at(day: 3, hour: 23), state: .final)
 
-        #expect(SportsDayWindow.today.contains(card, now: now, calendar: calendar))
+        #expect(isToday(card))
     }
 
     @Test func `yesterday afternoon's match is not today`() {
         let match = fixture(sport: "soccer", start: at(day: 3, hour: 15), state: .final)
 
-        #expect(!SportsDayWindow.today.contains(match, now: now, calendar: calendar))
-        #expect(SportsDayWindow.yesterday.contains(match, now: now, calendar: calendar))
+        #expect(!isToday(match))
     }
 
     @Test func `anything the provider calls live is today`() {
         let longGame = fixture(sport: "cricket", start: at(day: 2, hour: 10), state: .inProgress)
 
-        #expect(SportsDayWindow.today.contains(longGame, now: now, calendar: calendar))
-    }
-
-    @Test func `upcoming still goes by start`() {
-        let later = fixture(sport: "soccer", start: at(day: 4, hour: 16), state: .scheduled)
-        let started = fixture(sport: "mma", start: at(day: 3, hour: 23), state: .scheduled)
-
-        #expect(SportsDayWindow.upcoming.contains(later, now: now, calendar: calendar))
-        #expect(!SportsDayWindow.upcoming.contains(started, now: now, calendar: calendar))
+        #expect(isToday(longGame))
     }
 
     @Test func `an expanded race session uses the session's own length`() {
@@ -81,6 +78,6 @@ struct SportsDayWindowTests {
         )
 
         // 21:00 + 2.5 h ends before midnight.
-        #expect(!SportsDayWindow.today.contains(session, now: now, calendar: calendar))
+        #expect(!isToday(session))
     }
 }

@@ -90,9 +90,6 @@ struct SportsHubView: View {
                         activePlaylist: playlists.active(for: selectedPlaylistID)
                     ))
                     .browseSidebarToolbar(isPresented: $showingBrowse, isEnabled: premium.isPremium)
-                    .navigationDestination(for: SportsLeague.self) { league in
-                        LeagueDetailView(league: league)
-                    }
                     .navigationDestination(for: SportsFollowRoute.self) { route in
                         SportsHubView(pageKey: route.key)
                     }
