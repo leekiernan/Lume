@@ -93,9 +93,7 @@ nonisolated struct SkipAcceleration: Equatable {
 
     /// A position in the content, as the progress bar shows it: "12:34".
     static func timeLabel(for position: TimeInterval) -> String {
-        let clamped = position.isFinite ? max(position, 0).rounded(.down) : 0
-        let pattern: Duration.TimeFormatStyle.Pattern = clamped >= 3600 ? .hourMinuteSecond : .minuteSecond
-        return Duration.seconds(clamped).formatted(.time(pattern: pattern))
+        PlaybackTimeLabel.localized(position)
     }
 }
 

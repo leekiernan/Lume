@@ -35,28 +35,15 @@ import SwiftUI
             .tint(.white)
 
             HStack {
-                Text(Self.timeString(from: isSeeking ? seekPosition : clock.current))
+                Text(PlaybackTimeLabel.clock(isSeeking ? seekPosition : clock.current))
                     .contentTransition(.numericText())
                     .foregroundStyle(.white)
                 Spacer()
-                Text(Self.timeString(from: max(clock.duration, 0)))
+                Text(PlaybackTimeLabel.clock(max(clock.duration, 0)))
                     .foregroundStyle(.white.opacity(0.7))
             }
             .font(.caption.monospacedDigit())
             .shadow(color: .black.opacity(0.35), radius: 3, y: 1)
-        }
-
-        static func timeString(from time: TimeInterval) -> String {
-            guard time.isFinite, time >= 0 else { return "0:00" }
-            let totalSeconds = Int(time)
-            let hours = totalSeconds / 3600
-            let minutes = (totalSeconds % 3600) / 60
-            let seconds = totalSeconds % 60
-            if hours > 0 {
-                return String(format: "%d:%02d:%02d", hours, minutes, seconds)
-            } else {
-                return String(format: "%d:%02d", minutes, seconds)
-            }
         }
     }
 #endif

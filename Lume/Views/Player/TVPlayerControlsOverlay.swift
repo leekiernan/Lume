@@ -566,7 +566,7 @@
             if isLive, let epgNow {
                 return Self.wallClock(epgNow.start)
             }
-            return Self.timeString(isScrubbing ? scrubTarget : clock.current)
+            return PlaybackTimeLabel.clock(isScrubbing ? scrubTarget : clock.current)
         }
 
         private var trailingTimeLabel: String {
@@ -574,22 +574,11 @@
                 return Self.wallClock(epgNow.end)
             }
             let reference = isScrubbing ? scrubTarget : clock.current
-            return "-" + Self.timeString(max(clock.duration - reference, 0))
+            return "-" + PlaybackTimeLabel.clock(max(clock.duration - reference, 0))
         }
 
         private static func wallClock(_ date: Date) -> String {
             date.formatted(date: .omitted, time: .shortened)
-        }
-
-        private static func timeString(_ time: TimeInterval) -> String {
-            guard time.isFinite, time >= 0 else { return "0:00" }
-            let total = Int(time)
-            let hours = total / 3600
-            let minutes = (total % 3600) / 60
-            let seconds = total % 60
-            return hours > 0
-                ? String(format: "%d:%02d:%02d", hours, minutes, seconds)
-                : String(format: "%d:%02d", minutes, seconds)
         }
     }
 
