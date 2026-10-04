@@ -124,31 +124,7 @@ extension ContentSyncManager {
     }
 
     private func syncStalkerCategories(_ cats: [StalkerCategory], type: CategoryType, playlistId: UUID) throws {
-        let context = ModelContext(modelContainer)
-        context.autosaveEnabled = false
-
-        let lookup = buildExistingCategoryLookup(context: context, playlistId: playlistId, type: type)
-        guard let playlist = try context.fetch(
-            FetchDescriptor<Playlist>(predicate: #Predicate { $0.id == playlistId })
-        ).first else { return }
-
-        for (index, cat) in cats.enumerated() where !cat.id.isEmpty {
-            if let existing = lookup[cat.id] {
-                if existing.name != cat.title { existing.name = cat.title }
-                if existing.sortOrder != index { existing.sortOrder = index }
-            } else {
-                let category = Category(apiId: cat.id, name: cat.title, parentId: 0, type: type, playlist: playlist)
-                category.sortOrder = index
-                context.insert(category)
-            }
-        }
-        if context.hasChanges {
-            try context.save()
-        }
-
-        // A failed list request arrives here as `[]` (see `performStalkerSync`),
-        // which the guarded entry never sweeps on.
-        pruneCategories(playlistId: playlistId, type: type, seenApiIds: Set(cats.map(\.id)), importedCount: cats.count)
+        try syncProviderCategories(cats.map { ProviderCategory(id: $0.id, name: $0.title) }, type: type, playlistId: playlistId)
     }
 
     // MARK: - Catalog walk (vod / series)

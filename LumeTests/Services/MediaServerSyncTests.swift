@@ -37,6 +37,10 @@ private final nonisolated class JellyfinServerStubProtocol: URLProtocol {
         lock.withLock { replies[host] = nil }
     }
 
+    static func setReply(host: String, key: String, reply: Reply) {
+        lock.withLock { Self.replies[host]?[key] = reply }
+    }
+
     // swiftlint:disable:next static_over_final_class
     override class func canInit(with _: URLRequest) -> Bool {
         true
@@ -53,7 +57,8 @@ private final nonisolated class JellyfinServerStubProtocol: URLProtocol {
             return
         }
         let key = Self.route(url)
-        let reply = Self.lock.withLock { Self.replies[host]?[key] }
+        let offset = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "StartIndex" }?.value ?? "0"
+        let reply = Self.lock.withLock { Self.replies[host]?["\(key)|\(offset)"] ?? Self.replies[host]?[key] }
         let resolved = reply ?? Reply(status: 404, body: "")
         guard let response = HTTPURLResponse(
             url: url,
@@ -285,6 +290,37 @@ struct MediaServerSyncTests {
         #expect(movies.first?.name == "Arrival")
         let stored = try #require(try context.fetch(FetchDescriptor<Playlist>()).first)
         #expect(stored.jellyfinAccessToken == "sess2")
+    }
+
+    @Test(arguments: [MediaServerFlavor.jellyfin, .emby])
+    func `a truncated movie walk cannot prune or publish successful coverage`(flavor: MediaServerFlavor) async throws {
+        let host = uniqueHost()
+        defer { JellyfinServerStubProtocol.remove(host: host) }
+        installFullServer(host: host, movies: [jellyfinMovie(id: "m1", name: "First"), jellyfinMovie(id: "m2", name: "Keep")], series: [], episodes: [])
+        let container = try makeTestContainer()
+        let playlist = try makePlaylist(container: container, host: host, flavor: flavor)
+        let manager = makeManager(container: container)
+        try await manager.syncPlaylist(playlist)
+        let seed = ModelContext(container)
+        let survivor = try #require(try seed.fetch(FetchDescriptor<Movie>()).first { $0.name == "Keep" })
+        survivor.isFavorite = true
+        survivor.watchProgress = 0.4
+        try seed.save()
+        let previousSync = try #require(try seed.fetch(FetchDescriptor<Playlist>()).first?.lastSyncDate)
+        JellyfinServerStubProtocol.setReply(host: host, key: "/Users/user1/Items|libMovies|Movie|0", reply: jellyfinPage([jellyfinMovie(id: "m1", name: "Updated")], total: 3))
+        JellyfinServerStubProtocol.setReply(host: host, key: "/Users/user1/Items|libMovies|Movie|1", reply: jellyfinPage([], total: 3))
+        await #expect(throws: ProviderImportError.incompletePage(fetched: 1, expected: 3)) {
+            try await manager.syncPlaylist(playlist)
+        }
+        let context = ModelContext(container)
+        let movies = try context.fetch(FetchDescriptor<Movie>())
+        #expect(movies.count == 2)
+        #expect(movies.first { $0.name == "Keep" }?.isFavorite == true)
+        #expect(movies.first { $0.name == "Keep" }?.watchProgress == 0.4)
+        #expect(movies.contains { $0.name == "Updated" })
+        let stored = try #require(try context.fetch(FetchDescriptor<Playlist>()).first)
+        #expect(stored.syncStatus == .error)
+        #expect(stored.lastSyncDate == previousSync)
     }
 
     // MARK: Login failure

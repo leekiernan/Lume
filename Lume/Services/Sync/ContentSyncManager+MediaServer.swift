@@ -144,27 +144,17 @@ extension ContentSyncManager {
         unit: String,
         body: ([JellyfinItem]) throws -> Void
     ) async throws -> Int {
-        var startIndex = 0
-        var total = Int.max
-        var fetched = 0
-        while fetched < total {
-            try Task.checkCancellation()
+        try await walkProviderPages { startIndex in
             let page = try await jellyfinClient.items(
                 server: scope.server, session: scope.session, parentId: scope.view.id, types: types,
                 startIndex: startIndex
             )
-            total = page.totalRecordCount
-            if !page.items.isEmpty {
-                try body(page.items)
-            }
-            fetched += page.items.count
-            startIndex += page.items.count
+            return ProviderImportPage(items: page.items, total: page.totalRecordCount)
+        } consume: { items in
+            try body(items)
+        } report: { fetched, total in
             await progress?.update(detail: "\(fetched) of \(total) \(unit) in \(scope.view.name)", fraction: total == 0 ? 1 : Double(fetched) / Double(total))
-            if page.items.isEmpty {
-                break
-            }
         }
-        return fetched
     }
 
     // MARK: - Session
@@ -185,32 +175,7 @@ extension ContentSyncManager {
     /// `isHidden` / `customOrder`. Mirrors `syncCategories`' empty-gate: an
     /// empty view list is the transient-failure signature, never a deletion.
     private func syncJellyfinCategories(views: [JellyfinLibrary], type: CategoryType, playlistId: UUID) throws {
-        let context = ModelContext(modelContainer)
-        context.autosaveEnabled = false
-        let lookup = buildExistingCategoryLookup(context: context, playlistId: playlistId, type: type)
-        guard let playlist = try context.fetch(
-            FetchDescriptor<Playlist>(predicate: #Predicate { $0.id == playlistId })
-        ).first else { return }
-
-        for (index, view) in views.enumerated() {
-            if let existing = lookup[view.id] {
-                if existing.name != view.name {
-                    existing.name = view.name
-                }
-                if existing.sortOrder != index {
-                    existing.sortOrder = index
-                }
-            } else {
-                let category = Category(apiId: view.id, name: view.name, parentId: 0, type: type, playlist: playlist)
-                category.sortOrder = index
-                context.insert(category)
-            }
-        }
-        if context.hasChanges {
-            try context.save()
-        }
-
-        pruneCategories(playlistId: playlistId, type: type, seenApiIds: Set(views.map(\.id)), importedCount: views.count)
+        try syncProviderCategories(views.map { ProviderCategory(id: $0.id, name: $0.name) }, type: type, playlistId: playlistId)
     }
 
     // MARK: - Movies

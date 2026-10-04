@@ -243,11 +243,17 @@ extension ContentSyncManager {
     /// compiles to a range seek on the unique `id` index — no other playlist's
     /// rows are read.
     func buildExistingCategoryLookup(context: ModelContext, playlistId: UUID, type: CategoryType) -> [String: Category] {
+        (try? fetchCategoryLookup(context: context, playlistId: playlistId, type: type)) ?? [:]
+    }
+
+    /// Strict imports must stop on a failed lookup rather than replace stored
+    /// user state. The legacy streaming M3U path retains its best-effort wrapper.
+    func fetchCategoryLookup(context: ModelContext, playlistId: UUID, type: CategoryType) throws -> [String: Category] {
         let prefix = "\(playlistId.uuidString)-\(type.rawValue)-"
         let descriptor = FetchDescriptor<Category>(
             predicate: #Predicate { $0.id.starts(with: prefix) }
         )
-        guard let categories = try? context.fetch(descriptor) else { return [:] }
+        let categories = try context.fetch(descriptor)
         var lookup: [String: Category] = [:]
         lookup.reserveCapacity(categories.count)
         for category in categories {

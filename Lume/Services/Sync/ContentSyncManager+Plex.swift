@@ -167,30 +167,20 @@ extension ContentSyncManager {
         unit: String,
         body: ([PlexMetadata]) throws -> Void
     ) async throws -> Int {
-        var start = 0
-        var total = Int.max
-        var fetched = 0
-        while fetched < total {
-            try Task.checkCancellation()
+        try await walkProviderPages { start in
             let page = try await plexClient.items(
                 server: scope.server, token: scope.token, sectionKey: scope.section.key,
                 type: type, start: start
             )
-            total = page.totalSize
-            if !page.items.isEmpty {
-                try body(page.items)
-            }
-            fetched += page.items.count
-            start += page.items.count
+            return ProviderImportPage(items: page.items, total: page.totalSize)
+        } consume: { items in
+            try body(items)
+        } report: { fetched, total in
             await progress?.update(
                 detail: "\(fetched) of \(total) \(unit) in \(scope.section.title)",
                 fraction: total == 0 ? 1 : Double(fetched) / Double(total)
             )
-            if page.items.isEmpty {
-                break
-            }
         }
-        return fetched
     }
 
     // MARK: - Categories
@@ -200,32 +190,7 @@ extension ContentSyncManager {
     /// empty section list is the transient-failure signature, never a
     /// deletion.
     private func syncPlexCategories(sections: [PlexSection], type: CategoryType, playlistId: UUID) throws {
-        let context = ModelContext(modelContainer)
-        context.autosaveEnabled = false
-        let lookup = buildExistingCategoryLookup(context: context, playlistId: playlistId, type: type)
-        guard let playlist = try context.fetch(
-            FetchDescriptor<Playlist>(predicate: #Predicate { $0.id == playlistId })
-        ).first else { return }
-
-        for (index, section) in sections.enumerated() {
-            if let existing = lookup[section.key] {
-                if existing.name != section.title {
-                    existing.name = section.title
-                }
-                if existing.sortOrder != index {
-                    existing.sortOrder = index
-                }
-            } else {
-                let category = Category(apiId: section.key, name: section.title, parentId: 0, type: type, playlist: playlist)
-                category.sortOrder = index
-                context.insert(category)
-            }
-        }
-        if context.hasChanges {
-            try context.save()
-        }
-
-        pruneCategories(playlistId: playlistId, type: type, seenApiIds: Set(sections.map(\.key)), importedCount: sections.count)
+        try syncProviderCategories(sections.map { ProviderCategory(id: $0.key, name: $0.title) }, type: type, playlistId: playlistId)
     }
 
     // MARK: - Movies

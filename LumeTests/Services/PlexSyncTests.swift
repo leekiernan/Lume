@@ -41,6 +41,10 @@ private final nonisolated class PlexServerStubProtocol: URLProtocol {
         lock.withLock { replies[host] = nil }
     }
 
+    static func setReply(host: String, key: String, reply: Reply) {
+        lock.withLock { Self.replies[host]?[key] = reply }
+    }
+
     // swiftlint:disable:next static_over_final_class
     override class func canInit(with _: URLRequest) -> Bool {
         true
@@ -56,7 +60,9 @@ private final nonisolated class PlexServerStubProtocol: URLProtocol {
             client?.urlProtocol(self, didFailWithError: URLError(.badURL))
             return
         }
-        let reply = Self.lock.withLock { Self.replies[host]?[Self.route(url)] } ?? Reply(status: 404, body: "")
+        let key = Self.route(url)
+        let offset = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "X-Plex-Container-Start" }?.value ?? "0"
+        let reply = Self.lock.withLock { Self.replies[host]?["\(key)|\(offset)"] ?? Self.replies[host]?[key] } ?? Reply(status: 404, body: "")
         let sent = request.value(forHTTPHeaderField: "X-Plex-Token")
         let accepted: Bool = if let expected = reply.acceptedToken {
             sent == expected
@@ -321,6 +327,36 @@ struct PlexSyncTests {
 
         let names = try Set(ModelContext(container).fetch(FetchDescriptor<Movie>()).map(\.name))
         #expect(names == ["Arrival", "Foreign"])
+    }
+
+    @Test func `a truncated movie walk cannot prune or publish successful coverage`() async throws {
+        let host = uniqueHost()
+        defer { PlexServerStubProtocol.remove(host: host) }
+        installFullServer(host: host, movies: [plexMovie(ratingKey: "1", title: "First"), plexMovie(ratingKey: "2", title: "Keep")], shows: [], episodes: [])
+        let container = try makeTestContainer()
+        let playlist = try makePlaylist(container: container, host: host)
+        let manager = makeManager(container: container)
+        try await manager.syncPlaylist(playlist)
+        let seed = ModelContext(container)
+        let survivor = try #require(try seed.fetch(FetchDescriptor<Movie>()).first { $0.name == "Keep" })
+        survivor.isFavorite = true
+        survivor.watchProgress = 0.4
+        try seed.save()
+        let previousSync = try #require(try seed.fetch(FetchDescriptor<Playlist>()).first?.lastSyncDate)
+        PlexServerStubProtocol.setReply(host: host, key: "/library/sections/1/all|1|0", reply: plexPage([plexMovie(ratingKey: "1", title: "Updated")], total: 3))
+        PlexServerStubProtocol.setReply(host: host, key: "/library/sections/1/all|1|1", reply: plexPage([], total: 3))
+        await #expect(throws: ProviderImportError.incompletePage(fetched: 1, expected: 3)) {
+            try await manager.syncPlaylist(playlist)
+        }
+        let context = ModelContext(container)
+        let movies = try context.fetch(FetchDescriptor<Movie>())
+        #expect(movies.count == 2)
+        #expect(movies.first { $0.name == "Keep" }?.isFavorite == true)
+        #expect(movies.first { $0.name == "Keep" }?.watchProgress == 0.4)
+        #expect(movies.contains { $0.name == "Updated" })
+        let stored = try #require(try context.fetch(FetchDescriptor<Playlist>()).first)
+        #expect(stored.syncStatus == .error)
+        #expect(stored.lastSyncDate == previousSync)
     }
 
     // MARK: Authentication
