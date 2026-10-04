@@ -6,6 +6,24 @@ nonisolated enum HeroArtworkPolicy {
     static let portraitRatio: CGFloat = 2 / 3
     static let portraitZoom: CGFloat = 1.25
 
+    nonisolated struct Rendition: Equatable {
+        let url: URL?
+        /// CachedAsyncImage accepts points and applies the display scale itself.
+        let decodeSizeInPoints: CGFloat
+        /// ImagePipeline prefetch accepts pixels; use this for the same cache key.
+        let decodeSizeInPixels: CGFloat
+    }
+
+    static func rendition(
+        url: URL?, width: CGFloat, height: CGFloat,
+        sourceRatio: CGFloat = landscapeRatio, zoom: CGFloat = 1, displayScale: CGFloat
+    ) -> Rendition {
+        let points = decodePoints(width: width, height: height, sourceRatio: sourceRatio) * zoom
+        let pixels = points * displayScale
+        let sizedURL = sourceRatio < 1 ? posterURL(url, pixelWidth: pixels * sourceRatio) : backdropURL(url, pixelWidth: pixels)
+        return Rendition(url: sizedURL, decodeSizeInPoints: points, decodeSizeInPixels: pixels)
+    }
+
     static func portraitURL(_ poster: URL?, width: CGFloat) -> URL? {
         width < 600 ? poster : nil
     }

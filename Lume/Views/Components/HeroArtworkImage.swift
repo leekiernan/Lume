@@ -10,12 +10,13 @@ struct HeroArtworkImage: View {
 
     var body: some View {
         GeometryReader { proxy in
-            let points = HeroArtworkPolicy.decodePoints(width: proxy.size.width, height: proxy.size.height, sourceRatio: sourceRatio) * zoom
+            let rendition = HeroArtworkPolicy.rendition(
+                url: url, width: proxy.size.width, height: proxy.size.height,
+                sourceRatio: sourceRatio, zoom: zoom, displayScale: displayScale
+            )
             CachedAsyncImage(
-                url: sourceRatio < 1
-                    ? HeroArtworkPolicy.posterURL(url, pixelWidth: points * sourceRatio * displayScale)
-                    : HeroArtworkPolicy.backdropURL(url, pixelWidth: points * displayScale),
-                maxPixelSize: points
+                url: rendition.url,
+                maxPixelSize: rendition.decodeSizeInPoints
             ) { phase in
                 if case let .success(image) = phase {
                     image.resizable().scaledToFill()

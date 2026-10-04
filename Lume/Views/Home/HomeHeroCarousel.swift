@@ -194,10 +194,13 @@ struct HeroCarousel<Item: Identifiable, Backdrop: View, Info: View>: View where 
             let ratio = poster == nil ? HeroArtworkPolicy.landscapeRatio : HeroArtworkPolicy.portraitRatio
             let height = poster == nil ? HeroArtworkPolicy.artworkHeight(width: artworkSize.width, heroHeight: artworkSize.height) : artworkSize.height
             let zoom = poster == nil ? 1 : HeroArtworkPolicy.portraitZoom
-            let pixels = HeroArtworkPolicy.decodePoints(width: artworkSize.width, height: height, sourceRatio: ratio) * zoom * displayScale
-            let url = poster.map { HeroArtworkPolicy.posterURL($0, pixelWidth: pixels * ratio) }
-                ?? HeroArtworkPolicy.backdropURL(imageURL(items[neighbour]), pixelWidth: pixels)
-            if let url { Task { await ImagePipeline.shared.prefetch([url], maxPixelSize: pixels) } }
+            let rendition = HeroArtworkPolicy.rendition(
+                url: poster ?? imageURL(items[neighbour]), width: artworkSize.width, height: height,
+                sourceRatio: ratio, zoom: zoom, displayScale: displayScale
+            )
+            if let url = rendition.url {
+                Task { await ImagePipeline.shared.prefetch([url], maxPixelSize: rendition.decodeSizeInPixels) }
+            }
         }
     }
 
