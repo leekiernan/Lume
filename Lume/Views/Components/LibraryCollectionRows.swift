@@ -305,8 +305,13 @@ enum SeriesWatchSplit {
         loadNextPage: () -> Void
     ) async -> ContinueWatchingLoader.Result? {
         while true {
-            let result = await progress(collection.items)
+            let items = collection.items
+            let stamp = key(items, for: kind)
+            let result = await progress(items)
             guard !Task.isCancelled else { return nil }
+            // A user-driven page append or watch edit during the lookup is not
+            // covered by that result. Resolve the new window before publishing.
+            guard key(collection.items, for: kind) == stamp else { continue }
             guard shown(collection.items, for: kind, progress: result).isEmpty, collection.canLoadMore else {
                 return result
             }

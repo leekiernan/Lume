@@ -105,4 +105,64 @@ struct SeriesWatchSplitPagingTests {
         }
         #expect(await task.value == nil)
     }
+
+    @Test func `the split owns its page drain without restarting its task`() async throws {
+        let container = try makeTestContainer()
+        let context = container.mainContext
+        try seed([false, false, false, false, true], in: context)
+        let collection = PagedCollection<Series>()
+        collection.prepare(for: "watch")
+        func loadPage() {
+            collection.loadNextPage(in: context, pageSize: pageSize) { offset, limit in
+                SeriesCollectionQuery.pageDescriptor(for: .recentlyWatched, playlistPrefix: prefix, excludedCategoryIDs: [], offset: offset, limit: limit)
+            }
+        }
+        loadPage()
+        func key() -> [String] {
+            SeriesCatalog.progressRequestKey(request: "watch", loaded: collection.pagination.key, items: collection.items, kind: .recentlyWatched)
+        }
+        var machine = CollectionWatchSplitMachine()
+        machine.update(for: key())
+        let originalTaskKey = machine.taskKey
+        let request = machine.begin()
+        var passes = 0
+        let result = try #require(await SeriesWatchSplit.settle(.recentlyWatched, collection: collection, progress: { items in
+            passes += 1
+            return ContinueWatchingLoader.load(container: container, series: items.map(\.persistentModelID))
+        }, loadNextPage: {
+            loadPage()
+            machine.update(for: key()) // The view observes each page append.
+            #expect(machine.taskKey == originalTaskKey)
+        }))
+        #expect(passes == 3)
+        let finished = machine.finish(request, publishedKey: key())
+        #expect(finished)
+        machine.update(for: key()) // A deferred onChange may arrive after finish.
+        #expect(machine.taskKey == originalTaskKey)
+        #expect(result.finished == ["p-series-4"])
+        collection.items.first?.lastWatchedDate = Date.now
+        machine.update(for: key())
+        #expect(machine.taskKey != originalTaskKey)
+    }
+
+    @Test func `watch edits and scope replacements invalidate an active split but appends do not`() {
+        var machine = CollectionWatchSplitMachine()
+        let initial = ["watch-profile", "watch-profile", "show-a|1"]
+        machine.update(for: initial)
+        let first = machine.begin()
+        machine.update(for: initial + ["show-b|2"])
+        #expect(machine.taskKey == initial)
+        let edited = ["watch-profile", "watch-profile", "show-a|3", "show-b|2"]
+        machine.update(for: edited)
+        #expect(machine.taskKey == edited)
+        let staleEdit = machine.finish(first)
+        #expect(!staleEdit)
+        let second = machine.begin()
+        machine.update(for: ["other-profile", "other-profile", "show-a|3"])
+        let replacement = machine.begin()
+        let staleScope = machine.finish(second)
+        let current = machine.finish(replacement)
+        #expect(!staleScope)
+        #expect(current)
+    }
 }

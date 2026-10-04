@@ -32,6 +32,7 @@ struct CatalogCollectionView<Kind: CatalogCollectionKind>: View {
     @State private var collection = PagedCollection<Kind.Item>()
     @State private var progress = ContinueWatchingLoader.Result()
     @State private var settledProgressKey: [String]?
+    @State private var watchSplit = CollectionWatchSplitMachine()
     private let pageSize = 100
 
     var body: some View {
@@ -48,11 +49,18 @@ struct CatalogCollectionView<Kind: CatalogCollectionKind>: View {
             collection.prepare(for: requestKey)
             loadNextPage()
         }
-        .task(id: progressKey) {
+        .onChange(of: progressKey, initial: true) { _, key in
+            guard Kind.splits(kind) else { return }
+            watchSplit.update(for: key)
+        }
+        .task(id: watchSplit.taskKey) {
             guard Kind.splits(kind), collection.pagination.key == requestKey else { return }
             let owner = requestKey
+            let request = watchSplit.begin()
+            defer { watchSplit.finish(request) }
             let settled = await Kind.settle(kind, collection: collection, context: modelContext, loadNextPage: loadNextPage)
-            guard !Task.isCancelled, collection.pagination.key == owner, let settled else { return }
+            guard !Task.isCancelled, collection.pagination.key == owner, let settled,
+                  watchSplit.finish(request, publishedKey: progressKey) else { return }
             progress = settled
             settledProgressKey = progressKey
         }
