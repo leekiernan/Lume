@@ -46,6 +46,32 @@ struct ImageDecoderTests {
         }
     }
 
+    @Test func `extended RGB fallback uses a bounded standard range rendition`() throws {
+        let space = try #require(CGColorSpace(name: CGColorSpace.extendedLinearSRGB))
+        let context = try #require(CGContext(
+            data: nil, width: 600, height: 900, bitsPerComponent: 32, bytesPerRow: 0,
+            space: space, bitmapInfo: CGBitmapInfo.floatComponents.rawValue | CGImageAlphaInfo.premultipliedLast.rawValue
+        ))
+        try context.setFillColor(#require(CGColor(colorSpace: space, components: [1.5, 0.25, 0.1, 1])))
+        context.fill(CGRect(x: 0, y: 0, width: 600, height: 900))
+        let source = try #require(context.makeImage())
+        #expect(try CGColorSpaceUsesExtendedRange(#require(source.colorSpace)))
+        let bounded = try #require(ImageDecoder.boundedImage(source, maxPixelSize: 300))
+        #expect(bounded.width == 200 && bounded.height == 300)
+        #expect(bounded.bitsPerComponent == 8)
+        #expect(try !CGColorSpaceUsesExtendedRange(#require(bounded.colorSpace)))
+    }
+
+    @Test func `standard wide gamut is retained when bounding artwork`() throws {
+        let space = try #require(CGColorSpace(name: CGColorSpace.displayP3))
+        let source = try #require(CGContext(
+            data: nil, width: 600, height: 900, bitsPerComponent: 8, bytesPerRow: 0,
+            space: space, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        )?.makeImage())
+        let bounded = try #require(ImageDecoder.boundedImage(source, maxPixelSize: 300))
+        #expect(bounded.colorSpace?.name == CGColorSpace.displayP3)
+    }
+
     private func makeImage(width: Int, height: Int) throws -> CGImage {
         try #require(CGContext(
             data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width * 4,

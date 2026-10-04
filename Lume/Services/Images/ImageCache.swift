@@ -521,7 +521,12 @@ nonisolated enum ImageDecoder {
         let ratio = maxPixelSize / longestEdge
         let width = max(1, Int(floor(CGFloat(image.width) * ratio)))
         let height = max(1, Int(floor(CGFloat(image.height) * ratio)))
-        let colorSpace = image.colorSpace?.model == .rgb ? image.colorSpace : CGColorSpace(name: CGColorSpace.sRGB)
+        // Extended-range RGB requires floating-point storage. This returned
+        // rendition is deliberately 8-bpc: retain the source gamut/transfer
+        // function but convert to its standard-range equivalent first.
+        let colorSpace = image.colorSpace.flatMap {
+            $0.model == .rgb ? CGColorSpaceCreateCopyWithStandardRange($0) : nil
+        } ?? CGColorSpace(name: CGColorSpace.sRGB)
         guard let colorSpace,
               let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
                                       space: colorSpace, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
