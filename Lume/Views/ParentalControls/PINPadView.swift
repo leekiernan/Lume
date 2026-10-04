@@ -144,5 +144,5 @@ private struct PINKeyStyle: ButtonStyle {
 
 #Preview {
     @Previewable @State var entry = "12"
-    return PINPadView(title: "Enter PIN", subtitle: "Enter your 4-digit PIN.", entry: $entry)
+    return PINPadView(title: "Enter PIN", subtitle: "Enter your PIN to switch profile.", entry: $entry)
 }

@@ -373,7 +373,7 @@
                 heroItems: items,
                 onSelectHero: { _ in },
                 rows: {
-                    Text("Rows go here")
+                    Text(verbatim: "Rows go here")
                         .padding(.horizontal)
                 }
             )

@@ -18754,9 +18754,6 @@
         }
       }
     },
-    "Enter your 4-digit PIN." : {
-
-    },
     "Enter your current PIN to change it." : {
       "localizations" : {
         "de" : {
@@ -48023,9 +48020,6 @@
           }
         }
       }
-    },
-    "Rows go here" : {
-
     },
     "Rugby" : {
       "localizations" : {
