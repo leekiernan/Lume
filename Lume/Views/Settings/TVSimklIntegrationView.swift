@@ -95,6 +95,24 @@
                     importStatus(summary)
                 }
 
+                // An import waits for these to upload first, so without them
+                // on screen a chosen import looked like it did nothing.
+                if simkl.pendingMutationCount > 0 {
+                    Button {
+                        simkl.retryPendingMutations()
+                    } label: {
+                        TrackerButtonLabel(title: "Retry Pending Simkl Changes", systemImage: "arrow.clockwise", isBusy: simkl.isSyncingMutations)
+                    }
+                    .buttonStyle(TVSettingsRowButtonStyle())
+                    .disabled(simkl.isSyncingMutations)
+
+                    (simkl.mutationSyncError.map { Text($0) }
+                        ?? Text("\(simkl.pendingMutationCount) Simkl changes waiting to sync."))
+                        .font(.system(size: 22))
+                        .foregroundStyle(simkl.mutationSyncError != nil ? .red : .secondary)
+                        .padding(.horizontal, TVSettingsMetrics.rowHPadding)
+                }
+
                 Button {
                     Task { await simkl.disconnect() }
                 } label: {
