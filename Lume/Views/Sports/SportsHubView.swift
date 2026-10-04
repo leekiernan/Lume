@@ -36,9 +36,9 @@ struct SportsHubView: View {
     /// Follows taken off the hub in Settings ▸ Sports.
     @AppStorage(SportsHubLayout.hiddenKey) private var hiddenFollowsRaw = ""
     @State private var resolution = SportsFixtureResolutionMachine()
-    private var hubChannels: SportsHubChannels {
-        SportsHubChannels(resolution: resolution, highlights: highlightsLoad, visibilityToken: restriction.visibilityToken)
-    }
+    /// Rebuilt when either machine or the visibility changes — see
+    /// `keepingSportsHubChannels`.
+    @State private var hubChannels = SportsHubChannels.empty
 
     private var resolved: [String: [ResolvedChannel]] {
         hubChannels.resolved
@@ -128,6 +128,9 @@ struct SportsHubView: View {
                 lockedState
             }
         }
+        .keepingSportsHubChannels(
+            $hubChannels, resolution: resolution, highlights: highlightsLoad, visibilityToken: restriction.visibilityToken
+        )
         .sheet(isPresented: $showManageTeams) { ManageTeamsSheet() }
         .sheet(item: $selectedFixture, onDismiss: presentPendingMedia) { fixture in
             GameDetailSheet(fixture: fixture, resolved: resolved[fixture.id] ?? [], onWatch: watch)

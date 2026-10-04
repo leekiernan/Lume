@@ -47,9 +47,9 @@
         @State var showingBrowse = false
         @State var browseReturnFocus: TVSportsFocus?
         @State var resolution = SportsFixtureResolutionMachine()
-        private var hubChannels: SportsHubChannels {
-            SportsHubChannels(resolution: resolution, highlights: highlightsLoad, visibilityToken: restriction.visibilityToken)
-        }
+        /// Rebuilt when either machine or the visibility changes — see
+        /// `keepingSportsHubChannels`.
+        @State var hubChannels = SportsHubChannels.empty
 
         var resolved: [String: [ResolvedChannel]] {
             hubChannels.resolved
@@ -110,6 +110,9 @@
                     lockedState
                 }
             }
+            .keepingSportsHubChannels(
+                $hubChannels, resolution: resolution, highlights: highlightsLoad, visibilityToken: restriction.visibilityToken
+            )
             .sheet(isPresented: $showManageTeams) { TVManageTeamsPane() }
             .fullScreenCover(item: $selectedFixture, onDismiss: presentPendingMedia) { fixture in
                 TVGameDetailSheet(fixture: fixture, resolved: resolved[fixture.id] ?? [], onWatch: watch)

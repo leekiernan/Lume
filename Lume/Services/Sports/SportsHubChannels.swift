@@ -6,6 +6,12 @@ import Foundation
 nonisolated struct SportsHubChannels {
     let resolved: [String: [ResolvedChannel]]
 
+    static let empty = SportsHubChannels(resolved: [:])
+
+    init(resolved: [String: [ResolvedChannel]]) {
+        self.resolved = resolved
+    }
+
     init(
         resolution: SportsFixtureResolutionMachine,
         highlights: SportsHighlightsLoadMachine,
