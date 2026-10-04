@@ -254,7 +254,7 @@ struct VLCPlayerEngineView: View {
                 hoverHideTask?.cancel()
                 hoverHideTask = Task { @MainActor in
                     try? await Task.sleep(nanoseconds: 600_000_000)
-                    guard !Task.isCancelled else { return }
+                    guard !Task.isCancelled, canAutoHideControls else { return }
                     withAnimation(.easeInOut(duration: 0.2)) { isControlsVisible = false }
                 }
             }
@@ -449,12 +449,16 @@ struct VLCPlayerEngineView: View {
         }
     }
 
+    private var canAutoHideControls: Bool {
+        PlayerControlsAutoHide.mayHide(isPlaying: coordinator.isPlaying, isPanelOpen: isPanelOpen, isSuppressed: PlayerControlsAutoHide.isSuppressed)
+    }
+
     private func scheduleHide() {
         hideTask?.cancel()
-        guard coordinator.isPlaying, !isPanelOpen, !PlayerControlsAutoHide.isSuppressed else { return }
+        guard canAutoHideControls else { return }
         hideTask = Task { @MainActor in
             try? await Task.sleep(nanoseconds: UInt64(autoHideInterval * 1_000_000_000))
-            guard !Task.isCancelled, coordinator.isPlaying else { return }
+            guard !Task.isCancelled, canAutoHideControls else { return }
             withAnimation(.easeInOut(duration: 0.2)) { isControlsVisible = false }
         }
     }

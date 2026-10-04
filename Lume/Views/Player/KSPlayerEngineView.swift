@@ -555,7 +555,7 @@ struct KSPlayerEngineView: View {
                     hoverHideTask?.cancel()
                     hoverHideTask = Task { @MainActor in
                         try? await Task.sleep(nanoseconds: 600_000_000)
-                        guard !Task.isCancelled else { return }
+                        guard !Task.isCancelled, canAutoHideControls else { return }
                         withAnimation(.easeInOut(duration: 0.2)) {
                             isControlsVisible = false
                         }

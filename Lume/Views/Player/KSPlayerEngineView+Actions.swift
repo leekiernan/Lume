@@ -58,20 +58,20 @@ extension KSPlayerEngineView {
         }
     }
 
+    var canAutoHideControls: Bool {
+        #if os(tvOS)
+            PlayerControlsAutoHide.mayHide(isPlaying: engine.isPlaying, isPanelOpen: isPanelOpen, isSuppressed: PlayerControlsAutoHide.isSuppressed)
+        #else
+            PlayerControlsAutoHide.mayHide(isPlaying: isPlaying, isPanelOpen: false, isSuppressed: PlayerControlsAutoHide.isSuppressed)
+        #endif
+    }
+
     func scheduleHide() {
         hideTask?.cancel()
-        #if os(tvOS)
-            guard engine.isPlaying, !isPanelOpen else { return }
-        #else
-            guard isPlaying, !PlayerControlsAutoHide.isSuppressed else { return }
-        #endif
+        guard canAutoHideControls else { return }
         hideTask = Task { @MainActor in
             try? await Task.sleep(nanoseconds: UInt64(autoHideInterval * 1_000_000_000))
-            #if os(tvOS)
-                guard !Task.isCancelled, engine.isPlaying else { return }
-            #else
-                guard !Task.isCancelled, isPlaying else { return }
-            #endif
+            guard !Task.isCancelled, canAutoHideControls else { return }
             withAnimation(.easeInOut(duration: 0.2)) {
                 isControlsVisible = false
             }
