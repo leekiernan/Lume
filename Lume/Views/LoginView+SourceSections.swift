@@ -37,7 +37,7 @@ import SwiftUI
             } header: {
                 Text("Server Connection")
             } footer: {
-                Text("Your credentials are stored locally on this device.")
+                Text(LoginSourceType.xtream.footer)
             }
         }
     }
@@ -68,7 +68,7 @@ import SwiftUI
             } header: {
                 Text("M3U Playlist")
             } footer: {
-                Text("Enter the playlist URL or choose a local m3u/m3u8 file. The EPG URL is read from the playlist when left empty.")
+                Text(LoginSourceType.m3u.footer)
             }
 
             if let xtreamHint {
@@ -95,20 +95,7 @@ import SwiftUI
                 TextField("e.g. http://example.com:8080/c/", text: $portalURL)
                     .urlEntry()
 
-                HStack {
-                    TextField("MAC Address", text: $macAddress)
-                    #if os(iOS)
-                        .textInputAutocapitalization(.characters)
-                    #endif
-                        .autocorrectionDisabled()
-                    Button {
-                        macAddress = StalkerMAC.generate()
-                    } label: {
-                        Image(systemName: "arrow.clockwise")
-                    }
-                    .buttonStyle(.borderless)
-                    .accessibilityLabel("Generate a new MAC address")
-                }
+                StalkerMACEntry(address: $macAddress)
 
                 TextField("Username (optional)", text: $username)
                     .usernameEntry()
@@ -118,7 +105,7 @@ import SwiftUI
             } header: {
                 Text("Stalker Portal")
             } footer: {
-                Text("Enter the portal URL and the MAC address your provider authorized. Most portals need only the portal URL and MAC.")
+                Text(LoginSourceType.stalker.footer)
             }
         }
     }

@@ -224,11 +224,7 @@ struct PlaylistDetailView: View {
                     TextField("EPG URL (optional)", text: $editEPGURL)
                         .urlEntry()
                 } else if isStalker {
-                    TextField("MAC Address", text: $editMacAddress)
-                    #if os(iOS)
-                        .textInputAutocapitalization(.characters)
-                    #endif
-                        .autocorrectionDisabled()
+                    StalkerMACEntry(address: $editMacAddress)
                     TextField("Username (optional)", text: $editUsername)
                         .usernameEntry()
                     SecureField("Password (optional)", text: $editPassword)
