@@ -143,6 +143,53 @@ struct CatalogBrowseLoadMachineTests {
         #expect(machine.items == [3])
     }
 
+    @Test func `reopening during an unfinished first import imports again and loads the page`() async {
+        let category = category(stalker: true)
+        let machine = CatalogCategoryLoadMachine<Int>()
+        let gate = BrowseGate<Void>()
+        let first = Task {
+            await machine.open(category: category, key: categoryKey(category), fetch: { _, _, _ in [1] }, importContent: { _, _ in await gate.wait() })
+        }
+        await gate.started()
+        first.cancel()
+
+        // Back before the cancelled import returns; it never stamps the category.
+        var reimports = 0
+        let reopen = Task {
+            await machine.open(category: category, key: categoryKey(category), fetch: { _, _, _ in [2] }, importContent: { _, _ in reimports += 1 })
+        }
+        await Task.yield()
+        #expect(machine.items.isEmpty)
+        gate.release(())
+        await first.value
+        await reopen.value
+        #expect(reimports == 1)
+        #expect(machine.items == [2])
+    }
+
+    @Test func `reopening during a first import that completes loads the page without importing again`() async {
+        let category = category(stalker: true)
+        let machine = CatalogCategoryLoadMachine<Int>()
+        let gate = BrowseGate<Void>()
+        let first = Task {
+            await machine.open(category: category, key: categoryKey(category), fetch: { _, _, _ in [1] }, importContent: { category, _ in
+                await gate.wait()
+                category.contentImportedAt = .now
+            })
+        }
+        await gate.started()
+        first.cancel()
+
+        let reopen = Task {
+            await machine.open(category: category, key: categoryKey(category), fetch: { _, _, _ in [2] }, importContent: { _, _ in Issue.record("imported twice") })
+        }
+        await Task.yield()
+        gate.release(())
+        await first.value
+        await reopen.value
+        #expect(machine.items == [2])
+    }
+
     @Test func `cached category keeps paging during revalidation and reloads the whole reached window`() async {
         let category = category(stalker: true, stamp: .distantPast)
         let machine = CatalogCategoryLoadMachine<Int>(pageSize: 2)

@@ -20,6 +20,9 @@ final class CatalogCategoryLoadMachine<Item> {
     private var importToken: RequestToken?
     @ObservationIgnored private var generation = RequestToken()
     @ObservationIgnored private var loadedInitialPage = false
+    /// Opens of the same category waiting for an import already in flight —
+    /// see `open`. Resumed whenever import ownership is released.
+    @ObservationIgnored private var importWaiters: [CheckedContinuation<Void, Never>] = []
     let pageSize: Int
 
     init(pageSize: Int = 100) {
@@ -32,7 +35,7 @@ final class CatalogCategoryLoadMachine<Item> {
 
     func invalidate() {
         generation = RequestToken()
-        importToken = nil
+        releaseImport()
         key = nil
         items = []
         loadedInitialPage = false
@@ -40,26 +43,40 @@ final class CatalogCategoryLoadMachine<Item> {
     }
 
     func open(category: Category, key nextKey: CatalogCategoryKey, fetch: @escaping Fetch, importContent: @escaping Import) async {
-        if key != nextKey {
-            key = nextKey
-            generation = RequestToken()
-            importToken = nil
-            items = []
-            loadedInitialPage = false
-            if !pagination.prepare(for: nextKey.categoryID) { pagination.restart() }
-        } else if loadedInitialPage || isImporting {
-            return
-        }
+        guard await claimOpen(nextKey) else { return }
         let owner = generation
         if let playlist = stalkerPlaylist(category), category.contentImportedAt == nil {
             guard await runImport(category, playlist: playlist, owner: owner, action: importContent) else { return }
         }
         guard isCurrent(owner) else { return }
-        loadNextPage(fetch: fetch)
+        // A reopen that waited on this import may already have loaded it.
+        if !loadedInitialPage { loadNextPage(fetch: fetch) }
         if let playlist = stalkerPlaylist(category), category.contentImportedAt != nil, category.stalkerContentStale {
             guard await runImport(category, playlist: playlist, owner: owner, action: importContent) else { return }
             reloadWindow(fetch: fetch)
         }
+    }
+
+    /// Whether this open has work to do. A new key starts afresh; the same
+    /// key with its first page loaded keeps it. The same key while its first
+    /// import is still running — typically after leaving the category, which
+    /// cancelled the open that started the import and so will never load its
+    /// first page — waits for that import, then decides again: the caller
+    /// loads the page if it completed, or imports afresh if it didn't.
+    private func claimOpen(_ nextKey: CatalogCategoryKey) async -> Bool {
+        if key != nextKey {
+            key = nextKey
+            generation = RequestToken()
+            releaseImport()
+            items = []
+            loadedInitialPage = false
+            if !pagination.prepare(for: nextKey.categoryID) { pagination.restart() }
+            return true
+        }
+        guard !loadedInitialPage else { return false }
+        guard isImporting else { return true }
+        await withCheckedContinuation { importWaiters.append($0) }
+        return key == nextKey && !loadedInitialPage && !isImporting && !Task.isCancelled
     }
 
     func loadNextPage(fetch: Fetch) {
@@ -99,9 +116,18 @@ final class CatalogCategoryLoadMachine<Item> {
         guard isCurrent(owner), !isImporting else { return false }
         let token = RequestToken()
         importToken = token
-        defer { if importToken == token { importToken = nil } }
+        defer { if importToken == token { releaseImport() } }
         do { try await action(category, playlist) } catch { /* Existing best-effort import contract. */ }
         return isCurrent(owner)
+    }
+
+    private func releaseImport() {
+        importToken = nil
+        let waiters = importWaiters
+        importWaiters = []
+        for waiter in waiters {
+            waiter.resume()
+        }
     }
 
     private func isCurrent(_ owner: RequestToken) -> Bool {
