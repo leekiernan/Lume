@@ -61,7 +61,7 @@ final nonisolated class WebDAVPropfindParser: NSObject, XMLParserDelegate {
     private let httpDateFormatter: DateFormatter
 
     private init(collection: URL) {
-        collectionKey = Self.pathKey(collection.absoluteString)
+        collectionKey = WebDAVPathIdentity.key(collection.absoluteString)
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.timeZone = TimeZone(identifier: "GMT")
@@ -162,7 +162,7 @@ final nonisolated class WebDAVPropfindParser: NSObject, XMLParserDelegate {
         // The collection asked about is returned as the first response. Emitting
         // it would give every directory a phantom row and leave the recursive
         // walk descending into itself forever.
-        guard !isFirstResponse, Self.pathKey(url.absoluteString) != collectionKey else { return }
+        guard !isFirstResponse, WebDAVPathIdentity.key(url.absoluteString) != collectionKey else { return }
         guard let name = Self.lastSegment(of: href) else { return }
 
         resources.append(WebDAVResource(
@@ -190,15 +190,5 @@ final nonisolated class WebDAVPropfindParser: NSObject, XMLParserDelegate {
         guard let segment = path.split(separator: "/").last else { return nil }
         let decoded = segment.removingPercentEncoding ?? String(segment)
         return decoded.isEmpty ? nil : decoded
-    }
-
-    /// Identity used to recognise a response that describes the collection
-    /// itself. Percent-decoded and trailing-slash-insensitive: a server may
-    /// spell its own href differently from the URL we requested.
-    private static func pathKey(_ absoluteString: String) -> String {
-        let withoutQuery = absoluteString.split(separator: "?", maxSplits: 1).first.map(String.init)
-            ?? absoluteString
-        let decoded = withoutQuery.removingPercentEncoding ?? withoutQuery
-        return decoded.hasSuffix("/") ? String(decoded.dropLast()) : decoded
     }
 }

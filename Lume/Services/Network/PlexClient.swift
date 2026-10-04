@@ -365,9 +365,7 @@ final nonisolated class PlexClient: Sendable {
     /// Strips a trailing slash so `appendingPathComponent` never builds a
     /// double-slash path.
     nonisolated static func normalizedServerURL(_ url: URL) -> URL {
-        let string = url.absoluteString
-        guard string.hasSuffix("/"), string.count > 1 else { return url }
-        return URL(string: String(string.dropLast())) ?? url
+        MediaServerURL.normalized(url)
     }
 
     // MARK: - Request plumbing

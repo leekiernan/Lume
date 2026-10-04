@@ -19,19 +19,21 @@
 import Foundation
 
 nonisolated enum M3UDigestStore {
+    private static let persistence = PlaylistDigestStore(namespace: "sync.m3uDigest")
+
     static func key(playlistId: UUID) -> String {
-        "sync.m3uDigest.\(playlistId.uuidString)"
+        persistence.key(playlistId: playlistId)
     }
 
     static func digest(playlistId: UUID) -> String? {
-        UserDefaults.standard.string(forKey: key(playlistId: playlistId))
+        persistence.digest(playlistId: playlistId)
     }
 
     static func store(_ digest: String, playlistId: UUID) {
-        UserDefaults.standard.set(digest, forKey: key(playlistId: playlistId))
+        persistence.store(digest, playlistId: playlistId)
     }
 
     static func remove(playlistId: UUID) {
-        UserDefaults.standard.removeObject(forKey: key(playlistId: playlistId))
+        persistence.remove(playlistId: playlistId)
     }
 }

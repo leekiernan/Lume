@@ -385,9 +385,7 @@ final nonisolated class JellyfinClient: Sendable {
     /// double-slash path (which Jellyfin answers with a redirect that drops
     /// the POST body).
     nonisolated static func normalizedServerURL(_ url: URL) -> URL {
-        let string = url.absoluteString
-        guard string.hasSuffix("/"), string.count > 1 else { return url }
-        return URL(string: String(string.dropLast())) ?? url
+        MediaServerURL.normalized(url)
     }
 
     /// Only the item fields the catalog build reads. The server's default

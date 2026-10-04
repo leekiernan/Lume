@@ -178,10 +178,7 @@ nonisolated enum WebDAVWalkProducer {
     /// Cycle-detection key: scheme, host and percent-decoded path, without
     /// query or trailing slash. Case-sensitive — a WebDAV path is.
     private static func visitKey(_ url: URL) -> String {
-        let absolute = url.absoluteString
-        let withoutQuery = absolute.split(separator: "?", maxSplits: 1).first.map(String.init) ?? absolute
-        let decoded = withoutQuery.removingPercentEncoding ?? withoutQuery
-        return decoded.hasSuffix("/") ? String(decoded.dropLast()) : decoded
+        WebDAVPathIdentity.key(url.absoluteString)
     }
 
     /// Whether a listed href is actually inside the collection the user named.
