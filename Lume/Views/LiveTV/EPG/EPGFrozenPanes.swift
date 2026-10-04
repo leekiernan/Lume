@@ -60,10 +60,13 @@ struct EPGFrozenColumn: View {
     let sync: EPGScrollSync
     /// The row the guide's virtual focus highlights in the column (tvOS).
     let focusedRowIndex: Int?
+    var now: Date = .distantPast
+    var dataVersion = 0
     /// Touch/pointer: tapping a channel plays it live — the same action the
     /// tvOS channel hub performs on select. Unused on tvOS, where the focus
     /// strip owns activation.
     var onSelectChannel: (EPGChannelRow) -> Void = { _ in }
+    var onWatchFromStart: (EPGChannelRow, EPGProgramCell) -> Void = { _, _ in }
     /// Seeds Multi-View from a channel's long-press menu. Unused on tvOS, for
     /// the same reason as `onSelectChannel`.
     var onStartMultiView: (EPGChannelRow) -> Void = { _ in }
@@ -82,7 +85,10 @@ struct EPGFrozenColumn: View {
                     metrics: metrics,
                     sync: sync,
                     focusedRowIndex: focusedRowIndex,
+                    now: now,
+                    dataVersion: dataVersion,
                     onSelectChannel: onSelectChannel,
+                    onWatchFromStart: onWatchFromStart,
                     onStartMultiView: onStartMultiView
                 )
                 .equatable()
@@ -111,6 +117,8 @@ struct EPGColumnCells: View, Equatable {
     /// Observed for `rowWindow` only (per-property tracking).
     let sync: EPGScrollSync
     let focusedRowIndex: Int?
+    var now: Date = .distantPast
+    var dataVersion = 0
     #if !os(tvOS)
         /// For the long-press menu's favourite toggle.
         @Environment(\.modelContext) private var modelContext
@@ -118,10 +126,13 @@ struct EPGColumnCells: View, Equatable {
     /// Deliberately outside `==` — a fresh closure identity alone must not
     /// re-run the body.
     var onSelectChannel: (EPGChannelRow) -> Void = { _ in }
+    var onWatchFromStart: (EPGChannelRow, EPGProgramCell) -> Void = { _, _ in }
     var onStartMultiView: (EPGChannelRow) -> Void = { _ in }
 
     static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.rows.count == rhs.rows.count
+            && lhs.dataVersion == rhs.dataVersion
+            && lhs.now == rhs.now
             && lhs.rows.first?.id == rhs.rows.first?.id
             && lhs.rows.last?.id == rhs.rows.last?.id
             && lhs.focusedRowIndex == rhs.focusedRowIndex
@@ -182,6 +193,9 @@ struct EPGColumnCells: View, Equatable {
             .liveChannelMenu(
                 isFavorite: entry.row.stream.isFavorite,
                 onToggleFavorite: { LiveChannelFavorites.toggle(entry.row.stream, in: modelContext) },
+                onWatchFromStart: EPGChannelRestart.action(for: entry.row, now: now) {
+                    onWatchFromStart(entry.row, $0)
+                },
                 onStartMultiView: { onStartMultiView(entry.row) }
             )
         #endif

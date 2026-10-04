@@ -184,6 +184,15 @@ struct EPGChannelRow: Identifiable {
     func isReplayable(start: Date, now: Date) -> Bool {
         catchupCapable && CatchupWindow.contains(start: start, archiveDays: archiveDays, now: now)
     }
+
+    /// A channel-menu restart targets only the programme currently on air, not
+    /// a future fixture or an archive entry elsewhere in the displayed window.
+    func restartableCell(at now: Date) -> EPGProgramCell? {
+        guard let cell = cells.first(where: { $0.isLive(at: now) }),
+              CatchupRestart.programme(EPGSlot(cell), now: now, catchupCapable: catchupCapable, archiveDays: archiveDays) != nil
+        else { return nil }
+        return cell
+    }
 }
 
 // MARK: - Builder

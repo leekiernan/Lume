@@ -102,7 +102,10 @@ struct EPGGridScroller: View {
                     metrics: metrics,
                     sync: sync,
                     focusedRowIndex: columnFocusRowIndex,
+                    now: now,
+                    dataVersion: dataVersion,
                     onSelectChannel: { onPlay($0.stream) },
+                    onWatchFromStart: { row, cell in onPlayCatchup(row.stream, cell) },
                     onStartMultiView: { onStartMultiView($0.stream) }
                 )
 
@@ -310,17 +313,17 @@ struct EPGGridScroller: View {
             // long press raises them itself.
             .confirmationDialog(
                 channelActions?.name ?? "",
-                isPresented: Binding(
-                    get: { channelActions != nil },
-                    set: { if !$0 { channelActions = nil } }
-                ),
+                isPresented: $channelActions.presentationPresence(),
                 titleVisibility: .visible,
                 presenting: channelActions
             ) { row in
-                Button(row.stream.isFavorite ? "Remove from Favorites" : "Add to Favorites") {
+                if let restart = EPGChannelRestart.action(for: row, perform: { cell in onPlayCatchup(row.stream, cell) }) {
+                    LiveChannelMenuItems.watchFromStart(restart)
+                }
+                FavoriteMenuItems.favorite(isFavorite: row.stream.isFavorite) {
                     LiveChannelFavorites.toggle(row.stream, in: modelContext)
                 }
-                Button("Start Multi-View") {
+                LiveChannelMenuItems.startMultiView {
                     onStartMultiView(row.stream)
                 }
             }
