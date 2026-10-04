@@ -345,7 +345,7 @@ struct CatalogBrowseLoadMachineTests {
         #expect(!machine.pagination.canLoadMore)
     }
 
-    @Test func `sidebar genres reject old responses and snapshots from other visibility profiles or catalog versions`() async {
+    @Test func `sidebar genres reject old responses and snapshots from other playlists visibility or profiles`() async {
         let machine = LibraryGenreLoadMachine()
         let first = LibraryGenreLoadKey(prefix: "one-", visibility: "all", profile: nil, syncedAt: nil)
         let second = LibraryGenreLoadKey(prefix: "two-", visibility: "child", profile: UUID(), syncedAt: .now)
@@ -357,7 +357,18 @@ struct CatalogBrowseLoadMachineTests {
         await task.value
         #expect(machine.snapshot(for: first).isEmpty)
         #expect(machine.snapshot(for: second) == ["Comedy"])
-        #expect(machine.snapshot(for: .init(prefix: second.prefix, visibility: second.visibility, profile: second.profile, syncedAt: .distantPast)).isEmpty)
+        #expect(machine.snapshot(for: .init(prefix: second.prefix, visibility: "all", profile: second.profile, syncedAt: second.syncedAt)).isEmpty)
+        #expect(machine.snapshot(for: .init(prefix: second.prefix, visibility: second.visibility, profile: UUID(), syncedAt: second.syncedAt)).isEmpty)
+    }
+
+    @Test func `a sync keeps the sidebar genres on screen until they are re-derived`() async {
+        let machine = LibraryGenreLoadMachine()
+        let before = LibraryGenreLoadKey(prefix: "one-", visibility: "all", profile: nil, syncedAt: .distantPast)
+        await machine.load(for: before) { ["Drama"] }
+        let after = LibraryGenreLoadKey(prefix: "one-", visibility: "all", profile: nil, syncedAt: .now)
+        #expect(machine.snapshot(for: after) == ["Drama"])
+        await machine.load(for: after) { ["Drama", "Comedy"] }
+        #expect(machine.snapshot(for: after) == ["Drama", "Comedy"])
     }
 
     @Test func `cancelled sidebar derivation cannot replace a usable snapshot`() async {
