@@ -40,13 +40,21 @@
 
         /// The artwork to warm for a slide, when it is known up front.
         private let prefetchURL: ((Item) -> URL?)?
-        private var artworkPixels: CGFloat?
+        private var artworkGeometry: ArtworkGeometry?
+
+        struct ArtworkGeometry: Equatable {
+            let width: CGFloat
+            let height: CGFloat
+            let displayScale: CGFloat
+        }
 
         /// View geometry/display scale owns resolution. The carousel only uses
-        /// that target to warm exactly the rendition its backdrop will display.
-        func setArtworkPixels(_ pixels: CGFloat) {
-            guard artworkPixels != pixels else { return }
-            artworkPixels = pixels
+        /// it to warm exactly the rendition its backdrop will display — through
+        /// the same `HeroArtworkPolicy.rendition` `HeroArtworkImage` draws with,
+        /// so the two can't drift onto different cache keys.
+        func setArtworkGeometry(_ geometry: ArtworkGeometry) {
+            guard artworkGeometry != geometry else { return }
+            artworkGeometry = geometry
             prefetchNeighbours()
         }
 
@@ -143,12 +151,17 @@
         /// already-decoded image instead of a placeholder flash.
         private func prefetchNeighbours() {
             let count = items.count
-            guard count > 1, let prefetchURL, let artworkPixels else { return }
-            let neighbours = [(currentIndex - 1 + count) % count, (currentIndex + 1) % count]
+            guard count > 1, let prefetchURL, let geometry = artworkGeometry else { return }
+            let renditions = [(currentIndex - 1 + count) % count, (currentIndex + 1) % count]
                 .compactMap { prefetchURL(items[$0]) }
-            guard !neighbours.isEmpty else { return }
-            let urls = neighbours.compactMap { HeroArtworkPolicy.backdropURL($0, pixelWidth: artworkPixels) }
-            Task { await ImagePipeline.shared.prefetch(urls, maxPixelSize: artworkPixels) }
+                .map {
+                    HeroArtworkPolicy.rendition(
+                        url: $0, width: geometry.width, height: geometry.height, displayScale: geometry.displayScale
+                    )
+                }
+            guard let pixels = renditions.first?.decodeSizeInPixels else { return }
+            let urls = renditions.compactMap(\.url)
+            Task { await ImagePipeline.shared.prefetch(urls, maxPixelSize: pixels) }
         }
     }
 
