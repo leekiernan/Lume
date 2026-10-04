@@ -79,6 +79,20 @@ enum LiveTVSection: Identifiable, Hashable {
         case .category: false
         }
     }
+
+    /// Virtual collections remain independent of the synced category list: an
+    /// uncategorized channel can still be a visible favorite or recent.
+    static func resolve(
+        playlistPrefix: String, categories: [LiveTVSection],
+        hasFavorites: Bool, hasRecentlyWatched: Bool
+    ) -> [LiveTVSection] {
+        guard !playlistPrefix.isEmpty else { return categories }
+        var result: [LiveTVSection] = []
+        if hasFavorites { result.append(.favorites) }
+        if hasRecentlyWatched { result.append(.recentlyWatched) }
+        result.append(contentsOf: categories)
+        return result
+    }
 }
 
 // MARK: - Scope
@@ -371,9 +385,9 @@ final class LiveTVCategoryMemo {
 /// hands the result to `content`.
 ///
 /// The gates live here, in a child view, because a `@Query`'s descriptor is
-/// fixed at `init` and `LiveTVView` is a tab root whose `init` does not re-run
-/// when the selected playlist changes; this view is rebuilt by that body, so its
-/// probes always describe the playlist currently on screen. Resolving them as
+/// fixed at `init`; this child is rebuilt with the active playlist and visibility
+/// whenever the parent renders, so its probes describe the current scope.
+/// Resolving them as
 /// `@Query`s (rather than a fetch in a task) is what keeps the rail reacting to
 /// a channel being favorited or watched without a second render pass.
 struct LiveTVSections<Content: View>: View {
@@ -407,12 +421,10 @@ struct LiveTVSections<Content: View>: View {
         // An empty prefix means there is no active playlist at all, and
         // `starts(with: "")` matches every row — the guard the two `has…`
         // properties used to carry before the probes moved into SQL.
-        guard !playlistPrefix.isEmpty else { return categorySections }
-        var resolved: [LiveTVSection] = []
-        if !favoriteProbe.isEmpty { resolved.append(.favorites) }
-        if !recentProbe.isEmpty { resolved.append(.recentlyWatched) }
-        resolved.append(contentsOf: categorySections)
-        return resolved
+        LiveTVSection.resolve(
+            playlistPrefix: playlistPrefix, categories: categorySections,
+            hasFavorites: !favoriteProbe.isEmpty, hasRecentlyWatched: !recentProbe.isEmpty
+        )
     }
 
     var body: some View {

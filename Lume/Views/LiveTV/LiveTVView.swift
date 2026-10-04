@@ -37,8 +37,7 @@ struct LiveTVView: View {
         @Environment(\.openWindow) private var openWindow
     #endif
     @Query private var playlists: [Playlist]
-    @Query(filter: #Predicate<Category> { $0.typeRaw == "live" && $0.isHidden == false })
-    private var categories: [Category]
+    @Query private var categories: [Category]
 
     /// Keeps the sidebar's categories from being filtered and sorted on every body
     /// pass — see `LiveTVCategoryMemo`. Whether the two virtual sections appear
@@ -98,6 +97,15 @@ struct LiveTVView: View {
 
     private var layoutMode: LiveTVLayoutMode {
         LiveTVLayoutMode(rawValue: layoutModeRaw) ?? .list
+    }
+
+    /// MainTabView supplies the same active scope as Movies/Series. Query
+    /// construction stays separate from category ordering and section probes.
+    init(playlistPrefix: String? = nil, restriction: ContentRestriction = ContentRestriction()) {
+        _categories = Query(LibraryCategoryQuery.descriptor(
+            type: .live, playlistPrefix: playlistPrefix ?? "",
+            excludedCategoryIDs: restriction.excludedCategoryIDs
+        ))
     }
 
     /// Guide/List segmented switch shared across platforms.
@@ -202,7 +210,7 @@ struct LiveTVView: View {
             ))
             .browseSidebarToolbar(
                 isPresented: $showingBrowse,
-                isEnabled: !playlists.isEmpty && !categories.isEmpty
+                isEnabled: sections?.isEmpty == false
             )
             // Hands the sections up to the panel, which sits above the stack.
             .onChange(of: sections?.map(\.id), initial: true) { _, _ in browseSections = sections }
@@ -227,19 +235,17 @@ struct LiveTVView: View {
                     systemImage: "antenna.radiowaves.left.and.right",
                     description: Text("Add a playlist in Settings to start watching live TV")
                 )
-            } else if categories.isEmpty || sourceHasNoLiveChannels {
-                VStack(spacing: 20) {
-                    LiveTVEmptyState(sourceType: activePlaylist?.knownSourceType)
-                }
-            } else if let sections {
+            } else if let sections, !sections.isEmpty {
                 layout(for: sections)
                     .task(id: playlistPrefix) { seedSelection(from: sections) }
+            } else {
+                LiveTVEmptyState(sourceType: activePlaylist?.knownSourceType)
             }
         }
     }
 
     private var shouldResolveSections: Bool {
-        !playlists.isEmpty && !categories.isEmpty && !sourceHasNoLiveChannels
+        !playlists.isEmpty && !playlistPrefix.isEmpty
     }
 
     // MARK: - Platform-specific layouts
@@ -355,24 +361,15 @@ struct LiveTVView: View {
         playlists.active(for: selectedPlaylistID)
     }
 
-    /// A WebDAV share carries no live channels, so its rail stays empty even
-    /// when another playlist has live categories — the unscoped `categories`
-    /// query cannot see that on its own. Same for the media servers, whose
-    /// Live TV tuner APIs are not synced.
-    private var sourceHasNoLiveChannels: Bool {
-        activePlaylist?.knownSourceType.map { !$0.canCarryLiveChannels } == true && categorySections.isEmpty
-    }
-
     /// The id prefix every Category / LiveStream of the active playlist shares.
     private var playlistPrefix: String {
         activePlaylist.map { "\($0.id.uuidString)-" } ?? ""
     }
 
     /// The rail's category entries: the active playlist's live categories this
-    /// viewer may see, in the chosen order. The `@Query` fetches every playlist's
-    /// categories (SwiftData can't parameterize a `@Query` on view state), so the
-    /// isolation by playlist-prefixed `id` — and the sort — happen here, memoized
-    /// so a body pass that changed nothing about them costs a key comparison.
+    /// viewer may see, in provider/custom order. SQL already selects the active
+    /// playlist and exclusions; the memo retains ordering and a defensive
+    /// visibility check without sorting again on unrelated body passes.
     private var categorySections: [LiveTVSection] {
         categoryMemo.sections(
             categories: categories,

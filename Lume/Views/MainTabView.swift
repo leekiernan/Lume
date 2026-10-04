@@ -152,13 +152,17 @@ struct MainTabView: View {
         if router.selectedTab != resolved { router.selectedTab = resolved }
     }
 
-    /// Home's local rails are bounded queries, and the Movies/Series category
+    /// Home's local rails are bounded queries, and the library category
     /// lists are playlist-scoped ones, so the scope has to be known when their
     /// `@Query` wrappers are constructed. Passing the prefix from this root keeps
     /// the selection in SQL rather than filtering another playlist's rows in
     /// memory.
     private var activePlaylistPrefix: String? {
         playlists.active(for: selectedPlaylistID).map { "\($0.id.uuidString)-" }
+    }
+
+    private var liveTVRoot: some View {
+        LiveTVView(playlistPrefix: activePlaylistPrefix, restriction: contentRestriction)
     }
 
     var body: some View {
@@ -336,7 +340,7 @@ struct MainTabView: View {
 
                 if isOn(.liveTV) {
                     Tab(value: AppTab.liveTV) {
-                        activeOnly(.liveTV, selection: selection.wrappedValue) { LiveTVView() }
+                        activeOnly(.liveTV, selection: selection.wrappedValue) { liveTVRoot }
                     } label: {
                         Text("Live TV")
                     }
@@ -453,7 +457,7 @@ struct MainTabView: View {
 
                 if isOn(.liveTV) {
                     Tab("Live TV", systemImage: "antenna.radiowaves.left.and.right", value: AppTab.liveTV) {
-                        IdleUnmountingTab(isSelected: selection.wrappedValue == .liveTV) { LiveTVView() }
+                        IdleUnmountingTab(isSelected: selection.wrappedValue == .liveTV) { liveTVRoot }
                     }
                 }
 
