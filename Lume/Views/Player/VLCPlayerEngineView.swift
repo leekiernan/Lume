@@ -84,6 +84,7 @@ struct VLCPlayerEngineView: View {
     /// Set once the stream is given up on (initial-load failure with no fallback
     /// left). Swaps the player for the `PlayerErrorIndicator` (Try Again / Back).
     @State var loadFailed = false
+    @State private var isCatchupSegmentLoading = false
     @State private var isSeeking = false
     @State private var seekPosition: TimeInterval = 0
     @State private var hideTask: Task<Void, Never>?
@@ -114,6 +115,10 @@ struct VLCPlayerEngineView: View {
 
     private let autoHideInterval: TimeInterval = 4
 
+    private var drawsControls: Bool {
+        PlayerChrome.drawsControls(requested: isControlsVisible, started: coordinator.hasStartedPlayback, catchupSegmentLoading: isCatchupSegmentLoading, failed: loadFailed)
+    }
+
     var engineBody: some View {
         ZStack {
             // Backdrop. On macOS the host NSView is deliberately not
@@ -134,7 +139,7 @@ struct VLCPlayerEngineView: View {
             tapCatcher
                 .ignoresSafeArea()
 
-            if PlayerChrome.drawsControls(requested: isControlsVisible, started: coordinator.hasStartedPlayback, failed: loadFailed) {
+            if drawsControls {
                 controlsOverlay
                     .transition(.opacity.animation(.easeInOut(duration: 0.2)))
             }
@@ -162,7 +167,7 @@ struct VLCPlayerEngineView: View {
             #endif
 
             if coordinator.isBuffering, !loadFailed {
-                PlayerLoadingIndicator(opening: coordinator.hasStartedPlayback ? nil : media)
+                PlayerLoadingIndicator(opening: coordinator.hasStartedPlayback || isCatchupSegmentLoading ? nil : media)
                     .transition(.opacity)
             }
 
@@ -205,18 +210,25 @@ struct VLCPlayerEngineView: View {
             clock.isPlaying = playing
             resetHideTimer()
         }
+        .onChange(of: coordinator.hasStartedPlayback) { _, started in
+            if started { isCatchupSegmentLoading = false }
+        }
         .onChange(of: scenePhase) { _, phase in
             // The Home button backgrounds the app without calling onDisappear,
             // so pause here to stop audio when the player loses focus.
             if phase != .active { coordinator.pauseForBackground() }
         }
-        .onChange(of: media) { _, newMedia in
+        .onChange(of: media) { oldMedia, newMedia in
             // The host swapped the stream (e.g. a new episode). Reset local
             // scrubbing state and hand the new media to the live player.
             isSeeking = false
             seekPosition = 0
             isPanelOpen = false
             loadFailed = false
+            isCatchupSegmentLoading = PlayerChrome.keepsCatchupControls(
+                previous: oldMedia.catchup, next: newMedia.catchup,
+                started: coordinator.hasStartedPlayback, alreadyLoading: isCatchupSegmentLoading
+            )
             coordinator.reload(media: newMedia)
             resetHideTimer()
         }
@@ -288,7 +300,7 @@ struct VLCPlayerEngineView: View {
             .buttonStyle(InvisibleButtonStyle())
             // Yield focus to the failure overlay's buttons when a stream dies.
             // Only while the controls are actually drawn — see `PlayerChrome`.
-            .disabled(PlayerChrome.drawsControls(requested: isControlsVisible, started: coordinator.hasStartedPlayback, failed: loadFailed) || isChannelBrowserOpen || loadFailed)
+            .disabled(drawsControls || isChannelBrowserOpen || loadFailed)
             .focused($catcherFocused)
             .tvRemoteMoveCommand { direction in
                 // While watching live TV with the controls hidden, left opens
@@ -476,6 +488,7 @@ struct VLCPlayerEngineView: View {
     /// switches engines); otherwise raise the failure overlay.
     private func reportFailure() {
         guard !loadFailed else { return }
+        isCatchupSegmentLoading = false
         if reportsStartupFailure, !coordinator.hasStartedPlayback {
             onPlaybackFailed?()
             return
@@ -485,6 +498,7 @@ struct VLCPlayerEngineView: View {
 
     /// Re-prepare the current stream after a failure (the Try Again button).
     private func retryPlayback() {
+        isCatchupSegmentLoading = false
         withAnimation(.easeInOut(duration: 0.25)) { loadFailed = false }
         coordinator.retryAfterFailure()
     }
@@ -524,47 +538,6 @@ private extension View {
         #endif
     }
 }
-
-    // MARK: - Video Container (platform view bridge)
-
-// Hosts the plain platform view that VLC renders into. The coordinator is
-// set as the player's `drawable`; VLC calls back into it to insert its
-// output surface and to query bounds.
-#if os(macOS)
-    private struct VLCVideoContainer: NSViewRepresentable {
-        let coordinator: VLCPlayerCoordinator
-
-        func makeNSView(context _: Context) -> NSView {
-            // Deliberately NOT layer-backed: VLCKit's macOS video output
-            // inserts a legacy `NSOpenGLView`. Inside a layer-backed view
-            // tree, on Apple Silicon's deprecated OpenGL-on-Metal shim,
-            // VLC's renderer aborts with `GL_INVALID_OPERATION` in
-            // `CreateFilters` (vout_helper.c). Leaving `wantsLayer` unset
-            // lets the GL view present the traditional, non-layer-backed
-            // way. SwiftUI may still force layer-backing from an ancestor;
-            // if so this won't be enough and macOS playback should fall
-            // back to a Metal-based engine (KSPlayer).
-            let view = NSView()
-            coordinator.attach(hostView: view)
-            return view
-        }
-
-        func updateNSView(_: NSView, context _: Context) {}
-    }
-#else
-    private struct VLCVideoContainer: UIViewRepresentable {
-        let coordinator: VLCPlayerCoordinator
-
-        func makeUIView(context _: Context) -> UIView {
-            let view = UIView()
-            view.backgroundColor = .black
-            coordinator.attach(hostView: view)
-            return view
-        }
-
-        func updateUIView(_: UIView, context _: Context) {}
-    }
-#endif
 
 #Preview("Fallback") {
     VLCPlayerEngineView(

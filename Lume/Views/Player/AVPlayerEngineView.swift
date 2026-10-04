@@ -74,6 +74,7 @@ struct AVPlayerEngineView: View {
     /// Set once the stream is given up on (initial-load failure with no fallback
     /// left). Swaps the player for the `PlayerErrorIndicator` (Try Again / Back).
     @State var loadFailed = false
+    @State private var isCatchupSegmentLoading = false
     @State private var isSeeking = false
     @State private var seekPosition: TimeInterval = 0
     @State private var hideTask: Task<Void, Never>?
@@ -102,6 +103,10 @@ struct AVPlayerEngineView: View {
 
     private let autoHideInterval: TimeInterval = 4
 
+    private var drawsControls: Bool {
+        PlayerChrome.drawsControls(requested: isControlsVisible, started: coordinator.hasStartedPlayback, catchupSegmentLoading: isCatchupSegmentLoading, failed: loadFailed)
+    }
+
     var engineBody: some View {
         ZStack {
             Color.black
@@ -117,7 +122,7 @@ struct AVPlayerEngineView: View {
             tapCatcher
                 .ignoresSafeArea()
 
-            if PlayerChrome.drawsControls(requested: isControlsVisible, started: coordinator.hasStartedPlayback, failed: loadFailed) {
+            if drawsControls {
                 controlsOverlay
                     .transition(.opacity.animation(.easeInOut(duration: 0.2)))
             }
@@ -145,7 +150,7 @@ struct AVPlayerEngineView: View {
             #endif
 
             if coordinator.isBuffering, !loadFailed {
-                PlayerLoadingIndicator(opening: coordinator.hasStartedPlayback ? nil : media)
+                PlayerLoadingIndicator(opening: coordinator.hasStartedPlayback || isCatchupSegmentLoading ? nil : media)
                     .transition(.opacity)
             }
 
@@ -185,18 +190,25 @@ struct AVPlayerEngineView: View {
             clock.isPlaying = playing
             resetHideTimer()
         }
+        .onChange(of: coordinator.hasStartedPlayback) { _, started in
+            if started { isCatchupSegmentLoading = false }
+        }
         .onChange(of: scenePhase) { _, phase in
             // The Home button backgrounds the app without calling onDisappear,
             // so pause here to stop audio when the player loses focus.
             if phase != .active { coordinator.pauseForBackground() }
         }
-        .onChange(of: media) { _, newMedia in
+        .onChange(of: media) { oldMedia, newMedia in
             // The host swapped the stream (e.g. a new episode). Reset local
             // scrubbing state and hand the new media to the live player.
             isSeeking = false
             seekPosition = 0
             isPanelOpen = false
             loadFailed = false
+            isCatchupSegmentLoading = PlayerChrome.keepsCatchupControls(
+                previous: oldMedia.catchup, next: newMedia.catchup,
+                started: coordinator.hasStartedPlayback, alreadyLoading: isCatchupSegmentLoading
+            )
             coordinator.reload(media: newMedia)
             resetHideTimer()
         }
@@ -254,7 +266,7 @@ struct AVPlayerEngineView: View {
             .buttonStyle(AVInvisibleButtonStyle())
             // Yield focus to the failure overlay's buttons when a stream dies.
             // Only while the controls are actually drawn — see `PlayerChrome`.
-            .disabled(PlayerChrome.drawsControls(requested: isControlsVisible, started: coordinator.hasStartedPlayback, failed: loadFailed) || isChannelBrowserOpen || loadFailed)
+            .disabled(drawsControls || isChannelBrowserOpen || loadFailed)
             .focused($catcherFocused)
             .tvRemoteMoveCommand { direction in
                 // Left opens the channel browser; up/down surf adjacent
@@ -445,6 +457,7 @@ struct AVPlayerEngineView: View {
     /// switches engines); otherwise raise the failure overlay.
     private func reportFailure() {
         guard !loadFailed else { return }
+        isCatchupSegmentLoading = false
         if reportsStartupFailure, !coordinator.hasStartedPlayback {
             onPlaybackFailed?()
             return
@@ -454,6 +467,7 @@ struct AVPlayerEngineView: View {
 
     /// Re-prepare the current stream after a failure (the Try Again button).
     private func retryPlayback() {
+        isCatchupSegmentLoading = false
         withAnimation(.easeInOut(duration: 0.25)) { loadFailed = false }
         coordinator.retryAfterFailure()
     }
@@ -492,76 +506,6 @@ private extension View {
         #endif
     }
 }
-
-// MARK: - Video Container (AVPlayerLayer bridge)
-
-// Hosts a view whose backing layer is an `AVPlayerLayer`. The coordinator owns
-// the `AVPlayer` and is handed the layer once it mounts so it can drive content
-// gravity and Picture in Picture.
-#if os(macOS)
-    private struct AVPlayerVideoContainer: NSViewRepresentable {
-        let coordinator: AVPlayerCoordinator
-
-        func makeNSView(context _: Context) -> AVPlayerHostNSView {
-            let view = AVPlayerHostNSView()
-            coordinator.attach(layer: view.playerLayer)
-            return view
-        }
-
-        func updateNSView(_: AVPlayerHostNSView, context _: Context) {}
-    }
-
-    /// AppKit has no `layerClass` hook, so the `AVPlayerLayer` is created and
-    /// kept in sync with the view's bounds manually.
-    private final class AVPlayerHostNSView: NSView {
-        let playerLayer = AVPlayerLayer()
-
-        override init(frame frameRect: NSRect) {
-            super.init(frame: frameRect)
-            wantsLayer = true
-            playerLayer.frame = bounds
-            layer?.addSublayer(playerLayer)
-            layer?.backgroundColor = NSColor.black.cgColor
-        }
-
-        @available(*, unavailable)
-        required init?(coder _: NSCoder) {
-            fatalError("init(coder:) has not been implemented")
-        }
-
-        override func layout() {
-            super.layout()
-            playerLayer.frame = bounds
-        }
-    }
-#else
-    private struct AVPlayerVideoContainer: UIViewRepresentable {
-        let coordinator: AVPlayerCoordinator
-
-        func makeUIView(context _: Context) -> AVPlayerHostUIView {
-            let view = AVPlayerHostUIView()
-            view.backgroundColor = .black
-            coordinator.attach(layer: view.playerLayer)
-            return view
-        }
-
-        func updateUIView(_: AVPlayerHostUIView, context _: Context) {}
-    }
-
-    /// `layerClass` makes the view's backing layer an `AVPlayerLayer`, so it
-    /// resizes with the view automatically.
-    private final class AVPlayerHostUIView: UIView {
-        // swiftlint:disable:next static_over_final_class
-        override class var layerClass: AnyClass {
-            AVPlayerLayer.self
-        }
-
-        var playerLayer: AVPlayerLayer {
-            // swiftlint:disable:next force_cast
-            layer as! AVPlayerLayer
-        }
-    }
-#endif
 
 #Preview {
     AVPlayerEngineView(

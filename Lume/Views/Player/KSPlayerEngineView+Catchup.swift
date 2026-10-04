@@ -42,8 +42,10 @@ extension KSPlayerEngineView {
     /// A segment that never starts still ends in the startup watchdog's error
     /// overlay or an engine fallback.
     func resetForNewStream(_ newMedia: PlayableMedia) {
-        let isCatchupSeek = newMedia.catchup?.isSameProgramme(as: catchupRouter.media?.catchup) == true
-        isCatchupSegmentLoading = isCatchupSeek && (hasStartedPlayback || isCatchupSegmentLoading)
+        isCatchupSegmentLoading = PlayerChrome.keepsCatchupControls(
+            previous: catchupRouter.media?.catchup, next: newMedia.catchup,
+            started: hasStartedPlayback, alreadyLoading: isCatchupSegmentLoading
+        )
         catchupRouter.load(newMedia)
         isSeeking = false
         seekPosition = 0

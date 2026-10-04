@@ -241,7 +241,10 @@ struct LumeEngineEngineView: View {
             // A catch-up seek within one programme: the host already placed
             // the clock on the new segment, and a reset would zero it.
             let isCatchupSeek = newMedia.catchup?.isSameProgramme(as: oldMedia.catchup) == true
-            isCatchupSegmentLoading = isCatchupSeek && (coordinator.hasStartedPlayback || isCatchupSegmentLoading)
+            isCatchupSegmentLoading = PlayerChrome.keepsCatchupControls(
+                previous: oldMedia.catchup, next: newMedia.catchup,
+                started: coordinator.hasStartedPlayback, alreadyLoading: isCatchupSegmentLoading
+            )
             if isCatchupSeek { clock.rebase(onto: newMedia) } else { clock.reset(for: newMedia) }
             coordinator.configure(media: newMedia)
             resetHideTimer()
