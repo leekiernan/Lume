@@ -90,11 +90,6 @@ nonisolated struct SkipAcceleration: Equatable {
             .formatted(.units(allowed: [.hours, .minutes, .seconds], width: .abbreviated))
         return (distance < 0 ? "−" : "+") + magnitude
     }
-
-    /// A position in the content, as the progress bar shows it: "12:34".
-    static func timeLabel(for position: TimeInterval) -> String {
-        PlaybackTimeLabel.localized(position)
-    }
 }
 
 /// How far the current skip run has gone and where it lands, shown until the

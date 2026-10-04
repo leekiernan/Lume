@@ -30,6 +30,5 @@ struct PlaybackTimeLabelTests {
                 #expect(PlaybackTimeLabel.localized(seconds, locale: locale) == native)
             }
         }
-        #expect(SkipAcceleration.timeLabel(for: 754.9) == PlaybackTimeLabel.localized(754.9))
     }
 }

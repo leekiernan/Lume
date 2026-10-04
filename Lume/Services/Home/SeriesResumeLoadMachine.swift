@@ -81,10 +81,6 @@ final class SeriesResumeLoadMachine {
         state = .loaded(request)
     }
 
-    func invalidate() {
-        state = .idle
-    }
-
     private func owns(_ request: Request) -> Bool {
         guard case let .loading(active) = state else { return false }
         return active == request

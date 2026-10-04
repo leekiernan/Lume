@@ -81,7 +81,7 @@ struct SeriesResumeLoadMachineTests {
         #expect(machine.snapshot(for: requestKey).fractions.isEmpty)
     }
 
-    @Test func `fractions and watch split publish atomically and invalidation rejects the suspended split`() async throws {
+    @Test func `fractions and watch split publish atomically and cancellation rejects the suspended split`() async throws {
         let container = try makeTestContainer()
         let split = SuspendedResumeLookup()
         let machine = SeriesResumeLoadMachine(lookup: { _ in ["show": 0.5] })
@@ -94,7 +94,7 @@ struct SeriesResumeLoadMachineTests {
         }
         let splitID = await split.nextRequest()
         #expect(machine.snapshot(for: requestKey).fractions.isEmpty)
-        machine.invalidate()
+        task.cancel()
         await split.finish(splitID, with: [:])
         await task.value
         #expect(machine.snapshot(for: requestKey).fractions.isEmpty)

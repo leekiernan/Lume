@@ -31,7 +31,7 @@ struct SkipBadgeLabel: View {
                         .progressViewStyle(.circular)
                         .tint(.white)
                 }
-                Text(SkipAcceleration.timeLabel(for: badge.press.target))
+                Text(PlaybackTimeLabel.localized(badge.press.target))
                     .monospacedDigit()
                     .contentTransition(.numericText())
             }
