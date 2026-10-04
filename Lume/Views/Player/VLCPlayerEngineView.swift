@@ -242,43 +242,37 @@ struct VLCPlayerEngineView: View {
         // Handle the Menu/back button at the player root — the always-present
         // ancestor of both the tap-catcher and the controls overlay — so it
         // reliably overrides the fullScreenCover's default dismiss-on-Menu.
-        .onMenuPress { handleMenuPress() }
         // The Siri Remote's dedicated Play/Pause button is a distinct press
         // type from a click-pad Select, so the on-screen button never sees it.
         // Drive togglePlay() explicitly, otherwise the press is swallowed and
         // playback never toggles.
-        .onPlayPausePress {
-            if remoteBridge?.claimsPlayPause() != true { togglePlay() }
-        }
-        .onChange(of: isControlsVisible, initial: true) { _, visible in
-            remoteBridge?.controlsVisible = visible
-        }
+        .playerRemoteControls(controlsVisible: isControlsVisible, onBack: handleMenuPress, onPlayPause: togglePlay)
         #if os(macOS)
-        .onContinuousHover(coordinateSpace: .local) { phase in
-            switch phase {
-            case .active:
-                if !isControlsVisible {
-                    withAnimation(.easeInOut(duration: 0.2)) { isControlsVisible = true }
-                }
-                resetHideTimer()
-                hoverHideTask?.cancel()
-            case .ended:
-                hoverHideTask?.cancel()
-                hoverHideTask = Task { @MainActor in
-                    try? await Task.sleep(nanoseconds: 600_000_000)
-                    guard !Task.isCancelled, canAutoHideControls else { return }
-                    withAnimation(.easeInOut(duration: 0.2)) { isControlsVisible = false }
+            .onContinuousHover(coordinateSpace: .local) { phase in
+                switch phase {
+                case .active:
+                    if !isControlsVisible {
+                        withAnimation(.easeInOut(duration: 0.2)) { isControlsVisible = true }
+                    }
+                    resetHideTimer()
+                    hoverHideTask?.cancel()
+                case .ended:
+                    hoverHideTask?.cancel()
+                    hoverHideTask = Task { @MainActor in
+                        try? await Task.sleep(nanoseconds: 600_000_000)
+                        guard !Task.isCancelled, canAutoHideControls else { return }
+                        withAnimation(.easeInOut(duration: 0.2)) { isControlsVisible = false }
+                    }
                 }
             }
-        }
-        .onKeyPress(.leftArrow) { coordinator.skip(by: -media.skipInterval(default: 15)); resetHideTimer(); return .handled }
-        .onKeyPress(.rightArrow) { coordinator.skip(by: media.skipInterval(default: 15)); resetHideTimer(); return .handled }
-        .liveChannelKeyNavigation(
-            neighbours: itemNeighbours, swapper: mediaSwapper,
-            onSelect: { onSelectMedia?($0) }, onResetHideTimer: resetHideTimer
-        )
-        .onKeyPress(.space) { togglePlay(); return .handled }
-        .onKeyPress(.escape) { closePlayer(); return .handled }
+            .onKeyPress(.leftArrow) { coordinator.skip(by: -media.skipInterval(default: 15)); resetHideTimer(); return .handled }
+            .onKeyPress(.rightArrow) { coordinator.skip(by: media.skipInterval(default: 15)); resetHideTimer(); return .handled }
+            .liveChannelKeyNavigation(
+                neighbours: itemNeighbours, swapper: mediaSwapper,
+                onSelect: { onSelectMedia?($0) }, onResetHideTimer: resetHideTimer
+            )
+            .onKeyPress(.space) { togglePlay(); return .handled }
+            .onKeyPress(.escape) { closePlayer(); return .handled }
         #endif
     }
 
@@ -514,30 +508,6 @@ struct VLCPlayerEngineView: View {
         }
     }
 #endif
-
-private extension View {
-    /// Runs `action` on the Siri remote's Menu/back press (tvOS only); a no-op
-    /// elsewhere so the cross-platform body still compiles.
-    @ViewBuilder
-    func onMenuPress(perform action: @escaping () -> Void) -> some View {
-        #if os(tvOS)
-            onExitCommand(perform: action)
-        #else
-            self
-        #endif
-    }
-
-    /// Runs `action` on the Siri remote's dedicated Play/Pause button (tvOS
-    /// only); a no-op elsewhere so the cross-platform body still compiles.
-    @ViewBuilder
-    func onPlayPausePress(perform action: @escaping () -> Void) -> some View {
-        #if os(tvOS)
-            onPlayPauseCommand(perform: action)
-        #else
-            self
-        #endif
-    }
-}
 
 #Preview("Fallback") {
     VLCPlayerEngineView(

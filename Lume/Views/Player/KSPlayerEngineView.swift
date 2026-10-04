@@ -362,17 +362,11 @@ struct KSPlayerEngineView: View {
             )
             // Handle Menu/back at the player root so it reliably overrides the
             // cover's default dismiss-on-Menu.
-            .onExitCommand { handleMenuPress() }
             // The Siri Remote's dedicated Play/Pause button is a distinct press
             // type from a click-pad Select, so the on-screen button never sees
             // it. Drive togglePlay() explicitly, otherwise the press falls
             // through to KSPlayer's own handling, which pauses but won't resume.
-            .onPlayPauseCommand {
-                if remoteBridge?.claimsPlayPause() != true { togglePlay() }
-            }
-            .onChange(of: isControlsVisible, initial: true) { _, visible in
-                remoteBridge?.controlsVisible = visible
-            }
+            .playerRemoteControls(controlsVisible: isControlsVisible, onBack: handleMenuPress, onPlayPause: togglePlay)
         }
 
         private var tapCatcher: some View {
