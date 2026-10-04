@@ -63,32 +63,73 @@ extension ContentSyncManager {
             Logger.database.info("Plex sync: no movie or TV-show sections; catalog untouched")
         }
 
+        // A section the server cuts short keeps its rows and skips its kind's
+        // prune; the rest still import, and the sync reports it at the end.
+        let connection = PlexPhaseConnection(server: server, token: token, playlistId: playlistId)
+        var incomplete: ProviderImportError?
         if areas.contains(.movies) {
-            try syncPlexCategories(sections: movieSections, type: .vod, playlistId: playlistId)
-            await progress?.start(.movies)
-            var seenMovies = Set<String>()
-            for section in movieSections {
-                let scope = scope(server: server, token: token, playlistId: playlistId, section: section, type: .vod)
-                try await syncPlexMovies(scope: scope, seenIds: &seenMovies, progress: progress)
-            }
-            prunePlexMovies(playlistId: playlistId, seenIds: seenMovies, fetched: !movieSections.isEmpty)
-            await progress?.complete(.movies)
+            incomplete = try await syncPlexMoviePhase(sections: movieSections, connection: connection, progress: progress)
         }
-
         if areas.contains(.series) {
-            try syncPlexCategories(sections: showSections, type: .series, playlistId: playlistId)
-            await progress?.start(.series)
-            var seenSeries = Set<String>()
-            var seenEpisodes = Set<String>()
-            for section in showSections {
-                let scope = scope(server: server, token: token, playlistId: playlistId, section: section, type: .series)
-                try await syncPlexShows(scope: scope, seenSeries: &seenSeries, seenEpisodes: &seenEpisodes, progress: progress)
-            }
-            prunePlexSeries(playlistId: playlistId, seenSeries: seenSeries, seenEpisodes: seenEpisodes, fetched: !showSections.isEmpty)
-            await progress?.complete(.series)
+            let showsIncomplete = try await syncPlexShowPhase(sections: showSections, connection: connection, progress: progress)
+            incomplete = incomplete ?? showsIncomplete
         }
 
         markPlaylistUpdated(playlistId)
+        if let incomplete { throw incomplete }
+    }
+
+    private struct PlexPhaseConnection {
+        let server: URL
+        let token: String?
+        let playlistId: UUID
+    }
+
+    /// Every movie section, then the movie prune if all of them walked
+    /// completely. Returns the first incomplete walk.
+    private func syncPlexMoviePhase(
+        sections: [PlexSection], connection: PlexPhaseConnection, progress: SyncProgress?
+    ) async throws -> ProviderImportError? {
+        try syncPlexCategories(sections: sections, type: .vod, playlistId: connection.playlistId)
+        await progress?.start(.movies)
+        var seenMovies = Set<String>()
+        var incomplete: ProviderImportError?
+        for section in sections {
+            let scope = scope(server: connection.server, token: connection.token, playlistId: connection.playlistId, section: section, type: .vod)
+            let walked = try await walkLibrary(section.title) {
+                try await syncPlexMovies(scope: scope, seenIds: &seenMovies, progress: progress)
+            }
+            incomplete = incomplete ?? walked
+        }
+        if incomplete == nil {
+            prunePlexMovies(playlistId: connection.playlistId, seenIds: seenMovies, fetched: !sections.isEmpty)
+        }
+        await progress?.complete(.movies)
+        return incomplete
+    }
+
+    /// Every TV section, then the series/episode prune if all of them walked
+    /// completely. Returns the first incomplete walk.
+    private func syncPlexShowPhase(
+        sections: [PlexSection], connection: PlexPhaseConnection, progress: SyncProgress?
+    ) async throws -> ProviderImportError? {
+        try syncPlexCategories(sections: sections, type: .series, playlistId: connection.playlistId)
+        await progress?.start(.series)
+        var seenSeries = Set<String>()
+        var seenEpisodes = Set<String>()
+        var incomplete: ProviderImportError?
+        for section in sections {
+            let scope = scope(server: connection.server, token: connection.token, playlistId: connection.playlistId, section: section, type: .series)
+            let walked = try await walkLibrary(section.title) {
+                try await syncPlexShows(scope: scope, seenSeries: &seenSeries, seenEpisodes: &seenEpisodes, progress: progress)
+            }
+            incomplete = incomplete ?? walked
+        }
+        if incomplete == nil {
+            prunePlexSeries(playlistId: connection.playlistId, seenSeries: seenSeries, seenEpisodes: seenEpisodes, fetched: !sections.isEmpty)
+        }
+        await progress?.complete(.series)
+        return incomplete
     }
 
     private func scope(server: URL, token: String?, playlistId: UUID, section: PlexSection, type: CategoryType) -> PlexSectionScope {

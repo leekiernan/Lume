@@ -96,32 +96,69 @@ extension ContentSyncManager {
             Logger.database.info("\(flavor.displayName, privacy: .public) sync: no movie or TV-show libraries; catalog untouched")
         }
 
+        // A library the server cuts short keeps its rows and skips its kind's
+        // prune; the rest still import, and the sync reports it at the end.
+        var incomplete: ProviderImportError?
         if areas.contains(.movies) {
-            try syncJellyfinCategories(views: movieViews, type: .vod, playlistId: playlistId)
-            await progress?.start(.movies)
-            var seenMovies = Set<String>()
-            for view in movieViews {
-                let viewScope = scope(connection, playlistId: playlistId, view: view, type: .vod)
-                try await syncJellyfinMovies(scope: viewScope, seenIds: &seenMovies, progress: progress)
-            }
-            pruneJellyfinMovies(playlistId: playlistId, flavor: flavor, seenIds: seenMovies, fetched: !movieViews.isEmpty)
-            await progress?.complete(.movies)
+            incomplete = try await syncJellyfinMoviePhase(views: movieViews, connection: connection, playlistId: playlistId, progress: progress)
         }
-
         if areas.contains(.series) {
-            try syncJellyfinCategories(views: showViews, type: .series, playlistId: playlistId)
-            await progress?.start(.series)
-            var seenSeries = Set<String>()
-            var seenEpisodes = Set<String>()
-            for view in showViews {
-                let viewScope = scope(connection, playlistId: playlistId, view: view, type: .series)
-                try await syncJellyfinShows(scope: viewScope, seenSeries: &seenSeries, seenEpisodes: &seenEpisodes, progress: progress)
-            }
-            pruneJellyfinSeries(playlistId: playlistId, flavor: flavor, seenSeries: seenSeries, seenEpisodes: seenEpisodes, fetched: !showViews.isEmpty)
-            await progress?.complete(.series)
+            let showsIncomplete = try await syncJellyfinShowPhase(views: showViews, connection: connection, playlistId: playlistId, progress: progress)
+            incomplete = incomplete ?? showsIncomplete
         }
 
         markPlaylistUpdated(playlistId)
+        if let incomplete { throw incomplete }
+    }
+
+    /// Every movie library, then the movie prune if all of them walked
+    /// completely. Returns the first incomplete walk.
+    private func syncJellyfinMoviePhase(
+        views: [JellyfinLibrary], connection: JellyfinConnection, playlistId: UUID, progress: SyncProgress?
+    ) async throws -> ProviderImportError? {
+        try syncJellyfinCategories(views: views, type: .vod, playlistId: playlistId)
+        await progress?.start(.movies)
+        var seenMovies = Set<String>()
+        var incomplete: ProviderImportError?
+        for view in views {
+            let viewScope = scope(connection, playlistId: playlistId, view: view, type: .vod)
+            let walked = try await walkLibrary(view.name) {
+                try await syncJellyfinMovies(scope: viewScope, seenIds: &seenMovies, progress: progress)
+            }
+            incomplete = incomplete ?? walked
+        }
+        if incomplete == nil {
+            pruneJellyfinMovies(playlistId: playlistId, flavor: connection.flavor, seenIds: seenMovies, fetched: !views.isEmpty)
+        }
+        await progress?.complete(.movies)
+        return incomplete
+    }
+
+    /// Every TV library, then the series/episode prune if all of them walked
+    /// completely. Returns the first incomplete walk.
+    private func syncJellyfinShowPhase(
+        views: [JellyfinLibrary], connection: JellyfinConnection, playlistId: UUID, progress: SyncProgress?
+    ) async throws -> ProviderImportError? {
+        try syncJellyfinCategories(views: views, type: .series, playlistId: playlistId)
+        await progress?.start(.series)
+        var seenSeries = Set<String>()
+        var seenEpisodes = Set<String>()
+        var incomplete: ProviderImportError?
+        for view in views {
+            let viewScope = scope(connection, playlistId: playlistId, view: view, type: .series)
+            let walked = try await walkLibrary(view.name) {
+                try await syncJellyfinShows(scope: viewScope, seenSeries: &seenSeries, seenEpisodes: &seenEpisodes, progress: progress)
+            }
+            incomplete = incomplete ?? walked
+        }
+        if incomplete == nil {
+            pruneJellyfinSeries(
+                playlistId: playlistId, flavor: connection.flavor,
+                seenSeries: seenSeries, seenEpisodes: seenEpisodes, fetched: !views.isEmpty
+            )
+        }
+        await progress?.complete(.series)
+        return incomplete
     }
 
     private func scope(_ connection: JellyfinConnection, playlistId: UUID, view: JellyfinLibrary, type: CategoryType) -> JellyfinViewScope {

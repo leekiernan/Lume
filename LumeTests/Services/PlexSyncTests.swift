@@ -359,6 +359,35 @@ struct PlexSyncTests {
         #expect(stored.lastSyncDate == previousSync)
     }
 
+    @Test func `a truncated movie section still lets the TV section import and prune`() async throws {
+        let host = uniqueHost()
+        defer { PlexServerStubProtocol.remove(host: host) }
+        installFullServer(
+            host: host,
+            movies: [plexMovie(ratingKey: "1", title: "First"), plexMovie(ratingKey: "2", title: "Keep")],
+            shows: [plexShow(ratingKey: "3", title: "Old Show")],
+            episodes: []
+        )
+        let container = try makeTestContainer()
+        let playlist = try makePlaylist(container: container, host: host)
+        let manager = makeManager(container: container)
+        try await manager.syncPlaylist(playlist)
+
+        // Movies come back short; the TV section has a new show and lost one.
+        PlexServerStubProtocol.setReply(host: host, key: "/library/sections/1/all|1|0", reply: plexPage([plexMovie(ratingKey: "1", title: "Updated")], total: 3))
+        PlexServerStubProtocol.setReply(host: host, key: "/library/sections/1/all|1|1", reply: plexPage([], total: 3))
+        PlexServerStubProtocol.setReply(host: host, key: "/library/sections/2/all|2", reply: plexPage([plexShow(ratingKey: "4", title: "New Show")], total: 1))
+        await #expect(throws: ProviderImportError.incompletePage(fetched: 1, expected: 3)) {
+            try await manager.syncPlaylist(playlist)
+        }
+
+        let context = ModelContext(container)
+        let movies = try context.fetch(FetchDescriptor<Movie>()).map(\.name)
+        #expect(Set(movies) == ["Updated", "Keep"])
+        let shows = try context.fetch(FetchDescriptor<Series>()).map(\.name)
+        #expect(shows == ["New Show"])
+    }
+
     // MARK: Authentication
 
     @Test func `credentials with no stored token are exchanged at plex tv`() async throws {

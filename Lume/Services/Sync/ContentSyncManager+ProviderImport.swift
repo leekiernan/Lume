@@ -1,4 +1,5 @@
 import Foundation
+import OSLog
 import SwiftData
 
 /// Only the common paging envelope, not a universal provider DTO. Each adapter
@@ -43,6 +44,22 @@ extension ContentSyncManager {
             await report(fetched, page.total)
             try Task.checkCancellation()
             if fetched >= page.total { return fetched }
+        }
+    }
+
+    /// Walks one library. A walk the server cut short — fewer items than it
+    /// advertised, or a nonsense total — keeps that library's rows and returns
+    /// the error instead of throwing, so the other libraries still import.
+    /// The caller skips pruning that kind and reports the error once every
+    /// library has had its turn, which keeps `lastSyncDate` and coverage from
+    /// advancing. Any other failure (network, auth, cancellation) throws.
+    func walkLibrary(_ name: String, _ walk: () async throws -> Void) async throws -> ProviderImportError? {
+        do {
+            try await walk()
+            return nil
+        } catch let error as ProviderImportError {
+            Logger.database.error("Library \(name, privacy: .public) walk incomplete (\(String(describing: error), privacy: .public)); its rows are kept and its kind isn't pruned")
+            return error
         }
     }
 
