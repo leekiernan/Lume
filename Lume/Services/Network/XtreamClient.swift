@@ -50,40 +50,6 @@ final nonisolated class XtreamClient: Sendable {
 
     // MARK: - Helper Methods
 
-    /// The provider's XMLTV guide URL for a playlist (`xmltv.php` with the
-    /// account credentials). Exposed so `EPGSourceReconciler` can store it as a
-    /// standalone EPG source — the guide is no longer fetched during a playlist
-    /// sync.
-    static func xmltvURL(for playlist: Playlist) -> URL? {
-        guard !playlist.serverURL.isEmpty else { return nil }
-        var components = URLComponents(string: playlist.serverURL)
-        guard components != nil else { return nil }
-        if !(components?.path.hasSuffix("/") ?? false) {
-            components?.path.append("/")
-        }
-        components?.path.append("xmltv.php")
-        let existingItems = components?.queryItems ?? []
-        components?.queryItems = existingItems + [
-            URLQueryItem(name: "username", value: playlist.username),
-            URLQueryItem(name: "password", value: playlist.password)
-        ]
-        return components?.url
-    }
-
-    func buildURL(serverURL: String, path: String, queryItems: [URLQueryItem]) -> URL? {
-        var components = URLComponents(string: serverURL)
-        // Ensure the path is appended properly
-        if !(components?.path.hasSuffix("/") ?? false), !path.hasPrefix("/") {
-            components?.path.append("/")
-        }
-        components?.path.append(path)
-
-        let existingItems = components?.queryItems ?? []
-        components?.queryItems = existingItems + queryItems
-
-        return components?.url
-    }
-
     /// Signposts wrapping the two halves of a bulk request, so a trace can tell
     /// a slow transfer apart from a slow decode. Only the three catalog
     /// endpoints supply one; every other call leaves the phases unnamed.
@@ -224,12 +190,7 @@ final nonisolated class XtreamClient: Sendable {
 
     /// 1. Get Server and User Info
     func getInfo(playlist: Playlist) async throws -> XtreamAuthResponse {
-        let queryItems = [
-            URLQueryItem(name: "username", value: playlist.username),
-            URLQueryItem(name: "password", value: playlist.password)
-        ]
-
-        guard let url = buildURL(serverURL: playlist.serverURL, path: "player_api.php", queryItems: queryItems) else {
+        guard let url = Self.playerAPIURL(for: playlist) else {
             throw XtreamError.invalidURL
         }
 
@@ -239,13 +200,7 @@ final nonisolated class XtreamClient: Sendable {
 
     /// 2. Get Live Categories
     func getLiveCategories(playlist: Playlist) async throws -> [XtreamCategory] {
-        let queryItems = [
-            URLQueryItem(name: "username", value: playlist.username),
-            URLQueryItem(name: "password", value: playlist.password),
-            URLQueryItem(name: "action", value: "get_live_categories")
-        ]
-
-        guard let url = buildURL(serverURL: playlist.serverURL, path: "player_api.php", queryItems: queryItems) else {
+        guard let url = Self.playerAPIURL(for: playlist, action: "get_live_categories") else {
             throw XtreamError.invalidURL
         }
 
@@ -255,13 +210,7 @@ final nonisolated class XtreamClient: Sendable {
 
     /// 4. Get VOD Categories
     func getVODCategories(playlist: Playlist) async throws -> [XtreamCategory] {
-        let queryItems = [
-            URLQueryItem(name: "username", value: playlist.username),
-            URLQueryItem(name: "password", value: playlist.password),
-            URLQueryItem(name: "action", value: "get_vod_categories")
-        ]
-
-        guard let url = buildURL(serverURL: playlist.serverURL, path: "player_api.php", queryItems: queryItems) else {
+        guard let url = Self.playerAPIURL(for: playlist, action: "get_vod_categories") else {
             throw XtreamError.invalidURL
         }
 
@@ -271,13 +220,7 @@ final nonisolated class XtreamClient: Sendable {
 
     /// 6. Get Series Categories
     func getSeriesCategories(playlist: Playlist) async throws -> [XtreamCategory] {
-        let queryItems = [
-            URLQueryItem(name: "username", value: playlist.username),
-            URLQueryItem(name: "password", value: playlist.password),
-            URLQueryItem(name: "action", value: "get_series_categories")
-        ]
-
-        guard let url = buildURL(serverURL: playlist.serverURL, path: "player_api.php", queryItems: queryItems) else {
+        guard let url = Self.playerAPIURL(for: playlist, action: "get_series_categories") else {
             throw XtreamError.invalidURL
         }
 
@@ -287,14 +230,10 @@ final nonisolated class XtreamClient: Sendable {
 
     /// 8. Get Series Info
     func getSeriesInfo(playlist: Playlist, seriesId: Int) async throws -> XtreamSeriesInfoResponse {
-        let queryItems = [
-            URLQueryItem(name: "username", value: playlist.username),
-            URLQueryItem(name: "password", value: playlist.password),
-            URLQueryItem(name: "action", value: "get_series_info"),
+        let parameters = [
             URLQueryItem(name: "series_id", value: String(seriesId))
         ]
-
-        guard let url = buildURL(serverURL: playlist.serverURL, path: "player_api.php", queryItems: queryItems) else {
+        guard let url = Self.playerAPIURL(for: playlist, action: "get_series_info", parameters: parameters) else {
             throw XtreamError.invalidURL
         }
 
