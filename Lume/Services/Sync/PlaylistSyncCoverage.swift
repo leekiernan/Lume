@@ -34,7 +34,7 @@ nonisolated enum PlaylistSyncCoverage {
     /// When each area was last refreshed. An area missing here has never
     /// been fetched on this device.
     static func refreshDates(playlistID: UUID, defaults: UserDefaults = .standard) -> [AppArea: Date] {
-        let raw = defaults.dictionary(forKey: key(playlistID: playlistID)) as? [String: Double] ?? [:]
+        let raw = storedDates(playlistID: playlistID, defaults: defaults)
         var dates: [AppArea: Date] = [:]
         for (area, timestamp) in raw {
             guard let area = AppArea(rawValue: area) else { continue }
@@ -62,11 +62,7 @@ nonisolated enum PlaylistSyncCoverage {
         at date: Date = Date(),
         defaults: UserDefaults = .standard
     ) {
-        var raw = defaults.dictionary(forKey: key(playlistID: playlistID)) as? [String: Double] ?? [:]
-        for area in areas {
-            raw[area.rawValue] = date.timeIntervalSince1970
-        }
-        defaults.set(raw, forKey: key(playlistID: playlistID))
+        stamp(areas, playlistID: playlistID, at: date, defaults: defaults)
         clearDeferred(areas, playlistID: playlistID, defaults: defaults)
     }
 
@@ -139,6 +135,20 @@ nonisolated enum PlaylistSyncCoverage {
         }
     }
 
+    /// Preserve unknown area keys when updating a newer install's record.
+    /// Conversion to AppArea belongs only at the read boundary.
+    private static func storedDates(playlistID: UUID, defaults: UserDefaults) -> [String: Double] {
+        defaults.dictionary(forKey: key(playlistID: playlistID)) as? [String: Double] ?? [:]
+    }
+
+    private static func stamp(_ areas: Set<AppArea>, playlistID: UUID, at date: Date, defaults: UserDefaults) {
+        var raw = storedDates(playlistID: playlistID, defaults: defaults)
+        for area in areas {
+            raw[area.rawValue] = date.timeIntervalSince1970
+        }
+        defaults.set(raw, forKey: key(playlistID: playlistID))
+    }
+
     /// Seeds the dates on first use. An install from before per-area dates
     /// carries the set of areas its latest sync covered; one from before any
     /// bookkeeping has only its catalog, where a kind that already has rows
@@ -161,11 +171,7 @@ nonisolated enum PlaylistSyncCoverage {
         }
         // Without a successful sync to date them, they're owed one.
         let date = lastSyncDate ?? .distantPast
-        var raw: [String: Double] = [:]
-        for area in existing {
-            raw[area.rawValue] = date.timeIntervalSince1970
-        }
-        defaults.set(raw, forKey: key(playlistID: playlistID))
+        stamp(existing, playlistID: playlistID, at: date, defaults: defaults)
         defaults.removeObject(forKey: legacyKey(playlistID: playlistID))
     }
 
