@@ -256,17 +256,11 @@ extension SettingsView {
         }
 
         private func actionLabel(_ title: LocalizedStringKey, systemImage: String) -> some View {
-            HStack {
-                Label(title, systemImage: systemImage)
-                if isPreparing {
-                    Spacer()
-                    ProgressView()
-                }
-            }
+            SettingsActionLabel(title: title, systemImage: systemImage, isBusy: isPreparing)
         }
 
         private var errorAlertBinding: Binding<Bool> {
-            Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })
+            $errorMessage.presentationPresence()
         }
 
         // MARK: Preparation

@@ -58,10 +58,7 @@ import SwiftUI
             #endif
                 .confirmationDialog(
                     "Delete Download",
-                    isPresented: Binding(
-                        get: { itemToDelete != nil },
-                        set: { if !$0 { itemToDelete = nil } }
-                    ),
+                    isPresented: $itemToDelete.presentationPresence(),
                     titleVisibility: .visible
                 ) {
                     Button("Delete", role: .destructive) {

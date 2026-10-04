@@ -163,12 +163,7 @@ struct StorageManagementView: View {
                 onClear: { Task { await perform(.watchHistory) } }
             )
             #if DEBUG
-            .alert("Clear Index", isPresented: $confirmIndexClear) {
-                    Button("Clear", role: .destructive) { Task { await perform(.index) } }
-                    Button("Cancel", role: .cancel) {}
-                } message: {
-                    Text("The TMDB metadata and on-device embeddings for every title will be wiped, then re-indexed from scratch in the background.")
-                }
+            .indexClearConfirmation(isPresented: $confirmIndexClear) { Task { await perform(.index) } }
             #endif
         }
     #endif
@@ -262,12 +257,7 @@ struct StorageManagementView: View {
                 onClear: { Task { await perform(.watchHistory) } }
             )
             #if DEBUG
-            .alert("Clear Index", isPresented: $confirmIndexClear) {
-                    Button("Clear", role: .destructive) { Task { await perform(.index) } }
-                    Button("Cancel", role: .cancel) {}
-                } message: {
-                    Text("The TMDB metadata and on-device embeddings for every title will be wiped, then re-indexed from scratch in the background.")
-                }
+            .indexClearConfirmation(isPresented: $confirmIndexClear) { Task { await perform(.index) } }
             #endif
         }
 
@@ -290,6 +280,17 @@ struct StorageManagementView: View {
 // MARK: - Confirmation alerts
 
 private extension View {
+    #if DEBUG
+        func indexClearConfirmation(isPresented: Binding<Bool>, onClear: @escaping () -> Void) -> some View {
+            alert("Clear Index", isPresented: isPresented) {
+                Button("Clear", role: .destructive, action: onClear)
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("The TMDB metadata and on-device embeddings for every title will be wiped, then re-indexed from scratch in the background.")
+            }
+        }
+    #endif
+
     /// The two clear-confirmation alerts, shared by both platform layouts.
     func clearConfirmations(
         confirmImageClear: Binding<Bool>,

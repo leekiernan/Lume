@@ -28,15 +28,10 @@ extension SettingsView {
                     NavigationLink {
                         TraktIntegrationView()
                     } label: {
-                        HStack {
-                            Label("Trakt", systemImage: "arrow.trianglehead.2.clockwise.rotate.90.circle")
-                            Spacer()
-                            if trakt.isConnected {
-                                Text(trakt.username.map { "@\($0)" } ?? "Connected")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
+                        IntegrationSettingsLabel(
+                            title: "Trakt", symbol: "arrow.trianglehead.2.clockwise.rotate.90.circle",
+                            detail: trakt.isConnected ? (trakt.username.map { "@\($0)" } ?? "Connected") : nil
+                        )
                     }
                 }
 
@@ -44,15 +39,10 @@ extension SettingsView {
                     NavigationLink {
                         SimklIntegrationView()
                     } label: {
-                        HStack {
-                            Label("Simkl", systemImage: "arrow.trianglehead.2.clockwise.rotate.90.circle")
-                            Spacer()
-                            if simkl.isConnected {
-                                Text(simkl.username.map { "@\($0)" } ?? "Connected")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
+                        IntegrationSettingsLabel(
+                            title: "Simkl", symbol: "arrow.trianglehead.2.clockwise.rotate.90.circle",
+                            detail: simkl.isConnected ? (simkl.username.map { "@\($0)" } ?? "Connected") : nil
+                        )
                     }
                 }
 
@@ -60,15 +50,7 @@ extension SettingsView {
                     NavigationLink {
                         OpenSubtitlesIntegrationView()
                     } label: {
-                        HStack {
-                            Label("OpenSubtitles", systemImage: "captions.bubble")
-                            Spacer()
-                            if let username = openSubtitles.username {
-                                Text(username)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
+                        IntegrationSettingsLabel(title: "OpenSubtitles", symbol: "captions.bubble", detail: openSubtitles.username)
                     }
                 }
             } header: {
@@ -95,6 +77,22 @@ extension SettingsView {
                 sentences.append(String(localized: "Download subtitles for anything that ships without them."))
             }
             return sentences.joined(separator: " ")
+        }
+    }
+
+    private struct IntegrationSettingsLabel: View {
+        let title: LocalizedStringKey
+        let symbol: String
+        let detail: String?
+
+        var body: some View {
+            LabeledContent {
+                if let detail {
+                    Text(detail).font(.caption).foregroundStyle(.secondary)
+                }
+            } label: {
+                Label(title, systemImage: symbol)
+            }
         }
     }
 

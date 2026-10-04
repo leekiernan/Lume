@@ -66,13 +66,7 @@
                 Button {
                     Task { await service.signIn(username: username, password: password) }
                 } label: {
-                    HStack(spacing: 16) {
-                        Image(systemName: "person.crop.circle.badge.checkmark")
-                            .font(.system(size: 22, weight: .medium))
-                        Text("Sign In")
-                        Spacer(minLength: 0)
-                        if service.isSigningIn { ProgressView() }
-                    }
+                    SettingsActionLabel(title: "Sign In", systemImage: "person.crop.circle.badge.checkmark", isBusy: service.isSigningIn)
                 }
                 .buttonStyle(TVSettingsRowButtonStyle())
                 .disabled(service.isSigningIn || username.isEmpty || password.isEmpty)
@@ -90,20 +84,15 @@
             VStack(alignment: .leading, spacing: 16) {
                 TVSettingsValueRow("Signed In", value: service.username ?? "—")
 
-                Text("Search for subtitles from the player's subtitle menu while a movie or episode is playing.")
+                Text(OpenSubtitlesAllowance.summary(remaining: service.remainingDownloads, allowed: service.allowedDownloads))
                     .font(.system(size: 22))
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, TVSettingsMetrics.rowHPadding)
 
-                Button {
+                Button(role: .destructive) {
                     Task { await service.signOut() }
                 } label: {
-                    HStack(spacing: 16) {
-                        Image(systemName: "rectangle.portrait.and.arrow.right")
-                            .font(.system(size: 22, weight: .medium))
-                        Text("Sign Out")
-                        Spacer(minLength: 0)
-                    }
+                    SettingsActionLabel(title: "Sign Out", systemImage: "rectangle.portrait.and.arrow.right")
                 }
                 .buttonStyle(TVSettingsRowButtonStyle(isDestructive: true))
             }

@@ -133,9 +133,7 @@ import SwiftUI
             .pinPrompt(target: $pendingSwitch) { profile in
                 Task { await profileManager?.switchProfile(to: profile.id) }
             }
-            .fullScreenCover(item: $pinFlow) { flow in
-                ParentalPINFlowView(flow: flow) { pinFlow = nil }
-            }
+            .parentalPINManagement(flow: $pinFlow)
         }
 
         @ViewBuilder
@@ -143,37 +141,13 @@ import SwiftUI
             TVSettingsSectionLabel("Parental Controls")
                 .padding(.top, 24)
 
-            if parental?.isPINSet == true {
-                Button { pinFlow = .change } label: {
-                    parentalRowLabel("Change PIN", systemImage: "lock.rotation")
-                }
-                .buttonStyle(TVSettingsRowButtonStyle())
-
-                Button { pinFlow = .remove } label: {
-                    parentalRowLabel("Turn Off PIN", systemImage: "lock.open")
-                }
-                .buttonStyle(TVSettingsRowButtonStyle())
-            } else {
-                Button { pinFlow = .set } label: {
-                    parentalRowLabel("Set a PIN", systemImage: "lock")
-                }
-                .buttonStyle(TVSettingsRowButtonStyle())
-            }
+            ParentalPINButtons(isPINSet: parental?.isPINSet == true, flow: $pinFlow)
 
             Text("A PIN is required to switch away from a child profile and to open Content Management.")
                 .font(.system(size: 20))
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, TVSettingsMetrics.rowHPadding)
                 .padding(.top, 6)
-        }
-
-        private func parentalRowLabel(_ title: LocalizedStringKey, systemImage: String) -> some View {
-            HStack(spacing: 16) {
-                Image(systemName: systemImage)
-                    .font(.system(size: 22, weight: .medium))
-                Text(title)
-                Spacer(minLength: 0)
-            }
         }
 
         private func row(_ profileRow: QuickSwitchRow<UserProfile>) -> some View {

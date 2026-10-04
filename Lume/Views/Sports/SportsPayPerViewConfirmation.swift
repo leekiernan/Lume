@@ -18,7 +18,7 @@ extension View {
     ) -> some View {
         confirmationDialog(
             event.wrappedValue?.title ?? "",
-            isPresented: Binding(get: { event.wrappedValue != nil }, set: { if !$0 { event.wrappedValue = nil } }),
+            isPresented: event.presentationPresence(),
             titleVisibility: .visible,
             presenting: event.wrappedValue
         ) { pending in
