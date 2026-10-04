@@ -20,38 +20,32 @@ extension ContentSyncManager {
         return try await client.tvDetails(tmdbId)
     }
 
-    /// Fetches and persists TMDB movie enrichment **off the main thread**.
-    ///
-    /// Detail views used to apply enrichment on the view's main context and call
-    /// `modelContext.save()` synchronously — a main-thread store write (scalar
-    /// fields plus a full cast replace) on the hot path of every detail open. Here
-    /// the fetch, apply and save all run on the engine actor's own background
-    /// context. The returned value lets callers update transient UI
-    /// immediately: an already-materialised SwiftData model can remain stale
-    /// even though the background save is durable.
+    /// Background scalar enrichment for heroes/rails. Cast relationships remain
+    /// owned by the detail context; values returned here can render immediately
+    /// even when the view context has not merged the background save yet.
     @discardableResult
-    func enrichMovie(id: String, tmdbId: Int) async -> TMDBTitleDetails? {
-        guard let details = try? await fetchTMDBMovieDetails(tmdbId: tmdbId) else { return nil }
+    func enrichMovieArtwork(id: String, tmdbId: Int) async -> TMDBTitleDetails? {
+        guard let details = try? await fetchTMDBMovieDetails(tmdbId: tmdbId), !Task.isCancelled else { return nil }
         let context = ModelContext(modelContainer)
         context.autosaveEnabled = false
         var descriptor = FetchDescriptor<Movie>(predicate: #Predicate { $0.id == id })
         descriptor.fetchLimit = 1
         guard let movie = try? context.fetch(descriptor).first else { return nil }
-        applyMovieDetails(details, to: movie, context: context)
+        applyMovieArtwork(details, to: movie)
         try? context.save()
         return details
     }
 
-    /// Series counterpart of ``enrichMovie(id:tmdbId:)``.
+    /// Series counterpart of ``enrichMovieArtwork(id:tmdbId:)``.
     @discardableResult
-    func enrichSeries(id: String, tmdbId: Int) async -> TMDBTitleDetails? {
-        guard let details = try? await fetchTMDBTVDetails(tmdbId: tmdbId) else { return nil }
+    func enrichSeriesArtwork(id: String, tmdbId: Int) async -> TMDBTitleDetails? {
+        guard let details = try? await fetchTMDBTVDetails(tmdbId: tmdbId), !Task.isCancelled else { return nil }
         let context = ModelContext(modelContainer)
         context.autosaveEnabled = false
         var descriptor = FetchDescriptor<Series>(predicate: #Predicate { $0.id == id })
         descriptor.fetchLimit = 1
         guard let series = try? context.fetch(descriptor).first else { return nil }
-        applySeriesDetails(details, to: series, context: context)
+        applySeriesArtwork(details, to: series)
         try? context.save()
         return details
     }
@@ -64,27 +58,11 @@ extension ContentSyncManager {
     }
 }
 
-// MARK: - Direct context apply
+// MARK: - Context apply
 
-/// Applies TMDB movie details directly to the given movie on the caller's
-/// context — the detail views' main (view) context, or the content indexer's
-/// background context. Nonisolated so it runs in the caller's isolation either
-/// way; the movie and context must belong together.
-///
-/// `includeCast` must be `false` when called on a background context (the
-/// indexer). Rewriting the `CastMember` relationship there forces CoreData
-/// inverse-relationship maintenance to fault objects out of this multi-store
-/// CloudKit container, which crashes with an uncatchable `no such table`
-/// NSException. The embedding never reads the relationship (only the `actors`
-/// string), so the indexer skips it — and skips the `tmdbEnrichedAt` stamp so
-/// the detail view still performs a full, cast-included enrichment on the main
-/// context the first time the title is opened.
-nonisolated func applyMovieDetails(
-    _ details: TMDBTitleDetails,
-    to movie: Movie,
-    context: ModelContext,
-    includeCast: Bool = true
-) {
+/// Scalar metadata/artwork only: safe for background enrichment while a
+/// detail screen holds cast faults. Does not claim full-detail freshness.
+nonisolated func applyMovieArtwork(_ details: TMDBTitleDetails, to movie: Movie) {
     movie.backdropPath = details.backdropPath ?? movie.backdropPath
     movie.posterPath = details.posterPath ?? movie.posterPath
     movie.posterCheckedAt = Date()
@@ -117,31 +95,23 @@ nonisolated func applyMovieDetails(
         movie.collectionPosterPath = details.collectionPosterPath
         movie.collectionBackdropPath = details.collectionBackdropPath
     }
+    movie.tmdbArtworkEnrichedAt = Date()
+}
 
-    guard includeCast else { return }
+/// Full-detail enrichment on the context that owns the displayed cast. Never
+/// call this from an artwork/indexing background context: replacing cast rows
+/// there can invalidate faults retained by a detail screen before they merge.
+nonisolated func applyMovieDetails(_ details: TMDBTitleDetails, to movie: Movie, context: ModelContext) {
+    applyMovieArtwork(details, to: movie)
     replaceCast(of: movie.castMembers, with: details.cast, ownerId: movie.id, context: context) { castMember in
         castMember.movie = movie
     }
-
-    // Stamp "fully enriched" only once cast is applied; the indexer's partial
-    // pass leaves this nil so the detail view completes enrichment later.
     movie.tmdbEnrichedAt = Date()
 }
 
-/// Applies TMDB TV series details directly to the given series on the caller's
-/// context — the detail views' main (view) context, or the content indexer's
-/// background context. Nonisolated so it runs in the caller's isolation either
-/// way; the series and context must belong together.
-///
-/// `includeCast` must be `false` on a background context — see
-/// `applyMovieDetails` for why. The series embedding reads the enriched `cast`
-/// string (set below, unconditionally), never the `CastMember` relationship.
-nonisolated func applySeriesDetails(
-    _ details: TMDBTitleDetails,
-    to series: Series,
-    context: ModelContext,
-    includeCast: Bool = true
-) {
+/// Scalar metadata/artwork only: safe for background enrichment while a
+/// detail screen holds cast faults. Does not claim full-detail freshness.
+nonisolated func applySeriesArtwork(_ details: TMDBTitleDetails, to series: Series) {
     series.backdropPath = details.backdropPath ?? series.backdropPath
     series.posterPath = details.posterPath ?? series.posterPath
     series.posterCheckedAt = Date()
@@ -167,14 +137,17 @@ nonisolated func applySeriesDetails(
     if currentRating == 0, let vote = details.voteAverage, vote > 0 {
         series.rating = String(format: "%.1f", vote)
     }
+    series.tmdbArtworkEnrichedAt = Date()
+}
 
-    guard includeCast else { return }
+/// Full-detail enrichment on the context that owns the displayed cast. Never
+/// call this from an artwork/indexing background context: replacing cast rows
+/// there can invalidate faults retained by a detail screen before they merge.
+nonisolated func applySeriesDetails(_ details: TMDBTitleDetails, to series: Series, context: ModelContext) {
+    applySeriesArtwork(details, to: series)
     replaceCast(of: series.castMembers, with: details.cast, ownerId: series.id, context: context) { castMember in
         castMember.series = series
     }
-
-    // Stamp "fully enriched" only once cast is applied; the indexer's partial
-    // pass leaves this nil so the detail view completes enrichment later.
     series.tmdbEnrichedAt = Date()
 }
 

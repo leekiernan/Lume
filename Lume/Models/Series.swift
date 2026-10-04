@@ -62,6 +62,9 @@ final class Series {
     var contentRating: String?
     /// When the title was last enriched from TMDB; nil means never.
     var tmdbEnrichedAt: Date?
+    /// Scalar artwork metadata was fetched, without replacing the cast. Optional
+    /// so existing catalogs backfill once without claiming full-detail freshness.
+    var tmdbArtworkEnrichedAt: Date?
     /// TMDB ids of similar titles, in TMDB's order, for "You May Also Like".
     ///
     /// Optional on purpose: a non-optional `[Int] = []` is not free — SwiftData

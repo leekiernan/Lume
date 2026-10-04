@@ -460,10 +460,10 @@ actor ContentIndexer {
             movie.tmdbId = tmdbId
         }
         if let details = result.details {
-            // Background context: skip the cast relationship — see
-            // applyMovieDetails. The embedding uses `movie.actors`, and the
+            // Background context: scalar metadata only. The embedding uses
+            // `movie.actors`, and the
             // detail view fully enriches (incl. cast) on first open.
-            applyMovieDetails(details, to: movie, context: context, includeCast: false)
+            applyMovieArtwork(details, to: movie)
         }
         let document = Self.document(for: .init(
             name: result.item.title,
@@ -497,10 +497,10 @@ actor ContentIndexer {
             series.tmdbId = tmdbId
         }
         if let details = result.details {
-            // Background context: skip the cast relationship — see
-            // applySeriesDetails. The embedding uses the `series.cast`
+            // Background context: scalar metadata only. The embedding uses
+            // the `series.cast`
             // string; the detail view fully enriches (incl. cast) later.
-            applySeriesDetails(details, to: series, context: context, includeCast: false)
+            applySeriesArtwork(details, to: series)
         }
         let document = Self.document(for: .init(
             name: result.item.title,

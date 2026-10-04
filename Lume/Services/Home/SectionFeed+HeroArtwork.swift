@@ -100,13 +100,13 @@ extension SectionFeed {
                     case .movie:
                         group.addTask {
                             guard !Task.isCancelled else { return (heroID, nil) }
-                            let details = await manager.enrichMovie(id: id, tmdbId: tmdbId)
+                            let details = await manager.enrichMovieArtwork(id: id, tmdbId: tmdbId)
                             return (heroID, details)
                         }
                     case .series:
                         group.addTask {
                             guard !Task.isCancelled else { return (heroID, nil) }
-                            let details = await manager.enrichSeries(id: id, tmdbId: tmdbId)
+                            let details = await manager.enrichSeriesArtwork(id: id, tmdbId: tmdbId)
                             return (heroID, details)
                         }
                     }
@@ -133,7 +133,7 @@ extension SectionFeed {
                 posterPath: movie.posterPath,
                 posterCheckedAt: movie.posterCheckedAt,
                 logoPath: movie.logoPath,
-                enrichedAt: movie.tmdbEnrichedAt
+                enrichedAt: movie.tmdbArtworkEnrichedAt ?? movie.tmdbEnrichedAt
             ), let tmdbId = movie.tmdbId else { return nil }
             return HeroArtworkRequest(
                 id: movie.id,
@@ -148,7 +148,7 @@ extension SectionFeed {
                 posterPath: series.posterPath,
                 posterCheckedAt: series.posterCheckedAt,
                 logoPath: series.logoPath,
-                enrichedAt: series.tmdbEnrichedAt
+                enrichedAt: series.tmdbArtworkEnrichedAt ?? series.tmdbEnrichedAt
             ), let tmdbId = series.tmdbId else { return nil }
             return HeroArtworkRequest(
                 id: series.id,
@@ -166,9 +166,9 @@ extension SectionFeed {
     ) async -> TMDBTitleDetails? {
         switch request.kind {
         case .movie:
-            await manager.enrichMovie(id: request.id, tmdbId: request.tmdbId)
+            await manager.enrichMovieArtwork(id: request.id, tmdbId: request.tmdbId)
         case .series:
-            await manager.enrichSeries(id: request.id, tmdbId: request.tmdbId)
+            await manager.enrichSeriesArtwork(id: request.id, tmdbId: request.tmdbId)
         }
     }
 

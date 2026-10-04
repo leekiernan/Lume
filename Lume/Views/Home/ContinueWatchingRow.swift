@@ -136,8 +136,8 @@ struct ContinueWatchingRow: View {
         for request in requests {
             guard !Task.isCancelled else { return }
             let details = switch request.kind {
-            case .movie: await manager.enrichMovie(id: request.modelID, tmdbId: request.tmdbId)
-            case .series: await manager.enrichSeries(id: request.modelID, tmdbId: request.tmdbId)
+            case .movie: await manager.enrichMovieArtwork(id: request.modelID, tmdbId: request.tmdbId)
+            case .series: await manager.enrichSeriesArtwork(id: request.modelID, tmdbId: request.tmdbId)
             }
             if let details {
                 artwork[request.id] = ContinueWatchingArtwork(backdropPath: details.backdropPath, logoPath: details.logoPath)
@@ -166,12 +166,12 @@ struct ContinueWatchingArtworkRequest {
         switch item {
         case let .movie(movie):
             guard let tmdbId = movie.tmdbId,
-                  Self.needsArtwork(movie.backdropPath, movie.logoPath, enrichedAt: movie.tmdbEnrichedAt)
+                  Self.needsArtwork(movie.backdropPath, movie.logoPath, enrichedAt: movie.tmdbArtworkEnrichedAt ?? movie.tmdbEnrichedAt)
             else { return nil }
             self.init(id: item.id, modelID: movie.id, tmdbId: tmdbId, kind: .movie)
         case let .series(show):
             guard let tmdbId = show.tmdbId,
-                  Self.needsArtwork(show.backdropPath, show.logoPath, enrichedAt: show.tmdbEnrichedAt)
+                  Self.needsArtwork(show.backdropPath, show.logoPath, enrichedAt: show.tmdbArtworkEnrichedAt ?? show.tmdbEnrichedAt)
             else { return nil }
             self.init(id: item.id, modelID: show.id, tmdbId: tmdbId, kind: .series)
         case .live:

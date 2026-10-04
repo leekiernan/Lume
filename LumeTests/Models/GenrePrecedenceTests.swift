@@ -36,7 +36,7 @@ struct GenrePrecedenceTests {
         let context = container.mainContext
         let series = Series(id: "p-series-1", seriesId: 1, name: "Show", genre: "Drama")
         context.insert(series)
-        applySeriesDetails(tmdbDetails(genreNames: ["Action", "Thriller"]), to: series, context: context, includeCast: false)
+        applySeriesArtwork(tmdbDetails(genreNames: ["Action", "Thriller"]), to: series)
         #expect(series.genre == "Action, Thriller")
     }
 
@@ -45,7 +45,7 @@ struct GenrePrecedenceTests {
         let context = container.mainContext
         let series = Series(id: "p-series-1", seriesId: 1, name: "Show", genre: "Drama")
         context.insert(series)
-        applySeriesDetails(tmdbDetails(genreNames: []), to: series, context: context, includeCast: false)
+        applySeriesArtwork(tmdbDetails(genreNames: []), to: series)
         #expect(series.genre == "Drama")
     }
 
@@ -55,7 +55,7 @@ struct GenrePrecedenceTests {
         let movie = Movie(id: "p-movie-1", streamId: 1, name: "Film")
         movie.genre = "Stale"
         context.insert(movie)
-        applyMovieDetails(tmdbDetails(genreNames: ["Action"]), to: movie, context: context, includeCast: false)
+        applyMovieArtwork(tmdbDetails(genreNames: ["Action"]), to: movie)
         #expect(movie.genre == "Action")
     }
 }

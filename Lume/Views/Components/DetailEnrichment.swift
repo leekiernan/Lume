@@ -31,11 +31,10 @@ func detailNeedsTMDBFetch(tmdbId: Int?, enrichedAt: Date?) -> Bool {
 }
 
 /// Fetches TMDB movie details off-thread, then applies them on the view's own
-/// context. The background `ContentSyncManager.enrichMovie` path is unsafe
-/// here: it deletes and reinserts `CastMember` rows from a separate
-/// `ModelContext`, so if the view context holds faulted references to those
-/// rows and a render fires before the merge lands, SwiftData fires a fault
-/// against a deleted store row → `_assertionFailure`.
+/// context. Cast replacement must stay on the context displaying those rows;
+/// doing it elsewhere can invalidate retained faults before they merge.
+/// Background artwork enrichment is scalar-only and does not mark these
+/// complete details fresh, so it cannot suppress this full enrichment.
 ///
 /// - Returns: whether details were applied (callers bump their refresh token).
 @discardableResult
