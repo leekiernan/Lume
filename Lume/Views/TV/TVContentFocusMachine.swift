@@ -39,6 +39,12 @@ nonisolated struct TVContentFocusRequest: Equatable {
     let scope: Scope
     var channelID: String?
 
+    /// A synchronous channel query has settled without a native target. Consume
+    /// this handoff rather than letting a later import unexpectedly steal focus.
+    func emptyCompletion(in currentScope: Scope, hasChannels: Bool) -> Self? {
+        scope == currentScope && !hasChannels ? self : nil
+    }
+
     func landing(in currentScope: Scope, channelIDs: [String]) -> Landing? {
         guard scope == currentScope, !channelIDs.isEmpty else { return nil }
         let index = channelID.flatMap { channelIDs.firstIndex(of: $0) } ?? 0

@@ -76,4 +76,24 @@ struct LiveTVSectionQueryTests {
     private func categories(in context: ModelContext, prefix: String, restriction: ContentRestriction) throws -> [Lume.Category] {
         try context.fetch(LibraryCategoryQuery.descriptor(type: .live, playlistPrefix: prefix, excludedCategoryIDs: restriction.excludedCategoryIDs))
     }
+
+    @Test func `empty state detects stored hidden channels with a bounded playlist scoped probe`() throws {
+        try OnDiskCatalogStore.withContext { context in
+            let hidden = LiveStream(id: "mine-live-1", streamId: 1, name: "Hidden", categoryId: "mine-live-hidden")
+            hidden.isHidden = true
+            context.insert(hidden)
+            context.insert(LiveStream(id: "other-live-1", streamId: 2, name: "Other", categoryId: nil))
+            try context.save()
+            let probe = LiveChannelQuery.excludedChannelsProbe(playlistPrefix: "mine-", restriction: ContentRestriction())
+            #expect(probe.fetchLimit == 1 && probe.sortBy.isEmpty)
+            #expect(try context.fetch(probe).map(\.id) == [hidden.id])
+            #expect(try context.fetch(LiveChannelQuery.excludedChannelsProbe(playlistPrefix: "other-", restriction: ContentRestriction())).isEmpty)
+            #expect(try context.fetch(LiveChannelQuery.excludedChannelsProbe(playlistPrefix: "", restriction: ContentRestriction())).isEmpty)
+            hidden.isHidden = false
+            try context.save()
+            #expect(try context.fetch(probe).isEmpty)
+            let child = ContentRestriction(isActive: true, restrictedCategoryIDs: ["mine-live-hidden"])
+            #expect(try context.fetch(LiveChannelQuery.excludedChannelsProbe(playlistPrefix: "mine-", restriction: child)).map(\.id) == [hidden.id])
+        }
+    }
 }

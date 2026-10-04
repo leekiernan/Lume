@@ -151,6 +151,7 @@
                     }
                 }
             }
+            .completingEmptyTVFocus(focusRequest, scope: focusScope, hasChannels: !channels.isEmpty, onComplete: onDidClaimFocus)
             // Reload when the visible window or channel set changes, or a guide
             // import settles — EPG is resolved only for the channels on screen.
             .task(id: Set(channels.compactMap(\.categoryId))) {

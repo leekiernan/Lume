@@ -242,7 +242,7 @@ struct LiveTVView: View {
                 layout(for: sections)
                     .task(id: playlistPrefix) { seedSelection(from: sections) }
             } else {
-                LiveTVEmptyState(sourceType: activePlaylist?.knownSourceType)
+                LiveTVEmptyState(sourceType: activePlaylist?.knownSourceType, playlistPrefix: playlistPrefix, restriction: restriction)
             }
         }
     }

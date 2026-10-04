@@ -58,6 +58,23 @@ struct TVContentFocusTests {
             #expect(request.landing(in: other, channelIDs: ["channel"]) == nil)
         }
     }
+
+    @Test func `a settled empty section consumes only its matching handoff`() throws {
+        var machine = TVContentFocusMachine()
+        machine.requestFocus(in: scope)
+        let request = try #require(machine.request)
+        #expect(request.emptyCompletion(in: scope, hasChannels: true) == nil)
+        let other = TVContentFocusRequest.Scope(playlistPrefix: "other-", channelScope: .favorites, visibilityToken: "parent")
+        #expect(request.emptyCompletion(in: other, hasChannels: false) == nil)
+        let empty = try #require(request.emptyCompletion(in: scope, hasChannels: false))
+        let completed = machine.didClaim(empty)
+        #expect(completed)
+        #expect(machine.request == nil) // Later channels cannot revive it.
+        machine.requestFocus(in: scope, channelID: "new")
+        let stale = machine.didClaim(empty)
+        #expect(!stale) // A late empty acknowledgment is stale.
+        #expect(machine.request?.channelID == "new")
+    }
 }
 
 @MainActor

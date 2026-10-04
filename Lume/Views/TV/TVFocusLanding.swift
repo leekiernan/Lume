@@ -28,6 +28,24 @@
 
 import SwiftUI
 
+extension View {
+    /// List and guide have synchronous, scoped channel queries. Yield out of
+    /// the render pass before acknowledging an empty answer; a changed request
+    /// or arriving channel cancels this task, just like a normal focus landing.
+    func completingEmptyTVFocus(
+        _ request: TVContentFocusRequest?, scope: TVContentFocusRequest.Scope,
+        hasChannels: Bool, onComplete: @escaping (TVContentFocusRequest) -> Void
+    ) -> some View {
+        let completion = request?.emptyCompletion(in: scope, hasChannels: hasChannels)
+        return task(id: completion) {
+            guard let completion else { return }
+            await Task.yield()
+            guard !Task.isCancelled else { return }
+            onComplete(completion)
+        }
+    }
+}
+
 /// The release/settle/assert boundary is tested independently of UIKit's focus
 /// engine. Cancellation or dismissal never asserts focus on a departed surface.
 @MainActor

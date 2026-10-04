@@ -231,6 +231,18 @@ nonisolated enum LiveChannelQuery {
         return descriptor
     }
 
+    /// Empty-state copy only: content exists but none is browseable. Do not
+    /// reveal rows/counts or bind this unfiltered query to channel rendering.
+    static func excludedChannelsProbe(playlistPrefix: String, restriction: ContentRestriction) -> FetchDescriptor<LiveStream> {
+        let prefix = playlistPrefix
+        let hasPlaylist = !prefix.isEmpty
+        let excluded = excludedCategoryIDs(restriction)
+        return probe(predicate: #Predicate { stream in
+            hasPlaylist && stream.id.starts(with: prefix)
+                && (stream.isHidden || excluded.contains(stream.categoryId))
+        })
+    }
+
     /// The categories hidden from this viewer, as optionals, so a predicate can
     /// test the optional `categoryId` against them directly: neither `?? ""` nor
     /// a nil-check plus force-unwrap survives SwiftData's SQL generation, while
