@@ -44,12 +44,8 @@ import SwiftUI
                         Button {
                             presentPaywall(.playbackControls)
                         } label: {
-                            HStack(spacing: 16) {
-                                Image(systemName: "crown")
-                                    .font(.system(size: 22, weight: .medium))
-                                Text("Unlock with Premium")
-                                Spacer(minLength: 0)
-                            }
+                            Label("Unlock with Premium", systemImage: "crown")
+                                .labelStyle(TVSettingsIconLabelStyle())
                         }
                         .buttonStyle(TVSettingsRowButtonStyle())
                     }

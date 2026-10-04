@@ -208,24 +208,16 @@ extension SettingsView {
                     Button {
                         presentPaywall(nil)
                     } label: {
-                        HStack(spacing: 16) {
-                            Image(systemName: "crown")
-                                .font(.system(size: 22, weight: .medium))
-                            Text("Upgrade to Premium")
-                            Spacer(minLength: 0)
-                        }
+                        Label("Upgrade to Premium", systemImage: "crown")
+                            .labelStyle(TVSettingsIconLabelStyle())
                     }
                     .buttonStyle(TVSettingsRowButtonStyle())
 
                     Button {
                         Task { await premium.restore() }
                     } label: {
-                        HStack(spacing: 16) {
-                            Image(systemName: "arrow.clockwise")
-                                .font(.system(size: 22, weight: .medium))
-                            Text("Restore Purchases")
-                            Spacer(minLength: 0)
-                        }
+                        Label("Restore Purchases", systemImage: "arrow.clockwise")
+                            .labelStyle(TVSettingsIconLabelStyle())
                     }
                     .buttonStyle(TVSettingsRowButtonStyle())
                 }

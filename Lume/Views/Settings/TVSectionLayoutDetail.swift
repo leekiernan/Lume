@@ -270,12 +270,8 @@ import SwiftUI
                     Button {
                         beginAdding()
                     } label: {
-                        HStack(spacing: 16) {
-                            Image(systemName: "plus")
-                                .font(.system(size: 22, weight: .medium))
-                            Text("Add Section")
-                            Spacer(minLength: 0)
-                        }
+                        Label("Add Section", systemImage: "plus")
+                            .labelStyle(TVSettingsIconLabelStyle())
                     }
                     .buttonStyle(TVSettingsRowButtonStyle())
                     .focused($focusedControl, equals: .addSection)

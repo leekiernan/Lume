@@ -99,12 +99,8 @@ import SwiftUI
                         showPaywall = true
                     }
                 } label: {
-                    HStack(spacing: 16) {
-                        Image(systemName: premium.isPremium ? "plus" : "crown")
-                            .font(.system(size: 22, weight: .medium))
-                        Text("Add Profile")
-                        Spacer(minLength: 0)
-                    }
+                    Label("Add Profile", systemImage: premium.isPremium ? "plus" : "crown")
+                        .labelStyle(TVSettingsIconLabelStyle())
                 }
                 .buttonStyle(TVSettingsRowButtonStyle())
 
