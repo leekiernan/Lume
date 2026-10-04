@@ -23,7 +23,11 @@ struct SimklAccountBackend: TrackerAccountBackend {
     static let slowDownStep: TimeInterval = 5
     static let outboxStorageKey = "simkl.mutationOutbox.v1"
 
-    private let client = SimklClient.shared
+    private let client: SimklClient
+
+    init(client: SimklClient = .shared) {
+        self.client = client
+    }
 
     var isConfigured: Bool {
         client.isConfigured

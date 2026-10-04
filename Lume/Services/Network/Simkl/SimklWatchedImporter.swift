@@ -44,8 +44,8 @@ nonisolated struct SimklImportSummary: Equatable {
 nonisolated enum SimklWatchedImporter {
     /// Marks the local movies and episodes that Simkl reports as watched,
     /// writing through the given catalog context. Returns what changed.
-    static func apply(items: SimklAllItems, in context: ModelContext) -> SimklImportSummary {
-        apply(movies: items.movies, shows: items.shows, in: context)
+    static func apply(items: SimklAllItems, in context: ModelContext, pendingScope: TrackerProgressScope = .simkl) -> SimklImportSummary {
+        apply(movies: items.movies, shows: items.shows, in: context, pendingScope: pendingScope)
     }
 
     /// Marks the local movies and episodes that Simkl reports as watched,
@@ -53,10 +53,11 @@ nonisolated enum SimklWatchedImporter {
     static func apply(
         movies: [SimklWatchedMovie],
         shows: [SimklWatchedShow],
-        in context: ModelContext
+        in context: ModelContext,
+        pendingScope: TrackerProgressScope = .simkl
     ) -> SimklImportSummary {
         let moviesMarked = importMovies(movies, in: context)
-        let shows = importShows(shows, in: context)
+        let shows = importShows(shows, in: context, pendingScope: pendingScope)
 
         if context.hasChanges {
             do {
@@ -119,7 +120,8 @@ nonisolated enum SimklWatchedImporter {
 
     private static func importShows(
         _ watched: [SimklWatchedShow],
-        in context: ModelContext
+        in context: ModelContext,
+        pendingScope: TrackerProgressScope
     ) -> (marked: Int, queued: Int) {
         var showsByTMDB: [Int: SimklWatchedShow] = [:]
         for show in watched {
@@ -132,7 +134,7 @@ nonisolated enum SimklWatchedImporter {
 
         let candidates = TrackerCatalogLookup.series(tmdbIDs: Set(showsByTMDB.keys), in: context)
 
-        var pending = SimklPendingWatchedStore.load()
+        var pending = SimklPendingWatchedStore.load(scope: pendingScope)
         var pendingChanged = false
         var marked = 0
         var queued = 0

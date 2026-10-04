@@ -21,7 +21,8 @@ struct TrackerImportScope: Equatable {
     /// next one.
     @MainActor
     static func begin(after queue: TrackerMutationQueue<some Any>) async -> TrackerImportScope? {
-        let scope = TrackerImportScope(account: queue.account, profileID: ActiveProfileStore.current)
+        guard let account = queue.account, !account.isEmpty else { return nil }
+        let scope = TrackerImportScope(account: account, profileID: ActiveProfileStore.current)
         await queue.flush()
         guard scope.isCurrent(isConnected: true, account: queue.account, pendingCount: queue.pendingCount) else {
             return nil

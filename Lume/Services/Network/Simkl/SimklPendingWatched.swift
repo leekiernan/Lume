@@ -43,10 +43,18 @@ nonisolated struct SimklPendingShow: Codable, Equatable {
 nonisolated struct SimklPendingWatched: Codable, Equatable {
     var shows: [String: SimklPendingShow] = [:]
     /// The profile whose import parked this. The file is device-wide but the
-    /// watched state is per profile: another profile neither applies it nor
-    /// merges into it (`SimklPendingWatchedStore`). `nil` in files written
-    /// before the stamp, which no profile claims; the next import rebuilds them.
+    /// watched state is per profile/account: another scope neither applies it
+    /// nor merges into it (`SimklPendingWatchedStore`). Legacy files without an
+    /// account stamp are rebuilt by the next import, not replayed.
     var profileID: UUID?
+
+    /// Stable provider account partition; absent legacy files are not replayed.
+    var accountID: String?
+
+    var scope: TrackerProgressScope {
+        get { TrackerProgressScope(profileID: profileID, accountID: accountID) }
+        set { profileID = newValue.profileID; accountID = newValue.accountID }
+    }
 
     static let empty = SimklPendingWatched()
 
@@ -79,11 +87,12 @@ nonisolated enum SimklPendingWatchedStore {
         directory?.appendingPathComponent("SimklPendingWatched.json")
     }
 
-    /// The active profile's parked state; empty under any other profile.
-    static func load() -> SimklPendingWatched {
-        let profileID = ActiveProfileStore.current
+    /// A captured import scope, or the active profile/account on episode open.
+    /// Unstamped legacy files and unknown accounts cannot authorize replay.
+    static func load(scope: TrackerProgressScope = .simkl) -> SimklPendingWatched {
         let stored = loadStored()
-        return stored.profileID == profileID ? stored : SimklPendingWatched(profileID: profileID)
+        if stored.scope.matches(scope) { return stored }
+        return SimklPendingWatched(profileID: scope.profileID, accountID: scope.accountID)
     }
 
     private static func loadStored() -> SimklPendingWatched {
@@ -102,10 +111,9 @@ nonisolated enum SimklPendingWatchedStore {
         }
     }
 
-    /// Saved as the active profile's, replacing any other profile's.
+    /// Keep the captured scope; never relabel old history as a new account/profile.
     static func save(_ state: SimklPendingWatched) {
-        var state = state
-        state.profileID = ActiveProfileStore.current
+        guard state.scope.matches(.simkl) else { return }
         lock.withLock {
             cached = state
             guard let url = fileURL else { return }
@@ -139,7 +147,10 @@ nonisolated enum SimklPendingWatchedStore {
     /// Drops everything — used when disconnecting the Simkl account, so a
     /// stale import can't keep marking episodes for a signed-out user.
     static func clearAll() {
-        save(.empty)
+        lock.withLock {
+            cached = nil
+            if let url = fileURL { try? FileManager.default.removeItem(at: url) }
+        }
     }
 
     /// Test seam: forgets the in-memory copy so the next `load()` re-reads disk.

@@ -4,7 +4,7 @@ import SwiftData
 import Testing
 
 @MainActor
-@Suite(.serialized, .globalState)
+@Suite(.serialized, .globalState, .trackerIdentity(.trakt))
 struct TraktWatchedImporterTests {
     @Test func `old remote completion cannot erase newer local movie progress`() throws {
         let context = try makeContext()

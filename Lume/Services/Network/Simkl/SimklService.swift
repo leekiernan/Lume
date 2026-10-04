@@ -27,7 +27,7 @@ final class SimklService {
     static let shared = SimklService()
 
     /// Sign-in and tokens — shared with Trakt, see `TrackerAccountSession`.
-    let session = TrackerAccountSession(backend: SimklAccountBackend())
+    let session: TrackerAccountSession<SimklAccountBackend>
 
     /// The connected Simkl username, or nil when signed out or not yet known.
     var username: String? {
@@ -84,12 +84,15 @@ final class SimklService {
     /// import can run the moment the device code is approved.
     private var importContext: ModelContext?
 
-    private let client = SimklClient.shared
+    private let client: SimklClient
 
-    private init() {
+    init(client: SimklClient = .shared, outbox: TrackerMutationOutbox? = nil) {
+        self.client = client
+        let session = TrackerAccountSession(backend: SimklAccountBackend(client: client))
+        self.session = session
         mutations = TrackerMutationQueue(
             session: session,
-            outbox: TrackerMutationOutbox(storageKey: SimklAccountBackend.outboxStorageKey)
+            outbox: outbox ?? TrackerMutationOutbox(storageKey: SimklAccountBackend.outboxStorageKey)
         )
         session.didConnect = { [weak self] in
             // The account's watched history imports on connect, not only on
@@ -266,7 +269,7 @@ final class SimklService {
             accessToken: { await self.session.validAccessToken() },
             fetch: { try await self.client.watchedItems(accessToken: $0) },
             isCurrent: { $0.isCurrent(isConnected: self.isConnected, account: self.mutations.account, pendingCount: self.mutations.pendingCount) },
-            apply: { items, scope in await Self.applyImport(items: items, container: container, profileID: scope.profileID) }
+            apply: { items, scope in await Self.applyImport(items: items, container: container, profileID: scope.profileID, accountID: scope.account) }
         ).perform()
         switch outcome {
         case .deferred:
@@ -282,9 +285,10 @@ final class SimklService {
 
     /// Off the main actor, on a context of its own — see `TraktService`.
     @concurrent
-    static func applyImport(items: SimklAllItems, container: ModelContainer, profileID: UUID?) async -> SimklImportSummary {
-        guard ActiveProfileStore.current == profileID else { return .failure }
-        return SimklWatchedImporter.apply(items: items, in: ModelContext(container))
+    static func applyImport(items: SimklAllItems, container: ModelContainer, profileID: UUID?, accountID: String? = nil) async -> SimklImportSummary {
+        let scope = TrackerProgressScope(profileID: profileID, accountID: accountID)
+        guard scope.matches(.simkl) else { return .failure }
+        return SimklWatchedImporter.apply(items: items, in: ModelContext(container), pendingScope: scope)
     }
 }
 

@@ -304,7 +304,7 @@ final class TraktService {
             apply: { history, scope in
                 await Self.applyImport(
                     movies: history.movies, shows: history.shows, paused: history.paused, container: container,
-                    profileID: scope.profileID
+                    scope: TrackerProgressScope(profileID: scope.profileID, accountID: scope.account)
                 )
             }
         ).perform()
@@ -332,13 +332,13 @@ final class TraktService {
         shows: [TraktWatchedShow],
         paused: [TraktPlaybackItem]?,
         container: ModelContainer,
-        profileID: UUID?
+        scope: TrackerProgressScope
     ) async -> TraktImportSummary {
-        guard ActiveProfileStore.current == profileID else { return .failure }
+        guard scope.matches(.trakt) else { return .failure }
         let context = ModelContext(container)
-        var summary = TraktWatchedImporter.apply(movies: movies, shows: shows, in: context)
+        var summary = TraktWatchedImporter.apply(movies: movies, shows: shows, in: context, pendingScope: scope)
         if !summary.failed, let paused {
-            summary.inProgress = TraktPlaybackImporter.apply(paused, in: context)
+            summary.inProgress = TraktPlaybackImporter.apply(paused, in: context, pendingScope: scope)
             if context.hasChanges { try? context.save() }
         }
         return summary
