@@ -132,33 +132,13 @@ struct MoviesView: View {
     /// The same slideshow Home shows, filtered to this page's medium, above the
     /// page's rows. tvOS keeps the immersive treatment (`TVHomeScreen` wraps the
     /// rows in the fold); everywhere else it is the standard carousel.
-    @ViewBuilder
     private var heroAndRows: some View {
-        #if os(tvOS)
-            TVHomeScreen(
-                heroItems: feed.heroItems,
-                reservesHero: feed.heroState.reservesSpace,
-                warmStartBackdropURL: heroWarmStartBackdropURL,
-                onSelectHero: open(hero:)
-            ) {
-                rowsContent
-            }
-        #else
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: PosterCardMetrics.sectionSpacing) {
-                    if !feed.heroItems.isEmpty {
-                        HomeHeroCarousel(items: feed.heroItems)
-                    } else if feed.heroState.reservesSpace {
-                        HomeHeroWarmStart(backdropURL: heroWarmStartBackdropURL, posterURL: heroWarmStart.posterURL(hero: heroRef, catalogScope: heroWarmStartScope))
-                    }
-                    rowsContent
-                }
-                // The hero fills the top inset itself when it's showing.
-                .padding(.top, feed.heroState.reservesSpace ? 0 : PosterCardMetrics.sectionVerticalPadding)
-                .padding(.bottom, PosterCardMetrics.sectionVerticalPadding)
-            }
-            .ignoresSafeArea(edges: feed.heroState.reservesSpace ? .top : [])
-        #endif
+        HeroFeedPage(
+            heroItems: feed.heroItems, reservesHero: feed.heroState.reservesSpace,
+            warmStartBackdropURL: heroWarmStartBackdropURL,
+            warmStartPosterURL: { heroWarmStart.posterURL(hero: heroRef, catalogScope: heroWarmStartScope) },
+            onSelectHero: open(hero:), rows: { rowsContent }
+        )
     }
 
     @ViewBuilder

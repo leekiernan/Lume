@@ -162,6 +162,12 @@ struct HomeView: View {
         ))
     }
 
+    private func selectHero(_ hero: HeroItem) {
+        #if os(tvOS)
+            selectedHero = hero
+        #endif
+    }
+
     var body: some View {
         // Derived once per pass — see `DerivedContent`.
         let content = derivedContent()
@@ -182,40 +188,16 @@ struct HomeView: View {
                         description: Text("Watch something or mark titles as favorites and they'll show up here.")
                     )
                 case let .content(hero):
+                    HeroFeedPage(
+                        heroItems: feed.heroItems, reservesHero: hero.reservesSpace,
+                        warmStartBackdropURL: heroWarmStartBackdropURL,
+                        warmStartPosterURL: { heroWarmStartPosterURL }, hidesScrollIndicators: true,
+                        onSelectHero: selectHero, rows: { homeRows(content) }
+                    )
                     #if os(tvOS)
-                        // Immersive Apple TV-style home: full-screen backdrop,
-                        // teasing first row, fold-snapping scroll. Lives in
-                        // `TVHomeScreen.swift`.
-                        TVHomeScreen(
-                            heroItems: feed.heroItems,
-                            reservesHero: hero.reservesSpace,
-                            warmStartBackdropURL: heroWarmStartBackdropURL,
-                            onSelectHero: { selectedHero = $0 },
-                            rows: { homeRows(content) }
-                        )
-                        .tvQuickSwitchHint(interacted: selectedHero != nil)
+                    .tvQuickSwitchHint(interacted: selectedHero != nil)
                     #else
-                        ScrollView {
-                            LazyVStack(alignment: .leading, spacing: PosterCardMetrics.sectionSpacing) {
-                                if !feed.heroItems.isEmpty {
-                                    HomeHeroCarousel(items: feed.heroItems)
-                                } else if hero.reservesSpace {
-                                    HomeHeroWarmStart(backdropURL: heroWarmStartBackdropURL, posterURL: heroWarmStartPosterURL)
-                                }
-                                homeRows(content)
-                            }
-                            // The hero fills the top inset itself when it's
-                            // showing; without one, Home takes the same inset as
-                            // the Movies and Series pages.
-                            .padding(.top, hero.reservesSpace ? 0 : PosterCardMetrics.sectionVerticalPadding)
-                            .padding(.bottom, PosterCardMetrics.sectionVerticalPadding)
-                        }
-                        .browseActivity()
-                        .scrollIndicators(.hidden)
-                        // Only let content run under the nav bar when the hero
-                        // backdrop is there to fill it; otherwise the first row
-                        // would sit hidden behind the bar.
-                        .ignoresSafeArea(edges: hero.reservesSpace ? .top : [])
+                    .browseActivity()
                     #endif
                 }
             }
