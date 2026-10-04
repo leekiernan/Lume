@@ -354,7 +354,7 @@ nonisolated enum LiveChannelNavigator {
         playlist: Playlist,
         in context: ModelContext
     ) -> (ring: Ring, index: Int)? {
-        let prefix = "\(playlist.id.uuidString)-"
+        let prefix = playlist.contentIDPrefix
         let ownCategory = current.categoryId.map(LiveChannelScope.category)
         // A category launch scope *is* the channel's own category, and the branch
         // below resolves that list anyway — asking for it here first would walk

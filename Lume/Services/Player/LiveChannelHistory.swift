@@ -85,7 +85,7 @@ enum LiveChannelHistory {
         let recents = LiveChannelQuery.scoped(
             (try? context.fetch(descriptor)) ?? [],
             scope: .recentlyWatched,
-            playlistPrefix: "\(playlist.id.uuidString)-",
+            playlistPrefix: playlist.contentIDPrefix,
             restriction: restriction
         )
         let others = recents.lazy.filter { $0.id != current.id }.prefix(recentsRailLimit - 1)
