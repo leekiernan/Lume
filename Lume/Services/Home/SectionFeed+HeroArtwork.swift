@@ -122,7 +122,7 @@ extension SectionFeed {
         }
     }
 
-    private func heroArtworkRequest(_ hero: HeroItem) -> HeroArtworkRequest? {
+    func heroArtworkRequest(_ hero: HeroItem) -> HeroArtworkRequest? {
         // An override means this session already fetched the model's currently
         // stale fields; do not let a later feed loader issue the same request.
         guard heroPresentationOverrides[hero.id] == nil else { return nil }

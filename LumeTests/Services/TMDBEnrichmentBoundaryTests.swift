@@ -5,6 +5,32 @@ import Testing
 
 @MainActor
 struct TMDBEnrichmentBoundaryTests {
+    @Test func `hero and continue watching select artwork freshness before full detail freshness`() {
+        let feed = SectionFeed(surface: .home)
+        let movie = Movie(id: "freshness-movie", streamId: 1, name: "Movie")
+        let series = Series(id: "freshness-series", seriesId: 1, name: "Series")
+        movie.tmdbId = 123
+        series.tmdbId = 456
+        // Keep the distinct poster-backfill gate out of this date regression.
+        movie.posterPath = "/poster.jpg"
+        series.posterPath = "/poster.jpg"
+        for (artwork, details, requests) in [
+            (Date.distantPast as Date?, Date.now as Date?, true),
+            (Date.now, Date.distantPast, false),
+            (nil, Date.now, false),
+            (nil, Date.distantPast, true)
+        ] {
+            movie.tmdbArtworkEnrichedAt = artwork
+            series.tmdbArtworkEnrichedAt = artwork
+            movie.tmdbEnrichedAt = details
+            series.tmdbEnrichedAt = details
+            #expect((feed.heroArtworkRequest(.movie(movie, backdropURL: nil, logoURL: nil, overview: "")) != nil) == requests)
+            #expect((feed.heroArtworkRequest(.series(series, backdropURL: nil, logoURL: nil, overview: "")) != nil) == requests)
+            #expect((ContinueWatchingArtworkRequest(.movie(movie)) != nil) == requests)
+            #expect((ContinueWatchingArtworkRequest(.series(series)) != nil) == requests)
+        }
+    }
+
     @Test func `scalar enrichment in another context preserves displayed movie and series cast`() throws {
         try OnDiskCatalogStore.withContext { viewContext in
             let movie = Movie(id: "movie", streamId: 1, name: "Movie")

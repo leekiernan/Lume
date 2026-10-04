@@ -101,6 +101,22 @@ struct ChannelEPGLoadMachineTests {
         }
     }
 
+    @Test func `now and next remain visible across a full guide sync and reject its stale response`() throws {
+        var machine = ChannelEPGLoadMachine()
+        let original = ChannelEPG(current: pair.current, next: EPGSlot(title: "Next", start: now, end: now.addingTimeInterval(3600)))
+        let initial = try begin(&machine, key(["a"]))
+        machine.finish(initial, with: ["a": original])
+        let duringSync = try begin(&machine, key(["a"], syncing: true))
+        #expect(machine.snapshot(for: scope()) == ["a": original])
+        let afterSync = try begin(&machine, key(["a"], syncing: false))
+        #expect(machine.snapshot(for: scope()) == ["a": original])
+        let stale = machine.finish(duringSync, with: [:])
+        #expect(!stale)
+        #expect(machine.snapshot(for: scope()) == ["a": original])
+        machine.finish(afterSync, with: ["a": pair])
+        #expect(machine.snapshot(for: scope()) == ["a": pair])
+    }
+
     @Test func `profile or playlist changes hide old pairs before the replacement starts`() throws {
         for replacement in [scope(visibility: "child"), scope(playlist: "other-")] {
             var machine = ChannelEPGLoadMachine()
