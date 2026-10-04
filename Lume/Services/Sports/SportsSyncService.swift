@@ -524,7 +524,7 @@ final class SportsSyncService {
             ids.append(leagueId)
         }
         for teamId in followSource.followedTeamIds {
-            guard let leagueId = Self.leagueId(fromTeamID: teamId) else { continue }
+            guard let leagueId = SportsTeam.leagueID(fromTeamID: teamId) else { continue }
             if seen.insert(leagueId).inserted { ids.append(leagueId) }
         }
         return ids

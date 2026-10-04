@@ -22,7 +22,7 @@ enum SportsRailPlanner {
         for follow in follows {
             let leagueId = follow.kind == .league
                 ? follow.key
-                : SportsHubView.leagueId(fromTeamKey: follow.key)
+                : SportsTeam.leagueID(fromTeamID: follow.key)
             if let leagueId, !result.contains(leagueId) { result.append(leagueId) }
         }
         return result
@@ -45,7 +45,7 @@ enum SportsRailPlanner {
             for fixture in snapshot.fixtures.flatMap({ $0.expandedBySession(now: now) })
                 where isInWindow(fixture, start: start, end: end)
             {
-                if involvesFollowedTeam(fixture, followedTeamKeys: followedTeamKeys) {
+                if fixture.involves(anyOf: followedTeamKeys) {
                     if seen.insert(fixture.id).inserted { teamFixtures.append(fixture) }
                 } else if leagueFollowed {
                     if seen.insert(fixture.id).inserted { leagueFixtures.append(fixture) }
@@ -88,7 +88,7 @@ enum SportsRailPlanner {
             for fixture in snapshot.fixtures.flatMap({ $0.expandedBySession(now: now) })
                 where isInWindow(fixture, start: start, end: end)
             {
-                if leagueFollowed || involvesFollowedTeam(fixture, followedTeamKeys: followedTeamKeys) {
+                if leagueFollowed || fixture.involves(anyOf: followedTeamKeys) {
                     return true
                 }
             }
@@ -103,11 +103,5 @@ enum SportsRailPlanner {
         // Live, or on at some point in the window — a card that started last
         // night and ran past midnight still counts for today.
         fixture.isInProgress || fixture.isOn(during: start ..< end)
-    }
-
-    private static func involvesFollowedTeam(_ fixture: SportsFixture, followedTeamKeys: Set<String>) -> Bool {
-        if let home = fixture.home?.team, followedTeamKeys.contains(home.id) { return true }
-        if let away = fixture.away?.team, followedTeamKeys.contains(away.id) { return true }
-        return false
     }
 }

@@ -229,7 +229,7 @@ struct ManageTeamsSheet: View {
     }
 
     private func leagueName(forTeamKey key: String) -> String {
-        guard let leagueId = SportsHubView.leagueId(fromTeamKey: key) else { return "" }
+        guard let leagueId = SportsTeam.leagueID(fromTeamID: key) else { return "" }
         return SportsCatalog.league(id: leagueId)?.name ?? ""
     }
 

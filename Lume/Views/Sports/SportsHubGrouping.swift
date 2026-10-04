@@ -92,8 +92,8 @@ struct SportsHubGrouping {
     }
 
     /// "espn:soccer/eng.1:363" → "espn:soccer/eng.1".
-    static func leagueId(ofTeam key: String) -> String {
-        key.range(of: ":", options: .backwards).map { String(key[..<$0.lowerBound]) } ?? key
+    nonisolated static func leagueId(ofTeam key: String) -> String {
+        SportsTeam.leagueID(fromTeamID: key) ?? key
     }
 
     /// Every followed league (plus followed teams' leagues), for the sidebar.
@@ -106,9 +106,7 @@ struct SportsHubGrouping {
     }
 
     func involvesFollowedTeam(_ fixture: SportsFixture) -> Bool {
-        if let home = fixture.home?.team, followedTeamKeys.contains(home.id) { return true }
-        if let away = fixture.away?.team, followedTeamKeys.contains(away.id) { return true }
-        return false
+        fixture.involves(anyOf: followedTeamKeys)
     }
 
     private func involves(_ fixture: SportsFixture, team key: String) -> Bool {

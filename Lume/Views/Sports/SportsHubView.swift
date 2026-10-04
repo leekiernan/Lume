@@ -426,15 +426,6 @@ struct SportsHubView: View {
     private var scopeTitle: String {
         grouping.scopeTitle
     }
-
-    // MARK: - Static helpers
-
-    /// The league id embedded in a team follow key ("espn:soccer/ger.1:132" →
-    /// "espn:soccer/ger.1").
-    static func leagueId(fromTeamKey key: String) -> String? {
-        guard let separator = key.lastIndex(of: ":"), separator > key.startIndex else { return nil }
-        return String(key[..<separator])
-    }
 }
 
 #Preview {
