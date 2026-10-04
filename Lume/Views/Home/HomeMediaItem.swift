@@ -104,6 +104,12 @@ enum HomeMediaItem: Identifiable, Hashable {
 /// `ChannelEPGLoader` performs for the Live TV cards: one bounded fetch for the
 /// whole screen, plain values out.
 enum SeriesResumeLoader {
+    nonisolated static func loadAsync(container: ModelContainer) async -> [String: Double] {
+        await Task.detached(priority: .userInitiated) {
+            load(container: container)
+        }.value
+    }
+
     nonisolated static func load(container: ModelContainer) -> [String: Double] {
         let context = ModelContext(container)
         // Scoped by watch state, not by the series on screen: `watchProgress`

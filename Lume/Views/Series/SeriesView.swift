@@ -38,7 +38,11 @@ struct SeriesView: View {
     /// Resume fractions for partially-watched series, resolved off the main
     /// thread so the rails don't fault each series' episodes — see
     /// `SeriesResumeLoader`.
-    @State private var seriesResume: [String: Double] = [:]
+    @State private var resumeLoader = SeriesResumeLoadMachine()
+    private var seriesResume: [String: Double] {
+        resumeLoader.snapshot(for: seriesResumeKey).fractions
+    }
+
     /// The active playlist's most recently watched series. Only its stamp is
     /// read, to key the resume lookup — see `seriesResumeKey`.
     @Query private var newestWatchedSeries: [Series]
@@ -140,21 +144,15 @@ struct SeriesView: View {
                 genres = await GenreDerivation.seriesGenres(in: modelContext.container, playlistPrefix: playlistPrefix, restriction: restriction)
             }
             .task(id: seriesResumeKey) {
-                let container = modelContext.container
-                seriesResume = await Task.detached(priority: .userInitiated) {
-                    SeriesResumeLoader.load(container: container)
-                }.value
+                await resumeLoader.load(for: seriesResumeKey, in: modelContext.container)
             }
     }
 
-    /// Identity of the series resume lookup, keyed like Home's: resuming or
-    /// finishing an episode stamps its series' `lastWatchedDate`
-    /// (`WatchProgressWriter`), so the newest stamp moves whenever a resume bar
-    /// would. Keyed on the playlist alone, the bars never refreshed after
-    /// watching something from this tab.
-    private var seriesResumeKey: String {
-        let newest = newestWatchedSeries.first?.lastWatchedDate?.timeIntervalSince1970 ?? 0
-        return "resume-\(newest)-\(playlistPrefix)"
+    /// The same scope/publication contract as Home, without growing the
+    /// one-row observation query into a second watch-rail query.
+    private var seriesResumeKey: SeriesResumeLoadKey {
+        SeriesResumeLoadKey(playlistPrefix: playlistPrefix.isEmpty ? nil : playlistPrefix,
+                            restriction: restriction, watched: newestWatchedSeries)
     }
 
     /// The same slideshow Home shows, filtered to this page's medium, above the

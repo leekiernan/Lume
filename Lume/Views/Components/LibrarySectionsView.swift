@@ -73,27 +73,11 @@ struct LibrarySectionsView<CollectionRow: View>: View {
                 row(for: ref)
             }
         }
-        .task(id: catalogKey) {
-            feed.heroRef = heroRef
-            feed.update(context: feedContext)
-            await feed.loadTrending(cacheKey: catalogKey)
-        }
-        .task(id: watchlistKey(.trakt)) {
-            feed.heroRef = heroRef
-            feed.update(context: feedContext)
-            await feed.loadWatchlist(.trakt, cacheKey: watchlistKey(.trakt))
-        }
-        .task(id: watchlistKey(.simkl)) {
-            feed.heroRef = heroRef
-            feed.update(context: feedContext)
-            await feed.loadWatchlist(.simkl, cacheKey: watchlistKey(.simkl))
-        }
-        .task(id: customSectionsKey) {
-            seedDefaultHeroIfNeeded()
-            feed.heroRef = heroRef
-            feed.update(context: feedContext)
-            await feed.loadCustomSections(cacheKey: customSectionsCacheKey, sections: visibleCustomSections)
-        }
+        .sectionFeedLoads(
+            feed: feed, configuration: .init(context: feedContext, catalogKey: catalogKey,
+                                             heroRef: heroRef, heroSelection: heroSectionRaw, customSections: visibleCustomSections,
+                                             traktAccount: trakt.username, prepareCustomSections: seedDefaultHeroIfNeeded)
+        )
     }
 
     // MARK: - Rows
@@ -174,26 +158,6 @@ struct LibrarySectionsView<CollectionRow: View>: View {
                 animationNamespace: animationNamespace
             )
         }
-    }
-
-    // MARK: - Load keys
-
-    private func watchlistKey(_ provider: WatchlistProvider) -> String {
-        "watchlist-\(provider)-\(surface.rawValue)-\(provider.account ?? "disconnected")-\(catalogKey)"
-    }
-
-    /// Includes the promoted section: choosing a hero changes neither the
-    /// catalog nor the section list, so without it the load never re-runs and
-    /// the feed is never told which section to build the hero from.
-    private var customSectionsKey: String {
-        "\(customSectionsCacheKey)-hero-\(heroSectionRaw)"
-    }
-
-    /// Folds in the Trakt account when a row reads from Trakt — see
-    /// `CustomHomeSections.accountSignature`.
-    private var customSectionsCacheKey: String {
-        "custom-\(catalogKey)-\(CustomHomeSections.contentSignature(visibleCustomSections))"
-            + CustomHomeSections.accountSignature(visibleCustomSections, traktUsername: trakt.username)
     }
 
     /// The promoted row, if this surface has one and it is still switched on.
