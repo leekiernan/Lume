@@ -30,7 +30,7 @@ extension SettingsView {
                     } label: {
                         IntegrationSettingsLabel(
                             title: "Trakt", symbol: "arrow.trianglehead.2.clockwise.rotate.90.circle",
-                            detail: trakt.isConnected ? (trakt.username.map { "@\($0)" } ?? "Connected") : nil
+                            detail: trakt.isConnected ? (trakt.username.map { Text(verbatim: "@\($0)") } ?? Text("Connected")) : nil
                         )
                     }
                 }
@@ -41,7 +41,7 @@ extension SettingsView {
                     } label: {
                         IntegrationSettingsLabel(
                             title: "Simkl", symbol: "arrow.trianglehead.2.clockwise.rotate.90.circle",
-                            detail: simkl.isConnected ? (simkl.username.map { "@\($0)" } ?? "Connected") : nil
+                            detail: simkl.isConnected ? (simkl.username.map { Text(verbatim: "@\($0)") } ?? Text("Connected")) : nil
                         )
                     }
                 }
@@ -50,7 +50,7 @@ extension SettingsView {
                     NavigationLink {
                         OpenSubtitlesIntegrationView()
                     } label: {
-                        IntegrationSettingsLabel(title: "OpenSubtitles", symbol: "captions.bubble", detail: openSubtitles.username)
+                        IntegrationSettingsLabel(title: "OpenSubtitles", symbol: "captions.bubble", detail: openSubtitles.username.map { Text(verbatim: $0) })
                     }
                 }
             } header: {
@@ -83,12 +83,13 @@ extension SettingsView {
     private struct IntegrationSettingsLabel: View {
         let title: LocalizedStringKey
         let symbol: String
-        let detail: String?
+        /// A username is shown as is; the "Connected" fallback is localised.
+        let detail: Text?
 
         var body: some View {
             LabeledContent {
                 if let detail {
-                    Text(detail).font(.caption).foregroundStyle(.secondary)
+                    detail.font(.caption).foregroundStyle(.secondary)
                 }
             } label: {
                 Label(title, systemImage: symbol)
