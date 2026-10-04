@@ -16,12 +16,12 @@ struct DetailArtworkPolicyTests {
         #expect(DetailArtworkSource(backdropURL: nil, posterFallbackURL: nil).url == nil)
     }
 
-    @Test func `HD and UHD detail backdrops retain output resolution with separate cache identities`() throws {
+    @Test func `HD keeps its output resolution and UHD stops at the detail budget, with separate cache identities`() throws {
         let source = DetailArtworkSource(backdropURL: backdrop, posterFallbackURL: nil)
         let highDefinition = try #require(DetailArtworkPolicy.rendition(for: source, width: 1920, height: 900, displayScale: 1))
         let uhd = try #require(DetailArtworkPolicy.rendition(for: source, width: 1920, height: 900, displayScale: 2))
         #expect(highDefinition.decodeSizeInPixels == 1920)
-        #expect(uhd.decodeSizeInPixels == 3840)
+        #expect(uhd.decodeSizeInPixels == DetailArtworkPolicy.maximumPixelEdge)
         #expect(highDefinition.url?.path == "/t/p/original/backdrop.jpg")
         #expect(uhd.url?.query == "test=1")
         let url = try #require(uhd.url)
@@ -32,8 +32,8 @@ struct DetailArtworkPolicyTests {
     @Test func `fill crop and display scale determine the bounded rendition`() throws {
         let source = DetailArtworkSource(backdropURL: backdrop, posterFallbackURL: nil)
         let cropped = try #require(DetailArtworkPolicy.rendition(for: source, width: 390, height: 500, displayScale: 3))
-        // 500pt × 16:9 × 3 ≈ 2667px, rounded up to the next ladder width.
-        #expect(cropped.decodeSizeInPixels == 3840)
+        // 500pt × 16:9 × 3 ≈ 2667px: over the budget, so capped.
+        #expect(cropped.decodeSizeInPixels == DetailArtworkPolicy.maximumPixelEdge)
         #expect(abs(cropped.decodeSizeInPoints * 3 - cropped.decodeSizeInPixels) < 0.001)
         let small = try #require(DetailArtworkPolicy.rendition(for: source, width: 600, height: 300, displayScale: 1))
         #expect(small.url?.path == "/t/p/w780/backdrop.jpg")

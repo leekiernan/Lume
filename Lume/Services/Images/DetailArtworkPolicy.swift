@@ -15,17 +15,20 @@ nonisolated struct DetailArtworkSource {
 }
 
 nonisolated enum DetailArtworkPolicy {
-    /// Supports UHD landscape output, while bounding extreme portrait fill
-    /// crops and large Retina windows. This is a longest-edge pixel budget,
-    /// not a device/model setting or a change to the hero's layout.
-    static let maximumPixelEdge: CGFloat = 4096
+    /// Longest-edge decode budget. A detail backdrop sits under a heavy
+    /// scrim with the title and actions over it, so it stops short of UHD: a
+    /// 4K decode held ~33 MB in the image memory cache per detail page, and
+    /// push chains (detail → similar → detail) evicted the posters around
+    /// them. 2560px is ~15 MB, and shows on a 4K TV scaled 1.5×. Not a device
+    /// setting, and the Home hero keeps its own budget.
+    static let maximumPixelEdge: CGFloat = 2560
 
     /// Decode widths the requirement is rounded up to. Without them every
     /// point of a window resize, Stage Manager change or rotation was a new
     /// decode size, so a new cache key: the backdrop dropped to its
     /// placeholder and decoded again each time. Common output widths, so HD
-    /// and UHD screens land exactly on 1920 and 3840.
-    static let decodeLadder: [CGFloat] = [320, 480, 640, 960, 1280, 1920, 2560, 3840, maximumPixelEdge]
+    /// screens land exactly on 1920.
+    static let decodeLadder: [CGFloat] = [320, 480, 640, 960, 1280, 1920, maximumPixelEdge]
 
     static func rendition(
         for source: DetailArtworkSource, width: CGFloat, height: CGFloat, displayScale: CGFloat
