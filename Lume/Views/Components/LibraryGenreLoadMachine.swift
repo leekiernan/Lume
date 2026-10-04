@@ -14,14 +14,14 @@ struct LibraryGenreLoadKey: Hashable {
 final class LibraryGenreLoadMachine {
     private var publishedKey: LibraryGenreLoadKey?
     private var values: [String] = []
-    @ObservationIgnored private var owner = UUID()
+    @ObservationIgnored private var owner = RequestToken()
 
     func snapshot(for key: LibraryGenreLoadKey) -> [String] {
         publishedKey == key ? values : []
     }
 
     func load(for key: LibraryGenreLoadKey, fetch: () async -> [String]) async {
-        let token = UUID()
+        let token = RequestToken()
         owner = token
         let result = await fetch()
         guard !Task.isCancelled, owner == token else { return }

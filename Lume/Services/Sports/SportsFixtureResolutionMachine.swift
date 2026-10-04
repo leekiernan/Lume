@@ -15,10 +15,9 @@ import Foundation
 
 nonisolated struct SportsFixtureResolutionMachine: Equatable {
     struct Request: Equatable {
-        fileprivate let generation: UInt
+        fileprivate let token = RequestToken()
     }
 
-    private var generation: UInt = 0
     private var active: Request?
     private var visibilityToken: String?
     /// Fixture id → the channels carrying it, as last published.
@@ -40,7 +39,6 @@ nonisolated struct SportsFixtureResolutionMachine: Equatable {
     /// Starts a request for `fixtures`, superseding any in flight. With none
     /// to show, clears the answer and returns `nil`: there is nothing to run.
     mutating func begin(_ fixtures: [SportsFixture], visibilityToken: String = "") -> Request? {
-        generation &+= 1
         if self.visibilityToken != visibilityToken {
             resolved = [:]
         }
@@ -50,7 +48,7 @@ nonisolated struct SportsFixtureResolutionMachine: Equatable {
             resolved = [:]
             return nil
         }
-        let request = Request(generation: generation)
+        let request = Request()
         active = request
         return request
     }

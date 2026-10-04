@@ -17,8 +17,8 @@ final class CatalogCategoryLoadMachine<Item> {
     private(set) var key: CatalogCategoryKey?
     private(set) var items: [Item] = []
     private(set) var pagination = PaginationMachine()
-    private var importToken: UUID?
-    @ObservationIgnored private var generation = UUID()
+    private var importToken: RequestToken?
+    @ObservationIgnored private var generation = RequestToken()
     @ObservationIgnored private var loadedInitialPage = false
     let pageSize: Int
 
@@ -31,7 +31,7 @@ final class CatalogCategoryLoadMachine<Item> {
     }
 
     func invalidate() {
-        generation = UUID()
+        generation = RequestToken()
         importToken = nil
         key = nil
         items = []
@@ -42,7 +42,7 @@ final class CatalogCategoryLoadMachine<Item> {
     func open(category: Category, key nextKey: CatalogCategoryKey, fetch: @escaping Fetch, importContent: @escaping Import) async {
         if key != nextKey {
             key = nextKey
-            generation = UUID()
+            generation = RequestToken()
             importToken = nil
             items = []
             loadedInitialPage = false
@@ -95,16 +95,16 @@ final class CatalogCategoryLoadMachine<Item> {
         items = rows
     }
 
-    private func runImport(_ category: Category, playlist: Playlist, owner: UUID, action: Import) async -> Bool {
+    private func runImport(_ category: Category, playlist: Playlist, owner: RequestToken, action: Import) async -> Bool {
         guard isCurrent(owner), !isImporting else { return false }
-        let token = UUID()
+        let token = RequestToken()
         importToken = token
         defer { if importToken == token { importToken = nil } }
         do { try await action(category, playlist) } catch { /* Existing best-effort import contract. */ }
         return isCurrent(owner)
     }
 
-    private func isCurrent(_ owner: UUID) -> Bool {
+    private func isCurrent(_ owner: RequestToken) -> Bool {
         generation == owner && !Task.isCancelled
     }
 

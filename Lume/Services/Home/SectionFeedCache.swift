@@ -107,15 +107,15 @@ final class SectionFeedCache {
 @MainActor
 final class SectionFeedLoadGate {
     struct Request {
-        fileprivate let id: UUID
+        fileprivate let id: RequestToken
         fileprivate let revision: UInt
     }
 
-    private var current: [SectionFeedSource: UUID] = [:]
+    private var current: [SectionFeedSource: RequestToken] = [:]
     private(set) var revision: UInt = 0
 
     func begin(_ feed: SectionFeedSource) -> Request {
-        let id = UUID()
+        let id = RequestToken()
         current[feed] = id
         return Request(id: id, revision: revision)
     }

@@ -2,6 +2,19 @@
 import Testing
 
 struct DetailLoadStateTests {
+    @Test func `one detail lane cannot consume another lane's request`() {
+        var initial = DetailLoadState(isBlocking: true)
+        var optional = DetailLoadState()
+        let request = initial.begin()
+        let other = optional.begin()
+        let accepted4 = initial.finish(other)
+        #expect(!accepted4)
+        #expect(initial.owns(request))
+        let accepted5 = optional.finish(request)
+        #expect(!accepted5)
+        #expect(optional.owns(other))
+    }
+
     @Test func `a new title lane cannot reuse a previous request identity`() {
         var state = DetailLoadState()
         let previous = state.begin()

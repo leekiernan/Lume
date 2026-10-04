@@ -36,7 +36,7 @@ final class SeriesResumeLoadMachine {
     }
 
     private struct Request: Equatable {
-        let id = UUID()
+        let id = RequestToken()
         let key: SeriesResumeLoadKey
     }
 

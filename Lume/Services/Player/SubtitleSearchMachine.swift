@@ -12,7 +12,7 @@ nonisolated enum SubtitleSearchStatus: Equatable {
 /// spend a second download or invalidate a file the viewer already selected.
 nonisolated struct SubtitleSearchMachine {
     struct Request: Equatable {
-        fileprivate let generation: UInt
+        fileprivate let token = RequestToken()
     }
 
     private enum SearchState {
@@ -23,7 +23,6 @@ nonisolated struct SubtitleSearchMachine {
         case failed(String)
     }
 
-    private var generation: UInt = 0
     private var state: SearchState = .idle
     private enum DownloadState {
         case idle
@@ -68,8 +67,7 @@ nonisolated struct SubtitleSearchMachine {
             results = []
         }
         self.mediaID = mediaID
-        generation &+= 1
-        let request = Request(generation: generation)
+        let request = Request()
         state = supported ? .loading(request) : .unsupported
         if !supported { results = [] }
         return request
@@ -92,8 +90,7 @@ nonisolated struct SubtitleSearchMachine {
 
     mutating func beginDownload(_ subtitle: OnlineSubtitle) -> Request? {
         guard downloadingID == nil else { return nil }
-        generation &+= 1
-        let request = Request(generation: generation)
+        let request = Request()
         downloadState = .downloading(request, subtitleID: subtitle.id)
         return request
     }
@@ -107,7 +104,6 @@ nonisolated struct SubtitleSearchMachine {
 
     /// Dismissal rejects late success, error, and download presentation callbacks.
     mutating func invalidate() {
-        generation &+= 1
         state = .idle
         downloadState = .idle
     }

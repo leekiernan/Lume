@@ -72,4 +72,27 @@ struct SectionFeedCacheTests {
         }
         #expect(WatchlistProvider(section: .trendingMovies) == nil)
     }
+
+    @Test func `requests from a recreated gate cannot enter the same source lane`() {
+        let old = SectionFeedLoadGate()
+        let oldRequest = old.begin(.trending)
+        let gate = SectionFeedLoadGate()
+        let current = gate.begin(.trending)
+        #expect(!gate.isCurrent(oldRequest, for: .trending))
+        #expect(gate.isCurrent(current, for: .trending))
+        gate.invalidateAll()
+        let replacement = gate.begin(.trending)
+        #expect(!gate.isCurrent(current, for: .trending))
+        #expect(gate.isCurrent(replacement, for: .trending))
+    }
+
+    @Test func `a cancelled task cannot publish its otherwise current feed request`() async {
+        let gate = SectionFeedLoadGate()
+        let request = gate.begin(.trending)
+        let check = Task { gate.isCurrent(request, for: .trending) }
+        check.cancel()
+        let accepted = await check.value
+        #expect(!accepted)
+        #expect(gate.isCurrent(request, for: .trending))
+    }
 }

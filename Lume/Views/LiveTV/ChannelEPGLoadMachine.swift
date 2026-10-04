@@ -18,13 +18,12 @@ nonisolated struct ChannelEPGLoadMachine {
     }
 
     struct Request: Equatable {
-        fileprivate let generation: UInt
+        fileprivate let token = RequestToken()
         let channelIDs: [String]
         fileprivate let extending: Bool
         fileprivate let startedAt: Date
     }
 
-    private var generation: UInt = 0
     private var active: Request?
     private var scope: Scope?
     private var resolved: [String: ChannelEPG] = [:]
@@ -36,7 +35,6 @@ nonisolated struct ChannelEPGLoadMachine {
     }
 
     mutating func begin(_ key: Key, now: Date = Date()) -> Request? {
-        generation &+= 1
         active = nil
         if scope != key.scope {
             resolved = [:]
@@ -55,7 +53,7 @@ nonisolated struct ChannelEPGLoadMachine {
         let extending = age >= 0 && age < ChannelEPGLoader.snapshotLifetime
         let pending = extending ? channelIDs.subtracting(lookedUp) : channelIDs
         guard !pending.isEmpty else { return nil }
-        let request = Request(generation: generation, channelIDs: pending.sorted(), extending: extending, startedAt: now)
+        let request = Request(channelIDs: pending.sorted(), extending: extending, startedAt: now)
         active = request
         return request
     }

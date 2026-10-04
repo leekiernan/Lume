@@ -4,7 +4,7 @@ import Foundation
 /// machines own their distinct work; this only arbitrates request lifetimes.
 nonisolated struct DetailLoadState {
     struct Request: Equatable {
-        fileprivate let id = UUID()
+        fileprivate let token = RequestToken()
     }
 
     private enum State {

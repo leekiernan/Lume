@@ -11,7 +11,7 @@ nonisolated struct SportsHighlightsLoadMachine: Equatable {
     typealias Result = SportsHighlightsPipeline.Result
 
     struct Request: Equatable {
-        fileprivate let generation: UInt
+        fileprivate let token = RequestToken()
     }
 
     private enum State: Equatable {
@@ -20,7 +20,6 @@ nonisolated struct SportsHighlightsLoadMachine: Equatable {
         case content(Result)
     }
 
-    private var generation: UInt = 0
     private var state: State = .idle
     private var visibilityToken: String?
 
@@ -46,11 +45,10 @@ nonisolated struct SportsHighlightsLoadMachine: Equatable {
         return false
     }
 
-    /// Starts a new request. A fresh generation intentionally replaces an older
+    /// Starts a new request. A fresh identity intentionally replaces an older
     /// in-flight request: a profile/follow change must not wait for stale work.
     mutating func begin(visibilityToken: String = "") -> Request {
-        generation &+= 1
-        let request = Request(generation: generation)
+        let request = Request()
         let previous = self.visibilityToken == visibilityToken ? result : nil
         self.visibilityToken = visibilityToken
         state = .loading(request, previous)

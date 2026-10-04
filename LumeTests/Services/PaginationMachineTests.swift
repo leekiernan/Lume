@@ -2,6 +2,50 @@
 import Testing
 
 struct PaginationMachineTests {
+    @Test func `a same-offset retry cannot accept or abandon the failed attempt's request`() throws {
+        var machine = PaginationMachine()
+        machine.prepare(for: "collection")
+        let begun14 = machine.beginLoading()
+        let failed = try #require(begun14)
+        let accepted6 = machine.abandon(failed)
+        #expect(accepted6)
+        let begun15 = machine.beginLoading()
+        let retry = try #require(begun15)
+        #expect(retry.offset == failed.offset)
+        #expect(retry != failed)
+        let accepted7 = machine.finish(failed, scanned: 100, hasMore: false)
+        #expect(!accepted7)
+        let accepted8 = machine.abandon(failed)
+        #expect(!accepted8)
+        #expect(machine.isLoading)
+        let accepted9 = machine.finish(retry, scanned: 20, hasMore: false)
+        #expect(accepted9)
+        #expect(machine.nextOffset == 20)
+    }
+
+    @Test func `recreating a collection cannot reuse its old cursor request`() throws {
+        var machine = PaginationMachine()
+        machine.prepare(for: "same-collection")
+        let begun16 = machine.beginLoading()
+        let old = try #require(begun16)
+        machine = PaginationMachine()
+        machine.prepare(for: "same-collection")
+        let begun17 = machine.beginLoading()
+        let current = try #require(begun17)
+        #expect(old != current)
+        let accepted10 = machine.finish(old, scanned: 100, hasMore: false)
+        #expect(!accepted10)
+        let accepted11 = machine.abandon(old)
+        #expect(!accepted11)
+        #expect(machine.isLoading)
+        #expect(machine.nextOffset == 0)
+        let accepted12 = machine.finish(current, scanned: 20, hasMore: false)
+        #expect(accepted12)
+        let accepted13 = machine.finish(current, scanned: 20, hasMore: false)
+        #expect(!accepted13)
+        #expect(machine.nextOffset == 20)
+    }
+
     @Test func `preparing a new query resets cursor but preserving a query does not`() throws {
         var machine = PaginationMachine()
 

@@ -3,6 +3,22 @@ import Foundation
 import Testing
 
 struct ChannelEPGLoadMachineTests {
+    @Test func `recreated guide owner rejects old completion and cancellation at the same scope`() throws {
+        var machine = ChannelEPGLoadMachine()
+        let old = try begin(&machine, key(["a"]))
+        machine = ChannelEPGLoadMachine()
+        let current = try begin(&machine, key(["a"]))
+        #expect(old != current)
+        machine.cancel(old)
+        let accepted1 = machine.finish(old, with: ["a": pair])
+        #expect(!accepted1)
+        let accepted2 = machine.finish(current, with: ["a": pair])
+        #expect(accepted2)
+        let accepted3 = machine.finish(current, with: [:])
+        #expect(!accepted3)
+        #expect(machine.snapshot(for: scope()) == ["a": pair])
+    }
+
     private let now = Date(timeIntervalSince1970: 1_800_000_000)
     private let pair = ChannelEPG(current: EPGSlot(title: "On air", start: .distantPast, end: .distantFuture), next: nil)
 

@@ -19,7 +19,7 @@ final class CatalogGenreLoadMachine<Item> {
     private(set) var key: CatalogGenreKey?
     private(set) var items: [Item] = []
     private(set) var pagination = PaginationMachine()
-    @ObservationIgnored private var owner = UUID()
+    @ObservationIgnored private var owner = RequestToken()
     @ObservationIgnored private var nextTask: Task<Void, Never>?
     let pageSize: Int
 
@@ -50,7 +50,7 @@ final class CatalogGenreLoadMachine<Item> {
     }
 
     func cancel() {
-        owner = UUID()
+        owner = RequestToken()
         nextTask?.cancel()
         nextTask = nil
         // Preserve the visible snapshot and retry the unfinished offset.
