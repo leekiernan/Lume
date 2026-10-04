@@ -68,7 +68,10 @@ extension ContentSyncManager {
     /// left: anything else (a recreated store, a partly deleted playlist) means
     /// the bytes may match while the catalog does not.
     func trustedXtreamDigest(_ endpoint: XtreamDigestStore.Endpoint, playlistId: UUID, reuseUnchanged: Bool) -> String? {
-        guard reuseUnchanged, let entry = XtreamDigestStore.entry(playlistId: playlistId, endpoint: endpoint) else {
+        guard reuseUnchanged,
+              !SweepSkipDefaults.isHoldingBack(playlistId: playlistId, kind: endpoint.sweepKind),
+              let entry = XtreamDigestStore.entry(playlistId: playlistId, endpoint: endpoint)
+        else {
             return nil
         }
         guard storedRowCount(endpoint, playlistId: playlistId) == entry.rowCount else {
