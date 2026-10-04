@@ -119,7 +119,11 @@ struct KSPlayerEngineView: View {
     /// (so the reconnector never engages, and the startup watchdog is already
     /// disarmed). See `handleState`.
     @State var stallWatchdog: Task<Void, Never>?
-    @State var isControlsVisible = true
+    @State var chrome = PlayerChromeController()
+    var isControlsVisible: Bool {
+        chrome.isVisible
+    }
+
     @Environment(PlayerControlsBridge.self) var remoteBridge: PlayerControlsBridge?
 
     /// Whether the controls are on screen — see `PlayerChrome`.
@@ -139,8 +143,6 @@ struct KSPlayerEngineView: View {
     /// PiP state and its observer task are `internal` (not `private`) so the
     /// PiP observation in `KSPlayerEngineView+Playback.swift` can drive them.
     @State var isPipActive = false
-    @State var hideTask: Task<Void, Never>?
-    @State private var hoverHideTask: Task<Void, Never>?
     @State var pipObservationTask: Task<Void, Never>?
     #if os(macOS)
         /// Drives PiP on macOS in place of the layer's `isPipActive`, whose
@@ -177,12 +179,11 @@ struct KSPlayerEngineView: View {
         @State var videoInfo: PlayerVideoInfo?
     #endif
 
-    // `dismiss` / `autoHideInterval` are internal so the shared
+    // `dismiss` is internal so the shared
     // transport actions in `KSPlayerEngineView+Actions.swift` can reach them.
     @Environment(\.dismiss) var dismiss
     @Environment(\.scenePhase) private var scenePhase
 
-    let autoHideInterval: TimeInterval = 4
     /// How long to wait for the first frame before declaring a stream dead. The
     /// engine legitimately sits in `.preparing`/`.buffering` for ~10–20s on a
     /// healthy open; the reconnect budget (~31s of bounded backoff) usually
@@ -324,6 +325,7 @@ struct KSPlayerEngineView: View {
             .subtitleSearch(isPresented: $isSearchingSubtitles, media: media, onPick: applyExternalSubtitle)
             .preferredColorScheme(.dark)
             .onAppear {
+                chrome.activate()
                 loadCatchupRouter()
                 engine.attach(coordinator: coordinator, catchupRouter: catchupRouter)
                 attachNowPlayingTransport()
@@ -331,7 +333,7 @@ struct KSPlayerEngineView: View {
                 startStartupWatchdog()
             }
             .onDisappear {
-                hideTask?.cancel()
+                chrome.deactivate()
                 reconnector.cancel()
                 cancelStartupWatchdog()
                 cancelStallWatchdog()
@@ -370,45 +372,25 @@ struct KSPlayerEngineView: View {
         }
 
         private var tapCatcher: some View {
-            // tvOS has no touch surface: drive the overlay from the Siri remote.
-            // The catcher only takes focus while controls are hidden, so the
-            // control buttons stay reachable otherwise.
-            Button(action: showControls) {
-                Color.clear.contentShape(Rectangle())
-            }
-            .buttonStyle(PlayerInvisibleButtonStyle())
-            // Yield focus to the failure overlay's buttons when a stream dies.
-            // Only while the controls are actually drawn (from the first frame):
-            // until then this is what hears the remote, so a second surf press
-            // lands while the channel is still starting.
-            .disabled(drawsControls || isChannelBrowserOpen || loadFailed)
-            .focused($catcherFocused)
-            .tvRemoteMoveCommand { direction in
-                // Watching live TV with the controls hidden, left opens the
-                // channel browser, up/down surf adjacent channels and right
-                // recalls the last channel watched. Any other move summons
-                // the controls.
-                if media.isLive, direction == .left {
-                    openChannelBrowser()
-                } else if media.isLive, direction == .up || direction == .down || direction == .right {
-                    switchLiveChannel(direction)
-                } else {
-                    showControls()
-                }
-            }
+            #if os(tvOS)
+                PlayerTapCatcher(
+                    isLive: media.isLive, controlsDrawn: drawsControls,
+                    browserOpen: isChannelBrowserOpen, failed: loadFailed,
+                    focused: $catcherFocused, showControls: showControls,
+                    openBrowser: openChannelBrowser, surf: switchLiveChannel
+                )
+            #endif
         }
 
         func showControls() {
-            guard !isControlsVisible else { resetHideTimer(); return }
-            withAnimation(.easeInOut(duration: 0.2)) { isControlsVisible = true }
+            chrome.show()
             scheduleHide()
         }
 
         /// Dismiss the controls overlay (Menu button when no panel is open). A
         /// second Menu press, with the controls hidden, dismisses the player.
         private func hideControls() {
-            hideTask?.cancel()
-            withAnimation(.easeInOut(duration: 0.2)) { isControlsVisible = false }
+            chrome.hide()
         }
 
         private func handleMenuPress() {
@@ -429,7 +411,7 @@ struct KSPlayerEngineView: View {
         private func setPanelOpen(_ open: Bool) {
             isPanelOpen = open
             if open {
-                hideTask?.cancel()
+                chrome.suspend()
             } else {
                 resetHideTimer()
             }
@@ -472,6 +454,8 @@ struct KSPlayerEngineView: View {
                 // only video — this overlay renders those parts on screen.
                 KSSubtitleOverlay(subtitleModel: coordinator.subtitleModel)
 
+                PlayerTapCatcher(toggleControls: toggleControls)
+
                 // Hold the controls back until the stream starts, so the loading
                 // indicator stands in for a player that would otherwise look
                 // paused behind its Play button.
@@ -499,6 +483,7 @@ struct KSPlayerEngineView: View {
             .subtitleSearch(isPresented: $isSearchingSubtitles, media: media, onPick: applyExternalSubtitle)
             .preferredColorScheme(.dark)
             .onAppear {
+                chrome.activate()
                 loadCatchupRouter()
                 attachNowPlayingTransport()
                 scheduleHide()
@@ -506,8 +491,7 @@ struct KSPlayerEngineView: View {
                 startStartupWatchdog()
             }
             .onDisappear {
-                hideTask?.cancel()
-                hoverHideTask?.cancel()
+                chrome.deactivate()
                 pipObservationTask?.cancel()
                 #if os(macOS)
                     macPip.stop(restoringWindow: false)
@@ -519,6 +503,7 @@ struct KSPlayerEngineView: View {
                 NowPlayingService.shared.detachTransport(owner: coordinator)
                 coordinator.resetPlayer()
             }
+            .onChange(of: isPlaying) { _, _ in resetHideTimer() }
             .onChange(of: media.id) { _, _ in
                 // Same reset as tvOS: re-arms the startup watchdog and raises
                 // the spinner until the new stream's first frame.
@@ -530,32 +515,9 @@ struct KSPlayerEngineView: View {
                 // its decoder session — strongly for as long as it runs).
                 observePipState()
             }
-            .onTapGesture {
-                toggleControls()
-            }
             #if os(macOS)
             .onChange(of: macPip.isActive) { _, active in isPipActive = active }
-            .onContinuousHover(coordinateSpace: .local) { phase in
-                switch phase {
-                case .active:
-                    if !isControlsVisible {
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            isControlsVisible = true
-                        }
-                    }
-                    resetHideTimer()
-                    hoverHideTask?.cancel()
-                case .ended:
-                    hoverHideTask?.cancel()
-                    hoverHideTask = Task { @MainActor in
-                        try? await Task.sleep(nanoseconds: 600_000_000)
-                        guard !Task.isCancelled, canAutoHideControls else { return }
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            isControlsVisible = false
-                        }
-                    }
-                }
-            }
+            .playerPointerChrome(chrome, mayHide: { canAutoHideControls })
             .onKeyPress(.leftArrow) { skip(by: -media.skipInterval(default: 15)); resetHideTimer(); return .handled }
             .onKeyPress(.rightArrow) { skip(by: media.skipInterval(default: 15)); resetHideTimer(); return .handled }
             .liveChannelKeyNavigation(

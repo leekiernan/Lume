@@ -32,12 +32,13 @@
 
         func openChannelBrowser() {
             guard media.isLive, !isChannelBrowserOpen else { return }
-            hideTask?.cancel()
+            chrome.suspend()
             withAnimation(.easeInOut(duration: 0.25)) { isChannelBrowserOpen = true }
         }
 
         func closeChannelBrowser() {
             withAnimation(.easeInOut(duration: 0.25)) { isChannelBrowserOpen = false }
+            resetHideTimer()
             // Hand focus back to the tap-catcher so the remote keeps working.
             Task { @MainActor in catcherFocused = true }
         }

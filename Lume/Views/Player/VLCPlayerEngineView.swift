@@ -75,7 +75,11 @@ struct VLCPlayerEngineView: View {
     var session: PlaybackSession?
 
     @StateObject var coordinator = VLCPlayerCoordinator()
-    @State private var isControlsVisible = true
+    @State private var chrome = PlayerChromeController()
+    private var isControlsVisible: Bool {
+        chrome.isVisible
+    }
+
     @Environment(PlayerControlsBridge.self) private var remoteBridge: PlayerControlsBridge?
     /// Presents the OpenSubtitles browser. Held here rather than in the controls
     /// overlay: the overlay is removed when the controls auto-hide, which would
@@ -87,8 +91,6 @@ struct VLCPlayerEngineView: View {
     @State private var isCatchupSegmentLoading = false
     @State private var isSeeking = false
     @State private var seekPosition: TimeInterval = 0
-    @State private var hideTask: Task<Void, Never>?
-    @State private var hoverHideTask: Task<Void, Never>?
     /// While an overlay panel (episodes / info) is open the controls must not
     /// auto-hide out from under the viewer.
     @State private var isPanelOpen = false
@@ -112,8 +114,6 @@ struct VLCPlayerEngineView: View {
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
-
-    private let autoHideInterval: TimeInterval = 4
 
     private var drawsControls: Bool {
         PlayerChrome.drawsControls(requested: isControlsVisible, started: coordinator.hasStartedPlayback, catchupSegmentLoading: isCatchupSegmentLoading, failed: loadFailed)
@@ -185,6 +185,7 @@ struct VLCPlayerEngineView: View {
         }
         .preferredColorScheme(.dark)
         .onAppear {
+            chrome.activate()
             let catchup = coordinator.catchup
             coordinator.onTime = { current in
                 if !isSeeking { catchup.report(position: current, to: clock) }
@@ -201,8 +202,7 @@ struct VLCPlayerEngineView: View {
             scheduleHide()
         }
         .onDisappear {
-            hideTask?.cancel()
-            hoverHideTask?.cancel()
+            chrome.deactivate()
             NowPlayingService.shared.detachTransport(owner: coordinator)
             coordinator.tearDown()
         }
@@ -248,23 +248,7 @@ struct VLCPlayerEngineView: View {
         // playback never toggles.
         .playerRemoteControls(controlsVisible: isControlsVisible, onBack: handleMenuPress, onPlayPause: togglePlay)
         #if os(macOS)
-            .onContinuousHover(coordinateSpace: .local) { phase in
-                switch phase {
-                case .active:
-                    if !isControlsVisible {
-                        withAnimation(.easeInOut(duration: 0.2)) { isControlsVisible = true }
-                    }
-                    resetHideTimer()
-                    hoverHideTask?.cancel()
-                case .ended:
-                    hoverHideTask?.cancel()
-                    hoverHideTask = Task { @MainActor in
-                        try? await Task.sleep(nanoseconds: 600_000_000)
-                        guard !Task.isCancelled, canAutoHideControls else { return }
-                        withAnimation(.easeInOut(duration: 0.2)) { isControlsVisible = false }
-                    }
-                }
-            }
+            .playerPointerChrome(chrome, mayHide: { canAutoHideControls })
             .onKeyPress(.leftArrow) { coordinator.skip(by: -media.skipInterval(default: 15)); resetHideTimer(); return .handled }
             .onKeyPress(.rightArrow) { coordinator.skip(by: media.skipInterval(default: 15)); resetHideTimer(); return .handled }
             .liveChannelKeyNavigation(
@@ -281,38 +265,14 @@ struct VLCPlayerEngineView: View {
     @ViewBuilder
     private var tapCatcher: some View {
         #if os(tvOS)
-            // tvOS has no touch surface: drive the overlay from the Siri
-            // remote. The catcher only takes focus while controls are
-            // hidden, so the control buttons stay reachable otherwise.
-            // A focusable Button reliably catches the Siri remote's Select
-            // (center) press; `tvRemoteMoveCommand` covers the directions,
-            // swipes among them unless the viewer turned those off. Disabled
-            // while the controls are up so the overlay's buttons own focus.
-            Button(action: showControls) {
-                Color.clear.contentShape(Rectangle())
-            }
-            .buttonStyle(PlayerInvisibleButtonStyle())
-            // Yield focus to the failure overlay's buttons when a stream dies.
-            // Only while the controls are actually drawn — see `PlayerChrome`.
-            .disabled(drawsControls || isChannelBrowserOpen || loadFailed)
-            .focused($catcherFocused)
-            .tvRemoteMoveCommand { direction in
-                // While watching live TV with the controls hidden, left opens
-                // the channel browser, up/down surf adjacent channels — the
-                // classic channel rocker — and right recalls the last channel
-                // watched. Any other move just summons the controls.
-                if media.isLive, direction == .left {
-                    openChannelBrowser()
-                } else if media.isLive, direction == .up || direction == .down || direction == .right {
-                    switchLiveChannel(direction)
-                } else {
-                    showControls()
-                }
-            }
+            PlayerTapCatcher(
+                isLive: media.isLive, controlsDrawn: drawsControls,
+                browserOpen: isChannelBrowserOpen, failed: loadFailed,
+                focused: $catcherFocused, showControls: showControls,
+                openBrowser: openChannelBrowser, surf: switchLiveChannel
+            )
         #else
-            Color.clear
-                .contentShape(Rectangle())
-                .onTapGesture { toggleControls() }
+            PlayerTapCatcher(toggleControls: toggleControls)
         #endif
     }
 
@@ -341,7 +301,7 @@ struct VLCPlayerEngineView: View {
                 isSeeking: $isSeeking,
                 seekPosition: $seekPosition,
                 clock: clock,
-                hideTask: $hideTask,
+                onSuspendHide: { chrome.suspend() },
                 onClose: { closePlayer() },
                 onTogglePlay: { togglePlay() },
                 onResetHideTimer: { resetHideTimer() },
@@ -386,33 +346,32 @@ struct VLCPlayerEngineView: View {
 
         private func openChannelBrowser() {
             guard media.isLive, !isChannelBrowserOpen else { return }
-            hideTask?.cancel()
+            chrome.suspend()
             withAnimation(.easeInOut(duration: 0.25)) { isChannelBrowserOpen = true }
         }
 
         private func closeChannelBrowser() {
             withAnimation(.easeInOut(duration: 0.25)) { isChannelBrowserOpen = false }
+            resetHideTimer()
             // Hand focus back to the tap-catcher so the remote keeps working.
             Task { @MainActor in catcherFocused = true }
         }
     #endif
 
     private func toggleControls() {
-        withAnimation(.easeInOut(duration: 0.2)) { isControlsVisible.toggle() }
+        chrome.toggle()
         if isControlsVisible { scheduleHide() }
     }
 
     func showControls() {
-        guard !isControlsVisible else { resetHideTimer(); return }
-        withAnimation(.easeInOut(duration: 0.2)) { isControlsVisible = true }
+        chrome.show()
         scheduleHide()
     }
 
     /// Dismiss the controls overlay (Menu button when no panel is open). A
     /// second Menu press, with the controls hidden, dismisses the player.
     private func hideControls() {
-        hideTask?.cancel()
-        withAnimation(.easeInOut(duration: 0.2)) { isControlsVisible = false }
+        chrome.hide()
     }
 
     /// Menu/back routing: close the channel browser or an open panel first,
@@ -439,32 +398,34 @@ struct VLCPlayerEngineView: View {
     }
 
     private func resetHideTimer() {
-        hideTask?.cancel()
-        if isControlsVisible { scheduleHide() }
+        scheduleHide()
     }
 
     /// Keep the controls pinned open while an overlay panel is showing.
     private func setPanelOpen(_ open: Bool) {
         isPanelOpen = open
         if open {
-            hideTask?.cancel()
+            chrome.suspend()
         } else {
             resetHideTimer()
         }
     }
 
     private var canAutoHideControls: Bool {
-        PlayerControlsAutoHide.mayHide(isPlaying: coordinator.isPlaying, isPanelOpen: isPanelOpen, isSuppressed: PlayerControlsAutoHide.isSuppressed)
+        #if os(tvOS)
+            let browserOpen = isChannelBrowserOpen
+        #else
+            let browserOpen = false
+        #endif
+        return PlayerControlsAutoHide.mayHide(
+            isPlaying: coordinator.isPlaying,
+            isPanelOpen: isPanelOpen || browserOpen || isSeeking,
+            isSuppressed: PlayerControlsAutoHide.isSuppressed
+        )
     }
 
     private func scheduleHide() {
-        hideTask?.cancel()
-        guard canAutoHideControls else { return }
-        hideTask = Task { @MainActor in
-            try? await Task.sleep(nanoseconds: UInt64(autoHideInterval * 1_000_000_000))
-            guard !Task.isCancelled, canAutoHideControls else { return }
-            withAnimation(.easeInOut(duration: 0.2)) { isControlsVisible = false }
-        }
+        chrome.schedule(mayHide: { canAutoHideControls })
     }
 
     private func closePlayer() {

@@ -22,7 +22,7 @@ import SwiftUI
                 seekPosition: $seekPosition,
                 clock: clock,
                 isPipActive: $isPipActive,
-                hideTask: $hideTask,
+                onSuspendHide: { chrome.suspend() },
                 onClose: { closePlayer() },
                 onTogglePlay: { togglePlay() },
                 onTogglePip: { togglePip() },
@@ -52,12 +52,8 @@ import SwiftUI
         }
 
         func toggleControls() {
-            withAnimation(.easeInOut(duration: 0.2)) {
-                isControlsVisible.toggle()
-            }
-            if isControlsVisible {
-                scheduleHide()
-            }
+            chrome.toggle()
+            if isControlsVisible { scheduleHide() }
         }
     }
 
