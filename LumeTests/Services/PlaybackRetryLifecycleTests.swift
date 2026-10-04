@@ -67,6 +67,12 @@ struct PlaybackRetryLifecycleTests {
         // A later engine error after the overlay is up mustn't reload behind it.
         #expect(retry.hasGivenUp)
         #expect(await !retryFires(retry))
+        // Queued KVO/delegate callbacks can arrive after the failure. Neither
+        // health nor a same-stream reconnect authorizes dismissal/recovery.
+        retry.reset()
+        retry.handle(.reconnect)
+        #expect(retry.hasGivenUp)
+        #expect(await !retryFires(retry))
     }
 
     @Test func `a new stream or Try Again re-arms after a terminal failure`() async {

@@ -25,6 +25,7 @@ final class PlaybackRetryController {
     private var attempt = 0
     private var pending: Task<Void, Never>?
     private var gaveUp = false
+    private var terminalFailure = false
 
     init(backoff: [TimeInterval] = PlaybackRetryController.defaultBackoff) {
         self.backoff = backoff
@@ -62,10 +63,13 @@ final class PlaybackRetryController {
 
     func handle(_ event: Lifecycle) {
         switch event {
-        case .newStream, .manualRetry: reset()
+        case .newStream, .manualRetry:
+            terminalFailure = false
+            reset()
         case .reconnect: break
         case .terminalFailure:
             cancel()
+            terminalFailure = true
             gaveUp = true
         case .teardown: cancel()
         }
@@ -77,9 +81,11 @@ final class PlaybackRetryController {
     }
 
     /// Mark playback healthy again (the player reached a playing state). Clears
-    /// the attempt counter and the give-up flag so a later, unrelated drop gets
-    /// a full budget.
+    /// the attempt counter so a later, unrelated drop gets a full budget.
+    /// Late healthy callbacks cannot undo a terminal failure/error overlay.
+    /// Only a new stream or explicit Try Again clears that latch.
     func reset() {
+        guard !terminalFailure else { return }
         attempt = 0
         gaveUp = false
         pending?.cancel()
