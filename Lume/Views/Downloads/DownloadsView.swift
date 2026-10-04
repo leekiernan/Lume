@@ -143,7 +143,7 @@ import SwiftUI
                 )
                 return
             }
-            guard let playlist = playlists.first(where: { movie.id.hasPrefix($0.id.uuidString) }) ?? playlists.first,
+            guard let playlist = PlaylistOwner.playlist(forContentID: movie.id, in: playlists, fallback: .firstAvailable),
                   let media = PlayableMedia.from(movie: movie, playlist: playlist)
             else { return }
             playingMedia = media
@@ -165,7 +165,7 @@ import SwiftUI
                 return
             }
             guard let series = episode.series,
-                  let playlist = playlists.first(where: { series.id.hasPrefix($0.id.uuidString) }) ?? playlists.first,
+                  let playlist = PlaylistOwner.playlist(forContentID: series.id, in: playlists, fallback: .firstAvailable),
                   let media = PlayableMedia.from(episode: episode, playlist: playlist)
             else { return }
             playingMedia = media

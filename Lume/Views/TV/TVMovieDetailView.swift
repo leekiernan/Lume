@@ -270,7 +270,7 @@
         /// The playlist this movie actually belongs to (ids are `"<playlistUUID>-…"`),
         /// so playback uses the correct credentials. Falls back to the first.
         private var moviePlaylist: Playlist? {
-            playlists.first { movie.id.hasPrefix($0.id.uuidString) } ?? playlists.first
+            PlaylistOwner.playlist(forContentID: movie.id, in: playlists, fallback: .firstAvailable)
         }
 
         // MARK: - Actions

@@ -4,15 +4,35 @@
 //
 //  Resolves the playlist that owns a catalog row from the row's id. Every synced
 //  id is written as "<playlist UUID>-<kind>-<provider id>" by `ContentSyncManager`,
-//  so the owner is a single indexed lookup rather than a walk of every installed
-//  playlist — which is what the player's neighbour resolvers used to do, once per
-//  stream, on the main actor.
+//  so player lookups can use one indexed fetch rather than walking every installed
+//  playlist. Scene callers already holding query results use the array overload,
+//  with their legacy fallback selected explicitly instead of duplicated in views.
 //
 
 import Foundation
 import SwiftData
 
 nonisolated enum PlaylistOwner {
+    enum Fallback {
+        case none
+        /// Preserve input order for legacy orphan/non-prefixed content and
+        /// the TV episode overlay's missing-series case. This is neither the
+        /// oldest nor active playlist, and does not prove ownership.
+        case firstAvailable
+    }
+
+    /// Array-backed callers already hold their scene's query results. Preserve
+    /// their historical UUID prefix spelling, and make fallback an explicit
+    /// opt-in. Player lookups below remain strictly indexed, with no fallback.
+    @MainActor
+    static func playlist(forContentID contentID: String?, in playlists: [Playlist], fallback: Fallback = .none) -> Playlist? {
+        if let contentID, let owner = playlists.first(where: { contentID.hasPrefix($0.id.uuidString) }) { return owner }
+        switch fallback {
+        case .none: return nil
+        case .firstAvailable: return playlists.first
+        }
+    }
+
     /// The number of characters a canonical `UUID.uuidString` occupies. Ids are
     /// built from that exact spelling, so the owner's UUID is the leading slice.
     private static let uuidLength = 36

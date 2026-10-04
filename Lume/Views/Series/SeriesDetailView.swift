@@ -286,7 +286,7 @@ struct SeriesDetailView: View {
     #endif
 
     private var seriesPlaylist: Playlist? {
-        playlists.first { series.id.hasPrefix($0.id.uuidString) } ?? playlists.first
+        PlaylistOwner.playlist(forContentID: series.id, in: playlists, fallback: .firstAvailable)
     }
 }
 

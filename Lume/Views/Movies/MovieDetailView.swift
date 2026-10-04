@@ -274,9 +274,10 @@ struct MovieDetailView: View {
     #endif
 
     /// The playlist this movie actually belongs to (ids are `"<playlistUUID>-…"`),
-    /// so playback uses the correct credentials. Falls back to the first.
+    /// so playback uses the correct credentials. Explicitly retains the legacy
+    /// first-available fallback; this is not the active-playlist selection.
     private var moviePlaylist: Playlist? {
-        playlists.first { movie.id.hasPrefix($0.id.uuidString) } ?? playlists.first
+        PlaylistOwner.playlist(forContentID: movie.id, in: playlists, fallback: .firstAvailable)
     }
 
     // MARK: - Actions

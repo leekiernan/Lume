@@ -50,12 +50,11 @@
                 .sorted { $0.episodeNum < $1.episodeNum }
         }
 
-        /// The playlist that owns a series, mirroring the detail screen's logic
-        /// (prefix match on the playlist UUID, falling back to the first one).
+        /// Uses the detail screen's explicit legacy fallback, including when
+        /// the episode has no series. A fallback is not proof of ownership.
         static func playlist(for series: Series?, in context: ModelContext) -> Playlist? {
             let playlists = (try? context.fetch(FetchDescriptor<Playlist>())) ?? []
-            guard let series else { return playlists.first }
-            return playlists.first { series.id.hasPrefix($0.id.uuidString) } ?? playlists.first
+            return PlaylistOwner.playlist(forContentID: series?.id, in: playlists, fallback: .firstAvailable)
         }
 
         // MARK: - EPG (off the main actor)

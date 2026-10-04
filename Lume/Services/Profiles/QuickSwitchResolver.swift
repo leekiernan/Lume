@@ -50,7 +50,7 @@ extension [Playlist] {
     /// `nil` for an id no current playlist owns, so callers pick their own
     /// fallback.
     func owner(ofContentID contentID: String) -> Playlist? {
-        first { contentID.hasPrefix($0.id.uuidString) }
+        PlaylistOwner.playlist(forContentID: contentID, in: self)
     }
 
     /// The in-effect playlist's `id.uuidString`, or an empty string when there is
