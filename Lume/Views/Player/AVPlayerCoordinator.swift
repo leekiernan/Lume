@@ -227,9 +227,7 @@ final class AVPlayerCoordinator: NSObject, ObservableObject {
         audioTrackOptions = []
         textTrackOptions = []
         isBuffering = true
-        // `reconnecting`, not `reconnect`: a startup error retried before the
-        // first frame is the same stream, and must not refill its budget.
-        retry.handle(reconnecting ? .reconnect : .newStream)
+        retry.handle(PlaybackRetryController.lifecycle(forLoadReconnecting: reconnecting))
         if reconnect {
             startTracker.beginReconnect()
         } else {

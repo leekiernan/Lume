@@ -56,7 +56,7 @@ struct PlaybackRetryLifecycleTests {
         #expect(await retryFires(retry))
     }
 
-    @Test func `a terminal failure stops a pending retry without refilling the budget`() async throws {
+    @Test func `a terminal failure stops a pending retry and any later one`() async throws {
         let retry = controller()
         var reloaded = false
         retry.scheduleRetry { reloaded = true }
@@ -64,9 +64,25 @@ struct PlaybackRetryLifecycleTests {
         try await Task.sleep(for: .milliseconds(100))
         #expect(!reloaded)
 
-        // The cancelled attempt still counted: one left, then it gives up.
-        #expect(await retryFires(retry))
+        // A later engine error after the overlay is up mustn't reload behind it.
+        #expect(retry.hasGivenUp)
         #expect(await !retryFires(retry))
+    }
+
+    @Test func `a new stream or Try Again re-arms after a terminal failure`() async {
+        let retry = controller()
+        retry.handle(.terminalFailure)
+        retry.handle(.newStream)
+        #expect(await retryFires(retry))
+
+        retry.handle(.terminalFailure)
+        retry.handle(.manualRetry)
+        #expect(await retryFires(retry))
+    }
+
+    @Test func `a reload before the first frame keeps the budget; only a new load refills it`() {
+        #expect(PlaybackRetryController.lifecycle(forLoadReconnecting: true) == .reconnect)
+        #expect(PlaybackRetryController.lifecycle(forLoadReconnecting: false) == .newStream)
     }
 
     @Test func `try Again gets a full budget`() async {

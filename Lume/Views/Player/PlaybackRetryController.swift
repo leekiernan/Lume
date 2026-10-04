@@ -41,8 +41,9 @@ final class PlaybackRetryController {
         /// error: the budget carries on, or a stream that never plays would
         /// retry forever.
         case reconnect
-        /// Failure reported to the viewer: a pending retry mustn't reload
-        /// behind the error overlay.
+        /// Failure reported to the viewer: nothing may reload behind the
+        /// error overlay — neither a pending retry nor one a later engine
+        /// error would schedule. Only a new stream or Try Again re-arms it.
         case terminalFailure
         /// The viewer pressed Try Again: a full budget.
         case manualRetry
@@ -50,11 +51,23 @@ final class PlaybackRetryController {
         case teardown
     }
 
+    /// The event a `load` is: re-opening the same stream — including a
+    /// startup error retried before the first frame — carries the budget on;
+    /// anything else is a new stream. Keyed on the caller's intent, not on
+    /// whether playback had started, or a stream that never plays would
+    /// refill its budget on every retry.
+    nonisolated static func lifecycle(forLoadReconnecting reconnecting: Bool) -> Lifecycle {
+        reconnecting ? .reconnect : .newStream
+    }
+
     func handle(_ event: Lifecycle) {
         switch event {
         case .newStream, .manualRetry: reset()
         case .reconnect: break
-        case .terminalFailure, .teardown: cancel()
+        case .terminalFailure:
+            cancel()
+            gaveUp = true
+        case .teardown: cancel()
         }
     }
 
