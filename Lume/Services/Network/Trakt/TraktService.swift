@@ -287,33 +287,37 @@ final class TraktService {
         lastImport = nil
         defer { isImporting = false }
 
-        guard let scope = await TrackerImportScope.begin(after: mutations), !Task.isCancelled else {
-            Logger.network.info("Trakt history import deferred: pending local changes or changed scope")
-            return
-        }
-        guard let accessToken = await session.validAccessToken() else {
-            lastImport = .failure
-            return
-        }
-        do {
-            async let movies = client.watchedMovies(accessToken: accessToken)
-            async let shows = client.watchedShows(accessToken: accessToken)
-            let watched = try await (movies: movies, shows: shows)
-            // What's paused part-way, for Continue Watching. Best effort: the
-            // watched history stands if this fails.
-            let paused = try? await client.playback(accessToken: accessToken)
-            guard !Task.isCancelled,
-                  scope.isCurrent(isConnected: isConnected, account: mutations.account, pendingCount: mutations.pendingCount)
-            else { return }
-            lastImport = await Self.applyImport(
-                movies: watched.movies, shows: watched.shows, paused: paused, container: context.container,
-                profileID: scope.profileID
-            )
-            if let summary = lastImport {
-                Logger.network.info("Trakt history imported: movies \(summary.moviesMarked), episodes \(summary.episodesMarked), paused \(summary.inProgress), failed \(summary.failed)")
+        let container = context.container
+        let outcome = await TrackerImportRun(
+            begin: { await TrackerImportScope.begin(after: self.mutations) },
+            accessToken: { await self.session.validAccessToken() },
+            fetch: { token in
+                async let movies = self.client.watchedMovies(accessToken: token)
+                async let shows = self.client.watchedShows(accessToken: token)
+                let watched = try await (movies: movies, shows: shows)
+                // What's paused part-way, for Continue Watching. Best effort:
+                // the watched history stands if this fails.
+                let paused = try? await self.client.playback(accessToken: token)
+                return (movies: watched.movies, shows: watched.shows, paused: paused)
+            },
+            isCurrent: { $0.isCurrent(isConnected: self.isConnected, account: self.mutations.account, pendingCount: self.mutations.pendingCount) },
+            apply: { history, scope in
+                await Self.applyImport(
+                    movies: history.movies, shows: history.shows, paused: history.paused, container: container,
+                    profileID: scope.profileID
+                )
             }
-        } catch {
+        ).perform()
+        switch outcome {
+        case .deferred:
+            Logger.network.info("Trakt history import deferred: pending local changes or changed scope")
+        case .failed:
             lastImport = .failure
+        case .discarded:
+            Logger.network.info("Trakt history import discarded: account, profile or pending changes moved during the fetch")
+        case let .applied(summary):
+            lastImport = summary
+            Logger.network.info("Trakt history imported: movies \(summary.moviesMarked), episodes \(summary.episodesMarked), paused \(summary.inProgress), failed \(summary.failed)")
         }
     }
 

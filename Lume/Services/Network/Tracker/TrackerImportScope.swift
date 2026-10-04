@@ -40,3 +40,42 @@ struct TrackerImportScope: Equatable {
         isConnected && account == self.account && pendingCount == 0 && profileID == self.profileID
     }
 }
+
+/// What a tracker history import came to.
+enum TrackerImportOutcome<Summary> {
+    /// Local changes are still waiting to upload, or the scope moved before
+    /// the fetch: nothing was fetched.
+    case deferred
+    /// No token, or the fetch failed.
+    case failed
+    /// Fetched, but the account, profile, connection or outbox changed while
+    /// it ran: the history describes something else now, so it isn't applied.
+    case discarded
+    case applied(Summary)
+}
+
+/// The import sequence both trackers share: flush and take the scope, get a
+/// token, fetch, check the scope again, apply. The services supply the
+/// provider-specific steps; the order and the gates are fixed here, where a
+/// test can change the scope mid-fetch.
+struct TrackerImportRun<Items, Summary> {
+    var begin: () async -> TrackerImportScope?
+    var accessToken: () async -> String?
+    var fetch: (String) async throws -> Items
+    /// Whether the scope taken at `begin` still holds after the fetch.
+    var isCurrent: (TrackerImportScope) -> Bool
+    /// Applies under the scope's profile; implementations re-check it there.
+    var apply: (Items, TrackerImportScope) async -> Summary
+
+    func perform() async -> TrackerImportOutcome<Summary> {
+        guard let scope = await begin(), !Task.isCancelled else { return .deferred }
+        guard let token = await accessToken() else { return .failed }
+        do {
+            let items = try await fetch(token)
+            guard !Task.isCancelled, isCurrent(scope) else { return .discarded }
+            return await .applied(apply(items, scope))
+        } catch {
+            return .failed
+        }
+    }
+}

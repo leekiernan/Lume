@@ -260,28 +260,29 @@ final class SimklService {
 
         // Same scope rule as Trakt: local changes go up first, and the history
         // is applied only to the account and profile it was fetched for.
-        guard let scope = await TrackerImportScope.begin(after: mutations), !Task.isCancelled else {
+        let container = context.container
+        let outcome = await TrackerImportRun(
+            begin: { await TrackerImportScope.begin(after: self.mutations) },
+            accessToken: { await self.session.validAccessToken() },
+            fetch: { try await self.client.watchedItems(accessToken: $0) },
+            isCurrent: { $0.isCurrent(isConnected: self.isConnected, account: self.mutations.account, pendingCount: self.mutations.pendingCount) },
+            apply: { items, scope in await Self.applyImport(items: items, container: container, profileID: scope.profileID) }
+        ).perform()
+        switch outcome {
+        case .deferred:
             Logger.network.info("Simkl history import deferred: pending local changes or changed scope")
-            return
-        }
-        guard let accessToken = await session.validAccessToken() else {
+        case .failed:
             lastImport = .failure
-            return
-        }
-        do {
-            let items = try await client.watchedItems(accessToken: accessToken)
-            guard !Task.isCancelled,
-                  scope.isCurrent(isConnected: isConnected, account: mutations.account, pendingCount: mutations.pendingCount)
-            else { return }
-            lastImport = await Self.applyImport(items: items, container: context.container, profileID: scope.profileID)
-        } catch {
-            lastImport = .failure
+        case .discarded:
+            Logger.network.info("Simkl history import discarded: account, profile or pending changes moved during the fetch")
+        case let .applied(summary):
+            lastImport = summary
         }
     }
 
     /// Off the main actor, on a context of its own — see `TraktService`.
     @concurrent
-    private static func applyImport(items: SimklAllItems, container: ModelContainer, profileID: UUID?) async -> SimklImportSummary {
+    static func applyImport(items: SimklAllItems, container: ModelContainer, profileID: UUID?) async -> SimklImportSummary {
         guard ActiveProfileStore.current == profileID else { return .failure }
         return SimklWatchedImporter.apply(items: items, in: ModelContext(container))
     }
