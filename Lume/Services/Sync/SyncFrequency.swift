@@ -45,7 +45,7 @@ enum SyncFrequency: String, CaseIterable, Identifiable {
 
     /// Minimum age of a playlist's `lastSyncDate` before it is considered stale
     /// and eligible for an automatic re-sync.
-    var interval: TimeInterval {
+    nonisolated var interval: TimeInterval {
         switch self {
         case .sixHours: 6 * 60 * 60
         case .daily: 24 * 60 * 60
@@ -66,7 +66,7 @@ enum SyncFrequency: String, CaseIterable, Identifiable {
     /// Whether a playlist whose last successful sync was `lastSyncDate` is due
     /// for an automatic re-sync now. A playlist that has never synced is always
     /// due, so first launch triggers the initial sync.
-    func isDue(lastSyncDate: Date?, now: Date = Date()) -> Bool {
+    nonisolated func isDue(lastSyncDate: Date?, now: Date = Date()) -> Bool {
         guard let lastSyncDate else { return true }
         return now.timeIntervalSince(lastSyncDate) >= interval
     }

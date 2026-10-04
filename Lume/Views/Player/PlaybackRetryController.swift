@@ -19,7 +19,7 @@ import OSLog
 final class PlaybackRetryController {
     /// Delay before each successive attempt, in seconds. The element count is
     /// the attempt budget (6 reconnects spanning ~31s before giving up).
-    static let defaultBackoff: [TimeInterval] = [1, 2, 4, 8, 8, 8]
+    nonisolated static let defaultBackoff: [TimeInterval] = [1, 2, 4, 8, 8, 8]
 
     private let backoff: [TimeInterval]
     private var attempt = 0
