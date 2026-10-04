@@ -45,6 +45,13 @@
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, TVSettingsMetrics.rowHPadding)
         }
+
+        /// Error/status copy uses the same ten-foot size and row inset.
+        func tvSettingsErrorText() -> some View {
+            font(.system(size: TVSettingsMetrics.statusFontSize))
+                .foregroundStyle(.red)
+                .padding(.horizontal, TVSettingsMetrics.rowHPadding)
+        }
     }
 
     // MARK: - Section label

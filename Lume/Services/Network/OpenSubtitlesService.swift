@@ -110,10 +110,8 @@ final class OpenSubtitlesService {
             username = newSession.username
             allowedDownloads = newSession.allowedDownloads
             remainingDownloads = nil
-        } catch let error as OpenSubtitlesError {
-            signInError = String(localized: error.message)
         } catch {
-            signInError = error.localizedDescription
+            signInError = OpenSubtitlesError.presentationMessage(for: error)
         }
     }
 

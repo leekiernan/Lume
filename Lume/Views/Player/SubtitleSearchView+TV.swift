@@ -91,7 +91,7 @@
                 }
                 if let downloadError {
                     Text(verbatim: downloadError)
-                        .foregroundStyle(.red)
+                        .tvSettingsErrorText()
                 }
 
                 switch status {
@@ -103,9 +103,7 @@
                     .tvSettingsSecondaryText()
                 case let .failed(message):
                     Text(verbatim: message)
-                        .font(.system(size: 24))
-                        .foregroundStyle(.red)
-                        .padding(.horizontal, TVSettingsMetrics.rowHPadding)
+                        .tvSettingsErrorText()
                 case .unsupported:
                     Text("Subtitle search is only available for movies and episodes.")
                         .tvSettingsSecondaryText()
