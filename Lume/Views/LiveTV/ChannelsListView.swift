@@ -93,10 +93,13 @@ struct ChannelsList: View {
         let channels = scopedStreams
         let visible = Array(channels.prefix(visibleCount))
         let epgScope = ChannelEPGLoadMachine.Scope(
-            playlistPrefix: playlistPrefix, visibilityToken: restriction.visibilityToken, channelScope: scope,
-            channelIDs: Set(channels.compactMap(\.epgChannelId)), guideIsSyncing: epgSync.isSyncing
+            playlistPrefix: playlistPrefix, visibilityToken: restriction.visibilityToken, channelScope: scope
         )
-        let epgKey = ChannelEPGLoadMachine.Key(scope: epgScope, visibleChannelIDs: Set(visible.compactMap(\.epgChannelId)))
+        let epgKey = ChannelEPGLoadMachine.Key(
+            scope: epgScope,
+            refresh: .init(channelIDs: Set(channels.compactMap(\.epgChannelId)), guideIsSyncing: epgSync.isSyncing),
+            visibleChannelIDs: Set(visible.compactMap(\.epgChannelId))
+        )
         let epgByChannel = epgLoad.snapshot(for: epgScope)
         VStack(spacing: 0) {
             if scope == .recentlyWatched, !channels.isEmpty {

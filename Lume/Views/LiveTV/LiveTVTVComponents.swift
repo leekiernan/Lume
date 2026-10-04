@@ -85,10 +85,13 @@
             let focusScope = TVContentFocusRequest.Scope(playlistPrefix: playlistPrefix, channelScope: scope, visibilityToken: restriction.visibilityToken)
             let landing = focusRequest?.landing(in: focusScope, channelIDs: channels.map(\.id))
             let epgScope = ChannelEPGLoadMachine.Scope(
-                playlistPrefix: playlistPrefix, visibilityToken: restriction.visibilityToken, channelScope: scope,
-                channelIDs: Set(channels.compactMap(\.epgChannelId)), guideIsSyncing: epgSync.isSyncing
+                playlistPrefix: playlistPrefix, visibilityToken: restriction.visibilityToken, channelScope: scope
             )
-            let epgKey = ChannelEPGLoadMachine.Key(scope: epgScope, visibleChannelIDs: Set(visible.compactMap(\.epgChannelId)))
+            let epgKey = ChannelEPGLoadMachine.Key(
+                scope: epgScope,
+                refresh: .init(channelIDs: Set(channels.compactMap(\.epgChannelId)), guideIsSyncing: epgSync.isSyncing),
+                visibleChannelIDs: Set(visible.compactMap(\.epgChannelId))
+            )
             let epgByChannel = epgLoad.snapshot(for: epgScope)
             ScrollViewReader { proxy in
                 ScrollView {

@@ -22,14 +22,21 @@ struct ChannelEPGLoadMachineTests {
     private let now = Date(timeIntervalSince1970: 1_800_000_000)
     private let pair = ChannelEPG(current: EPGSlot(title: "On air", start: .distantPast, end: .distantFuture), next: nil)
 
-    private func scope(
-        _ ids: Set<String> = ["a", "b"], visibility: String = "parent", playlist: String = "playlist-", syncing: Bool = false
-    ) -> ChannelEPGLoadMachine.Scope {
-        .init(playlistPrefix: playlist, visibilityToken: visibility, channelScope: .favorites, channelIDs: ids, guideIsSyncing: syncing)
+    private func scope(visibility: String = "parent", playlist: String = "playlist-") -> ChannelEPGLoadMachine.Scope {
+        .init(playlistPrefix: playlist, visibilityToken: visibility, channelScope: .favorites)
     }
 
-    private func key(_ visible: Set<String>, scope: ChannelEPGLoadMachine.Scope? = nil) -> ChannelEPGLoadMachine.Key {
-        .init(scope: scope ?? self.scope(), visibleChannelIDs: visible)
+    private func key(
+        _ visible: Set<String>,
+        scope: ChannelEPGLoadMachine.Scope? = nil,
+        channels: Set<String> = ["a", "b"],
+        syncing: Bool = false
+    ) -> ChannelEPGLoadMachine.Key {
+        .init(
+            scope: scope ?? self.scope(),
+            refresh: .init(channelIDs: channels, guideIsSyncing: syncing),
+            visibleChannelIDs: visible
+        )
     }
 
     private func begin(
@@ -77,15 +84,19 @@ struct ChannelEPGLoadMachineTests {
         #expect(machine.snapshot(for: scope()) == ["b": pair])
     }
 
-    @Test func `same sized channel replacements and guide updates invalidate the snapshot`() throws {
-        let replacements = [scope(["c", "d"]), scope(syncing: true)]
-        for replacement in replacements {
+    @Test func `channel changes and guide syncs refetch everything but keep the pairs on screen`() throws {
+        let refreshes = [key(["c", "d"], channels: ["c", "d"]), key(["a"], syncing: true)]
+        for refresh in refreshes {
             var machine = ChannelEPGLoadMachine()
             let initial = try begin(&machine, key(["a"]))
             machine.finish(initial, with: ["a": pair])
-            #expect(machine.snapshot(for: replacement).isEmpty)
-            let current = try begin(&machine, key(replacement.channelIDs, scope: replacement))
-            #expect(Set(current.channelIDs) == replacement.channelIDs)
+
+            let current = try begin(&machine, refresh)
+            // Every visible channel, not just new ones: the old pairs may be stale.
+            #expect(Set(current.channelIDs) == refresh.visibleChannelIDs)
+            #expect(machine.snapshot(for: scope()) == ["a": pair])
+
+            machine.finish(current, with: [:])
             #expect(machine.snapshot(for: scope()).isEmpty)
         }
     }
@@ -140,11 +151,10 @@ struct ChannelEPGLoadMachineTests {
 
     @Test func `ten pages fetch each channel once rather than refetching their prefixes`() throws {
         let ids = (0 ..< 500).map { "channel-\($0)" }
-        let listScope = scope(Set(ids))
         var machine = ChannelEPGLoadMachine()
         var fetched: [String] = []
         for page in 1 ... 10 {
-            let request = try begin(&machine, key(Set(ids.prefix(page * 50)), scope: listScope))
+            let request = try begin(&machine, key(Set(ids.prefix(page * 50)), channels: Set(ids)))
             #expect(request.channelIDs.count == 50)
             fetched.append(contentsOf: request.channelIDs)
             machine.finish(request, with: [:])
