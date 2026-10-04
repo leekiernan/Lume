@@ -54,12 +54,7 @@
                         showPaywall = true
                     }
                 } label: {
-                    HStack(spacing: 16) {
-                        Image(systemName: premium.isPremium ? "link" : "crown")
-                            .font(.system(size: 22, weight: .medium))
-                        Text("Connect Simkl Account")
-                        Spacer(minLength: 0)
-                    }
+                    TrackerButtonLabel(title: "Connect Simkl Account", systemImage: premium.isPremium ? "link" : "crown")
                 }
                 .buttonStyle(TVSettingsRowButtonStyle())
                 .disabled(simkl.isConnecting)
@@ -91,15 +86,7 @@
                 Button {
                     Task { await simkl.importWatched(into: modelContext) }
                 } label: {
-                    HStack(spacing: 16) {
-                        Image(systemName: "arrow.down.circle")
-                            .font(.system(size: 22, weight: .medium))
-                        Text("Import Watched from Simkl")
-                        Spacer(minLength: 0)
-                        if simkl.isImporting {
-                            ProgressView()
-                        }
-                    }
+                    TrackerButtonLabel(title: "Import Watched from Simkl", systemImage: "arrow.down.circle", isBusy: simkl.isImporting)
                 }
                 .buttonStyle(TVSettingsRowButtonStyle())
                 .disabled(simkl.isImporting)
@@ -111,12 +98,7 @@
                 Button {
                     Task { await simkl.disconnect() }
                 } label: {
-                    HStack(spacing: 16) {
-                        Image(systemName: "link.badge.plus")
-                            .font(.system(size: 22, weight: .medium))
-                        Text("Disconnect")
-                        Spacer(minLength: 0)
-                    }
+                    TrackerButtonLabel(title: "Disconnect", systemImage: "link.badge.minus")
                 }
                 .buttonStyle(TVSettingsRowButtonStyle(isDestructive: true))
             }

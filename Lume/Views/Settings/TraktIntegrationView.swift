@@ -52,7 +52,7 @@
                         showPaywall = true
                     }
                 } label: {
-                    Label("Connect Trakt Account", systemImage: premium.isPremium ? "link" : "crown")
+                    TrackerButtonLabel(title: "Connect Trakt Account", systemImage: premium.isPremium ? "link" : "crown")
                 }
                 .disabled(trakt.isConnecting)
             } header: {
@@ -87,14 +87,7 @@
                 Button {
                     Task { await trakt.importWatched(into: modelContext) }
                 } label: {
-                    HStack {
-                        Label("Import Watched from Trakt", systemImage: "arrow.down.circle")
-                        if trakt.isImporting {
-                            Spacer()
-                            ProgressView()
-                                .controlSize(.small)
-                        }
-                    }
+                    TrackerButtonLabel(title: "Import Watched from Trakt", systemImage: "arrow.down.circle", isBusy: trakt.isImporting)
                 }
                 .disabled(trakt.isImporting)
 
@@ -102,14 +95,7 @@
                     Button {
                         trakt.retryPendingMutations()
                     } label: {
-                        HStack {
-                            Label("Retry Pending Trakt Changes", systemImage: "arrow.clockwise")
-                            if trakt.isSyncingMutations {
-                                Spacer()
-                                ProgressView()
-                                    .controlSize(.small)
-                            }
-                        }
+                        TrackerButtonLabel(title: "Retry Pending Trakt Changes", systemImage: "arrow.clockwise", isBusy: trakt.isSyncingMutations)
                     }
                     .disabled(trakt.isSyncingMutations)
                 }
@@ -117,7 +103,7 @@
                 Button(role: .destructive) {
                     Task { await trakt.disconnect() }
                 } label: {
-                    Label("Disconnect", systemImage: "link.badge.plus")
+                    TrackerButtonLabel(title: "Disconnect", systemImage: "link.badge.minus")
                 }
             } header: {
                 Text("Trakt")

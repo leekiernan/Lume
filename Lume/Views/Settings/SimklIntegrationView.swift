@@ -52,7 +52,7 @@
                         showPaywall = true
                     }
                 } label: {
-                    Label("Connect Simkl Account", systemImage: premium.isPremium ? "link" : "crown")
+                    TrackerButtonLabel(title: "Connect Simkl Account", systemImage: premium.isPremium ? "link" : "crown")
                 }
                 .disabled(simkl.isConnecting)
             } header: {
@@ -87,21 +87,14 @@
                 Button {
                     Task { await simkl.importWatched(into: modelContext) }
                 } label: {
-                    HStack {
-                        Label("Import Watched from Simkl", systemImage: "arrow.down.circle")
-                        if simkl.isImporting {
-                            Spacer()
-                            ProgressView()
-                                .controlSize(.small)
-                        }
-                    }
+                    TrackerButtonLabel(title: "Import Watched from Simkl", systemImage: "arrow.down.circle", isBusy: simkl.isImporting)
                 }
                 .disabled(simkl.isImporting)
 
                 Button(role: .destructive) {
                     Task { await simkl.disconnect() }
                 } label: {
-                    Label("Disconnect", systemImage: "link.badge.plus")
+                    TrackerButtonLabel(title: "Disconnect", systemImage: "link.badge.minus")
                 }
             } header: {
                 Text("Simkl")

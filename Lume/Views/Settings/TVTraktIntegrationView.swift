@@ -54,12 +54,7 @@
                         showPaywall = true
                     }
                 } label: {
-                    HStack(spacing: 16) {
-                        Image(systemName: premium.isPremium ? "link" : "crown")
-                            .font(.system(size: 22, weight: .medium))
-                        Text("Connect Trakt Account")
-                        Spacer(minLength: 0)
-                    }
+                    TrackerButtonLabel(title: "Connect Trakt Account", systemImage: premium.isPremium ? "link" : "crown")
                 }
                 .buttonStyle(TVSettingsRowButtonStyle())
                 .disabled(trakt.isConnecting)
@@ -91,15 +86,7 @@
                 Button {
                     Task { await trakt.importWatched(into: modelContext) }
                 } label: {
-                    HStack(spacing: 16) {
-                        Image(systemName: "arrow.down.circle")
-                            .font(.system(size: 22, weight: .medium))
-                        Text("Import Watched from Trakt")
-                        Spacer(minLength: 0)
-                        if trakt.isImporting {
-                            ProgressView()
-                        }
-                    }
+                    TrackerButtonLabel(title: "Import Watched from Trakt", systemImage: "arrow.down.circle", isBusy: trakt.isImporting)
                 }
                 .buttonStyle(TVSettingsRowButtonStyle())
                 .disabled(trakt.isImporting)
@@ -112,15 +99,7 @@
                     Button {
                         trakt.retryPendingMutations()
                     } label: {
-                        HStack(spacing: 16) {
-                            Image(systemName: "arrow.clockwise")
-                                .font(.system(size: 22, weight: .medium))
-                            Text("Retry Pending Trakt Changes")
-                            Spacer(minLength: 0)
-                            if trakt.isSyncingMutations {
-                                ProgressView()
-                            }
-                        }
+                        TrackerButtonLabel(title: "Retry Pending Trakt Changes", systemImage: "arrow.clockwise", isBusy: trakt.isSyncingMutations)
                     }
                     .buttonStyle(TVSettingsRowButtonStyle())
                     .disabled(trakt.isSyncingMutations)
@@ -135,12 +114,7 @@
                 Button {
                     Task { await trakt.disconnect() }
                 } label: {
-                    HStack(spacing: 16) {
-                        Image(systemName: "link.badge.plus")
-                            .font(.system(size: 22, weight: .medium))
-                        Text("Disconnect")
-                        Spacer(minLength: 0)
-                    }
+                    TrackerButtonLabel(title: "Disconnect", systemImage: "link.badge.minus")
                 }
                 .buttonStyle(TVSettingsRowButtonStyle(isDestructive: true))
             }
