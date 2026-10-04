@@ -79,13 +79,13 @@ enum HomeMediaItem: Identifiable, Hashable {
     func progress(seriesResume: [String: Double]) -> Double? {
         switch self {
         case let .movie(movie):
-            guard let duration = movie.durationSecs, duration > 0,
-                  movie.watchProgress > 0, !movie.isWatched else { return nil }
-            return min(movie.watchProgress / Double(duration), 1)
+            ContinueWatching.resumeFraction(
+                progress: movie.watchProgress, duration: movie.durationSecs, isWatched: movie.isWatched
+            )
         case let .series(series):
-            return seriesResume[series.id]
+            seriesResume[series.id]
         case .live:
-            return nil
+            nil
         }
     }
 }
@@ -135,11 +135,9 @@ enum SeriesResumeLoader {
             let watched = episode.lastWatchedDate ?? .distantPast
             if let seen = newest[seriesId], seen >= watched { continue }
             newest[seriesId] = watched
-            if let duration = episode.durationSecs, duration > 0 {
-                resume[seriesId] = min(episode.watchProgress / Double(duration), 1)
-            } else {
-                resume.removeValue(forKey: seriesId)
-            }
+            // Assigning nil removes an older entry: the latest unfinished
+            // episode with no duration must never borrow an older one's bar.
+            resume[seriesId] = ContinueWatching.fraction(progress: episode.watchProgress, duration: episode.durationSecs)
         }
         return resume
     }

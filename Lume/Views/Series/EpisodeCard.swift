@@ -159,10 +159,9 @@ import SwiftUI
         }
 
         private var resumeFraction: Double? {
-            guard episode.watchProgress > 0,
-                  let duration = episode.durationSecs, duration > 0,
-                  !episode.isWatched else { return nil }
-            return min(episode.watchProgress / Double(duration), 1)
+            ContinueWatching.resumeFraction(
+                progress: episode.watchProgress, duration: episode.durationSecs, isWatched: episode.isWatched
+            )
         }
     }
 
