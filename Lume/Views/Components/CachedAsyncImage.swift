@@ -11,7 +11,8 @@
 //    URLs that just failed so a dead poster isn't re-requested on every pass.
 //  • Optional downsampling via `maxPixelSize` (longest edge in points; converted
 //    to pixels using the display scale) to cut memory and decode time for cards.
-//    Pass `nil` for full-resolution artwork such as tvOS 4K heroes.
+//    `nil` is explicitly unbounded; heroes should pass a geometry/display-scale
+//    budget, including on 4K displays.
 //  • Fades in artwork that had to be fetched, while keeping cache hits instant.
 //    Pass an explicit `transaction` to override, or `Transaction()` to disable.
 //

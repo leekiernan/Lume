@@ -56,41 +56,6 @@ enum DetailMetrics {
     }
 }
 
-// MARK: - Backdrop image
-
-/// A wide artwork fill that prefers the TMDB backdrop and gracefully falls back
-/// to the provider poster, then to a symbol. Mirrors the home hero treatment.
-struct BackdropImage: View {
-    let url: URL?
-    var fallbackSymbol: String = "film"
-
-    var body: some View {
-        GeometryReader { geo in
-            CachedAsyncImage(url: url) { phase in
-                switch phase {
-                case .empty:
-                    Rectangle().fill(Color.gray.opacity(0.25))
-                        .overlay { ProgressView() }
-                case let .success(image):
-                    image.resizable().aspectRatio(contentMode: .fill)
-                        .frame(width: geo.size.width, height: geo.size.height)
-                        .clipped()
-                case .failure:
-                    Rectangle().fill(Color.gray.opacity(0.25))
-                        .overlay {
-                            Image(systemName: fallbackSymbol)
-                                .font(.largeTitle)
-                                .foregroundStyle(.secondary)
-                        }
-                @unknown default:
-                    EmptyView()
-                }
-            }
-            .frame(width: geo.size.width, height: geo.size.height)
-        }
-    }
-}
-
 // MARK: - Hero
 
 /// The cinematic header: backdrop artwork dimmed by a bottom gradient, with the
@@ -108,7 +73,7 @@ struct DetailHero: View {
 
     var body: some View {
         ZStack(alignment: .bottomLeading) {
-            BackdropImage(url: backdropURL ?? posterFallbackURL, fallbackSymbol: fallbackSymbol)
+            DetailBackdropArtwork(backdropURL: backdropURL, posterFallbackURL: posterFallbackURL, fallbackSymbol: fallbackSymbol)
 
             LinearGradient(
                 colors: [.clear, .black.opacity(0.35), .black.opacity(0.92)],

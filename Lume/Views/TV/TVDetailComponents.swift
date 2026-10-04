@@ -41,41 +41,6 @@
         static let castAvatar: CGFloat = 160
     }
 
-    // MARK: - Backdrop
-
-    /// A full-bleed artwork fill that prefers the TMDB backdrop and gracefully
-    /// degrades to the provider poster, then to a symbol.
-    struct TVDetailBackdrop: View {
-        let url: URL?
-        var fallbackSymbol: String = "film"
-
-        var body: some View {
-            GeometryReader { geo in
-                CachedAsyncImage(url: url) { phase in
-                    switch phase {
-                    case .empty:
-                        Rectangle().fill(Color.black.opacity(0.6))
-                            .overlay { ProgressView() }
-                    case let .success(image):
-                        image.resizable().aspectRatio(contentMode: .fill)
-                            .frame(width: geo.size.width, height: geo.size.height)
-                            .clipped()
-                    case .failure:
-                        Rectangle().fill(Color.black.opacity(0.6))
-                            .overlay {
-                                Image(systemName: fallbackSymbol)
-                                    .font(.system(size: 80))
-                                    .foregroundStyle(.white.opacity(0.4))
-                            }
-                    @unknown default:
-                        EmptyView()
-                    }
-                }
-                .frame(width: geo.size.width, height: geo.size.height)
-            }
-        }
-    }
-
     // MARK: - Star rating
 
     /// Five-star rating (with halves) plus the numeric value, on a 0…5 scale.
@@ -224,7 +189,7 @@
 
         var body: some View {
             ZStack(alignment: .bottomLeading) {
-                TVDetailBackdrop(url: backdropURL ?? posterFallbackURL, fallbackSymbol: fallbackSymbol)
+                DetailBackdropArtwork(backdropURL: backdropURL, posterFallbackURL: posterFallbackURL, fallbackSymbol: fallbackSymbol, appearance: .television)
 
                 // Bottom scrim for legibility over bright artwork.
                 LinearGradient(
