@@ -73,12 +73,7 @@
                     Section {
                         TextField("Title", text: $title, prompt: titlePrompt)
                         TextField("List URL", text: $urlText, prompt: Text(verbatim: exampleURL))
-                        #if os(iOS)
-                            .textInputAutocapitalization(.never)
-                            .keyboardType(.URL)
-                        #endif
-                            .autocorrectionDisabled()
-                            .textContentType(.URL)
+                            .urlEntry()
                     } header: {
                         Text("Section")
                     } footer: {

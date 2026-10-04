@@ -223,12 +223,7 @@ struct EPGSettingsView: View {
                     Section("Source") {
                         TextField("Name", text: $name)
                         TextField("XMLTV URL", text: $url)
-                        #if os(iOS)
-                            .textInputAutocapitalization(.never)
-                            .keyboardType(.URL)
-                        #endif
-                            .autocorrectionDisabled()
-                            .textContentType(.URL)
+                            .urlEntry()
                     }
                 }
                 #if os(macOS)

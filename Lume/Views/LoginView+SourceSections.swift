@@ -27,19 +27,10 @@ import SwiftUI
                     .textContentType(.name)
 
                 TextField("e.g. http://example.com:8080", text: $serverURL)
-                #if os(iOS)
-                    .textInputAutocapitalization(.never)
-                    .keyboardType(.URL)
-                #endif
-                    .autocorrectionDisabled()
-                    .textContentType(.URL)
+                    .urlEntry()
 
                 TextField("Username", text: $username)
-                #if os(iOS)
-                    .textInputAutocapitalization(.never)
-                #endif
-                    .autocorrectionDisabled()
-                    .textContentType(.username)
+                    .usernameEntry()
 
                 SecureField("Password", text: $password)
                     .textContentType(.password)
@@ -68,22 +59,12 @@ import SwiftUI
                     .textContentType(.name)
 
                 TextField("e.g. http://example.com/playlist.m3u", text: $m3uURL)
-                #if os(iOS)
-                    .textInputAutocapitalization(.never)
-                    .keyboardType(.URL)
-                #endif
-                    .autocorrectionDisabled()
-                    .textContentType(.URL)
+                    .urlEntry()
 
                 Button("Choose Local File…") { showFileImporter = true }
 
                 TextField("EPG URL (optional)", text: $epgURL)
-                #if os(iOS)
-                    .textInputAutocapitalization(.never)
-                    .keyboardType(.URL)
-                #endif
-                    .autocorrectionDisabled()
-                    .textContentType(.URL)
+                    .urlEntry()
             } header: {
                 Text("M3U Playlist")
             } footer: {
@@ -112,12 +93,7 @@ import SwiftUI
                     .textContentType(.name)
 
                 TextField("e.g. http://example.com:8080/c/", text: $portalURL)
-                #if os(iOS)
-                    .textInputAutocapitalization(.never)
-                    .keyboardType(.URL)
-                #endif
-                    .autocorrectionDisabled()
-                    .textContentType(.URL)
+                    .urlEntry()
 
                 HStack {
                     TextField("MAC Address", text: $macAddress)
@@ -135,11 +111,7 @@ import SwiftUI
                 }
 
                 TextField("Username (optional)", text: $username)
-                #if os(iOS)
-                    .textInputAutocapitalization(.never)
-                #endif
-                    .autocorrectionDisabled()
-                    .textContentType(.username)
+                    .usernameEntry()
 
                 SecureField("Password (optional)", text: $password)
                     .textContentType(.password)
