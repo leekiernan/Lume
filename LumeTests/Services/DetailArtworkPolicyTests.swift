@@ -32,7 +32,8 @@ struct DetailArtworkPolicyTests {
     @Test func `fill crop and display scale determine the bounded rendition`() throws {
         let source = DetailArtworkSource(backdropURL: backdrop, posterFallbackURL: nil)
         let cropped = try #require(DetailArtworkPolicy.rendition(for: source, width: 390, height: 500, displayScale: 3))
-        #expect(cropped.decodeSizeInPixels == ceil(500 * HeroArtworkPolicy.landscapeRatio * 3))
+        // 500pt × 16:9 × 3 ≈ 2667px, rounded up to the next ladder width.
+        #expect(cropped.decodeSizeInPixels == 3840)
         #expect(abs(cropped.decodeSizeInPoints * 3 - cropped.decodeSizeInPixels) < 0.001)
         let small = try #require(DetailArtworkPolicy.rendition(for: source, width: 600, height: 300, displayScale: 1))
         #expect(small.url?.path == "/t/p/w780/backdrop.jpg")
@@ -41,10 +42,21 @@ struct DetailArtworkPolicyTests {
         #expect(large.decodeSizeInPoints * 3 == DetailArtworkPolicy.maximumPixelEdge)
     }
 
+    @Test func `small resizes keep the same rendition and cache key`() throws {
+        let source = DetailArtworkSource(backdropURL: backdrop, posterFallbackURL: nil)
+        let renditions = try [1100, 1150, 1199, 1280].map { width in
+            try #require(DetailArtworkPolicy.rendition(for: source, width: CGFloat(width), height: 500, displayScale: 1))
+        }
+        #expect(Set(renditions.map(\.decodeSizeInPixels)) == [1280])
+        #expect(Set(renditions.map(\.url)).count == 1)
+        let wider = try #require(DetailArtworkPolicy.rendition(for: source, width: 1300, height: 500, displayScale: 1))
+        #expect(wider.decodeSizeInPixels == 1920)
+    }
+
     @Test func `poster fallback uses poster tiers and bounds large portrait crops`() throws {
         let source = DetailArtworkSource(backdropURL: nil, posterFallbackURL: poster)
         let small = try #require(DetailArtworkPolicy.rendition(for: source, width: 300, height: 200, displayScale: 1))
-        #expect(small.decodeSizeInPixels == 450)
+        #expect(small.decodeSizeInPixels == 480)
         #expect(small.url?.path == "/t/p/w342/poster.jpg")
         let wide = try #require(DetailArtworkPolicy.rendition(for: source, width: 1920, height: 900, displayScale: 2))
         #expect(wide.decodeSizeInPixels == DetailArtworkPolicy.maximumPixelEdge)
