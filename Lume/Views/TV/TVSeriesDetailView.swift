@@ -302,12 +302,12 @@
             switch item {
             case let .movie(movie):
                 NavigationLink(value: movie) {
-                    TVPosterCard(title: item.title, imageURL: item.imageURL, badge: badge)
+                    TVPosterCard(item: item, badge: badge)
                 }
                 .buttonStyle(TVCardButtonStyle())
             case let .series(series):
                 NavigationLink(value: series) {
-                    TVPosterCard(title: item.title, imageURL: item.imageURL, badge: badge)
+                    TVPosterCard(item: item, badge: badge)
                 }
                 .buttonStyle(TVCardButtonStyle())
             case .live:

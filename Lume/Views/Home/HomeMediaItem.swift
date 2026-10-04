@@ -39,6 +39,24 @@ enum HomeMediaItem: Identifiable, Hashable {
         }
     }
 
+    /// Detail rails share the stored fallback and scalar recovery request with
+    /// library cards. Live channel logos never participate in TMDB recovery.
+    var posterPath: String? {
+        switch self {
+        case let .movie(movie): movie.posterPath
+        case let .series(series): series.posterPath
+        case .live: nil
+        }
+    }
+
+    var posterRecoveryRequest: PosterArtworkRequest? {
+        switch self {
+        case let .movie(movie): .init(kind: .movie, id: movie.id, categoryID: movie.categoryId)
+        case let .series(series): .init(kind: .series, id: series.id, categoryID: series.categoryId)
+        case .live: nil
+        }
+    }
+
     var lastWatchedDate: Date? {
         switch self {
         case let .movie(movie): movie.lastWatchedDate

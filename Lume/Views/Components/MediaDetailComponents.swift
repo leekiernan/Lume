@@ -362,13 +362,13 @@ struct SimilarRow: View {
                         switch item {
                         case let .movie(movie):
                             NavigationLink(value: movie) {
-                                DetailPosterCard(title: item.title, imageURL: item.imageURL)
+                                DetailPosterCard(item: item)
                                     .matchedTransitionSourceIfAvailable(id: movie.id, in: animationNamespace)
                             }
                             .buttonStyle(.plain)
                         case let .series(series):
                             NavigationLink(value: series) {
-                                DetailPosterCard(title: item.title, imageURL: item.imageURL, isSeries: true)
+                                DetailPosterCard(item: item)
                                     .matchedTransitionSourceIfAvailable(id: series.id, in: animationNamespace)
                             }
                             .buttonStyle(.plain)
@@ -380,48 +380,6 @@ struct SimilarRow: View {
                 }
             }
             .padding(.horizontal, DetailMetrics.contentPadding)
-        }
-    }
-}
-
-/// A poster-style card matching the home rows, for the similar-titles strip.
-struct DetailPosterCard: View {
-    let title: String
-    let imageURL: URL?
-    var badge: String?
-    /// Picks the series fallback symbol, matching `SeriesCardView`.
-    var isSeries: Bool = false
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: PosterCardMetrics.titleSpacing) {
-            CachedAsyncImage(url: imageURL, maxPixelSize: PosterCardMetrics.posterHeight) { phase in
-                switch phase {
-                case .empty:
-                    Rectangle().fill(Color.gray.opacity(0.3)).overlay { ProgressView() }
-                case let .success(image):
-                    image.resizable().aspectRatio(contentMode: .fill)
-                case .failure:
-                    Rectangle().fill(Color.gray.opacity(0.3))
-                        .overlay {
-                            Image(systemName: isSeries ? "tv" : "film")
-                                .foregroundStyle(.secondary)
-                                .font(.largeTitle)
-                        }
-                @unknown default:
-                    EmptyView()
-                }
-            }
-            .posterArtworkFrame(fillsWidth: false)
-            .clipShape(RoundedRectangle(cornerRadius: PosterCardMetrics.cornerRadius))
-            .posterBadge(badge)
-            #if !os(tvOS)
-                .shadow(radius: 2)
-            #endif
-
-            Text(title)
-                .font(PosterCardMetrics.titleFont)
-                .lineLimit(2)
-                .posterTitleFrame(fillsWidth: false)
         }
     }
 }

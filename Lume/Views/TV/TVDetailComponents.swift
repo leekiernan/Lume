@@ -458,46 +458,6 @@
         }
     }
 
-    // MARK: - Poster card
-
-    /// A poster-style card for the "You May Also Like" / collection rails.
-    struct TVPosterCard: View {
-        let title: String
-        let imageURL: URL?
-        var badge: String?
-
-        var body: some View {
-            VStack(alignment: .leading, spacing: 10) {
-                CachedAsyncImage(url: imageURL, maxPixelSize: PosterCardMetrics.posterHeight) { phase in
-                    switch phase {
-                    case .empty:
-                        Rectangle().fill(Color.white.opacity(0.08)).overlay { ProgressView() }
-                    case let .success(image):
-                        image.resizable().aspectRatio(contentMode: .fill)
-                    case .failure:
-                        Rectangle().fill(Color.white.opacity(0.08))
-                            .overlay {
-                                Image(systemName: "film")
-                                    .font(.system(size: 56))
-                                    .foregroundStyle(.white.opacity(0.5))
-                            }
-                    @unknown default:
-                        EmptyView()
-                    }
-                }
-                .frame(width: TVDetailMetrics.posterCardWidth, height: TVDetailMetrics.posterCardHeight)
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                .posterBadge(badge)
-
-                Text(title)
-                    .font(.system(size: 24, weight: .medium))
-                    .foregroundStyle(.white)
-                    .lineLimit(2)
-                    .frame(width: TVDetailMetrics.posterCardWidth, alignment: .leading)
-            }
-        }
-    }
-
     // MARK: - Info card
 
     /// A card listing supplementary key/value information (Director, Genre…).

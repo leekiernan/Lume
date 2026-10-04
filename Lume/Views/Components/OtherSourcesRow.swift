@@ -28,8 +28,7 @@ struct OtherSourcesRow: View {
                     case let .movie(movie):
                         NavigationLink(value: movie) {
                             DetailPosterCard(
-                                title: source.item.title,
-                                imageURL: source.item.imageURL,
+                                item: source.item,
                                 badge: source.playlistName
                             )
                             .matchedTransitionSourceIfAvailable(id: movie.id, in: animationNamespace)
@@ -38,10 +37,8 @@ struct OtherSourcesRow: View {
                     case let .series(series):
                         NavigationLink(value: series) {
                             DetailPosterCard(
-                                title: source.item.title,
-                                imageURL: source.item.imageURL,
-                                badge: source.playlistName,
-                                isSeries: true
+                                item: source.item,
+                                badge: source.playlistName
                             )
                             .matchedTransitionSourceIfAvailable(id: series.id, in: animationNamespace)
                         }
