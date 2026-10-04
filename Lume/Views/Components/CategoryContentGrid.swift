@@ -22,10 +22,7 @@ struct CategoryContentGrid<Item: Identifiable & Hashable & WatchlistFavoritable,
     /// Called when the last item appears, so a paginating caller can fetch the
     /// next page. Nil callers load their full set up front (unchanged behavior).
     var onLoadMore: (() -> Void)?
-    @Environment(\.modelContext) private var modelContext
     @ViewBuilder let card: (Item) -> Card
-
-    private let columns = [GridItem(.adaptive(minimum: PosterCardMetrics.gridMinimum), spacing: PosterCardMetrics.gridSpacing)]
 
     var body: some View {
         CategoryPage(title: title) {
@@ -42,20 +39,12 @@ struct CategoryContentGrid<Item: Identifiable & Hashable & WatchlistFavoritable,
                 )
                 .padding(.top, 40)
             case .content:
-                LazyVGrid(columns: columns, spacing: PosterCardMetrics.gridSpacing) {
+                PosterGrid {
                     ForEach(items) { item in
-                        NavigationLink(value: item) {
-                            card(item)
-                                .matchedTransitionSourceIfAvailable(id: item.id, in: animationNamespace)
-                        }
-                        .posterCardButtonStyle()
-                        .onAppear {
-                            if let onLoadMore, item.id == items.last?.id { onLoadMore() }
-                        }
-                        .mediaFavoriteMenu(
-                            isFavorite: { item.isFavorite },
-                            onToggleFavorite: { MediaFavorites.toggle(item, in: modelContext) }
-                        )
+                        CatalogPosterLink(item: item, animationNamespace: animationNamespace, card: card)
+                            .onAppear {
+                                if let onLoadMore, item.id == items.last?.id { onLoadMore() }
+                            }
                     }
                 }
                 .padding()

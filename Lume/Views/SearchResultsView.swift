@@ -184,20 +184,9 @@ struct SearchResultsView<Header: View>: View {
         _ items: [Item],
         @ViewBuilder card: @escaping (Item) -> some View
     ) -> some View {
-        LazyVGrid(
-            columns: [GridItem(.adaptive(minimum: PosterCardMetrics.gridMinimum), spacing: PosterCardMetrics.gridSpacing)],
-            spacing: PosterCardMetrics.gridSpacing
-        ) {
+        PosterGrid {
             ForEach(items) { item in
-                NavigationLink(value: item) {
-                    card(item)
-                        .matchedTransitionSourceIfAvailable(id: item.id, in: animationNamespace)
-                }
-                .posterCardButtonStyle()
-                .mediaFavoriteMenu(
-                    isFavorite: { item.isFavorite },
-                    onToggleFavorite: { MediaFavorites.toggle(item, in: modelContext) }
-                )
+                CatalogPosterLink(item: item, animationNamespace: animationNamespace, card: card)
             }
         }
         .padding(.horizontal)

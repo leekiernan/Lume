@@ -20,27 +20,14 @@ struct SectionCollectionView: View {
     let feed: SectionFeed
     var animationNamespace: Namespace.ID?
 
-    @Environment(\.modelContext) private var modelContext
     @State private var entries: [HomeListEntry] = []
     @State private var items: [HomeMediaItem] = []
     @State private var pagination = PaginationMachine()
 
     private let pageSize = 100
-    private let columns = [
-        GridItem(.adaptive(minimum: PosterCardMetrics.gridMinimum), spacing: PosterCardMetrics.gridSpacing)
-    ]
 
     var body: some View {
-        ScrollView {
-            #if os(tvOS)
-                Text(selection.title)
-                    .font(.largeTitle)
-                    .fontWeight(.bold)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal)
-                    .padding(.top, 40)
-            #endif
-
+        CategoryPage(title: selection.title) {
             if items.isEmpty, pagination.isPrepared, !pagination.isLoading {
                 ContentUnavailableView(
                     "Nothing Here Yet",
@@ -48,7 +35,7 @@ struct SectionCollectionView: View {
                 )
                 .padding(.top, 40)
             } else {
-                LazyVGrid(columns: columns, spacing: PosterCardMetrics.gridSpacing) {
+                PosterGrid {
                     ForEach(items) { item in
                         itemLink(item)
                             .onAppear {
@@ -64,39 +51,22 @@ struct SectionCollectionView: View {
                 .padding()
             }
         }
-        .browseActivity()
-        #if !os(tvOS)
-            .navigationTitle(selection.title)
-            .macNavigationBack()
-        #endif
-            .task(id: selection.section.token) {
-                prepare()
-            }
+        .task(id: selection.section.token) {
+            prepare()
+        }
     }
 
     @ViewBuilder
     private func itemLink(_ item: HomeMediaItem) -> some View {
         switch item {
         case let .movie(movie):
-            NavigationLink(value: movie) {
+            CatalogPosterLink(item: movie, animationNamespace: animationNamespace) { movie in
                 MovieCardView(movie: movie, fillsWidth: true)
-                    .matchedTransitionSourceIfAvailable(id: movie.id, in: animationNamespace)
             }
-            .posterCardButtonStyle()
-            .mediaFavoriteMenu(
-                isFavorite: { movie.isFavorite },
-                onToggleFavorite: { MediaFavorites.toggle(movie, in: modelContext) }
-            )
         case let .series(series):
-            NavigationLink(value: series) {
+            CatalogPosterLink(item: series, animationNamespace: animationNamespace) { series in
                 SeriesCardView(series: series, fillsWidth: true)
-                    .matchedTransitionSourceIfAvailable(id: series.id, in: animationNamespace)
             }
-            .posterCardButtonStyle()
-            .mediaFavoriteMenu(
-                isFavorite: { series.isFavorite },
-                onToggleFavorite: { MediaFavorites.toggle(series, in: modelContext) }
-            )
         case .live:
             EmptyView()
         }
