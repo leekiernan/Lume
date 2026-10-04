@@ -91,49 +91,21 @@ struct CollectionPreviewRow<Item: Identifiable & Hashable & WatchlistFavoritable
     @ViewBuilder let card: (Item) -> Card
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text(title)
-                    .font(PosterCardMetrics.railTitleFont)
-                    .fontWeight(.bold)
-                    .foregroundStyle(.secondary)
-
-                Spacer()
-
-                if hasMore {
-                    NavigationLink(value: showAll) {
-                        Text("Show All")
-                            .font(.subheadline)
-                    }
+        PosterRail(title: Text(title), showAll: hasMore ? showAll : nil, groupsFocus: true) {
+            ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                NavigationLink(value: item) {
+                    card(item)
+                        .matchedTransitionSourceIfAvailable(id: item.id, in: animationNamespace)
                 }
+                .posterCardButtonStyle()
+                .onLeadingEdgeLeft(index == 0 ? onLeadingLeft : nil)
+                .mediaFavoriteMenu(
+                    isFavorite: { item.isFavorite },
+                    onToggleFavorite: { MediaFavorites.toggle(item, in: modelContext) },
+                    onRemoveFromRecents: removeAction.map { action in { action(item) } }
+                )
             }
-            .padding(.horizontal)
-
-            ScrollView(.horizontal, showsIndicators: false) {
-                LazyHStack(spacing: PosterCardMetrics.railSpacing) {
-                    ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
-                        NavigationLink(value: item) {
-                            card(item)
-                                .matchedTransitionSourceIfAvailable(id: item.id, in: animationNamespace)
-                        }
-                        .posterCardButtonStyle()
-                        .onLeadingEdgeLeft(index == 0 ? onLeadingLeft : nil)
-                        .mediaFavoriteMenu(
-                            isFavorite: { item.isFavorite },
-                            onToggleFavorite: { MediaFavorites.toggle(item, in: modelContext) },
-                            onRemoveFromRecents: removeAction.map { action in { action(item) } }
-                        )
-                    }
-                }
-                .padding(.horizontal)
-                .padding(.vertical, PosterCardMetrics.railVerticalPadding)
-            }
-            .scrollClipDisabled()
-            .frame(height: PosterCardMetrics.rowHeight)
         }
-        #if os(tvOS)
-        .focusSection()
-        #endif
     }
 }
 
@@ -210,66 +182,7 @@ struct MovieCollectionRow: View {
 }
 
 /// The full grid behind a Movies collection's "Show All".
-struct MovieCollectionView: View {
-    let kind: LibraryCollection.Kind
-    let playlistPrefix: String
-    var animationNamespace: Namespace.ID?
-    @Environment(\.modelContext) private var modelContext
-    @Environment(\.contentRestriction) private var restriction
-    @State private var collection = PagedCollection<Movie>()
-
-    private let pageSize = 100
-
-    init(kind: LibraryCollection.Kind, playlistPrefix: String, animationNamespace: Namespace.ID? = nil) {
-        self.kind = kind
-        self.playlistPrefix = playlistPrefix
-        self.animationNamespace = animationNamespace
-    }
-
-    var body: some View {
-        let emptyDescription: LocalizedStringKey = switch kind {
-        case .favorites: "Movies you mark as favorites will appear here"
-        case .continueWatching, .recentlyWatched: "Movies you watch will appear here"
-        case .recentlyAdded: "Movies recently added to your library will appear here"
-        }
-        CategoryContentGrid(
-            title: kind.localizedTitleString,
-            items: collection.items,
-            animationNamespace: animationNamespace,
-            emptyTitle: kind.title,
-            emptyIcon: kind.emptyIcon,
-            emptyDescription: emptyDescription,
-            isLoading: collection.pagination.key != requestKey || collection.isLoading,
-            onLoadMore: loadNextPage,
-            card: { MovieCardView(movie: $0, fillsWidth: true) }
-        )
-        .task(id: requestKey) {
-            collection.prepare(for: requestKey)
-            loadNextPage()
-        }
-    }
-
-    private var requestKey: String {
-        "\(kind.rawValue)-\(playlistPrefix)-\(restriction.visibilityToken)"
-    }
-
-    private func loadNextPage() {
-        collection.loadNextPage(
-            in: modelContext,
-            pageSize: pageSize,
-            deduplicateBy: { $0.tmdbId.map(AnyHashable.init) },
-            descriptor: { offset, limit in
-                MovieCollectionQuery.pageDescriptor(
-                    for: kind,
-                    playlistPrefix: playlistPrefix,
-                    excludedCategoryIDs: restriction.excludedCategoryIDs,
-                    offset: offset,
-                    limit: limit
-                )
-            }
-        )
-    }
-}
+typealias MovieCollectionView = CatalogCollectionView<MovieCatalog>
 
 // MARK: - Series
 
@@ -405,90 +318,11 @@ enum SeriesWatchSplit {
 }
 
 /// The full grid behind a Series collection's "Show All".
-struct SeriesCollectionView: View {
-    let kind: LibraryCollection.Kind
-    let playlistPrefix: String
-    var animationNamespace: Namespace.ID?
-    @Environment(\.modelContext) private var modelContext
-    @Environment(\.contentRestriction) private var restriction
-    @State private var collection = PagedCollection<Series>()
-    /// Splits the loaded pages between the two watch collections.
-    @State private var progress = ContinueWatchingLoader.Result()
-    @State private var settledProgressKey: [String]?
-
-    private let pageSize = 100
-
-    init(kind: LibraryCollection.Kind, playlistPrefix: String, animationNamespace: Namespace.ID? = nil) {
-        self.kind = kind
-        self.playlistPrefix = playlistPrefix
-        self.animationNamespace = animationNamespace
-    }
-
-    var body: some View {
-        let emptyDescription: LocalizedStringKey = switch kind {
-        case .favorites: "Series you mark as favorites will appear here"
-        case .continueWatching, .recentlyWatched: "Series you watch will appear here"
-        case .recentlyAdded: "Series recently added to your library will appear here"
-        }
-        CategoryContentGrid(
-            title: kind.localizedTitleString,
-            items: SeriesWatchSplit.shown(collection.items, for: kind, progress: progress),
-            animationNamespace: animationNamespace,
-            emptyTitle: kind.title,
-            emptyIcon: kind.emptyIcon,
-            emptyDescription: emptyDescription,
-            isLoading: collection.pagination.key != requestKey || collection.isLoading
-                || (SeriesWatchSplit.splits(kind) && settledProgressKey != progressKey),
-            onLoadMore: loadNextPage,
-            card: { SeriesCardView(series: $0, fillsWidth: true) }
-        )
-        .task(id: requestKey) {
-            collection.prepare(for: requestKey)
-            loadNextPage()
-        }
-        .task(id: progressKey) {
-            guard SeriesWatchSplit.splits(kind) else { return }
-            let settled = await SeriesWatchSplit.settle(
-                kind,
-                collection: collection,
-                progress: { await ContinueWatchingLoader.load($0, in: modelContext) },
-                loadNextPage: loadNextPage
-            )
-            guard !Task.isCancelled, let settled else { return }
-            progress = settled
-            settledProgressKey = progressKey
-        }
-    }
-
-    private var progressKey: [String] {
-        [requestKey] + SeriesWatchSplit.key(collection.items, for: kind)
-    }
-
-    private var requestKey: String {
-        "\(kind.rawValue)-\(playlistPrefix)-\(restriction.visibilityToken)"
-    }
-
-    private func loadNextPage() {
-        collection.loadNextPage(
-            in: modelContext,
-            pageSize: pageSize,
-            deduplicateBy: { $0.tmdbId.map(AnyHashable.init) },
-            descriptor: { offset, limit in
-                SeriesCollectionQuery.pageDescriptor(
-                    for: kind,
-                    playlistPrefix: playlistPrefix,
-                    excludedCategoryIDs: restriction.excludedCategoryIDs,
-                    offset: offset,
-                    limit: limit
-                )
-            }
-        )
-    }
-}
+typealias SeriesCollectionView = CatalogCollectionView<SeriesCatalog>
 
 // MARK: - Title bridging
 
-private extension LibraryCollection.Kind {
+extension LibraryCollection.Kind {
     /// `CategoryContentGrid` takes a plain `String` title (it surfaces the
     /// category name, normally already a `String`). These collections have a
     /// fixed English name we localize at the call site for the grid heading.

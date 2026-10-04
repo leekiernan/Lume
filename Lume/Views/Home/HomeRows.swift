@@ -38,44 +38,19 @@ struct HomeRow: View {
     var animationNamespace: Namespace.ID?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                title
-                    .font(PosterCardMetrics.railTitleFont)
-                    .fontWeight(.bold)
-                    .foregroundStyle(.secondary)
-
-                Spacer()
-
-                if let showAll {
-                    NavigationLink(value: showAll) {
-                        Text("Show All")
-                            .font(.subheadline)
-                    }
-                }
+        PosterRail(title: title, showAll: showAll) {
+            ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                HomeItemCell(
+                    item: item,
+                    seriesResume: seriesResume,
+                    onPlayLive: onPlayLive,
+                    onRemove: onRemove,
+                    onVote: onVote,
+                    onStartMultiView: onStartMultiView,
+                    animationNamespace: animationNamespace
+                )
+                .onLeadingEdgeLeft(index == 0 ? onLeadingLeft : nil)
             }
-            .padding(.horizontal)
-
-            ScrollView(.horizontal, showsIndicators: false) {
-                LazyHStack(spacing: PosterCardMetrics.railSpacing) {
-                    ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
-                        HomeItemCell(
-                            item: item,
-                            seriesResume: seriesResume,
-                            onPlayLive: onPlayLive,
-                            onRemove: onRemove,
-                            onVote: onVote,
-                            onStartMultiView: onStartMultiView,
-                            animationNamespace: animationNamespace
-                        )
-                        .onLeadingEdgeLeft(index == 0 ? onLeadingLeft : nil)
-                    }
-                }
-                .padding(.horizontal)
-                .padding(.vertical, PosterCardMetrics.railVerticalPadding)
-            }
-            .scrollClipDisabled()
-            .frame(height: PosterCardMetrics.rowHeight)
         }
     }
 }
@@ -223,8 +198,8 @@ struct ForYouRow: View {
 
 // MARK: - Poster card
 
-/// A poster-style card used across all home rows. Shows artwork with an
-/// optional resume progress bar and a "Live" badge.
+/// The channel-logo card used by Home rails. VOD posters and resume treatment
+/// are provided separately by `PosterCard`.
 ///
 /// Live channel logos are mostly transparent PNGs, so unlike movie/series
 /// posters they can't fill the card themselves. They get a full card treatment

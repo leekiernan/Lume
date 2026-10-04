@@ -65,51 +65,24 @@ struct ContinueWatchingRow: View {
     var body: some View {
         let visible = items
         if !visible.isEmpty {
-            VStack(alignment: .leading, spacing: 12) {
-                header
-                ScrollView(.horizontal, showsIndicators: false) {
-                    LazyHStack(spacing: PosterCardMetrics.railSpacing) {
-                        ForEach(Array(visible.enumerated()), id: \.element.id) { index, item in
-                            ContinueWatchingCell(
-                                item: item,
-                                continuation: continuation(for: item),
-                                artwork: artwork[item.id],
-                                onPlayLive: onPlayLive,
-                                onRemove: onRemove,
-                                onStartMultiView: onStartMultiView,
-                                animationNamespace: animationNamespace
-                            )
-                            .onLeadingEdgeLeft(index == 0 ? onLeadingLeft : nil)
-                        }
-                    }
-                    .padding(.horizontal)
-                    .padding(.vertical, PosterCardMetrics.railVerticalPadding)
+            PosterRail(title: Text("Continue Watching"), showAll: showAll,
+                       groupsFocus: true, rowHeight: ContinueWatchingMetrics.rowHeight)
+            {
+                ForEach(Array(visible.enumerated()), id: \.element.id) { index, item in
+                    ContinueWatchingCell(
+                        item: item,
+                        continuation: continuation(for: item),
+                        artwork: artwork[item.id],
+                        onPlayLive: onPlayLive,
+                        onRemove: onRemove,
+                        onStartMultiView: onStartMultiView,
+                        animationNamespace: animationNamespace
+                    )
+                    .onLeadingEdgeLeft(index == 0 ? onLeadingLeft : nil)
                 }
-                .scrollClipDisabled()
-                .frame(height: ContinueWatchingMetrics.rowHeight)
             }
-            #if os(tvOS)
-            .focusSection()
-            #endif
             .task(id: artworkKey) { await fetchMissingArtwork() }
         }
-    }
-
-    private var header: some View {
-        HStack {
-            Text("Continue Watching")
-                .font(PosterCardMetrics.railTitleFont)
-                .fontWeight(.bold)
-                .foregroundStyle(.secondary)
-            Spacer()
-            if let showAll {
-                NavigationLink(value: showAll) {
-                    Text("Show All")
-                        .font(.subheadline)
-                }
-            }
-        }
-        .padding(.horizontal)
     }
 
     private func continuation(for item: HomeMediaItem) -> SeriesContinuation? {
