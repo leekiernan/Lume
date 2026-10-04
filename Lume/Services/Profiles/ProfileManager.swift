@@ -239,14 +239,20 @@ final class ProfileManager {
         let interval = Perf.begin(.profileSwitch)
         let clock = ContinuousClock()
         let started = clock.now
-        var swapped = started
+        var swapped: ContinuousClock.Instant?
         defer {
             switchingToProfileID = nil
             Perf.end(interval)
-            Logger.sync.info("""
-            Profile switch finished in \((clock.now - started).logSeconds, privacy: .public) \
-            (store swap incl. queueing \((swapped - started).logSeconds, privacy: .public))
-            """)
+            let total = (clock.now - started).logSeconds
+            if let swapped {
+                Logger.sync.info("""
+                Profile switch finished in \(total, privacy: .public) \
+                (store swap incl. queueing \((swapped - started).logSeconds, privacy: .public))
+                """)
+            } else {
+                // The catch below has logged why; this says how long it took.
+                Logger.sync.info("Profile switch aborted after \(total, privacy: .public)")
+            }
         }
         preferencesSaveTask?.cancel()
         preferencesSaveTask = nil
