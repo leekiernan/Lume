@@ -57,26 +57,26 @@ import VLCKit
         }
 
         private var audioTrackOptions: [PlayerTrackOption] {
-            coordinator.audioTracks.enumerated().map {
-                PlayerTrackOption(id: String($0.offset), label: $0.element.trackName, isSelected: $0.element.isSelectedExclusively)
+            coordinator.audioTracks.map {
+                PlayerTrackOption(id: $0.trackId, label: $0.trackName, isSelected: $0.isSelectedExclusively)
             }
         }
 
         private var textTrackOptions: [PlayerTrackOption] {
-            coordinator.textTracks.enumerated().map {
-                PlayerTrackOption(id: String($0.offset), label: $0.element.trackName, isSelected: $0.element.isSelectedExclusively)
+            coordinator.textTracks.map {
+                PlayerTrackOption(id: $0.trackId, label: $0.trackName, isSelected: $0.isSelectedExclusively)
             }
         }
 
         private func selectAudioTrack(_ id: String) {
-            guard let index = Int(id), coordinator.audioTracks.indices.contains(index) else { return }
-            coordinator.selectAudioTrack(coordinator.audioTracks[index])
+            guard let track = coordinator.audioTracks.first(where: { $0.trackId == id }) else { return }
+            coordinator.selectAudioTrack(track)
         }
 
         private func selectTextTrack(_ id: String?) {
             guard let id else { coordinator.selectTextTrack(nil); return }
-            guard let index = Int(id), coordinator.textTracks.indices.contains(index) else { return }
-            coordinator.selectTextTrack(coordinator.textTracks[index])
+            guard let track = coordinator.textTracks.first(where: { $0.trackId == id }) else { return }
+            coordinator.selectTextTrack(track)
         }
 
         private func onSliderEditingChanged(editing: Bool) {
