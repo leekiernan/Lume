@@ -287,7 +287,7 @@ struct KSPlayerEngineView: View {
                         clock: clock,
                         panelCloseToken: panelCloseToken,
                         onTogglePlay: { togglePlay() },
-                        onResetHideTimer: { resetHideTimer() },
+                        onResetHideTimer: { scheduleHide() },
                         onSelectMedia: { selectMedia($0) },
                         onPanelOpenChange: { setPanelOpen($0) },
                         onSwitchChannel: { switchLiveChannel($0) },
@@ -342,7 +342,7 @@ struct KSPlayerEngineView: View {
                 coordinator.resetPlayer()
             }
             .onChange(of: engine.isPlaying) { _, _ in
-                resetHideTimer()
+                scheduleHide()
             }
             .onChange(of: scenePhase) { _, phase in
                 // The Home button backgrounds the app without calling
@@ -372,14 +372,12 @@ struct KSPlayerEngineView: View {
         }
 
         private var tapCatcher: some View {
-            #if os(tvOS)
-                PlayerTapCatcher(
-                    isLive: media.isLive, controlsDrawn: drawsControls,
-                    browserOpen: isChannelBrowserOpen, failed: loadFailed,
-                    focused: $catcherFocused, showControls: showControls,
-                    openBrowser: openChannelBrowser, surf: switchLiveChannel
-                )
-            #endif
+            PlayerTapCatcher(
+                isLive: media.isLive, controlsDrawn: drawsControls,
+                browserOpen: isChannelBrowserOpen, failed: loadFailed,
+                focused: $catcherFocused, showControls: showControls,
+                openBrowser: openChannelBrowser, surf: switchLiveChannel
+            )
         }
 
         func showControls() {
@@ -413,7 +411,7 @@ struct KSPlayerEngineView: View {
             if open {
                 chrome.suspend()
             } else {
-                resetHideTimer()
+                scheduleHide()
             }
         }
     #endif
@@ -507,7 +505,7 @@ struct KSPlayerEngineView: View {
                 NowPlayingService.shared.detachTransport(owner: coordinator)
                 coordinator.resetPlayer()
             }
-            .onChange(of: isPlaying) { _, _ in resetHideTimer() }
+            .onChange(of: isPlaying) { _, _ in scheduleHide() }
             .onChange(of: media.id) { _, _ in
                 // Same reset as tvOS: re-arms the startup watchdog and raises
                 // the spinner until the new stream's first frame.
@@ -522,11 +520,11 @@ struct KSPlayerEngineView: View {
             #if os(macOS)
             .onChange(of: macPip.isActive) { _, active in isPipActive = active }
             .playerPointerChrome(chrome, mayHide: { canAutoHideControls })
-            .onKeyPress(.leftArrow) { skip(by: -media.skipInterval(default: 15)); resetHideTimer(); return .handled }
-            .onKeyPress(.rightArrow) { skip(by: media.skipInterval(default: 15)); resetHideTimer(); return .handled }
+            .onKeyPress(.leftArrow) { skip(by: -media.skipInterval(default: 15)); scheduleHide(); return .handled }
+            .onKeyPress(.rightArrow) { skip(by: media.skipInterval(default: 15)); scheduleHide(); return .handled }
             .liveChannelKeyNavigation(
                 neighbours: itemNeighbours, swapper: mediaSwapper,
-                onSelect: { selectMedia($0) }, onResetHideTimer: resetHideTimer
+                onSelect: { selectMedia($0) }, onResetHideTimer: scheduleHide
             )
             .onKeyPress(.space) { togglePlay(); return .handled }
             .onKeyPress(.escape) { closePlayer(); return .handled }

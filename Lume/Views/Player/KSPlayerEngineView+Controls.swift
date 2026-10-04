@@ -26,7 +26,7 @@ import SwiftUI
                 onClose: { closePlayer() },
                 onTogglePlay: { togglePlay() },
                 onTogglePip: { togglePip() },
-                onResetHideTimer: { resetHideTimer() },
+                onResetHideTimer: { scheduleHide() },
                 onScheduleHide: { scheduleHide() },
                 onSeek: { seek(to: $0) },
                 onSkip: { skip(by: $0) },

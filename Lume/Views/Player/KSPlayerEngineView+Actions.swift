@@ -48,10 +48,6 @@ extension KSPlayerEngineView {
             // waiting for the next state callback.
             engine.syncState(playing ? .paused : .bufferFinished)
         #endif
-        resetHideTimer()
-    }
-
-    func resetHideTimer() {
         scheduleHide()
     }
 

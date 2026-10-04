@@ -188,7 +188,7 @@ struct AVPlayerEngineView: View {
         }
         .onChange(of: coordinator.isPlaying) { _, playing in
             clock.isPlaying = playing
-            resetHideTimer()
+            scheduleHide()
         }
         .onChange(of: coordinator.hasStartedPlayback) { _, started in
             if started { isCatchupSegmentLoading = false }
@@ -210,7 +210,7 @@ struct AVPlayerEngineView: View {
                 started: coordinator.hasStartedPlayback, alreadyLoading: isCatchupSegmentLoading
             )
             coordinator.reload(media: newMedia)
-            resetHideTimer()
+            scheduleHide()
         }
         #if os(tvOS)
         // Focus returns to the tap-catcher as the controls vanish, unless an
@@ -222,11 +222,11 @@ struct AVPlayerEngineView: View {
         .playerRemoteControls(controlsVisible: isControlsVisible, onBack: handleMenuPress, onPlayPause: togglePlay)
         #if os(macOS)
             .playerPointerChrome(chrome, mayHide: { canAutoHideControls })
-            .onKeyPress(.leftArrow) { coordinator.skip(by: -media.skipInterval(default: 15)); resetHideTimer(); return .handled }
-            .onKeyPress(.rightArrow) { coordinator.skip(by: media.skipInterval(default: 15)); resetHideTimer(); return .handled }
+            .onKeyPress(.leftArrow) { coordinator.skip(by: -media.skipInterval(default: 15)); scheduleHide(); return .handled }
+            .onKeyPress(.rightArrow) { coordinator.skip(by: media.skipInterval(default: 15)); scheduleHide(); return .handled }
             .liveChannelKeyNavigation(
                 neighbours: itemNeighbours, swapper: mediaSwapper,
-                onSelect: { onSelectMedia?($0) }, onResetHideTimer: resetHideTimer
+                onSelect: { onSelectMedia?($0) }, onResetHideTimer: scheduleHide
             )
             .onKeyPress(.space) { togglePlay(); return .handled }
             .onKeyPress(.escape) { closePlayer(); return .handled }
@@ -260,7 +260,7 @@ struct AVPlayerEngineView: View {
                 clock: clock,
                 panelCloseToken: panelCloseToken,
                 onTogglePlay: { togglePlay() },
-                onResetHideTimer: { resetHideTimer() },
+                onResetHideTimer: { scheduleHide() },
                 onSelectMedia: { onSelectMedia?($0) },
                 onPanelOpenChange: { setPanelOpen($0) },
                 onSwitchChannel: { switchLiveChannel($0) },
@@ -276,7 +276,7 @@ struct AVPlayerEngineView: View {
                 onSuspendHide: { chrome.suspend() },
                 onClose: { closePlayer() },
                 onTogglePlay: { togglePlay() },
-                onResetHideTimer: { resetHideTimer() },
+                onResetHideTimer: { scheduleHide() },
                 onScheduleHide: { scheduleHide() },
                 itemNeighbours: itemNeighbours,
                 onStepItem: { stepItem($0) }
@@ -288,7 +288,7 @@ struct AVPlayerEngineView: View {
 
     private func togglePlay() {
         coordinator.togglePlay()
-        resetHideTimer()
+        scheduleHide()
     }
 
     #if os(tvOS)
@@ -332,7 +332,7 @@ struct AVPlayerEngineView: View {
 
         private func closeChannelBrowser() {
             withAnimation(.easeInOut(duration: 0.25)) { isChannelBrowserOpen = false }
-            resetHideTimer()
+            scheduleHide()
             // Hand focus back to the tap-catcher so the remote keeps working.
             Task { @MainActor in catcherFocused = true }
         }
@@ -377,17 +377,13 @@ struct AVPlayerEngineView: View {
         }
     }
 
-    private func resetHideTimer() {
-        scheduleHide()
-    }
-
     /// Keep the controls pinned open while an overlay panel is showing.
     private func setPanelOpen(_ open: Bool) {
         isPanelOpen = open
         if open {
             chrome.suspend()
         } else {
-            resetHideTimer()
+            scheduleHide()
         }
     }
 

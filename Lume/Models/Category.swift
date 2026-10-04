@@ -95,7 +95,8 @@ extension Category {
     /// How long an on-demand Stalker category import stays fresh. Past this,
     /// opening the category revalidates it against the portal in the background
     /// (see `CatalogCategoryLoadMachine`) so provider-added titles
-    /// surface without a manual refresh — the only refresh path tvOS has.
+    /// surface without a manual refresh. The category's explicit refresh action
+    /// remains available on tvOS as well.
     static let stalkerContentTTL: TimeInterval = 24 * 60 * 60
 
     /// Whether the last on-demand import is old enough to revalidate. `true`

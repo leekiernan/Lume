@@ -61,6 +61,6 @@ extension KSPlayerEngineView {
             engine.reset()
         #endif
         startStartupWatchdog()
-        resetHideTimer()
+        scheduleHide()
     }
 }
