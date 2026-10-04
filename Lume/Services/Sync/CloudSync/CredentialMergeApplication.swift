@@ -4,7 +4,7 @@ import Foundation
 /// profile verdicts have different resolution/deletion authority and do not
 /// belong here. Store saves and disconnect acknowledgement stay in the engine.
 nonisolated enum CredentialMergeApplication {
-    struct Effects: Equatable {
+    nonisolated struct Effects: Equatable {
         var pushed = 0
         var pulled = 0
         var pending = 0

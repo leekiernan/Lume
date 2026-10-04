@@ -414,17 +414,18 @@ extension ContentSyncManager {
         return totalRemoved
     }
 
-    /// Whether a provider payload accounts for enough of the rows already stored
-    /// to be trusted to drive a sweep.
+    /// Whether a provider payload may drive a sweep of `kind`, applying
+    /// `CatalogSweepPolicy` against the rows already stored and the skips
+    /// persisted for this playlist and kind.
     ///
     /// `XtreamList` drops elements that fail to decode and rethrows only when
     /// *every* element fails, so a payload whose rows are mostly malformed
     /// arrives as a small non-empty array that the callers' `isEmpty` guards let
     /// through — and sweeping against it would delete nearly the whole catalog
-    /// along with the enrichment and ordering on those rows.
-    /// Persisted low-coverage tolerance is shared across the provider sweeps.
-    /// A failed count is distinct from low coverage: it must hold the digest
-    /// open for retry, but cannot ever authorize pruning by exhausting skips.
+    /// along with the enrichment and ordering on those rows. A failed count is
+    /// distinct from low coverage: it holds the digest open for retry, but can
+    /// never authorize pruning by exhausting skips. Counting is an aggregate
+    /// query, so it costs no materialised rows.
     private func sweepIsAllowed(
         playlistId: UUID,
         kind: String,
