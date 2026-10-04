@@ -114,7 +114,7 @@
                 Button {
                     Task { await trakt.disconnect() }
                 } label: {
-                    TrackerButtonLabel(title: "Disconnect", systemImage: "link.badge.minus")
+                    TrackerButtonLabel(title: "Disconnect", systemImage: "xmark.circle")
                 }
                 .buttonStyle(TVSettingsRowButtonStyle(isDestructive: true))
             }

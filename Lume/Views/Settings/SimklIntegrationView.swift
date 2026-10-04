@@ -94,7 +94,7 @@
                 Button(role: .destructive) {
                     Task { await simkl.disconnect() }
                 } label: {
-                    TrackerButtonLabel(title: "Disconnect", systemImage: "link.badge.minus")
+                    TrackerButtonLabel(title: "Disconnect", systemImage: "xmark.circle")
                 }
             } header: {
                 Text("Simkl")
