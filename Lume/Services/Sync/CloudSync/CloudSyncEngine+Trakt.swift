@@ -45,31 +45,16 @@ extension CloudSyncEngine {
         mirror: SyncedTraktAccount?,
         into result: inout CloudSyncReconcileResult
     ) {
-        switch verdict {
-        case .noChange:
-            break
-        case let .pushToCloud(value):
-            applyTraktToCloud(value, mirror: mirror)
-            result.traktPushed += 1
-            if value == nil { result.credentialDeletionsPushed.insert(.trakt) }
-            shadow.setTraktCredentialShadow(value)
-        case let .pullToLocal(value):
-            guard applyTraktToLocal(value) else {
-                result.traktPending += 1
-                return
-            }
-            result.traktPulled += 1
-            shadow.setTraktCredentialShadow(value)
-        case let .writeBoth(value):
-            guard applyTraktToLocal(value) else {
-                result.traktPending += 1
-                return
-            }
-            applyTraktToCloud(value, mirror: mirror)
-            result.traktPushed += 1
-            result.traktPulled += 1
-            shadow.setTraktCredentialShadow(value)
-        }
+        let effects = CredentialMergeApplication.apply(
+            verdict,
+            writeLocal: applyTraktToLocal,
+            writeCloud: { applyTraktToCloud($0, mirror: mirror) },
+            recordShadow: shadow.setTraktCredentialShadow
+        )
+        result.traktPushed += effects.pushed
+        result.traktPulled += effects.pulled
+        result.traktPending += effects.pending
+        if effects.deletionPushed { result.credentialDeletionsPushed.insert(.trakt) }
     }
 
     private func applyTraktToLocal(_ value: TraktCredentialValues?) -> Bool {
@@ -100,15 +85,11 @@ extension CloudSyncEngine {
     }
 
     private func fetchTraktAccountMirror() throws -> SyncedTraktAccount? {
-        var winner: SyncedTraktAccount?
-        for record in try cloudContext.fetch(FetchDescriptor<SyncedTraktAccount>()) {
-            guard !record.accessToken.isEmpty, !record.refreshToken.isEmpty else {
-                cloudContext.delete(record)
-                continue
-            }
-            winner = dedupe(record, against: winner, updatedAt: \.updatedAt)
-        }
-        return winner
+        try fetchCredentialMirror(
+            FetchDescriptor<SyncedTraktAccount>(),
+            isValid: { !$0.accessToken.isEmpty && !$0.refreshToken.isEmpty },
+            updatedAt: \.updatedAt
+        )
     }
 
     private static func traktValues(from mirror: SyncedTraktAccount) -> TraktCredentialValues {
