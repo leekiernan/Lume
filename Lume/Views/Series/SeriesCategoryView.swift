@@ -20,7 +20,7 @@ struct SeriesCategoryView: View {
     @State private var series: [Series] = []
     @State private var pagination = PaginationMachine()
     /// True while a Stalker category's content is being fetched from the portal
-    /// on first open — drives the loading overlay.
+    /// on first open — drives the grid's loading state.
     @State private var isImporting = false
     /// A category in a large IPTV playlist can hold thousands of titles; fetch a
     /// page at a time and load the next as the grid nears the end, rather than
@@ -36,11 +36,6 @@ struct SeriesCategoryView: View {
 
     var body: some View {
         grid
-            .overlay {
-                if isImporting, series.isEmpty {
-                    ProgressView("Loading…")
-                }
-            }
             .task(id: category.id) {
                 guard pagination.prepare(for: category.id) else { return }
                 series = []
@@ -59,6 +54,7 @@ struct SeriesCategoryView: View {
             emptyTitle: "No Series",
             emptyIcon: "tv.fill",
             emptyDescription: "This category has no series",
+            isLoading: pagination.key != category.id || pagination.isLoading || isImporting,
             onLoadMore: { loadNextPage() },
             card: { SeriesCardView(series: $0, fillsWidth: true) }
         )

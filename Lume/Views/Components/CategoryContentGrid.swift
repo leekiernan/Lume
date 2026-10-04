@@ -18,6 +18,7 @@ struct CategoryContentGrid<Item: Identifiable & Hashable & WatchlistFavoritable,
     let emptyTitle: LocalizedStringKey
     let emptyIcon: String
     let emptyDescription: LocalizedStringKey
+    var isLoading = false
     /// Called when the last item appears, so a paginating caller can fetch the
     /// next page. Nil callers load their full set up front (unchanged behavior).
     var onLoadMore: (() -> Void)?
@@ -28,14 +29,19 @@ struct CategoryContentGrid<Item: Identifiable & Hashable & WatchlistFavoritable,
 
     var body: some View {
         CategoryPage(title: title) {
-            if items.isEmpty {
+            switch CollectionGridPresentation.resolve(hasItems: !items.isEmpty, isLoading: isLoading) {
+            case .loading:
+                ProgressView("Loading…")
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 40)
+            case .empty:
                 ContentUnavailableView(
                     emptyTitle,
                     systemImage: emptyIcon,
                     description: Text(emptyDescription)
                 )
                 .padding(.top, 40)
-            } else {
+            case .content:
                 LazyVGrid(columns: columns, spacing: PosterCardMetrics.gridSpacing) {
                     ForEach(items) { item in
                         NavigationLink(value: item) {
@@ -102,7 +108,7 @@ struct MovieCategoryView: View {
     @State private var movies: [Movie] = []
     @State private var pagination = PaginationMachine()
     /// True while a Stalker category's content is being fetched from the portal
-    /// on first open — drives the loading overlay.
+    /// on first open — drives the grid's loading state.
     @State private var isImporting = false
     /// A category in a large IPTV playlist can hold thousands of titles; fetch a
     /// page at a time and load the next as the grid nears the end, rather than
@@ -118,11 +124,6 @@ struct MovieCategoryView: View {
 
     var body: some View {
         grid
-            .overlay {
-                if isImporting, movies.isEmpty {
-                    ProgressView("Loading…")
-                }
-            }
             .task(id: category.id) {
                 guard pagination.prepare(for: category.id) else { return }
                 movies = []
@@ -141,6 +142,7 @@ struct MovieCategoryView: View {
             emptyTitle: "No Movies",
             emptyIcon: "film.stack",
             emptyDescription: "This category has no movies",
+            isLoading: pagination.key != category.id || pagination.isLoading || isImporting,
             onLoadMore: { loadNextPage() },
             card: { MovieCardView(movie: $0, fillsWidth: true) }
         )

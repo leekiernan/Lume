@@ -239,6 +239,7 @@ struct MovieCollectionView: View {
             emptyTitle: kind.title,
             emptyIcon: kind.emptyIcon,
             emptyDescription: emptyDescription,
+            isLoading: collection.pagination.key != requestKey || collection.isLoading,
             onLoadMore: loadNextPage,
             card: { MovieCardView(movie: $0, fillsWidth: true) }
         )
@@ -413,6 +414,7 @@ struct SeriesCollectionView: View {
     @State private var collection = PagedCollection<Series>()
     /// Splits the loaded pages between the two watch collections.
     @State private var progress = ContinueWatchingLoader.Result()
+    @State private var settledProgressKey: [String]?
 
     private let pageSize = 100
 
@@ -435,6 +437,8 @@ struct SeriesCollectionView: View {
             emptyTitle: kind.title,
             emptyIcon: kind.emptyIcon,
             emptyDescription: emptyDescription,
+            isLoading: collection.pagination.key != requestKey || collection.isLoading
+                || (SeriesWatchSplit.splits(kind) && settledProgressKey != progressKey),
             onLoadMore: loadNextPage,
             card: { SeriesCardView(series: $0, fillsWidth: true) }
         )
@@ -442,7 +446,7 @@ struct SeriesCollectionView: View {
             collection.prepare(for: requestKey)
             loadNextPage()
         }
-        .task(id: SeriesWatchSplit.key(collection.items, for: kind)) {
+        .task(id: progressKey) {
             guard SeriesWatchSplit.splits(kind) else { return }
             let settled = await SeriesWatchSplit.settle(
                 kind,
@@ -450,8 +454,14 @@ struct SeriesCollectionView: View {
                 progress: { await ContinueWatchingLoader.load($0, in: modelContext) },
                 loadNextPage: loadNextPage
             )
-            if let settled { progress = settled }
+            guard !Task.isCancelled, let settled else { return }
+            progress = settled
+            settledProgressKey = progressKey
         }
+    }
+
+    private var progressKey: [String] {
+        [requestKey] + SeriesWatchSplit.key(collection.items, for: kind)
     }
 
     private var requestKey: String {

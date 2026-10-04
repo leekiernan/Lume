@@ -282,6 +282,7 @@ struct MovieGenreView: View {
             emptyTitle: "No Movies",
             emptyIcon: "film.stack",
             emptyDescription: "No movies in this genre",
+            isLoading: pagination.key != paginationKey || pagination.isLoading,
             onLoadMore: { loadNextPage() },
             card: { MovieCardView(movie: $0, fillsWidth: true) }
         )
@@ -353,6 +354,7 @@ struct SeriesGenreView: View {
             emptyTitle: "No Series",
             emptyIcon: "tv.fill",
             emptyDescription: "No series in this genre",
+            isLoading: pagination.key != paginationKey || pagination.isLoading,
             onLoadMore: { loadNextPage() },
             card: { SeriesCardView(series: $0, fillsWidth: true) }
         )
