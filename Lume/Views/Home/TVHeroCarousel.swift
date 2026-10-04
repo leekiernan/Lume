@@ -23,7 +23,10 @@
 
         /// Fill of the active page dot (0…1); doubles as the auto-advance clock
         /// so the loading-bar dot and the slide jump can never drift apart.
-        private(set) var progress: Double = 0
+        private let clock = HeroAutoAdvanceClock()
+        var progress: Double {
+            clock.progress
+        }
 
         /// Which hero the info overlay is showing. Deliberately LAGS the current
         /// slide: on a page change the copy fades out, swaps while invisible,
@@ -35,7 +38,6 @@
         /// (and prefetch artwork) where nobody can see it.
         var isPaused = false
 
-        private let autoAdvanceInterval: Duration = .seconds(6)
         /// The artwork to warm for a slide, when it is known up front.
         private let prefetchURL: ((Item) -> URL?)?
         private var artworkPixels: CGFloat?
@@ -79,9 +81,12 @@
         /// Runs the auto-advance clock until cancelled: tie it to a `.task`
         /// keyed by the items, on the showcase.
         func runAutoAdvance() async {
-            guard items.count > 1 else { return }
+            guard items.count > 1 else {
+                clock.reset()
+                return
+            }
             while !Task.isCancelled {
-                try? await Task.sleep(for: .milliseconds(50))
+                try? await Task.sleep(for: HeroAutoAdvanceClock.tickInterval)
                 if Task.isCancelled { return }
                 if tickAutoAdvance() { advance() }
             }
@@ -104,27 +109,12 @@
         /// has filled and the caller should page (the view pages so it can also
         /// re-assert hero focus, which the model knows nothing about).
         func tickAutoAdvance() -> Bool {
-            guard items.count > 1 else { return false }
-            // While paused, hold the bar EMPTY rather than frozen so the slide
-            // always gets a full dwell once it becomes visible again.
-            if isPaused {
-                progress = 0
-                return false
-            }
-            if progress >= 1 {
-                // Reset BEFORE paging so the next tick can't re-trigger an
-                // advance while the page change is still settling.
-                progress = 0
-                return true
-            }
-            let total = Double(autoAdvanceInterval.components.seconds)
-            progress = min(progress + 0.05 / total, 1)
-            return false
+            clock.tick(isPaused: isPaused, hasMultipleItems: items.count > 1)
         }
 
         private func page(by delta: Int) {
             guard items.count > 1 else { return }
-            progress = 0
+            clock.reset()
             // Animate the index change so the backdrop (keyed by hero id with an
             // opacity transition) crossfades rather than swapping hard.
             withAnimation(.easeInOut(duration: 0.8)) {

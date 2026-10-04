@@ -57,7 +57,7 @@ struct HeroCarousel<Item: Identifiable, Backdrop: View, Info: View>: View where 
     /// Read only by `HeroClockIndicator`: held as plain `@State` it was read by
     /// this body, which re-rendered the whole carousel — artwork, gradient and
     /// copy — at the clock's 20 Hz tick. The same split as tvOS's `TVHeroCarouselModel`.
-    @State private var clock = HeroClock()
+    @State private var clock = HeroAutoAdvanceClock()
 
     /// Which hero the overlay is showing. Deliberately LAGS the scroll position:
     /// on a page change the overlay fades out, swaps while invisible, then fades
@@ -65,7 +65,6 @@ struct HeroCarousel<Item: Identifiable, Backdrop: View, Info: View>: View where 
     @State private var displayedID: String?
     @State private var infoOpacity: Double = 1
 
-    private let autoAdvanceInterval: Duration = .seconds(6)
     /// Width below which the hero switches to the stacked, full-width layout.
     private let compactWidthThreshold: CGFloat = 600
 
@@ -168,7 +167,7 @@ struct HeroCarousel<Item: Identifiable, Backdrop: View, Info: View>: View where 
         }
         .onChange(of: currentItemID) { _, _ in
             // Restart the loading bar on every page change — auto or manual.
-            clock.progress = 0
+            clock.reset()
             prefetchNeighbours()
             crossfadeInfo()
         }
@@ -282,13 +281,12 @@ struct HeroCarousel<Item: Identifiable, Backdrop: View, Info: View>: View where 
     /// jump off the same `progress` the indicator renders keeps the bar and the
     /// slide change perfectly in step (like UIKit's `UIPageControlTimerProgress`).
     private func autoAdvance() async {
-        guard items.count > 1 else { return }
-        let tick: Duration = .milliseconds(50)
-        let total = Double(autoAdvanceInterval.components.seconds)
-        // Fraction of the bar to add per tick: 50ms / 6s.
-        let step = 0.05 / total
+        guard items.count > 1 else {
+            clock.reset()
+            return
+        }
         while !Task.isCancelled {
-            try? await Task.sleep(for: tick)
+            try? await Task.sleep(for: HeroAutoAdvanceClock.tickInterval)
             if Task.isCancelled { return }
             // While the user is driving the carousel, hold the bar EMPTY rather
             // than frozen. Freezing it near full meant the first tick after they
@@ -300,19 +298,12 @@ struct HeroCarousel<Item: Identifiable, Backdrop: View, Info: View>: View where 
             // and a full dwell once the hero scrolls back into view.
             if isInteracting || !isVisible {
                 // Writing an equal value still notifies the dots, so only reset once.
-                if clock.progress != 0 { clock.progress = 0 }
+                _ = clock.tick(isPaused: true)
                 // Nothing moves while paused, so check back less often.
                 try? await Task.sleep(for: .milliseconds(200))
                 continue
             }
-            if clock.progress >= 1 {
-                // Reset BEFORE paging so the next tick can't re-trigger an advance
-                // in the window before `onChange(currentItemID)` resets it.
-                clock.progress = 0
-                advance()
-            } else {
-                clock.progress = min(clock.progress + step, 1)
-            }
+            if clock.tick(isPaused: false) { advance() }
         }
     }
 
@@ -399,17 +390,9 @@ private struct HeroCarouselFrame: Layout {
     }
 }
 
-/// The carousel's auto-advance clock, observed only by `HeroClockIndicator`.
-@Observable
-private final class HeroClock {
-    /// Fill of the active page dot (0…1). It doubles as the auto-advance clock
-    /// so the loading-bar dot and the slide jump can never drift apart.
-    var progress: Double = 0
-}
-
 /// The page dots, as the one view that reads the clock.
 private struct HeroClockIndicator: View {
-    let clock: HeroClock
+    let clock: HeroAutoAdvanceClock
     let count: Int
     let activeIndex: Int
 
