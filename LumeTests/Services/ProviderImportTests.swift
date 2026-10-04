@@ -122,6 +122,25 @@ struct ProviderImportTests {
     }
 }
 
+@Suite(.readsGlobalState)
+struct XtreamEmptyCategoryTests {
+    @Test func `xtream keeps a category whose provider id is empty`() async throws {
+        let container = try makeTestContainer()
+        let context = ModelContext(container)
+        let playlist = Playlist(name: "Xtream", serverURL: "https://example.test", username: "u", password: "p")
+        context.insert(playlist)
+        try context.save()
+        let manager = ContentSyncManager(modelContainer: container)
+
+        let rows = [ProviderCategory(id: "", name: "Uncategorised"), ProviderCategory(id: "1", name: "Films")]
+        try await manager.syncProviderCategories(rows, type: .vod, playlistId: playlist.id, keepsEmptyIDs: true)
+        try await manager.syncProviderCategories(rows, type: .vod, playlistId: playlist.id, keepsEmptyIDs: true)
+
+        let ids = try Set(ModelContext(container).fetch(FetchDescriptor<Lume.Category>()).map(\.id))
+        #expect(ids == ["\(playlist.id.uuidString)-vod-", "\(playlist.id.uuidString)-vod-1"])
+    }
+}
+
 struct CatalogSweepPolicyTests {
     @Test func `only measured low coverage spends the shrink budget`() {
         #expect(CatalogSweepPolicy.decide(seenCount: 9, storedCount: 100, previousSkips: 0) == .hold(skips: 1))

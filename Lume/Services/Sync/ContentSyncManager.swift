@@ -224,7 +224,7 @@ actor ContentSyncManager {
         defer { Perf.end(interval) }
         try syncProviderCategories(dtos.map {
             ProviderCategory(id: $0.categoryId, name: $0.categoryName, parentID: $0.parentId ?? 0)
-        }, type: type, playlistId: playlistId)
+        }, type: type, playlistId: playlistId, keepsEmptyIDs: true)
     }
 
     /// Syncs episodes for a series

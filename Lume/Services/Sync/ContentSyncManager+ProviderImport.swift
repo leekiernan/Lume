@@ -66,7 +66,14 @@ extension ContentSyncManager {
     /// Provider order/metadata are refreshed in place. User visibility, order,
     /// icons and on-demand freshness belong to the stored row, never the DTO.
     /// The lookup includes new inserts, so repeated IDs cannot replace them.
-    func syncProviderCategories(_ rows: [ProviderCategory], type: CategoryType, playlistId: UUID) throws {
+    ///
+    /// `keepsEmptyIDs`: Xtream has always stored a category whose provider id is
+    /// empty (as `<uuid>-<type>-`), and its titles may point at it; skipping it
+    /// would prune that row and drop them from browse. Every other provider
+    /// treats an empty id as unusable.
+    func syncProviderCategories(
+        _ rows: [ProviderCategory], type: CategoryType, playlistId: UUID, keepsEmptyIDs: Bool = false
+    ) throws {
         let context = ModelContext(modelContainer)
         context.autosaveEnabled = false
         var lookup = try fetchCategoryLookup(context: context, playlistId: playlistId, type: type)
@@ -75,7 +82,7 @@ extension ContentSyncManager {
         ).first else { return }
 
         var seen = Set<String>()
-        for (index, row) in rows.enumerated() where !row.id.isEmpty {
+        for (index, row) in rows.enumerated() where keepsEmptyIDs || !row.id.isEmpty {
             seen.insert(row.id)
             if let category = lookup[row.id] {
                 if category.name != row.name { category.name = row.name }
