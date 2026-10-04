@@ -243,35 +243,7 @@
                 return
             }
             let prefix = "\(playlist.id.uuidString)-"
-            let sort = CategorySortOption.playlist
-            // Scoped in SQL, as in `TVChannelBrowserOverlay`: `starts(with:)` on
-            // the unique (indexed) `id` is a range seek, where the unscoped fetch
-            // pulled every live category of every playlist onto the main actor.
-            // `visibleCategories` still applies the parental filter.
-            let descriptor = FetchDescriptor<Category>(
-                predicate: #Predicate {
-                    $0.typeRaw == "live" && $0.isHidden == false && $0.id.starts(with: prefix)
-                }
-            )
-            let categories = sort.sort(
-                LiveChannelQuery.visibleCategories(
-                    (try? modelContext.fetch(descriptor)) ?? [],
-                    playlistPrefix: prefix,
-                    restriction: restriction
-                )
-            )
-
-            // `LIMIT 1` probes gate the virtual collections — materialising
-            // every favourite just to decide whether the row exists is what the
-            // channel browser measured at 1,506 rows.
-            var rail: [LiveTVSection] = []
-            if hasVisible(LiveChannelQuery.favoritesProbe(playlistPrefix: prefix, restriction: restriction)) {
-                rail.append(.favorites)
-            }
-            if hasVisible(LiveChannelQuery.recentlyWatchedProbe(playlistPrefix: prefix, restriction: restriction)) {
-                rail.append(.recentlyWatched)
-            }
-            rail.append(contentsOf: categories.map(LiveTVSection.category))
+            let rail = LiveChannelQuery.rail(in: modelContext, playlistPrefix: prefix, restriction: restriction)
             sections = rail
 
             selectedSectionID = rail.first?.id
@@ -291,10 +263,6 @@
                 selectedSectionID = sectionID
                 channels = fetchChannels(scope: section.scope, prefix: "\(playlist.id.uuidString)-")
             }
-        }
-
-        private func hasVisible(_ probe: FetchDescriptor<LiveStream>) -> Bool {
-            !((try? modelContext.fetch(probe)) ?? []).isEmpty
         }
 
         private func fetchChannels(scope: LiveChannelScope, prefix: String) -> [LiveStream] {
