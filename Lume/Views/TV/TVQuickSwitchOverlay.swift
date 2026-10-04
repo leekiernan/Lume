@@ -37,16 +37,22 @@
         @State private var pendingSwitch: UserProfile?
 
         @FocusState private var focus: FocusTarget?
+        /// Where focus first landed this presentation. The resolved target
+        /// moves as a playlist switch finishes, the profile manager becomes
+        /// ready or the roster updates from iCloud; following it would pull
+        /// focus away from wherever the viewer has since moved.
+        @State private var landingTarget: FocusTarget?
 
         private typealias FocusTarget = QuickSwitchFocusTarget
 
         var body: some View {
             let playlistRows = QuickSwitchResolver.playlistRows(playlists, storedID: selectedPlaylistID)
             let profileRows = resolvedProfileRows
-            let focusTarget = QuickSwitchResolver.initialFocus(
+            let resolvedTarget = QuickSwitchResolver.initialFocus(
                 playlists: playlistRows, profiles: profileRows,
                 canSwitchPlaylist: playlistSwitch?.isSwitching != true, canSwitchProfile: !profileColumnDisabled
             )
+            let focusTarget = landingTarget ?? resolvedTarget
 
             return ZStack {
                 Color.black.opacity(0.92)
@@ -77,6 +83,9 @@
                 .padding(.vertical, TVLayoutMetrics.modalVerticalInset)
             }
             .defaultFocus($focus, focusTarget, priority: .userInitiated)
+            .onChange(of: resolvedTarget, initial: true) { _, target in
+                if landingTarget == nil, let target { landingTarget = target }
+            }
             .onExitCommand(perform: close)
             .pinPrompt(target: $pendingSwitch) { profile in
                 guard let profileManager else { return }
