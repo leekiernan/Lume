@@ -395,9 +395,7 @@ struct LumeEngineEngineView: View {
     /// (a live channel, no API key in the build, or an engine that can't
     /// side-load a subtitle file).
     private var subtitleSearchAction: (() -> Void)? {
-        guard OpenSubtitlesService.supportsSearch(for: media),
-              coordinator.supportsExternalSubtitles else { return nil }
-        return { isSearchingSubtitles = true }
+        coordinator.subtitleSearchAction(for: media, isPresented: $isSearchingSubtitles)
     }
 
     // MARK: - Actions

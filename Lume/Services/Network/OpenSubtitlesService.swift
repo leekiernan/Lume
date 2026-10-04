@@ -70,8 +70,8 @@ final class OpenSubtitlesService {
     /// Whether the in-player search should be offered for `media`. Live channels
     /// are excluded: OpenSubtitles indexes films and episodes, and a live stream
     /// has neither an id nor a stable title to match on.
-    static func supportsSearch(for media: PlayableMedia) -> Bool {
-        shared.isConfigured && !media.isLive
+    static func supportsSearch(for media: PlayableMedia, supportsExternalSubtitles: Bool = true) -> Bool {
+        SubtitleSearchPolicy.canSearch(isLive: media.isLive, isConfigured: shared.isConfigured, supportsExternalSubtitles: supportsExternalSubtitles)
     }
 
     /// The app's UI language as an OpenSubtitles language code. OpenSubtitles
