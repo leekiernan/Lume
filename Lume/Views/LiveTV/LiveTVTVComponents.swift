@@ -35,7 +35,7 @@
         @Query private var streams: [LiveStream]
         /// Now/next EPG for the visible channels, resolved in one off-main fetch
         /// (see `ChannelEPGSnapshot`) instead of a per-row `@Query`.
-        @State private var epgByChannel: [String: ChannelEPG] = [:]
+        @State private var epgLoad = ChannelEPGLoadMachine()
         /// Observed so the EPG lookup refreshes when a guide import finishes.
         @State private var epgSync = EPGSyncService.shared
         /// How many channels are currently rendered. Grows by a page as the list
@@ -89,6 +89,12 @@
         var body: some View {
             let channels = scopedStreams
             let visible = Array(channels.prefix(visibleCount))
+            let epgScope = ChannelEPGLoadMachine.Scope(
+                playlistPrefix: playlistPrefix, visibilityToken: restriction.visibilityToken, channelScope: scope,
+                channelIDs: Set(channels.compactMap(\.epgChannelId)), guideIsSyncing: epgSync.isSyncing
+            )
+            let epgKey = ChannelEPGLoadMachine.Key(scope: epgScope, visibleChannelIDs: Set(visible.compactMap(\.epgChannelId)))
+            let epgByChannel = epgLoad.snapshot(for: epgScope)
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(spacing: 14) {
@@ -151,8 +157,8 @@
                 guard scope.showsCategoryLabels else { return }
                 categoryNames = LiveCategoryNames.names(for: channels, in: modelContext)
             }
-            .task(id: "\(channels.count)-\(visible.count)-\(epgSync.isSyncing)") {
-                await loadEPG(for: visible)
+            .task(id: epgKey) {
+                await ChannelEPGLoading.run(key: epgKey, machine: $epgLoad, container: modelContext.container)
             }
             .alert("Clear Recently Watched", isPresented: $confirmingClear) {
                 Button("Clear", role: .destructive) { clearRecentlyWatched() }
@@ -175,19 +181,6 @@
                     .padding(.vertical, 20)
             }
             .buttonStyle(TVCardButtonStyle(focusScale: 1.02))
-        }
-
-        private func loadEPG(for channels: [LiveStream]) async {
-            let channelIds = Array(Set(channels.compactMap(\.epgChannelId).filter { !$0.isEmpty }))
-            guard !channelIds.isEmpty else {
-                epgByChannel = [:]
-                return
-            }
-            let container = modelContext.container
-            let now = Date()
-            epgByChannel = await Task.detached(priority: .userInitiated) {
-                ChannelEPGLoader.load(container: container, channelIds: channelIds, now: now)
-            }.value
         }
 
         /// Clears a channel's watch timestamp so it drops out of the Recently
