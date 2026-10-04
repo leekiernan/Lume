@@ -89,15 +89,11 @@ import SwiftUI
                     showResetConfirmation = true
                 }
             }
-            .confirmationDialog(
+            .restoreDefaultsConfirmation(
                 "Restore the default Lume Engine options?",
-                isPresented: $showResetConfirmation,
-                titleVisibility: .visible
+                isPresented: $showResetConfirmation
             ) {
-                Button("Restore Defaults", role: .destructive) {
-                    PlayerSettings.Lume.resetToDefaults()
-                }
-                Button("Cancel", role: .cancel) {}
+                PlayerSettings.Lume.resetToDefaults()
             }
         }
     }
@@ -192,15 +188,11 @@ import SwiftUI
 
                 TVOptionResetRow(title: "Restore Defaults") { showResetConfirmation = true }
             }
-            .confirmationDialog(
+            .restoreDefaultsConfirmation(
                 "Restore the default Lume Engine options?",
-                isPresented: $showResetConfirmation,
-                titleVisibility: .visible
+                isPresented: $showResetConfirmation
             ) {
-                Button("Restore Defaults", role: .destructive) {
-                    PlayerSettings.Lume.resetToDefaults()
-                }
-                Button("Cancel", role: .cancel) {}
+                PlayerSettings.Lume.resetToDefaults()
             }
         }
     }

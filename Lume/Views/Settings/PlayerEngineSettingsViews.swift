@@ -8,8 +8,8 @@
 //  for iOS/macOS, and the flat Apple-TV-style detail blocks for tvOS.
 //
 //  The Lume Engine's own surfaces live in `LumeEngineSettingsViews.swift` —
-//  this file was at the file-length limit — but the shared `TVOption*` rows and
-//  `PlayerOptionCycle` they use are still defined here.
+//  this file was at the file-length limit. Shared `TVOption*` rows now live in
+//  `TVSettingsOptionRows.swift`; `PlayerOptionCycle` remains here.
 //
 //  Every control is backed directly by `@AppStorage`, so changes persist
 //  immediately and are read back by the engines via `VLCPlayerOptions` /
@@ -79,15 +79,11 @@ import SwiftUI
                     showResetConfirmation = true
                 }
             }
-            .confirmationDialog(
+            .restoreDefaultsConfirmation(
                 "Restore the default VLCKit options?",
-                isPresented: $showResetConfirmation,
-                titleVisibility: .visible
+                isPresented: $showResetConfirmation
             ) {
-                Button("Restore Defaults", role: .destructive) {
-                    PlayerSettings.VLC.resetToDefaults()
-                }
-                Button("Cancel", role: .cancel) {}
+                PlayerSettings.VLC.resetToDefaults()
             }
         }
     }
@@ -168,15 +164,11 @@ import SwiftUI
                     showResetConfirmation = true
                 }
             }
-            .confirmationDialog(
+            .restoreDefaultsConfirmation(
                 "Restore the default KSPlayer options?",
-                isPresented: $showResetConfirmation,
-                titleVisibility: .visible
+                isPresented: $showResetConfirmation
             ) {
-                Button("Restore Defaults", role: .destructive) {
-                    PlayerSettings.KSPlayer.resetToDefaults()
-                }
-                Button("Cancel", role: .cancel) {}
+                PlayerSettings.KSPlayer.resetToDefaults()
             }
         }
     }
@@ -198,47 +190,6 @@ import SwiftUI
 // MARK: - tvOS detail
 
 #if os(tvOS)
-
-    /// A flat toggle row matching the Apple-TV settings rows: shows On/Off and
-    /// flips on Select.
-    struct TVOptionToggleRow: View {
-        let title: LocalizedStringKey
-        @Binding var isOn: Bool
-
-        var body: some View {
-            Button { isOn.toggle() } label: {
-                HStack(spacing: 16) {
-                    Text(title)
-                    Spacer(minLength: 0)
-                    Text(isOn ? "On" : "Off")
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .buttonStyle(TVSettingsRowButtonStyle())
-        }
-    }
-
-    /// A flat row that cycles through a fixed set of choices on each Select,
-    /// showing the current choice's label on the right. tvOS has no good inline
-    /// picker, and a full sub-list per option would bury the settings, so the
-    /// row advances to the next value in place.
-    struct TVOptionCycleRow: View {
-        let title: LocalizedStringKey
-        let valueLabel: String
-        let onAdvance: () -> Void
-
-        var body: some View {
-            Button(action: onAdvance) {
-                HStack(spacing: 16) {
-                    Text(title)
-                    Spacer(minLength: 0)
-                    Text(verbatim: valueLabel)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .buttonStyle(TVSettingsRowButtonStyle())
-        }
-    }
 
     /// VLCKit options for the tvOS settings detail pane.
     struct VLCEngineSettingsTVDetail: View {
@@ -297,15 +248,11 @@ import SwiftUI
 
                 TVOptionResetRow(title: "Restore Defaults") { showResetConfirmation = true }
             }
-            .confirmationDialog(
+            .restoreDefaultsConfirmation(
                 "Restore the default VLCKit options?",
-                isPresented: $showResetConfirmation,
-                titleVisibility: .visible
+                isPresented: $showResetConfirmation
             ) {
-                Button("Restore Defaults", role: .destructive) {
-                    PlayerSettings.VLC.resetToDefaults()
-                }
-                Button("Cancel", role: .cancel) {}
+                PlayerSettings.VLC.resetToDefaults()
             }
         }
     }
@@ -379,33 +326,12 @@ import SwiftUI
 
                 TVOptionResetRow(title: "Restore Defaults") { showResetConfirmation = true }
             }
-            .confirmationDialog(
+            .restoreDefaultsConfirmation(
                 "Restore the default KSPlayer options?",
-                isPresented: $showResetConfirmation,
-                titleVisibility: .visible
+                isPresented: $showResetConfirmation
             ) {
-                Button("Restore Defaults", role: .destructive) {
-                    PlayerSettings.KSPlayer.resetToDefaults()
-                }
-                Button("Cancel", role: .cancel) {}
+                PlayerSettings.KSPlayer.resetToDefaults()
             }
-        }
-    }
-
-    /// A flat destructive-styled row used to trigger a reset on tvOS.
-    struct TVOptionResetRow: View {
-        let title: LocalizedStringKey
-        let action: () -> Void
-
-        var body: some View {
-            Button(action: action) {
-                HStack(spacing: 16) {
-                    Text(title)
-                        .foregroundStyle(.red)
-                    Spacer(minLength: 0)
-                }
-            }
-            .buttonStyle(TVSettingsRowButtonStyle())
         }
     }
 
