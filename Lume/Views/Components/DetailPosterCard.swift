@@ -11,39 +11,12 @@ struct DetailPosterCard: View {
     var isSeries: Bool = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: PosterCardMetrics.titleSpacing) {
-            PosterArtworkView(
-                provider: imageURL?.absoluteString, posterPath: posterPath,
-                request: request, maxPixelSize: PosterCardMetrics.posterHeight
-            ) { phase in
-                switch phase {
-                case .empty:
-                    Rectangle().fill(Color.gray.opacity(0.3)).overlay { ProgressView() }
-                case let .success(image):
-                    image.resizable().aspectRatio(contentMode: .fill)
-                case .failure:
-                    Rectangle().fill(Color.gray.opacity(0.3))
-                        .overlay {
-                            Image(systemName: isSeries ? "tv" : "film")
-                                .foregroundStyle(.secondary)
-                                .font(.largeTitle)
-                        }
-                @unknown default:
-                    EmptyView()
-                }
-            }
-            .posterArtworkFrame(fillsWidth: false)
-            .clipShape(RoundedRectangle(cornerRadius: PosterCardMetrics.cornerRadius))
-            .posterBadge(badge)
-            #if !os(tvOS)
-                .shadow(radius: 2)
-            #endif
+        posterCard
+    }
 
-            Text(title)
-                .font(PosterCardMetrics.titleFont)
-                .lineLimit(2)
-                .posterTitleFrame(fillsWidth: false)
-        }
+    var posterCard: PosterCard {
+        PosterCard(title: title, provider: imageURL?.absoluteString, posterPath: posterPath,
+                   request: request, fallbackSymbol: isSeries ? "tv" : "film", badge: badge)
     }
 }
 

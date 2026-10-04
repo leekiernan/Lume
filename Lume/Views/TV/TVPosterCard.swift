@@ -12,21 +12,11 @@ import SwiftUI
                     provider: item.imageURL?.absoluteString, posterPath: item.posterPath,
                     request: item.posterRecoveryRequest, maxPixelSize: PosterCardMetrics.posterHeight
                 ) { phase in
-                    switch phase {
-                    case .empty:
-                        Rectangle().fill(Color.white.opacity(0.08)).overlay { ProgressView() }
-                    case let .success(image):
-                        image.resizable().aspectRatio(contentMode: .fill)
-                    case .failure:
-                        Rectangle().fill(Color.white.opacity(0.08))
-                            .overlay {
-                                Image(systemName: item.posterRecoveryRequest?.kind == .series ? "tv" : "film")
-                                    .font(.system(size: 56))
-                                    .foregroundStyle(.white.opacity(0.5))
-                            }
-                    @unknown default:
-                        EmptyView()
-                    }
+                    PosterArtworkContent(
+                        phase: phase, fallbackSymbol: item.posterRecoveryRequest?.kind == .series ? "tv" : "film",
+                        placeholderFill: .white.opacity(0.08), fallbackForeground: .white.opacity(0.5),
+                        fallbackFont: .system(size: 56)
+                    )
                 }
                 .frame(width: TVDetailMetrics.posterCardWidth, height: TVDetailMetrics.posterCardHeight)
                 .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
