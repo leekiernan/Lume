@@ -6,10 +6,13 @@ struct CatalogCategoryView<Kind: CatalogBrowseKind>: View {
     var animationNamespace: Namespace.ID?
     @Environment(\.modelContext) private var modelContext
     @Environment(\.contentRestriction) private var restriction
+    /// Observed, so a profile switch restarts the load; `ActiveProfileStore`
+    /// alone is a UserDefaults read SwiftUI can't see change.
+    @Environment(ProfileManager.self) private var profiles: ProfileManager?
     @State private var loader = CatalogCategoryLoadMachine<Kind.Item>()
 
     private var key: CatalogCategoryKey {
-        .init(categoryID: category.id, visibility: restriction.visibilityToken, profile: ActiveProfileStore.current)
+        .init(categoryID: category.id, visibility: restriction.visibilityToken, profile: profiles?.activeProfileID ?? ActiveProfileStore.current)
     }
 
     private var isVisible: Bool {

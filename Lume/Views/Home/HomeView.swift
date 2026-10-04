@@ -18,6 +18,9 @@ struct HomeView: View {
     // row's loading in `HomeView+ForYou.swift` can drive them.
     @Environment(\.modelContext) var modelContext
     @Environment(\.contentRestriction) var restriction
+    /// Observed, so a profile switch restarts profile-scoped loads;
+    /// `ActiveProfileStore` alone is a UserDefaults read SwiftUI can't see change.
+    @Environment(ProfileManager.self) private var profiles: ProfileManager?
     /// tvOS's launch splash, waiting for Home to have something to show.
     @Environment(LaunchSplashModel.self) private var launchSplash: LaunchSplashModel?
     #if os(macOS)
@@ -450,7 +453,10 @@ struct HomeView: View {
 
     /// Shared request identity, using Home's already-bounded watch window.
     var seriesResumeKey: SeriesResumeLoadKey {
-        SeriesResumeLoadKey(playlistPrefix: playlistPrefix, restriction: restriction, watched: watchedSeries)
+        SeriesResumeLoadKey(
+            playlistPrefix: playlistPrefix, restriction: restriction, watched: watchedSeries,
+            profileID: profiles?.activeProfileID ?? ActiveProfileStore.current
+        )
     }
 
     // MARK: - Playlist scoping

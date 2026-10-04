@@ -7,10 +7,13 @@ struct CatalogGenreView<Kind: CatalogBrowseKind>: View {
     var animationNamespace: Namespace.ID?
     @Environment(\.modelContext) private var modelContext
     @Environment(\.contentRestriction) private var restriction
+    /// Observed, so a profile switch restarts the load; `ActiveProfileStore`
+    /// alone is a UserDefaults read SwiftUI can't see change.
+    @Environment(ProfileManager.self) private var profiles: ProfileManager?
     @State private var loader = CatalogGenreLoadMachine<Kind.Item>()
 
     private var key: CatalogGenreKey {
-        .init(genre: genre, playlistPrefix: playlistPrefix, visibility: restriction.visibilityToken, profile: ActiveProfileStore.current)
+        .init(genre: genre, playlistPrefix: playlistPrefix, visibility: restriction.visibilityToken, profile: profiles?.activeProfileID ?? ActiveProfileStore.current)
     }
 
     var body: some View {

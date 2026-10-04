@@ -7,6 +7,9 @@ struct LibraryAreaView<Kind: LibraryAreaKind>: View {
     @Namespace private var animationNamespace
     @Environment(\.modelContext) private var modelContext
     @Environment(\.contentRestriction) private var restriction
+    /// Observed, so a profile switch restarts the load; `ActiveProfileStore`
+    /// alone is a UserDefaults read SwiftUI can't see change.
+    @Environment(ProfileManager.self) private var profiles: ProfileManager?
     // Optional so previews (which don't inject it) fall back to a local path.
     @Environment(DeepLinkRouter.self) private var router: DeepLinkRouter?
     @State private var fallbackPath = NavigationPath()
@@ -136,13 +139,14 @@ struct LibraryAreaView<Kind: LibraryAreaKind>: View {
     }
 
     private var genreKey: LibraryGenreLoadKey {
-        .init(prefix: playlistPrefix, visibility: restriction.visibilityToken, profile: ActiveProfileStore.current, syncedAt: activePlaylist?.lastSyncDate)
+        .init(prefix: playlistPrefix, visibility: restriction.visibilityToken, profile: profiles?.activeProfileID ?? ActiveProfileStore.current, syncedAt: activePlaylist?.lastSyncDate)
     }
 
     private var resumeKey: SeriesResumeLoadKey? {
         guard resumeLoader != nil else { return nil }
         return SeriesResumeLoadKey(playlistPrefix: playlistPrefix.isEmpty ? nil : playlistPrefix,
-                                   restriction: restriction, watched: watchedSeries)
+                                   restriction: restriction, watched: watchedSeries,
+                                   profileID: profiles?.activeProfileID ?? ActiveProfileStore.current)
     }
 
     /// The same slideshow Home shows, filtered to this page's medium, above the
