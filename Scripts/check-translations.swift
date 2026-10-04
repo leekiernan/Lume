@@ -16,6 +16,14 @@ let paths: [String] = CommandLine.arguments.count > 1
 
 var failed = false
 
+/// Catalog entries may contain plural/device variants rather than a flat
+/// stringUnit. Check their leaves instead of misreporting them as untranslated.
+func stringUnits(in node: [String: Any]) -> [[String: Any]] {
+    let own = (node["stringUnit"] as? [String: Any]).map { [$0] } ?? []
+    let children = node.filter { $0.key != "stringUnit" }.values.compactMap { $0 as? [String: Any] }
+    return own + children.flatMap { stringUnits(in: $0) }
+}
+
 for path in paths {
     let url = URL(fileURLWithPath: path)
     guard let data = try? Data(contentsOf: url),
@@ -42,19 +50,21 @@ for path in paths {
     var newStateByLanguage: [String: [String]] = [:]
 
     for (key, value) in strings {
+        // Empty/punctuation-only fragments have no linguistic translation.
+        guard key.rangeOfCharacter(from: .letters) != nil else { continue }
         guard let entry = value as? [String: Any] else { continue }
+        guard entry["extractionState"] as? String != "stale" else { continue }
         let localizations = entry["localizations"] as? [String: Any] ?? [:]
 
         for language in allLanguages {
             guard let locEntry = localizations[language] as? [String: Any],
-                  let stringUnit = locEntry["stringUnit"] as? [String: Any],
-                  let value = stringUnit["value"] as? String, !value.isEmpty
+                  !stringUnits(in: locEntry).isEmpty,
+                  stringUnits(in: locEntry).allSatisfy({ ($0["value"] as? String)?.isEmpty == false })
             else {
                 missingByLanguage[language, default: []].append(key)
                 continue
             }
-            let state = stringUnit["state"] as? String ?? ""
-            if state == "new" || state == "needs_review" {
+            if stringUnits(in: locEntry).contains(where: { ["new", "needs_review"].contains($0["state"] as? String ?? "") }) {
                 newStateByLanguage[language, default: []].append(key)
             }
         }
