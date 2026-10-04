@@ -42,6 +42,11 @@ nonisolated struct SimklPendingShow: Codable, Equatable {
 /// whole thing is a plain JSON object).
 nonisolated struct SimklPendingWatched: Codable, Equatable {
     var shows: [String: SimklPendingShow] = [:]
+    /// The profile whose import parked this. The file is device-wide but the
+    /// watched state is per profile: another profile neither applies it nor
+    /// merges into it (`SimklPendingWatchedStore`). `nil` in files written
+    /// before the stamp, which no profile claims; the next import rebuilds them.
+    var profileID: UUID?
 
     static let empty = SimklPendingWatched()
 
@@ -74,7 +79,14 @@ nonisolated enum SimklPendingWatchedStore {
         directory?.appendingPathComponent("SimklPendingWatched.json")
     }
 
+    /// The active profile's parked state; empty under any other profile.
     static func load() -> SimklPendingWatched {
+        let profileID = ActiveProfileStore.current
+        let stored = loadStored()
+        return stored.profileID == profileID ? stored : SimklPendingWatched(profileID: profileID)
+    }
+
+    private static func loadStored() -> SimklPendingWatched {
         lock.withLock {
             if let cached {
                 return cached
@@ -90,7 +102,10 @@ nonisolated enum SimklPendingWatchedStore {
         }
     }
 
+    /// Saved as the active profile's, replacing any other profile's.
     static func save(_ state: SimklPendingWatched) {
+        var state = state
+        state.profileID = ActiveProfileStore.current
         lock.withLock {
             cached = state
             guard let url = fileURL else { return }

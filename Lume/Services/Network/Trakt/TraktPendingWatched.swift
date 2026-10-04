@@ -66,6 +66,11 @@ nonisolated struct TraktPendingPause: Codable, Equatable {
 /// whole thing is a plain JSON object).
 nonisolated struct TraktPendingWatched: Codable, Equatable {
     var shows: [String: TraktPendingShow] = [:]
+    /// The profile whose import parked this. The file is device-wide but the
+    /// watched state is per profile: another profile neither applies it nor
+    /// merges into it (`TraktPendingWatchedStore`). `nil` in files written
+    /// before the stamp, which no profile claims; the next import rebuilds them.
+    var profileID: UUID?
 
     static let empty = TraktPendingWatched()
 
@@ -98,7 +103,14 @@ nonisolated enum TraktPendingWatchedStore {
         directory?.appendingPathComponent("TraktPendingWatched.json")
     }
 
+    /// The active profile's parked state; empty under any other profile.
     static func load() -> TraktPendingWatched {
+        let profileID = ActiveProfileStore.current
+        let stored = loadStored()
+        return stored.profileID == profileID ? stored : TraktPendingWatched(profileID: profileID)
+    }
+
+    private static func loadStored() -> TraktPendingWatched {
         lock.withLock {
             if let cached {
                 return cached
@@ -114,7 +126,10 @@ nonisolated enum TraktPendingWatchedStore {
         }
     }
 
+    /// Saved as the active profile's, replacing any other profile's.
     static func save(_ state: TraktPendingWatched) {
+        var state = state
+        state.profileID = ActiveProfileStore.current
         lock.withLock {
             cached = state
             guard let url = fileURL else { return }
