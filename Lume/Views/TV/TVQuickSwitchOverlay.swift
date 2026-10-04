@@ -38,15 +38,15 @@
 
         @FocusState private var focus: FocusTarget?
 
-        private enum FocusTarget: Hashable {
-            case playlist(UUID)
-            case profile(UUID)
-        }
+        private typealias FocusTarget = QuickSwitchFocusTarget
 
         var body: some View {
             let playlistRows = QuickSwitchResolver.playlistRows(playlists, storedID: selectedPlaylistID)
             let profileRows = resolvedProfileRows
-            let focusTarget = initialFocus(playlists: playlistRows, profiles: profileRows)
+            let focusTarget = QuickSwitchResolver.initialFocus(
+                playlists: playlistRows, profiles: profileRows,
+                canSwitchPlaylist: playlistSwitch?.isSwitching != true, canSwitchProfile: !profileColumnDisabled
+            )
 
             return ZStack {
                 Color.black.opacity(0.92)
@@ -61,8 +61,8 @@
                     .foregroundStyle(.white)
 
                     HStack(alignment: .top, spacing: 60) {
-                        playlistColumn(playlistRows)
-                        profileColumn(profileRows)
+                        playlistColumn(playlistRows, target: focusTarget)
+                        profileColumn(profileRows, target: focusTarget)
                     }
 
                     Text(
@@ -73,11 +73,10 @@
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .center)
                 }
-                .padding(.horizontal, TVSubtitleSearchMetrics.horizontalInset)
-                .padding(.vertical, TVSubtitleSearchMetrics.verticalInset)
+                .padding(.horizontal, TVLayoutMetrics.modalHorizontalInset)
+                .padding(.vertical, TVLayoutMetrics.modalVerticalInset)
             }
             .defaultFocus($focus, focusTarget, priority: .userInitiated)
-            .onAppear { landInitialFocus(focusTarget) }
             .onExitCommand(perform: close)
             .pinPrompt(target: $pendingSwitch) { profile in
                 guard let profileManager else { return }
@@ -88,8 +87,8 @@
 
         // MARK: - Columns
 
-        private func playlistColumn(_ rows: [QuickSwitchRow<Playlist>]) -> some View {
-            column("Playlists", width: TVSettingsMetrics.contentMaxWidth) {
+        private func playlistColumn(_ rows: [QuickSwitchRow<Playlist>], target: FocusTarget?) -> some View {
+            column("Playlists", width: TVSettingsMetrics.contentMaxWidth, target: target?.isPlaylist == true ? target : nil) {
                 if rows.isEmpty {
                     emptyLabel(
                         Text(
@@ -103,14 +102,15 @@
                             select(playlist: row)
                         }
                         .focused($focus, equals: .playlist(row.id))
+                        .id(FocusTarget.playlist(row.id))
                     }
                 }
             }
             .disabled(playlistSwitch?.isSwitching == true)
         }
 
-        private func profileColumn(_ rows: [QuickSwitchRow<UserProfile>]) -> some View {
-            column("Profiles", width: TVSettingsMetrics.sideColumnWidth) {
+        private func profileColumn(_ rows: [QuickSwitchRow<UserProfile>], target: FocusTarget?) -> some View {
+            column("Profiles", width: TVSettingsMetrics.sideColumnWidth, target: target?.isPlaylist == false ? target : nil) {
                 if rows.isEmpty {
                     emptyLabel(
                         Text(
@@ -124,6 +124,7 @@
                             select(profile: row)
                         }
                         .focused($focus, equals: .profile(row.id))
+                        .id(FocusTarget.profile(row.id))
                     }
                 }
             }
@@ -135,16 +136,22 @@
         private func column(
             _ title: LocalizedStringKey,
             width: CGFloat,
-            @ViewBuilder rows: () -> some View
+            target: FocusTarget?,
+            @ViewBuilder rows: @escaping () -> some View
         ) -> some View {
             VStack(alignment: .leading, spacing: 8) {
                 TVSettingsSectionLabel(title)
 
-                ScrollView {
-                    VStack(spacing: 6) {
-                        rows()
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        VStack(spacing: 6) {
+                            rows()
+                        }
+                        .padding(.bottom, 24)
                     }
-                    .padding(.bottom, 24)
+                    .task(id: target) {
+                        await landTVFocus($focus, on: target, scrollingTo: proxy) { router.isQuickSwitchPresented && pendingSwitch == nil }
+                    }
                 }
             }
             .frame(width: width)
@@ -175,35 +182,6 @@
         private var profileColumnDisabled: Bool {
             guard let profileManager else { return true }
             return profileManager.isSwitching || !profileManager.isReady
-        }
-
-        // MARK: - Focus
-
-        private func initialFocus(
-            playlists: [QuickSwitchRow<Playlist>],
-            profiles: [QuickSwitchRow<UserProfile>]
-        ) -> FocusTarget? {
-            // A single playlist offers no meaningful switch target. Start in
-            // Profiles instead, on the active row where the viewer can either
-            // confirm their current profile or move directly to another one.
-            if playlists.count > 1, let first = playlists.first {
-                return .playlist(first.id)
-            }
-            if let current = profiles.first(where: \.isCurrent) {
-                return .profile(current.id)
-            }
-            if let first = profiles.first {
-                return .profile(first.id)
-            }
-            return playlists.first.map { .playlist($0.id) }
-        }
-
-        /// Asserts the initial focus once the tree has mounted: the engine picks
-        /// its own target as the rows appear, and a write made in the same turn is
-        /// overwritten. Released first — two assertions in flight leave the engine
-        /// on the incumbent.
-        private func landInitialFocus(_ target: FocusTarget?) {
-            Task { @MainActor in await landTVFocus($focus, on: target) }
         }
 
         // MARK: - Switching

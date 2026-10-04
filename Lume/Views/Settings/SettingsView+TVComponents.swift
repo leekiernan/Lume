@@ -43,7 +43,7 @@ import SwiftUI
         func tvEngineOptionsDetail(for engine: PlayerEngineKind) -> some View {
             VStack(alignment: .leading, spacing: 28) {
                 Text("\(engine.displayName) Options")
-                    .font(.system(size: 34, weight: .bold))
+                    .font(.system(size: TVSettingsMetrics.paneTitleFontSize, weight: .bold))
                     .padding(.horizontal, TVSettingsMetrics.rowHPadding)
 
                 switch engine {
@@ -55,9 +55,7 @@ import SwiftUI
                     LumeEngineSettingsTVDetail()
                 case .avPlayer:
                     Text("AVPlayer has no configurable options.")
-                        .font(.system(size: 20))
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, TVSettingsMetrics.rowHPadding)
+                        .tvSettingsFooter()
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -229,9 +227,7 @@ import SwiftUI
                 }
 
                 Text("Follow leagues and teams to build your Sports Hub. Fixtures, live scores and standings come from ESPN, and each game links to a channel in your playlists.")
-                    .font(.system(size: 20))
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, TVSettingsMetrics.rowHPadding)
+                    .tvSettingsFooter()
             }
             .fullScreenCover(isPresented: $showManageTeams) {
                 TVManageTeamsPane()
@@ -266,9 +262,7 @@ import SwiftUI
                     scrollProxy: proxy
                 )
                 Text("Hide a team or league to take its row off the Sports hub — it stays followed. Select a row to lift it, then move up or down and select again to place.")
-                    .font(.system(size: 20))
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, TVSettingsMetrics.rowHPadding)
+                    .tvSettingsFooter()
                     .padding(.top, 4)
             }
         }

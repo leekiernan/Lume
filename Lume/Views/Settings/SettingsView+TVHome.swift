@@ -38,9 +38,7 @@ import SwiftUI
                         }
                     } else {
                         Text("This area is switched off. It has no tab, and its content is skipped when playlists sync.")
-                            .font(.system(size: 20))
-                            .foregroundStyle(.secondary)
-                            .padding(.horizontal, TVSettingsMetrics.rowHPadding)
+                            .tvSettingsFooter()
                     }
                 }
             }
@@ -125,9 +123,7 @@ import SwiftUI
         private var tvAreaEnableNote: some View {
             if layoutArea == .home {
                 Text("Home draws on the other areas, so switching it off removes its tab without changing what syncs.")
-                    .font(.system(size: 20))
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, TVSettingsMetrics.rowHPadding)
+                    .tvSettingsFooter()
             }
         }
 
@@ -161,9 +157,7 @@ import SwiftUI
                     .focusSection()
                 } else {
                     Text("Hide and reorder the categories your provider supplies, and choose what appears in the browse sidebar.")
-                        .font(.system(size: 20))
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, TVSettingsMetrics.rowHPadding)
+                        .tvSettingsFooter()
                         .padding(.top, 6)
                 }
             }

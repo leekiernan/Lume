@@ -43,6 +43,20 @@ struct QuickSwitchResolverTests {
 
     // MARK: - owner(ofContentID:)
 
+    @Test func `initial focus prefers the active playlist and a single playlist prefers profiles`() throws {
+        let container = try makeProfileTestContainer()
+        let playlists = try makePlaylists(["First", "Active"], in: container.mainContext)
+        let profiles = try makeProfiles(["First", "Active"], in: container.mainContext)
+        let playlistRows = QuickSwitchResolver.playlistRows(playlists, storedID: playlists[1].id.uuidString)
+        let profileRows = QuickSwitchResolver.profileRows(profiles, activeProfileID: profiles[1].id)
+        #expect(QuickSwitchResolver.initialFocus(playlists: playlistRows, profiles: profileRows) == .playlist(playlists[1].id))
+        #expect(QuickSwitchResolver.initialFocus(playlists: Array(playlistRows.suffix(1)), profiles: profileRows) == .profile(profiles[1].id))
+        #expect(QuickSwitchResolver.initialFocus(playlists: playlistRows, profiles: profileRows, canSwitchPlaylist: false) == .profile(profiles[1].id))
+        #expect(QuickSwitchResolver.initialFocus(playlists: Array(playlistRows.suffix(1)), profiles: profileRows, canSwitchProfile: false) == .playlist(playlists[1].id))
+        #expect(QuickSwitchResolver.initialFocus(playlists: playlistRows, profiles: profileRows, canSwitchPlaylist: false, canSwitchProfile: false) == nil)
+        #expect(QuickSwitchResolver.initialFocus(playlists: [], profiles: []) == nil)
+    }
+
     @Test func `content resolves to the playlist whose prefix it carries`() throws {
         let container = try makeProfileTestContainer()
         let playlists = try makePlaylists(["First", "Second"], in: container.mainContext)

@@ -47,7 +47,7 @@ struct SearchResultsView<Header: View>: View {
 
     var body: some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: 32) {
+            LazyVStack(alignment: .leading, spacing: PosterCardMetrics.sectionSpacing) {
                 header()
                 switch layout {
                 case .overview:
@@ -108,7 +108,7 @@ struct SearchResultsView<Header: View>: View {
                     }
                 }
                 #if os(tvOS)
-                .padding(.horizontal, 60)
+                .padding(.horizontal, TVLayoutMetrics.contentInset)
                 #endif
             }
             #if os(tvOS)
@@ -208,7 +208,11 @@ struct SearchResultsView<Header: View>: View {
                 }
             }
         }
+        #if os(tvOS)
+        .padding(.horizontal, TVLayoutMetrics.contentInset)
+        #else
         .padding(.horizontal)
+        #endif
     }
 }
 

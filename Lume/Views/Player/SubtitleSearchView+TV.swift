@@ -22,8 +22,8 @@
         static let contentWidth: CGFloat = 1160
         /// Inset from the display edge. tvOS may crop up to ~5% per side on an
         /// overscanning panel, so nothing meaningful sits closer than this.
-        static let horizontalInset: CGFloat = 90
-        static let verticalInset: CGFloat = 60
+        static let horizontalInset = TVLayoutMetrics.modalHorizontalInset
+        static let verticalInset = TVLayoutMetrics.modalVerticalInset
     }
 
     extension SubtitleSearchView {

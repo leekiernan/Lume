@@ -190,9 +190,7 @@ import SwiftUI
                 }
 
                 Text(footerText)
-                    .font(.system(size: 20))
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, TVSettingsMetrics.rowHPadding)
+                    .tvSettingsFooter()
                     .padding(.top, 6)
             }
         }
@@ -278,15 +276,11 @@ import SwiftUI
                     .disabled(customSections.count >= CustomHomeSections.maximumCount)
 
                     Text("Build your own row from a public list, like a site's most-popular chart. Lume matches the list against your playlist and shows the titles you have.")
-                        .font(.system(size: 20))
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, TVSettingsMetrics.rowHPadding)
+                        .tvSettingsFooter()
                         .padding(.top, 6)
 
                     Text("Supported: \(supportedProviders).")
-                        .font(.system(size: 20))
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, TVSettingsMetrics.rowHPadding)
+                        .tvSettingsFooter()
                 } else {
                     editorForm
                 }
@@ -322,9 +316,7 @@ import SwiftUI
                 }
 
                 Text("Paste the address of a public list, for example \(exampleListURL).")
-                    .font(.system(size: 20))
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, TVSettingsMetrics.rowHPadding)
+                    .tvSettingsFooter()
             }
         }
 

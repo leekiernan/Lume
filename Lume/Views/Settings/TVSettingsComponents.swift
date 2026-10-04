@@ -22,7 +22,11 @@
         static let labelFontSize: CGFloat = 18
         static let secondaryFontSize: CGFloat = 20
         static let statusFontSize: CGFloat = 24
+        static let paneTitleFontSize: CGFloat = 34
+        static let screenTitleFontSize: CGFloat = 38
         static let titleFontSize: CGFloat = 46
+        static let pageHorizontalInset: CGFloat = 48
+        static let pageVerticalInset: CGFloat = 72
         static let contentMaxWidth: CGFloat = 760
         /// Width of the Settings detail pane content (sits next to the sidebar, so
         /// it gets a touch more room than the full-screen `contentMaxWidth`).
@@ -33,6 +37,13 @@
     }
 
     extension View {
+        /// Help copy beneath a group of rows, distinct from larger status text.
+        func tvSettingsFooter() -> some View {
+            font(.system(size: TVSettingsMetrics.secondaryFontSize))
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, TVSettingsMetrics.rowHPadding)
+        }
+
         /// The flat dark fill shared by every tvOS settings surface.
         func tvSettingsBackground() -> some View {
             background(TVSettingsMetrics.background.ignoresSafeArea())

@@ -3,6 +3,13 @@ import Foundation
 import Testing
 
 struct HeroArtworkPolicyTests {
+    @Test func `compact composition shares one breakpoint and bottom fade`() {
+        #expect(HeroArtworkPolicy.isCompact(width: 599))
+        #expect(!HeroArtworkPolicy.isCompact(width: 600))
+        #expect(!HeroArtworkPolicy.isCompact(width: 1920))
+        #expect(HeroArtworkPolicy.compactFadeStart == 0.65)
+    }
+
     @Test(arguments: [1.0, 2.0, 3.0])
     func `render and prefetch share portrait rendition and pixel cache identity`(scale: Double) throws {
         let displayScale = CGFloat(scale)

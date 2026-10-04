@@ -75,13 +75,10 @@ struct LiveTVView: View {
     @State private var browseSections: [LiveTVSection]?
     #if os(tvOS)
         @Environment(DeepLinkRouter.self) private var router
-        /// Bumped whenever the content should take focus deliberately rather
+        /// Owns a request whenever the content should take focus deliberately rather
         /// than let the engine pick: after a category change, and on the way
         /// back out of the browse panel.
-        @State private var contentFocusToken = 0
-        /// Where that focus should land — the channel the panel was opened
-        /// from, or nil for the top of the list.
-        @State private var contentFocusTarget: String?
+        @State private var contentFocus = TVContentFocusMachine()
         /// The channel focus left when the browse panel was opened, so closing
         /// it without picking anything puts the viewer back where they were.
         @State private var browseReturnChannelID: String?
@@ -181,6 +178,12 @@ struct LiveTVView: View {
                 )
             }
         }
+        #if os(tvOS)
+        .onChange(of: playlistPrefix) { _, _ in contentFocus.cancel() }
+        .onChange(of: restriction.visibilityToken) { _, _ in contentFocus.cancel() }
+        .onChange(of: layoutModeRaw) { _, _ in contentFocus.cancel() }
+        .onDisappear { contentFocus.cancel() }
+        #endif
     }
 
     /// Attaches the browse panel to the same navigation-content root as Movies
@@ -255,15 +258,12 @@ struct LiveTVView: View {
     @ViewBuilder
     private func layout(for sections: [LiveTVSection]) -> some View {
         let displayed = displayedSection(in: sections)
-        VStack(spacing: 0) {
+        Group {
             #if os(tvOS)
                 tvOSLayout(displayed: displayed)
             #else
                 contentLayout(displayed: displayed)
             #endif
-
-            BrowseCategoriesButton(isPresented: $showingBrowse)
-                .padding(.bottom, PosterCardMetrics.sectionVerticalPadding)
         }
     }
 
@@ -313,8 +313,8 @@ struct LiveTVView: View {
                 onStartMultiView: { startMultiView(with: $0) },
                 playlistPrefix: playlistPrefix,
                 sourceType: activePlaylist?.knownSourceType,
-                contentFocusToken: $contentFocusToken,
-                contentFocusTarget: contentFocusTarget
+                contentFocusRequest: contentFocus.request,
+                onDidClaimFocus: { contentFocus.didClaim($0) }
             )
         }
     #endif
@@ -325,14 +325,14 @@ struct LiveTVView: View {
         #if os(tvOS)
             // A different category is a different list: nothing to return to,
             // so the new one takes focus at the top.
-            contentFocusTarget = nil
-            contentFocusToken += 1
+            requestContentFocus(for: section)
         #endif
     }
 
     #if os(tvOS)
         /// Opens the browse panel, remembering the channel focus is leaving.
         private func openBrowse(from channelID: String?) {
+            contentFocus.cancel()
             browseReturnChannelID = channelID
             showingBrowse = true
         }
@@ -340,8 +340,14 @@ struct LiveTVView: View {
         /// Leaving the panel without picking a category: the list is unchanged,
         /// so focus goes back to the channel it came from.
         private func returnFromBrowse() {
-            contentFocusTarget = browseReturnChannelID
-            contentFocusToken += 1
+            guard let section = displayedSection(in: browseSections ?? []) else { return }
+            requestContentFocus(for: section, channelID: browseReturnChannelID)
+        }
+
+        private func requestContentFocus(for section: LiveTVSection, channelID: String? = nil) {
+            contentFocus.requestFocus(in: TVContentFocusRequest.Scope(
+                playlistPrefix: playlistPrefix, channelScope: section.scope, visibilityToken: restriction.visibilityToken
+            ), channelID: channelID)
         }
     #endif
 

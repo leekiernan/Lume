@@ -20,7 +20,7 @@ import SwiftUI
         var tvBody: some View {
             VStack(alignment: .leading, spacing: 32) {
                 Text(playlist.name)
-                    .font(.system(size: 34, weight: .bold))
+                    .font(.system(size: TVSettingsMetrics.paneTitleFontSize, weight: .bold))
                     .padding(.horizontal, TVSettingsMetrics.rowHPadding)
 
                 tvServerSection

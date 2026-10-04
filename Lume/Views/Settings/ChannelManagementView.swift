@@ -81,7 +81,7 @@ struct ChannelManagementView: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 28) {
                         Text(category.name)
-                            .font(.system(size: 34, weight: .bold))
+                            .font(.system(size: TVSettingsMetrics.paneTitleFontSize, weight: .bold))
                             .padding(.horizontal, TVSettingsMetrics.rowHPadding)
 
                         HStack {
@@ -97,9 +97,7 @@ struct ChannelManagementView: View {
 
                         if isReordering {
                             Text("Move up or down to position, then select to place. Press Menu to cancel.")
-                                .font(.system(size: 20))
-                                .foregroundStyle(.secondary)
-                                .padding(.horizontal, TVSettingsMetrics.rowHPadding)
+                                .tvSettingsFooter()
                         }
 
                         if streams.isEmpty {
@@ -121,8 +119,8 @@ struct ChannelManagementView: View {
                     }
                     .frame(maxWidth: TVSettingsMetrics.contentMaxWidth, alignment: .leading)
                     .frame(maxWidth: .infinity)
-                    .padding(.horizontal, 48)
-                    .padding(.vertical, 72)
+                    .padding(.horizontal, TVSettingsMetrics.pageHorizontalInset)
+                    .padding(.vertical, TVSettingsMetrics.pageVerticalInset)
                 }
             }
             .tvSettingsBackground()

@@ -406,9 +406,7 @@ struct EPGSettingsView: View {
                 }
 
                 Text("The TV guide refreshes automatically in the background at this interval.")
-                    .font(.system(size: 20))
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, TVSettingsMetrics.rowHPadding)
+                    .tvSettingsFooter()
                     .padding(.top, 6)
             }
         }

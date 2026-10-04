@@ -47,13 +47,8 @@
         /// keyed by category id; empty inside a category.
         @State private var categoryNames: [String: String] = [:]
 
-        /// Non-zero asks the list to take focus on its first channel — see
-        /// `LiveTVView.contentFocusToken`. `onDidClaimFocus` resets it.
-        let focusToken: Int
-        /// The channel to land on, or nil for the top of the list — which is
-        /// what a newly-picked category gets, having no position to return to.
-        let focusTarget: String?
-        let onDidClaimFocus: () -> Void
+        let focusRequest: TVContentFocusRequest?
+        let onDidClaimFocus: (TVContentFocusRequest) -> Void
 
         @FocusState private var focusedChannelID: String?
 
@@ -65,9 +60,8 @@
             onStartMultiView: @escaping (LiveStream) -> Void,
             onWatchFromStart: @escaping (LiveStream, EPGSlot) -> Void,
             onPlay: @escaping (LiveStream) -> Void,
-            focusToken: Int = 0,
-            focusTarget: String? = nil,
-            onDidClaimFocus: @escaping () -> Void = {}
+            focusRequest: TVContentFocusRequest? = nil,
+            onDidClaimFocus: @escaping (TVContentFocusRequest) -> Void = { _ in }
         ) {
             self.scope = scope
             self.playlistPrefix = playlistPrefix
@@ -76,8 +70,7 @@
             self.onStartMultiView = onStartMultiView
             self.onWatchFromStart = onWatchFromStart
             self.onPlay = onPlay
-            self.focusToken = focusToken
-            self.focusTarget = focusTarget
+            self.focusRequest = focusRequest
             self.onDidClaimFocus = onDidClaimFocus
             _streams = Query(LiveChannelQuery.descriptor(for: scope, sort: .playlist))
         }
@@ -89,6 +82,8 @@
         var body: some View {
             let channels = scopedStreams
             let visible = Array(channels.prefix(visibleCount))
+            let focusScope = TVContentFocusRequest.Scope(playlistPrefix: playlistPrefix, channelScope: scope, visibilityToken: restriction.visibilityToken)
+            let landing = focusRequest?.landing(in: focusScope, channelIDs: channels.map(\.id))
             let epgScope = ChannelEPGLoadMachine.Scope(
                 playlistPrefix: playlistPrefix, visibilityToken: restriction.visibilityToken, channelScope: scope,
                 channelIDs: Set(channels.compactMap(\.epgChannelId)), guideIsSyncing: epgSync.isSyncing
@@ -135,7 +130,7 @@
                             }
                         }
                     }
-                    .padding(.horizontal, 60)
+                    .padding(.horizontal, TVLayoutMetrics.contentInset)
                     .padding(.vertical, 40)
                 }
                 .focusSection()
@@ -144,11 +139,13 @@
                 // position, so that starts at the top. Either way it is said
                 // explicitly — the old rows are gone and the engine would be
                 // left to guess.
-                .task(id: focusToken) {
-                    guard focusToken != 0 else { return }
-                    let landing = focusTarget ?? visible.first?.id
-                    await landTVFocus($focusedChannelID, on: landing, scrollingTo: proxy)
-                    onDidClaimFocus()
+                .task(id: landing) {
+                    guard let landing, let focusRequest else { return }
+                    visibleCount = max(visibleCount, landing.minimumVisibleCount)
+                    await Task.yield()
+                    if await landTVFocus($focusedChannelID, on: landing.channelID, scrollingTo: proxy) {
+                        onDidClaimFocus(focusRequest)
+                    }
                 }
             }
             // Reload when the visible window or channel set changes, or a guide
@@ -222,85 +219,16 @@
             epg?.current
         }
 
-        private var nextEPG: EPGSlot? {
-            epg?.next
-        }
-
         var body: some View {
             Button(action: onPlay) {
-                HStack(spacing: 24) {
-                    logo
-
-                    VStack(alignment: .leading, spacing: 6) {
-                        if let categoryName {
-                            LiveCategoryLabel(name: categoryName)
-                        }
-                        Text(stream.name)
-                            .font(.system(size: 30, weight: .semibold))
-                            .foregroundStyle(primaryColor)
-                            .lineLimit(1)
-
-                        if let upcoming {
-                            Text(upcoming.title)
-                                .font(.system(size: 25))
-                                .foregroundStyle(secondaryColor)
-                                .lineLimit(1)
-                            Text(upcoming.start, format: .dateTime.weekday(.abbreviated).hour().minute())
-                                .font(.system(size: 22, weight: .semibold))
-                                .foregroundStyle(Color.lumeAccent)
-                        } else if let current = currentEPG {
-                            Text(current.title)
-                                .font(.system(size: 25))
-                                .foregroundStyle(secondaryColor)
-                                .lineLimit(1)
-
-                            HStack(spacing: 6) {
-                                Text(current.start, style: .time)
-                                Text("–")
-                                Text(current.end, style: .time)
-                            }
-                            .font(.system(size: 22))
-                            .foregroundStyle(tertiaryColor)
-
-                            if let next = nextEPG {
-                                HStack(spacing: 6) {
-                                    Text("Next:")
-                                    Text(next.title).lineLimit(1)
-                                    Text(next.start, style: .time)
-                                }
-                                .font(.system(size: 22))
-                                .foregroundStyle(tertiaryColor)
-                            }
-                        } else if stream.epgChannelId?.isEmpty == false {
-                            Text("No EPG data")
-                                .font(.system(size: 22))
-                                .foregroundStyle(tertiaryColor)
-                        } else {
-                            Text("Live")
-                                .font(.system(size: 22))
-                                .foregroundStyle(secondaryColor)
-                        }
-
-                        if stream.supportsCatchup {
-                            Label("Catchup: \(stream.catchupArchiveDays)d", systemImage: "clock.arrow.circlepath")
-                                .font(.system(size: 22))
-                                .foregroundStyle(Color.lumeAccent)
-                        }
-                    }
-
-                    Spacer(minLength: 0)
-
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 24, weight: .semibold))
-                        .foregroundStyle(tertiaryColor)
-                }
-                .padding(.horizontal, 32)
-                .padding(.vertical, 22)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .fill(isFocused ? AnyShapeStyle(.white.opacity(0.18)) : AnyShapeStyle(.white.opacity(0.06)))
-                )
+                LiveChannelRowContent(stream: stream, epg: epg, categoryName: categoryName, upcoming: upcoming, density: .television)
+                    .padding(.horizontal, 32)
+                    .padding(.vertical, 22)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .fill(isFocused ? AnyShapeStyle(.white.opacity(0.18)) : AnyShapeStyle(.white.opacity(0.06)))
+                    )
             }
             .buttonStyle(TVCardButtonStyle(focusScale: 1.03))
             .focused($isFocused)
@@ -314,39 +242,6 @@
                 onStartMultiView: onStartMultiView,
                 onRemoveFromRecents: onRemove
             )
-        }
-
-        private var logo: some View {
-            CachedAsyncImage(url: URL(string: stream.streamIcon ?? ""), maxPixelSize: 84) { phase in
-                switch phase {
-                case .empty:
-                    Rectangle().fill(Color.white.opacity(0.12)).overlay { ProgressView() }
-                case let .success(image):
-                    image.resizable().aspectRatio(contentMode: .fit)
-                case .failure:
-                    Rectangle().fill(Color.white.opacity(0.12))
-                        .overlay {
-                            Image(systemName: "antenna.radiowaves.left.and.right")
-                                .foregroundStyle(secondaryColor)
-                        }
-                @unknown default:
-                    EmptyView()
-                }
-            }
-            .frame(width: 84, height: 84)
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-        }
-
-        private var primaryColor: Color {
-            .white
-        }
-
-        private var secondaryColor: Color {
-            .white.opacity(0.7)
-        }
-
-        private var tertiaryColor: Color {
-            .white.opacity(0.45)
         }
     }
 
@@ -380,12 +275,8 @@
             LiveTVLayoutMode(rawValue: layoutModeRaw) ?? .list
         }
 
-        /// Bumped when the user selects a sidebar category, asking whichever
-        /// view is showing to take focus on its first channel. Reset once
-        /// claimed.
-        @Binding var contentFocusToken: Int
-        /// The channel the content should land on when it next claims focus.
-        let contentFocusTarget: String?
+        let contentFocusRequest: TVContentFocusRequest?
+        let onDidClaimFocus: (TVContentFocusRequest) -> Void
 
         var body: some View {
             VStack(spacing: 0) {
@@ -410,8 +301,8 @@
                         onPlay: onPlay,
                         onPlayCatchup: { onPlayCatchup($0, EPGSlot($1)) },
                         onStartMultiView: onStartMultiView,
-                        focusToken: contentFocusToken,
-                        onDidClaimFocus: { contentFocusToken = 0 },
+                        focusRequest: contentFocusRequest,
+                        onDidClaimFocus: onDidClaimFocus,
                         onLeadingLeft: { onOpenBrowse(nil) }
                     )
                     .id("\(section.id)-guide")
@@ -425,9 +316,8 @@
                         onStartMultiView: onStartMultiView,
                         onWatchFromStart: onPlayCatchup,
                         onPlay: onPlay,
-                        focusToken: contentFocusToken,
-                        focusTarget: contentFocusTarget,
-                        onDidClaimFocus: { contentFocusToken = 0 }
+                        focusRequest: contentFocusRequest,
+                        onDidClaimFocus: onDidClaimFocus
                     )
                     .id("\(section.id)-list")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -472,7 +362,7 @@
                 multiViewButton
                 Spacer(minLength: 0)
             }
-            .padding(.horizontal, 60)
+            .padding(.horizontal, TVLayoutMetrics.contentInset)
             .padding(.top, 30)
             .padding(.bottom, 16)
             .focusSection()

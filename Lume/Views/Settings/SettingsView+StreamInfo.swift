@@ -67,9 +67,7 @@ extension SettingsView {
                 }
 
                 Text(streamInfoDetailLevel.footer)
-                    .font(.system(size: 20))
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, TVSettingsMetrics.rowHPadding)
+                    .tvSettingsFooter()
                     .padding(.top, 6)
             }
         }

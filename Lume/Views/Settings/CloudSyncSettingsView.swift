@@ -122,14 +122,10 @@ enum CloudSyncStatusText {
                     .padding(.vertical, 8)
 
                     CloudSyncStatusText.detail(for: status)
-                        .font(.system(size: 20))
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, TVSettingsMetrics.rowHPadding)
+                        .tvSettingsFooter()
 
                     Text(CloudSyncStatusText.footer)
-                        .font(.system(size: 20))
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, TVSettingsMetrics.rowHPadding)
+                        .tvSettingsFooter()
                         .padding(.top, 6)
                 }
             }

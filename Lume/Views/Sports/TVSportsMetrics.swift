@@ -14,7 +14,7 @@
     enum TVSportsMetrics {
         /// Where the hub's content starts: hero copy, header, row headings and
         /// the first card of every row line up on it.
-        static let railInset: CGFloat = 60
+        static let railInset = TVLayoutMetrics.contentInset
         /// Clear of the tab bar, which the full-bleed hub sits under.
         static let contentTop: CGFloat = 110
         /// Between fixture cards in a row.

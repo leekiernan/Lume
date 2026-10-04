@@ -63,15 +63,11 @@ import SwiftUI
 
                 if !premium.isPremium {
                     Text("Free includes one playlist. Upgrade to Lume Pro to add more.")
-                        .font(.system(size: 20))
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, TVSettingsMetrics.rowHPadding)
+                        .tvSettingsFooter()
                         .padding(.top, 6)
                 } else if playlists.count > 1 {
                     Text("Switching playlist changes the content shown across Home, Movies, Series and Live TV.")
-                        .font(.system(size: 20))
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, TVSettingsMetrics.rowHPadding)
+                        .tvSettingsFooter()
                         .padding(.top, 6)
                 }
             }

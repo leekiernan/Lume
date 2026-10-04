@@ -35,10 +35,10 @@ struct EPGGridScroller: View {
     let onPlayCatchup: (LiveStream, EPGProgramCell) -> Void
     /// Seeds Multi-View from a channel's long-press menu in the column.
     var onStartMultiView: (LiveStream) -> Void = { _ in }
-    /// tvOS: non-zero asks the guide to take real focus (a sidebar category was
-    /// just activated); `onDidClaimFocus` resets it once claimed.
-    var focusToken = 0
-    var onDidClaimFocus: () -> Void = {}
+    /// tvOS: an owned request to take native focus after a browse handoff.
+    /// The matching completion acknowledges it; stale completions do nothing.
+    var focusRequest: TVContentFocusRequest?
+    var onDidClaimFocus: (TVContentFocusRequest) -> Void = { _ in }
     /// tvOS: opens the category sidebar from the leftmost virtual item.
     var onLeadingLeft: () -> Void = {}
 
@@ -327,13 +327,11 @@ struct EPGGridScroller: View {
                     onStartMultiView(row.stream)
                 }
             }
-            // Runs on appear *and* on token change: a category activation both
-            // rebuilds the guide (fresh scroller) and bumps the token, and the
-            // same-category case only bumps the token.
-            .task(id: focusToken) {
-                guard focusToken != 0 else { return }
-                surfaceClaimsFocus = true
-                onDidClaimFocus()
+            // Category changes and same-category returns both get a fresh
+            // owned request. Cancelled handoffs cannot acknowledge a new one.
+            .task(id: focusRequest?.id) {
+                guard let focusRequest else { return }
+                if await landTVFocus($surfaceClaimsFocus) { onDidClaimFocus(focusRequest) }
             }
         }
 

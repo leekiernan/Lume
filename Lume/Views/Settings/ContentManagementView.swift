@@ -245,7 +245,7 @@ struct ContentManagementView: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 28) {
                         Text("Content")
-                            .font(.system(size: 34, weight: .bold))
+                            .font(.system(size: TVSettingsMetrics.paneTitleFontSize, weight: .bold))
                             .padding(.horizontal, TVSettingsMetrics.rowHPadding)
 
                         if let name = activePlaylist?.name {
@@ -274,8 +274,8 @@ struct ContentManagementView: View {
                     }
                     .frame(maxWidth: TVSettingsMetrics.detailMaxWidth, alignment: .leading)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 48)
-                    .padding(.vertical, 72)
+                    .padding(.horizontal, TVSettingsMetrics.pageHorizontalInset)
+                    .padding(.vertical, TVSettingsMetrics.pageVerticalInset)
                 }
             }
             .tvSettingsBackground()
@@ -312,9 +312,7 @@ struct ContentManagementView: View {
 
             if isReordering {
                 Text("Move up or down to position, then select to place. Press Menu to cancel.")
-                    .font(.system(size: 20))
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, TVSettingsMetrics.rowHPadding)
+                    .tvSettingsFooter()
             }
 
             if categories.isEmpty {

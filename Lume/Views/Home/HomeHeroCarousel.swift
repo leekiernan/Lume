@@ -65,9 +65,6 @@ struct HeroCarousel<Item: Identifiable, Backdrop: View, Info: View>: View where 
     @State private var displayedID: String?
     @State private var infoOpacity: Double = 1
 
-    /// Width below which the hero switches to the stacked, full-width layout.
-    private let compactWidthThreshold: CGFloat = 600
-
     /// Sentinel scroll ids for the boundary clones, so `currentID` can tell a
     /// clone apart from the real page it mirrors (see `normaliseClonePosition()`).
     private static var headCloneID: String {
@@ -118,7 +115,7 @@ struct HeroCarousel<Item: Identifiable, Backdrop: View, Info: View>: View where 
         HeroCarouselFrame(portraitComposition: portraitURL != nil) {
             GeometryReader { proxy in
                 let width = proxy.size.width
-                let isCompact = width < compactWidthThreshold
+                let isCompact = HeroArtworkPolicy.isCompact(width: width)
 
                 ZStack(alignment: .bottomLeading) {
                     artwork
@@ -379,7 +376,7 @@ struct HomeHeroWarmStart: View {
 private struct HeroCarouselFrame: Layout {
     var portraitComposition = false
     func sizeThatFits(proposal: ProposedViewSize, subviews _: Subviews, cache _: inout ()) -> CGSize {
-        let width = proposal.width ?? 600
+        let width = proposal.width ?? HeroArtworkPolicy.compactWidthThreshold
         return CGSize(width: width, height: HeroArtworkPolicy.heroHeight(width: width, portraitComposition: portraitComposition))
     }
 
@@ -472,11 +469,7 @@ private struct HeroBackdrop: View {
                     onFailure: { if let poster { failedPosterURL = poster } }
                 )
                 .frame(height: height)
-                .mask {
-                    if proxy.size.width < 600 {
-                        LinearGradient(stops: [.init(color: .black, location: 0), .init(color: .black, location: 0.65), .init(color: .clear, location: 1)], startPoint: .top, endPoint: .bottom)
-                    } else { Color.black }
-                }
+                .mask { CompactHeroArtworkMask(width: proxy.size.width) }
             }
         }
     }
@@ -495,17 +488,26 @@ private struct HeroArtworkRegion<Artwork: View>: View {
                 artwork()
                     .frame(width: proxy.size.width, height: height)
                     .clipped()
-                    .mask {
-                        if proxy.size.width < 600, !managesComposition {
-                            LinearGradient(
-                                stops: [.init(color: .black, location: 0), .init(color: .black, location: 0.7), .init(color: .clear, location: 1)],
-                                startPoint: .top, endPoint: .bottom
-                            )
-                        } else {
-                            Color.black
-                        }
-                    }
+                    .mask { CompactHeroArtworkMask(width: proxy.size.width, enabled: !managesComposition) }
             }
+        }
+    }
+}
+
+/// Movie/series, Sports and warm-start artwork share the same compact fade.
+/// Self-composed artwork is masked once; wide-screen geometry is untouched.
+private struct CompactHeroArtworkMask: View {
+    let width: CGFloat
+    var enabled = true
+
+    var body: some View {
+        if enabled, HeroArtworkPolicy.isCompact(width: width) {
+            LinearGradient(
+                stops: [.init(color: .black, location: 0), .init(color: .black, location: HeroArtworkPolicy.compactFadeStart), .init(color: .clear, location: 1)],
+                startPoint: .top, endPoint: .bottom
+            )
+        } else {
+            Color.black
         }
     }
 }

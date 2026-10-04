@@ -86,9 +86,7 @@ enum SportsAlertSettingsModel {
                         }
                     }
                     Text("For the teams you follow. Never for the game you're watching — the stream can be behind.")
-                        .font(.system(size: 20))
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, TVSettingsMetrics.rowHPadding)
+                        .tvSettingsFooter()
                 }
                 if settings.mode != .off {
                     ForEach(SportsAlertSettingsModel.followedSports, id: \.self) { sport in

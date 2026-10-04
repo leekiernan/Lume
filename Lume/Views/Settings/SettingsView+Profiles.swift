@@ -105,9 +105,7 @@ import SwiftUI
                 .buttonStyle(TVSettingsRowButtonStyle())
 
                 Text("Each profile keeps its own watch history, progress and favorites, synced across your devices.")
-                    .font(.system(size: 20))
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, TVSettingsMetrics.rowHPadding)
+                    .tvSettingsFooter()
                     .padding(.top, 6)
 
                 TVSettingsSectionLabel("Startup")
@@ -116,9 +114,7 @@ import SwiftUI
                 TVOptionToggleRow(title: "Ask on Startup", isOn: $askOnStartup)
 
                 Text("Choose a profile each time Lume launches. When off, Lume resumes the last profile you used.")
-                    .font(.system(size: 20))
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, TVSettingsMetrics.rowHPadding)
+                    .tvSettingsFooter()
                     .padding(.top, 6)
 
                 parentalControls
@@ -144,9 +140,7 @@ import SwiftUI
             ParentalPINButtons(isPINSet: parental?.isPINSet == true, flow: $pinFlow)
 
             Text("A PIN is required to switch away from a child profile and to open Content Management.")
-                .font(.system(size: 20))
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, TVSettingsMetrics.rowHPadding)
+                .tvSettingsFooter()
                 .padding(.top, 6)
         }
 

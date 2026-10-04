@@ -2,6 +2,13 @@ import Foundation
 
 /// Composition and pixel sizing are independent of carousel/playback state.
 nonisolated enum HeroArtworkPolicy {
+    static let compactWidthThreshold: CGFloat = 600
+    static let compactFadeStart: CGFloat = 0.65
+
+    static func isCompact(width: CGFloat) -> Bool {
+        width < compactWidthThreshold
+    }
+
     static let landscapeRatio: CGFloat = 16 / 9
     static let portraitRatio: CGFloat = 2 / 3
     static let portraitZoom: CGFloat = 1.25
@@ -25,7 +32,7 @@ nonisolated enum HeroArtworkPolicy {
     }
 
     static func portraitURL(_ poster: URL?, width: CGFloat) -> URL? {
-        width < 600 ? poster : nil
+        isCompact(width: width) ? poster : nil
     }
 
     static func posterURL(_ url: URL?, pixelWidth: CGFloat) -> URL? {
@@ -35,7 +42,7 @@ nonisolated enum HeroArtworkPolicy {
 
     /// Stable from the first layout pass, including the warm-start placeholder.
     static func heroHeight(width: CGFloat, portraitComposition: Bool = false) -> CGFloat {
-        guard width < 600 else { return 800 }
+        guard isCompact(width: width) else { return 800 }
         let baseline = max(540, width / landscapeRatio + 320)
         return portraitComposition ? min(780, baseline * portraitZoom) : baseline
     }
@@ -43,7 +50,7 @@ nonisolated enum HeroArtworkPolicy {
     /// Preserve the complete landscape composition above compact hero copy.
     /// Wide surfaces keep their existing immersive artwork geometry.
     static func artworkHeight(width: CGFloat, heroHeight: CGFloat) -> CGFloat {
-        width < 600 ? min(heroHeight, width / landscapeRatio) : heroHeight
+        isCompact(width: width) ? min(heroHeight, width / landscapeRatio) : heroHeight
     }
 
     /// Longest decoded edge needed for a landscape image to fill this region.

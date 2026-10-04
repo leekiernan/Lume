@@ -201,9 +201,7 @@ struct StorageManagementView: View {
                     .padding(.vertical, 4)
 
                     Text("Matches your library against TMDB and builds an on-device index for smarter search. Runs slowly in the background.")
-                        .font(.system(size: 20))
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, TVSettingsMetrics.rowHPadding)
+                        .tvSettingsFooter()
                         .padding(.top, 6)
 
                     #if DEBUG
@@ -224,9 +222,7 @@ struct StorageManagementView: View {
                     }
 
                     Text("Cached artwork and metadata are re-downloaded automatically when needed. Your playlists, downloads, watch history and favorites are not affected.")
-                        .font(.system(size: 20))
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, TVSettingsMetrics.rowHPadding)
+                        .tvSettingsFooter()
                         .padding(.top, 6)
                 }
                 .disabled(isClearing)
@@ -238,9 +234,7 @@ struct StorageManagementView: View {
                     }
 
                     Text("Removes watch progress and the watched status of every title, and empties your Continue Watching and Recently Watched lists. Favorites and your watchlist aren't affected.")
-                        .font(.system(size: 20))
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, TVSettingsMetrics.rowHPadding)
+                        .tvSettingsFooter()
                         .padding(.top, 6)
                 }
                 .disabled(isClearing)

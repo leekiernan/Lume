@@ -81,9 +81,7 @@ import SwiftUI
                     }
 
                     Text("Up and down move to the next and previous channel, like a TV remote. List Order moves the way the channel list reads on screen instead — up goes to the row above.")
-                        .font(.system(size: 20))
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, TVSettingsMetrics.rowHPadding)
+                        .tvSettingsFooter()
                         .padding(.top, 6)
                 }
 
@@ -97,9 +95,7 @@ import SwiftUI
 
                     // swiftlint:disable:next line_length
                     Text("Swipes across the remote's touch surface control the player: up and down change channels, left opens the channel browser and right returns to the last channel. Turn this off to leave those to a click on the remote's direction buttons, so a brush across the surface changes nothing.")
-                        .font(.system(size: 20))
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, TVSettingsMetrics.rowHPadding)
+                        .tvSettingsFooter()
                         .padding(.top, 6)
                 }
 
@@ -115,9 +111,7 @@ import SwiftUI
                     }
 
                     Text(primaryEngine.subtitle)
-                        .font(.system(size: 20))
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, TVSettingsMetrics.rowHPadding)
+                        .tvSettingsFooter()
                         .padding(.top, 6)
                 }
 
@@ -149,9 +143,7 @@ import SwiftUI
 
                     // swiftlint:disable:next line_length
                     Text("Streams open in the selected app instead of Lume's player. Downloads always play in Lume, and the built-in player is used when the app is not installed or the stream is outside the selected content.")
-                        .font(.system(size: 20))
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, TVSettingsMetrics.rowHPadding)
+                        .tvSettingsFooter()
                         .padding(.top, 6)
                 }
 
@@ -287,7 +279,7 @@ import SwiftUI
             let codes = preferredLanguageCodes
             return VStack(alignment: .leading, spacing: 28) {
                 Text("Audio Languages")
-                    .font(.system(size: 34, weight: .bold))
+                    .font(.system(size: TVSettingsMetrics.paneTitleFontSize, weight: .bold))
                     .padding(.horizontal, TVSettingsMetrics.rowHPadding)
 
                 VStack(alignment: .leading, spacing: 8) {
@@ -320,9 +312,7 @@ import SwiftUI
                     .buttonStyle(TVSettingsRowButtonStyle())
 
                     Text(tvPreferredLanguageFooter)
-                        .font(.system(size: 20))
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, TVSettingsMetrics.rowHPadding)
+                        .tvSettingsFooter()
                         .padding(.top, 6)
                 }
             }
@@ -364,7 +354,7 @@ import SwiftUI
 
             return VStack(alignment: .leading, spacing: 28) {
                 Text("Add Language")
-                    .font(.system(size: 34, weight: .bold))
+                    .font(.system(size: TVSettingsMetrics.paneTitleFontSize, weight: .bold))
                     .padding(.horizontal, TVSettingsMetrics.rowHPadding)
 
                 if !addable.suggested.isEmpty {
