@@ -91,9 +91,7 @@ struct MultiViewKSTile: View {
     /// emitting `.error`, which would leave the tile spinning forever.
     private func startWatchdog() {
         startupWatchdog?.cancel()
-        let timeout = usesQuickStartupTimeout
-            ? MultiViewTilePlayer.fallbackStartupTimeout
-            : MultiViewTilePlayer.startupTimeout
+        let timeout = PlaybackPolicy.tileStartupTimeout(quick: usesQuickStartupTimeout)
         startupWatchdog = Task { @MainActor in
             try? await Task.sleep(for: .seconds(timeout))
             guard !Task.isCancelled, !hasStarted else { return }
@@ -117,9 +115,7 @@ struct MultiViewVLCTile: View {
         MultiViewVLCSurface(coordinator: coordinator)
             .onAppear {
                 coordinator.isMuted = isMuted
-                coordinator.startupTimeout = usesQuickStartupTimeout
-                    ? MultiViewTilePlayer.fallbackStartupTimeout
-                    : MultiViewTilePlayer.startupTimeout
+                coordinator.startupTimeout = PlaybackPolicy.tileStartupTimeout(quick: usesQuickStartupTimeout)
                 coordinator.onPlaybackFailure = onPlaybackFailed
                 coordinator.configure(media: media)
             }
@@ -151,9 +147,7 @@ struct MultiViewAVTile: View {
         MultiViewAVSurface(coordinator: coordinator)
             .onAppear {
                 coordinator.isMuted = isMuted
-                coordinator.startupTimeout = usesQuickStartupTimeout
-                    ? MultiViewTilePlayer.fallbackStartupTimeout
-                    : MultiViewTilePlayer.startupTimeout
+                coordinator.startupTimeout = PlaybackPolicy.tileStartupTimeout(quick: usesQuickStartupTimeout)
                 coordinator.onPlaybackFailure = onPlaybackFailed
                 coordinator.configure(media: media)
             }
@@ -186,9 +180,7 @@ struct MultiViewLumeTile: View {
             .onAppear {
                 coordinator.isEmbedded = true
                 coordinator.isMuted = isMuted
-                coordinator.startupTimeout = usesQuickStartupTimeout
-                    ? MultiViewTilePlayer.fallbackStartupTimeout
-                    : MultiViewTilePlayer.startupTimeout
+                coordinator.startupTimeout = PlaybackPolicy.tileStartupTimeout(quick: usesQuickStartupTimeout)
                 coordinator.onPlaybackFailure = onPlaybackFailed
                 coordinator.onStalled = { reconnector.scheduleRetry { coordinator.reload() } }
                 coordinator.onRecovered = { reconnector.reset() }

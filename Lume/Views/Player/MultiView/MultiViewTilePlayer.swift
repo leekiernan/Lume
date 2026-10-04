@@ -37,13 +37,6 @@ struct MultiViewTilePlayer: View {
     /// Set when every engine has been tried and none could open the stream.
     @State private var loadFailed = false
 
-    /// A tile gets a shorter startup window than the full-screen player: the
-    /// viewer is already watching another stream while it loads, so a dead one
-    /// should hand off — or say so — promptly rather than hold a black rectangle.
-    static let startupTimeout: TimeInterval = 25
-    /// Startup window while another engine remains to try.
-    static let fallbackStartupTimeout: TimeInterval = 12
-
     init(media: PlayableMedia, isMuted: Bool) {
         self.media = media
         self.isMuted = isMuted

@@ -26,6 +26,13 @@ nonisolated enum PlaybackPolicy {
         quick ? quickStartupTimeout : startupTimeout
     }
 
+    /// Tiles load beside an already playing stream, so their startup windows
+    /// stay shorter than full-screen playback's. This selects a deadline only;
+    /// retry budgets and first-frame reporting remain engine-owned.
+    static func tileStartupTimeout(quick: Bool) -> TimeInterval {
+        quick ? 12 : 25
+    }
+
     /// Whether a hard error before the first frame goes through the reconnect
     /// budget. With another engine left it's a definitive "this engine can't"
     /// and the session falls back at once; on the last engine a retry is the
