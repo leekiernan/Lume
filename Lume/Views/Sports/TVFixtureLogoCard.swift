@@ -20,14 +20,19 @@
         var showsLeagueMark = true
         var onSelect: () -> Void
         @AppStorage(SportsSyncService.hideScoresKey) private var hidesScores = false
+        @State private var reveal = SportsScoreReveal.shared
+
+        private var showsScore: Bool {
+            fixture.showsScore(hidingScores: hidesScores, reveal: reveal)
+        }
 
         var body: some View {
             Button(action: onSelect) {
-                TVFixtureLogoCardContent(fixture: fixture, showsLeagueMark: showsLeagueMark, showsScore: !hidesScores)
+                TVFixtureLogoCardContent(fixture: fixture, showsLeagueMark: showsLeagueMark, showsScore: showsScore)
             }
             .buttonStyle(TVCardButtonStyle(focusScale: 1.06))
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel(Text(verbatim: fixture.tvSpokenSummary(showsScore: !hidesScores)))
+            .accessibilityLabel(Text(verbatim: fixture.tvSpokenSummary(showsScore: showsScore)))
         }
     }
 
