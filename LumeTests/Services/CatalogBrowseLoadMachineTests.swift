@@ -93,7 +93,7 @@ struct CatalogBrowseLoadMachineTests {
         #expect(machine.items == [9])
     }
 
-    @Test func `an old import cannot publish or release the replacement scope's import ownership`() async {
+    @Test func `a scope change mid-import waits for that walk instead of starting a second`() async {
         let category = category(stalker: true)
         let machine = CatalogCategoryLoadMachine<Int>()
         let old = BrowseGate<Void>()
@@ -102,19 +102,50 @@ struct CatalogBrowseLoadMachineTests {
             await machine.open(category: category, key: categoryKey(category), fetch: { _, _, _ in [1] }, importContent: { _, _ in await old.wait() })
         }
         await old.started()
+        var walks = 0
         let replacement = Task {
             await machine.open(category: category, key: categoryKey(category, visibility: "hidden", profile: UUID()),
-                               fetch: { _, _, _ in [2] }, importContent: { _, _ in await new.wait() })
+                               fetch: { _, _, _ in [2] }, importContent: { _, _ in
+                                   walks += 1
+                                   await new.wait()
+                               })
         }
-        await new.started()
+        await Task.yield()
+        #expect(walks == 0)
+        #expect(machine.isImporting)
+
+        // The old walk didn't complete the import, so the new scope walks once.
         old.release(())
         await task.value
         #expect(machine.items.isEmpty)
-        #expect(machine.isImporting)
+        await new.started()
+        #expect(walks == 1)
         new.release(())
         await replacement.value
         #expect(machine.items == [2])
         #expect(!machine.isImporting)
+    }
+
+    @Test func `a scope change mid-import uses that walk when it completes`() async {
+        let category = category(stalker: true)
+        let machine = CatalogCategoryLoadMachine<Int>()
+        let old = BrowseGate<Void>()
+        let task = Task {
+            await machine.open(category: category, key: categoryKey(category), fetch: { _, _, _ in [1] }, importContent: { category, _ in
+                await old.wait()
+                category.contentImportedAt = .now
+            })
+        }
+        await old.started()
+        let replacement = Task {
+            await machine.open(category: category, key: categoryKey(category, visibility: "hidden", profile: UUID()),
+                               fetch: { _, _, _ in [2] }, importContent: { _, _ in Issue.record("walked twice") })
+        }
+        await Task.yield()
+        old.release(())
+        await task.value
+        await replacement.value
+        #expect(machine.items == [2])
     }
 
     @Test func `cancelled first import remains retryable and manual refresh ignores duplicate work`() async {

@@ -17,11 +17,17 @@ final class CatalogCategoryLoadMachine<Item> {
     private(set) var key: CatalogCategoryKey?
     private(set) var items: [Item] = []
     private(set) var pagination = PaginationMachine()
+    /// Which scope may publish the import running for it. A new scope takes
+    /// this over; the walk itself is `runningImport`.
     private var importToken: RequestToken?
+    /// The category whose provider import is running, whoever owns its
+    /// publication. One walk per category: a visibility or profile change
+    /// mid-import waits for it instead of walking the portal a second time.
+    @ObservationIgnored private var runningImport: String?
     @ObservationIgnored private var generation = RequestToken()
     @ObservationIgnored private var loadedInitialPage = false
-    /// Opens of the same category waiting for an import already in flight —
-    /// see `open`. Resumed whenever import ownership is released.
+    /// Opens of the same category waiting for the import already running —
+    /// see `claimOpen`. Resumed when that walk ends.
     @ObservationIgnored private var importWaiters: [CheckedContinuation<Void, Never>] = []
     let pageSize: Int
 
@@ -30,7 +36,7 @@ final class CatalogCategoryLoadMachine<Item> {
     }
 
     var isImporting: Bool {
-        importToken != nil
+        importToken != nil || (runningImport != nil && runningImport == key?.categoryID)
     }
 
     func invalidate() {
@@ -58,11 +64,11 @@ final class CatalogCategoryLoadMachine<Item> {
     }
 
     /// Whether this open has work to do. A new key starts afresh; the same
-    /// key with its first page loaded keeps it. The same key while its first
-    /// import is still running — typically after leaving the category, which
-    /// cancelled the open that started the import and so will never load its
-    /// first page — waits for that import, then decides again: the caller
-    /// loads the page if it completed, or imports afresh if it didn't.
+    /// key with its first page loaded keeps it. Either way, if this category's
+    /// import is still running — the same key after leaving it, which
+    /// cancelled the open that started it, or a new visibility or profile —
+    /// this open waits for that walk, then decides again: the caller loads the
+    /// page if it completed, or imports afresh if it didn't.
     private func claimOpen(_ nextKey: CatalogCategoryKey) async -> Bool {
         if key != nextKey {
             key = nextKey
@@ -71,12 +77,12 @@ final class CatalogCategoryLoadMachine<Item> {
             items = []
             loadedInitialPage = false
             if !pagination.prepare(for: nextKey.categoryID) { pagination.restart() }
-            return true
+        } else if loadedInitialPage {
+            return false
         }
-        guard !loadedInitialPage else { return false }
-        guard isImporting else { return true }
+        guard runningImport == nextKey.categoryID else { return true }
         await withCheckedContinuation { importWaiters.append($0) }
-        return key == nextKey && !loadedInitialPage && !isImporting && !Task.isCancelled
+        return key == nextKey && !loadedInitialPage && runningImport == nil && !Task.isCancelled
     }
 
     func loadNextPage(fetch: Fetch) {
@@ -113,16 +119,24 @@ final class CatalogCategoryLoadMachine<Item> {
     }
 
     private func runImport(_ category: Category, playlist: Playlist, owner: RequestToken, action: Import) async -> Bool {
-        guard isCurrent(owner), !isImporting else { return false }
+        guard isCurrent(owner), runningImport == nil else { return false }
         let token = RequestToken()
         importToken = token
-        defer { if importToken == token { releaseImport() } }
+        runningImport = category.id
+        defer {
+            if importToken == token { releaseImport() }
+            finishRunningImport()
+        }
         do { try await action(category, playlist) } catch { /* Existing best-effort import contract. */ }
         return isCurrent(owner)
     }
 
     private func releaseImport() {
         importToken = nil
+    }
+
+    private func finishRunningImport() {
+        runningImport = nil
         let waiters = importWaiters
         importWaiters = []
         for waiter in waiters {
