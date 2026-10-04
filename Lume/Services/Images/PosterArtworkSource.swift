@@ -11,17 +11,7 @@ nonisolated struct PosterArtworkSource: Hashable {
         let raw = provider?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         providerURL = Self.remoteURL(raw)
 
-        let path = posterPath?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        // TMDB returns a single relative filename, not a provider URL.
-        if path.hasPrefix("/"), !path.hasPrefix("//"),
-           path.dropFirst().contains("/") == false, path.contains("?") == false,
-           path.contains("#") == false,
-           ["jpg", "jpeg", "png", "webp"].contains((path as NSString).pathExtension.lowercased())
-        {
-            tmdbURL = URL(string: "https://image.tmdb.org/t/p/w500" + path)
-        } else {
-            tmdbURL = nil
-        }
+        tmdbURL = TMDBClient.posterURL(posterPath)
 
         if providerURL == nil {
             let reason = raw.isEmpty ? "missing provider URL" : "invalid provider URL"

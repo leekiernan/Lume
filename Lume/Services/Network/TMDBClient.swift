@@ -34,7 +34,7 @@ nonisolated struct TMDBClient {
     }
 
     private let baseURL = "https://api.themoviedb.org/3"
-    private static let imageBaseURL = "https://image.tmdb.org/t/p/"
+    private static let imageBaseURL = TMDBArtworkURL.baseURL
     private let session: URLSession
     private let token: String?
 
