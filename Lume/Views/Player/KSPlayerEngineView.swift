@@ -376,7 +376,7 @@ struct KSPlayerEngineView: View {
             Button(action: showControls) {
                 Color.clear.contentShape(Rectangle())
             }
-            .buttonStyle(KSInvisibleButtonStyle())
+            .buttonStyle(PlayerInvisibleButtonStyle())
             // Yield focus to the failure overlay's buttons when a stream dies.
             // Only while the controls are actually drawn (from the first frame):
             // until then this is what hears the remote, so a second surf press

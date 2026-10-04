@@ -291,7 +291,7 @@ struct VLCPlayerEngineView: View {
             Button(action: showControls) {
                 Color.clear.contentShape(Rectangle())
             }
-            .buttonStyle(InvisibleButtonStyle())
+            .buttonStyle(PlayerInvisibleButtonStyle())
             // Yield focus to the failure overlay's buttons when a stream dies.
             // Only while the controls are actually drawn — see `PlayerChrome`.
             .disabled(drawsControls || isChannelBrowserOpen || loadFailed)
@@ -497,17 +497,6 @@ struct VLCPlayerEngineView: View {
         coordinator.retryAfterFailure()
     }
 }
-
-#if os(tvOS)
-    /// Draws only its (clear) label — no focus highlight, scale or background —
-    /// so the full-screen tap-catcher stays invisible even while it holds focus
-    /// with the controls hidden.
-    private struct InvisibleButtonStyle: ButtonStyle {
-        func makeBody(configuration: Configuration) -> some View {
-            configuration.label
-        }
-    }
-#endif
 
 #Preview("Fallback") {
     VLCPlayerEngineView(

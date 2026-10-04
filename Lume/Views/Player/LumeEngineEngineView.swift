@@ -329,7 +329,7 @@ struct LumeEngineEngineView: View {
             Button(action: showControls) {
                 Color.clear.contentShape(Rectangle())
             }
-            .buttonStyle(LumeEngineInvisibleButtonStyle())
+            .buttonStyle(PlayerInvisibleButtonStyle())
             // Yield focus to the failure overlay's buttons when a stream dies.
             // Only while the controls are actually drawn — see KSPlayerEngineView.
             .disabled(drawsControls || isChannelBrowserOpen || loadFailed)

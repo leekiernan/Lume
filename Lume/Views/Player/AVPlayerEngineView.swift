@@ -257,7 +257,7 @@ struct AVPlayerEngineView: View {
             Button(action: showControls) {
                 Color.clear.contentShape(Rectangle())
             }
-            .buttonStyle(AVInvisibleButtonStyle())
+            .buttonStyle(PlayerInvisibleButtonStyle())
             // Yield focus to the failure overlay's buttons when a stream dies.
             // Only while the controls are actually drawn — see `PlayerChrome`.
             .disabled(drawsControls || isChannelBrowserOpen || loadFailed)
@@ -466,16 +466,6 @@ struct AVPlayerEngineView: View {
         coordinator.retryAfterFailure()
     }
 }
-
-#if os(tvOS)
-    /// Draws only its (clear) label so the full-screen tap-catcher stays
-    /// invisible even while it holds focus with the controls hidden.
-    private struct AVInvisibleButtonStyle: ButtonStyle {
-        func makeBody(configuration: Configuration) -> some View {
-            configuration.label
-        }
-    }
-#endif
 
 #Preview {
     AVPlayerEngineView(
