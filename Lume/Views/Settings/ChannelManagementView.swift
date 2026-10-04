@@ -152,11 +152,12 @@ struct ChannelManagementView: View {
                             .foregroundStyle(.secondary)
                     } else {
                         ForEach(listedStreams) { stream in
-                            ChannelManageRow(
+                            ContentManageRow(
                                 title: stream.name,
-                                iconURL: URL(string: stream.streamIcon ?? ""),
                                 isHidden: stream.isHidden,
-                                onToggleHidden: { ContentOrganizer.toggleHidden(stream) }
+                                titleLineLimit: 1,
+                                onToggleHidden: { ContentOrganizer.toggleHidden(stream) },
+                                icon: { ChannelManagementIcon(url: URL(string: stream.streamIcon ?? "")) }
                             )
                         }
                         .onMove(perform: moveHandler)
@@ -199,44 +200,26 @@ struct ChannelManagementView: View {
 // MARK: - iOS / macOS row
 
 #if !os(tvOS)
-    private struct ChannelManageRow: View {
-        let title: String
-        let iconURL: URL?
-        let isHidden: Bool
-        let onToggleHidden: () -> Void
+    private struct ChannelManagementIcon: View {
+        let url: URL?
 
         var body: some View {
-            HStack(spacing: 12) {
-                Button(action: onToggleHidden) {
-                    Image(systemName: isHidden ? "eye.slash" : "eye")
-                        .foregroundStyle(isHidden ? Color.secondary : Color.accentColor)
+            CachedAsyncImage(url: url, maxPixelSize: 44) { phase in
+                switch phase {
+                case let .success(image):
+                    image.resizable().aspectRatio(contentMode: .fit)
+                default:
+                    Rectangle()
+                        .fill(Color.gray.opacity(0.2))
+                        .overlay {
+                            Image(systemName: "antenna.radiowaves.left.and.right")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
                 }
-                .buttonStyle(.borderless)
-                .accessibilityLabel(isHidden ? "Show \(title)" : "Hide \(title)")
-
-                CachedAsyncImage(url: iconURL, maxPixelSize: 44) { phase in
-                    switch phase {
-                    case let .success(image):
-                        image.resizable().aspectRatio(contentMode: .fit)
-                    default:
-                        Rectangle()
-                            .fill(Color.gray.opacity(0.2))
-                            .overlay {
-                                Image(systemName: "antenna.radiowaves.left.and.right")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                    }
-                }
-                .frame(width: 44, height: 44)
-                .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-
-                Text(title)
-                    .foregroundStyle(isHidden ? .secondary : .primary)
-                    .lineLimit(1)
-
-                Spacer()
             }
+            .frame(width: 44, height: 44)
+            .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
         }
     }
 #endif

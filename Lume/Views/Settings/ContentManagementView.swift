@@ -128,7 +128,7 @@ struct ContentManagementView: View {
     /// The id prefix every Category of the active playlist shares. Empty only
     /// when there is no playlist at all, and then there is nothing to scope.
     private var playlistPrefix: String {
-        activePlaylist.map { "\($0.id.uuidString)-" } ?? ""
+        activePlaylist?.contentIDPrefix ?? ""
     }
 
     /// Everything the scoped group depends on, folded into one comparable value.
@@ -457,6 +457,7 @@ struct ContentManagementView: View {
     struct ContentManageRow<Icon: View>: View {
         let title: String
         let isHidden: Bool
+        var titleLineLimit: Int?
         var isRestricted = false
         var drillInValue: Category?
         let onToggleHidden: () -> Void
@@ -485,8 +486,14 @@ struct ContentManagementView: View {
                 }
 
                 icon()
-                Text(title)
-                    .foregroundStyle(isHidden ? .secondary : .primary)
+                Group {
+                    if let titleLineLimit {
+                        Text(title).lineLimit(titleLineLimit)
+                    } else {
+                        Text(title)
+                    }
+                }
+                .foregroundStyle(isHidden ? .secondary : .primary)
 
                 Spacer()
 

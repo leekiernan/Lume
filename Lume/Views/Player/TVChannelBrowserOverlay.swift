@@ -341,7 +341,7 @@
         private func loadInitialContent() {
             guard let stream = TVPlayerContent.liveStream(for: media.contentRef, in: modelContext),
                   let playlist = LiveChannelNavigator.playlist(for: stream, in: modelContext) else { return }
-            let prefix = "\(playlist.id.uuidString)-"
+            let prefix = playlist.contentIDPrefix
             playlistPrefix = prefix
 
             let rail = LiveChannelQuery.rail(in: modelContext, playlistPrefix: prefix, restriction: restriction)

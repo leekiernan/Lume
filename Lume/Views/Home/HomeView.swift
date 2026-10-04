@@ -477,7 +477,7 @@ struct HomeView: View {
     /// playlist shares (ids are stored as `"\(playlistID)-…"`). The `@Query`
     /// results span all playlists, so this scopes them in-memory.
     var playlistPrefix: String? {
-        activePlaylist.map { "\($0.id.uuidString)-" }
+        activePlaylist.map(\.contentIDPrefix)
     }
 
     func belongsToActivePlaylist(_ id: String) -> Bool {

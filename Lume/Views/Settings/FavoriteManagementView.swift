@@ -92,7 +92,7 @@ struct FavoriteManagementView: View {
     /// through to a stable type/provider grouping.
     private var favorites: [FavoriteEntry] {
         guard let playlistId = activePlaylist?.id else { return [] }
-        let prefix = "\(playlistId.uuidString)-"
+        let prefix = PlaylistContentScope.prefix(for: playlistId)
 
         var entries: [FavoriteEntry] = []
         for stream in favoriteChannels where stream.id.hasPrefix(prefix) {

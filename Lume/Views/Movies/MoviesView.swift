@@ -228,7 +228,7 @@ struct MoviesView: View {
     /// the collection rows' queries, the genre list and the "Show All" grids.
     /// `MainTabView` derives the same prefix for this view's category query.
     private var playlistPrefix: String {
-        activePlaylist.map { "\($0.id.uuidString)-" } ?? ""
+        activePlaylist?.contentIDPrefix ?? ""
     }
 
     /// Identity of the catalog the remote rows are matched against — the same

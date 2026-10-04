@@ -242,7 +242,7 @@
                 channels = []
                 return
             }
-            let prefix = "\(playlist.id.uuidString)-"
+            let prefix = playlist.contentIDPrefix
             let rail = LiveChannelQuery.rail(in: modelContext, playlistPrefix: prefix, restriction: restriction)
             sections = rail
 
@@ -261,7 +261,7 @@
                       let section = sections.first(where: { $0.id == sectionID }),
                       let playlist = selectedPlaylist else { return }
                 selectedSectionID = sectionID
-                channels = fetchChannels(scope: section.scope, prefix: "\(playlist.id.uuidString)-")
+                channels = fetchChannels(scope: section.scope, prefix: playlist.contentIDPrefix)
             }
         }
 

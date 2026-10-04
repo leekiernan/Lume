@@ -363,7 +363,7 @@ struct LiveTVView: View {
 
     /// The id prefix every Category / LiveStream of the active playlist shares.
     private var playlistPrefix: String {
-        activePlaylist.map { "\($0.id.uuidString)-" } ?? ""
+        activePlaylist?.contentIDPrefix ?? ""
     }
 
     /// The rail's category entries: the active playlist's live categories this

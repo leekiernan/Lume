@@ -158,7 +158,7 @@ struct MainTabView: View {
     /// the selection in SQL rather than filtering another playlist's rows in
     /// memory.
     private var activePlaylistPrefix: String? {
-        playlists.active(for: selectedPlaylistID).map { "\($0.id.uuidString)-" }
+        playlists.active(for: selectedPlaylistID).map(\.contentIDPrefix)
     }
 
     private var liveTVRoot: some View {
@@ -545,7 +545,7 @@ struct MainTabView: View {
 
     private func belongsToActivePlaylist(_ id: String) -> Bool {
         guard let activePlaylist = playlists.active(for: selectedPlaylistID) else { return true }
-        return id.hasPrefix("\(activePlaylist.id.uuidString)-")
+        return id.hasPrefix(activePlaylist.contentIDPrefix)
     }
 }
 
