@@ -454,7 +454,11 @@ struct KSPlayerEngineView: View {
                 // only video — this overlay renders those parts on screen.
                 KSSubtitleOverlay(subtitleModel: coordinator.subtitleModel)
 
+                // Full bleed, as on the other engines: the host keeps the
+                // overlays inside the safe area on iOS, but a tap at the very
+                // edges should still summon the controls.
                 PlayerTapCatcher(toggleControls: toggleControls)
+                    .ignoresSafeArea()
 
                 // Hold the controls back until the stream starts, so the loading
                 // indicator stands in for a player that would otherwise look
