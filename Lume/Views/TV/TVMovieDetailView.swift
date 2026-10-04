@@ -23,19 +23,19 @@
         @State private var playingMedia: PlayableMedia?
         @State private var loader: MovieDetailLoadMachine
         private var isLoadingTMDB: Bool {
-            loader.contentID == movie.id ? loader.isLoadingTMDB : detailNeedsTMDBFetch(tmdbId: movie.tmdbId, enrichedAt: movie.tmdbEnrichedAt)
+            loader.snapshot(for: movie).isLoadingTMDB
         }
 
         private var similar: [HomeMediaItem] {
-            loader.contentID == movie.id ? loader.similar : []
+            loader.snapshot(for: movie).similar
         }
 
         private var otherSources: [OtherSources.Source] {
-            loader.contentID == movie.id ? loader.otherSources : []
+            loader.snapshot(for: movie).otherSources
         }
 
         private var collectionMovies: [HomeMediaItem] {
-            loader.contentID == movie.id && loader.collectionID == movie.collectionId ? loader.collectionMovies : []
+            loader.snapshot(for: movie).collectionMovies
         }
 
         @State private var showYouTubeUnavailable = false

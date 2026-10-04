@@ -5,6 +5,13 @@ import SwiftData
 /// focus, playback, and user mutations remain in the platform view.
 @Observable
 final class MovieDetailLoadMachine {
+    struct Snapshot {
+        var isLoadingTMDB: Bool
+        var similar: [HomeMediaItem] = []
+        var collectionMovies: [HomeMediaItem] = []
+        var otherSources: [OtherSources.Source] = []
+    }
+
     private(set) var contentID: String
     private var detail: DetailLoadState
     private var collection = DetailLoadState()
@@ -19,7 +26,20 @@ final class MovieDetailLoadMachine {
 
     init(movie: Movie) {
         contentID = movie.id
-        detail = DetailLoadState(isBlocking: detailNeedsTMDBFetch(tmdbId: movie.tmdbId, enrichedAt: movie.tmdbEnrichedAt))
+        detail = Self.initialDetail(for: movie)
+    }
+
+    /// Safe before the view's identity-keyed task prepares a replacement title.
+    /// A changed collection also hides the old lane before its next load starts.
+    func snapshot(for movie: Movie) -> Snapshot {
+        guard contentID == movie.id else {
+            return Snapshot(isLoadingTMDB: Self.initialDetail(for: movie).isBlocking)
+        }
+        return Snapshot(
+            isLoadingTMDB: isLoadingTMDB, similar: similar,
+            collectionMovies: collectionID == movie.collectionId ? collectionMovies : [],
+            otherSources: otherSources
+        )
     }
 
     func load(_ movie: Movie, in context: ModelContext) async {
@@ -75,6 +95,10 @@ final class MovieDetailLoadMachine {
         collectionMovies = []
         collectionID = nil
         otherSources = []
-        detail = DetailLoadState(isBlocking: detailNeedsTMDBFetch(tmdbId: movie.tmdbId, enrichedAt: movie.tmdbEnrichedAt))
+        detail = Self.initialDetail(for: movie)
+    }
+
+    private static func initialDetail(for movie: Movie) -> DetailLoadState {
+        DetailLoadState(isBlocking: detailNeedsTMDBFetch(tmdbId: movie.tmdbId, enrichedAt: movie.tmdbEnrichedAt))
     }
 }
