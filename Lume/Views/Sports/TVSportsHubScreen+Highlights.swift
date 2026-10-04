@@ -27,7 +27,7 @@
 
         func highlightAvailability(_ fixture: SportsFixture) -> SportsChannelAvailability {
             SportsChannelAvailability(
-                highlightsResult.resolved[fixture.id], startDate: fixture.headlineDate, preference: .current
+                resolved[fixture.id], startDate: fixture.headlineDate, preference: .current
             )
         }
 

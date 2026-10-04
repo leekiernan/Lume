@@ -47,8 +47,12 @@
         @State var showingBrowse = false
         @State var browseReturnFocus: TVSportsFocus?
         @State var resolution = SportsFixtureResolutionMachine()
+        private var hubChannels: SportsHubChannels {
+            SportsHubChannels(resolution: resolution, highlights: highlightsLoad, visibilityToken: restriction.visibilityToken)
+        }
+
         var resolved: [String: [ResolvedChannel]] {
-            resolution.resolved(for: restriction.visibilityToken)
+            hubChannels.resolved
         }
 
         @State private var heroSelection = SportsHeroSelectionMachine()
@@ -149,11 +153,7 @@
             // rails, the default focus and the resolve key alike.
             let fixtures = grouping.visibleFixtures
             let preference = SportsChannelPreference.Context.current
-            let availableIDs = Set(
-                (resolved.merging(highlightsResult.resolved) { current, cached in current.isEmpty ? cached : current })
-                    .filter { !$0.value.isEmpty }
-                    .map(\.key)
-            )
+            let availableIDs = hubChannels.availableIDs
             let candidates = grouping.heroCandidates(
                 in: fixtures, highlights: highlightsResult.highlights.map(\.fixture), availableIDs: availableIDs
             )
@@ -244,7 +244,7 @@
 
         private func availability(of fixture: SportsFixture, preference: SportsChannelPreference.Context) -> SportsChannelAvailability {
             SportsChannelAvailability(
-                resolved[fixture.id] ?? highlightsResult.resolved[fixture.id], startDate: fixture.headlineDate, preference: preference
+                resolved[fixture.id], startDate: fixture.headlineDate, preference: preference
             )
         }
 

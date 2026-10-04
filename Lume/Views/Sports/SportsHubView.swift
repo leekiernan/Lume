@@ -36,8 +36,12 @@ struct SportsHubView: View {
     /// Follows taken off the hub in Settings ▸ Sports.
     @AppStorage(SportsHubLayout.hiddenKey) private var hiddenFollowsRaw = ""
     @State private var resolution = SportsFixtureResolutionMachine()
+    private var hubChannels: SportsHubChannels {
+        SportsHubChannels(resolution: resolution, highlights: highlightsLoad, visibilityToken: restriction.visibilityToken)
+    }
+
     private var resolved: [String: [ResolvedChannel]] {
-        resolution.resolved(for: restriction.visibilityToken)
+        hubChannels.resolved
     }
 
     @State private var heroSelection = SportsHeroSelectionMachine()
@@ -175,7 +179,7 @@ struct SportsHubView: View {
                 highlights: picks,
                 payPerView: highlights.payPerView,
                 availability: { fixture in
-                    SportsChannelAvailability(highlights.resolved[fixture.id], startDate: fixture.headlineDate, preference: .current)
+                    SportsChannelAvailability(resolved[fixture.id], startDate: fixture.headlineDate, preference: .current)
                 },
                 onOpen: { selectedFixture = $0 },
                 onWatchEvent: watchEvent
@@ -196,11 +200,7 @@ struct SportsHubView: View {
     }
 
     private var heroAvailableIDs: Set<String> {
-        Set(
-            (resolved.merging(highlightsResult.resolved) { current, cached in current.isEmpty ? cached : current })
-                .filter { !$0.value.isEmpty }
-                .map(\.key)
-        )
+        hubChannels.availableIDs
     }
 
     private func followedContent(_ fixtures: [SportsFixture]) -> some View {
@@ -251,7 +251,7 @@ struct SportsHubView: View {
 
     private func heroAvailability(_ fixture: SportsFixture) -> SportsChannelAvailability {
         SportsChannelAvailability(
-            resolved[fixture.id] ?? highlightsResult.resolved[fixture.id],
+            resolved[fixture.id],
             startDate: fixture.headlineDate,
             preference: .current
         )
