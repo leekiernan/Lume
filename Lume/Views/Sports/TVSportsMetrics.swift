@@ -24,6 +24,9 @@
         /// The side padding inside a whole-screen action's label (Manage Teams,
         /// Unlock Sports Hub, Follow Your Teams).
         static let actionLabelInset: CGFloat = 44
+        static let fixtureCardWidth: CGFloat = 404
+        static let fixtureCardHeight: CGFloat = 236
+        static let highlightCardHeight: CGFloat = 400
     }
 
 #endif

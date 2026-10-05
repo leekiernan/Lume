@@ -26,24 +26,22 @@
         // MARK: - States
 
         var onboardingState: some View {
-            fullScreenState(
+            SportsUnavailableState(
                 title: "Follow Your Teams",
-                message: "Add leagues and teams to see fixtures, live scores and standings, with one tap to the channel carrying the game."
+                message: SportsPresentationCopy.followTeams
             ) {
                 Button {
                     showManageTeams = true
                 } label: {
                     Label("Manage Teams", systemImage: "person.2.badge.plus")
-                        .font(.title3.weight(.semibold))
-                        .padding(.horizontal, TVSportsMetrics.actionLabelInset)
-                        .padding(.vertical, 20)
+                        .tvSportsStateActionLabel()
                 }
                 .buttonStyle(TVCardButtonStyle(focusScale: 1.05))
             }
         }
 
         var lockedState: some View {
-            fullScreenState(
+            SportsUnavailableState(
                 title: PremiumFeature.sportsHub.title,
                 message: PremiumFeature.sportsHub.subtitle
             ) {
@@ -51,46 +49,14 @@
                     showPaywall = true
                 } label: {
                     Text("Unlock Sports Hub")
-                        .font(.title3.weight(.semibold))
-                        .padding(.horizontal, TVSportsMetrics.actionLabelInset)
-                        .padding(.vertical, 20)
+                        .tvSportsStateActionLabel()
                 }
                 .buttonStyle(TVCardButtonStyle(focusScale: 1.05))
             }
         }
 
         var noGamesState: some View {
-            VStack(spacing: 24) {
-                Image(systemName: "sportscourt")
-                    .font(.system(size: 64))
-                    .foregroundStyle(.white.opacity(0.35))
-                Text("No games")
-                    .font(.title.weight(.semibold))
-                    .foregroundStyle(.white.opacity(0.6))
-            }
-            .frame(maxWidth: .infinity, minHeight: 560)
-        }
-
-        func fullScreenState(
-            title: LocalizedStringResource,
-            message: LocalizedStringResource,
-            @ViewBuilder action: () -> some View
-        ) -> some View {
-            VStack(spacing: 24) {
-                Image(systemName: "sportscourt")
-                    .font(.system(size: 80))
-                    .foregroundStyle(.white.opacity(0.5))
-                Text(title)
-                    .font(.largeTitle.weight(.bold))
-                    .foregroundStyle(.white)
-                Text(message)
-                    .font(.title3)
-                    .foregroundStyle(.white.opacity(0.6))
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: 820)
-                action()
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            SportsNoGamesView(presentation: .screen)
         }
     }
 

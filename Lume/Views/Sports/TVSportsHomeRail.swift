@@ -147,7 +147,7 @@ import SwiftUI
                             Text("Follow Your Teams")
                                 .font(.title3.weight(.semibold))
                                 .foregroundStyle(.white)
-                            Text("Add leagues and teams to see fixtures, live scores and standings, with one tap to the channel carrying the game.")
+                            Text(SportsPresentationCopy.followTeams)
                                 .font(.callout)
                                 .foregroundStyle(.white.opacity(0.6))
                                 .lineLimit(2)
@@ -173,10 +173,7 @@ import SwiftUI
         /// Same heading style and inset as `HomeRow`, so the Sports row lines up
         /// with every other row on the tvOS Home.
         private var header: some View {
-            Text("Sports")
-                .font(.subheadline)
-                .fontWeight(.bold)
-                .foregroundStyle(.secondary)
+            SportsSectionHeading(title: Text("Sports"), style: .rail)
                 .padding(.horizontal)
         }
 

@@ -30,10 +30,7 @@
 
         var body: some View {
             VStack(alignment: .leading, spacing: 12) {
-                Text("Big This Week")
-                    .font(.subheadline)
-                    .fontWeight(.bold)
-                    .foregroundStyle(.secondary)
+                SportsSectionHeading(title: Text("Big This Week"), style: .rail)
                     .padding(.horizontal, TVSportsMetrics.railInset)
                 ScrollView(.horizontal, showsIndicators: false) {
                     LazyHStack(spacing: TVSportsMetrics.tallRailSpacing) {
@@ -70,7 +67,6 @@
     private struct TVHighlightCard: View {
         let highlight: SportsHighlight
         let availability: SportsChannelAvailability
-        @Environment(\.isFocused) private var isFocused
 
         private var fixture: SportsFixture {
             highlight.fixture
@@ -79,12 +75,7 @@
         var body: some View {
             VStack(alignment: .leading, spacing: 0) {
                 HStack {
-                    Text(verbatim: highlight.chip)
-                        .font(.system(size: 19, weight: .heavy))
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 6)
-                        .background(Capsule().fill(.white))
-                        .foregroundStyle(.black)
+                    SportsHighlightChip(title: Text(verbatim: highlight.chip), style: .television)
                         .fixedSize()
                     Spacer(minLength: 8)
                     // When, on the top line: a long title or channel name
@@ -119,15 +110,7 @@
                         .padding(.top, 10)
                 }
             }
-            .foregroundStyle(.white)
-            .padding(26)
-            .frame(width: 404, height: 400, alignment: .topLeading)
-            .background(backdrop)
-            .overlay(
-                RoundedRectangle(cornerRadius: 30, style: .continuous)
-                    .strokeBorder(.white.opacity(isFocused ? 1 : 0.08), lineWidth: isFocused ? 4 : 1)
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
+            .sportsHighlightCardSurface { backdrop }
         }
 
         private var whenLine: String {
@@ -144,17 +127,11 @@
 
     private struct TVPayPerViewCard: View {
         let event: SportsPayPerView.Event
-        @Environment(\.isFocused) private var isFocused
 
         var body: some View {
             VStack(alignment: .leading, spacing: 0) {
                 HStack {
-                    Text("Pay-per-view")
-                        .font(.system(size: 19, weight: .heavy))
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 6)
-                        .background(Capsule().fill(.white))
-                        .foregroundStyle(.black)
+                    SportsHighlightChip(title: Text("Pay-per-view"), style: .television)
                         .fixedSize()
                     Spacer(minLength: 8)
                     Text(verbatim: event.whenText(now: Date()))
@@ -180,27 +157,12 @@
                     .lineLimit(3)
                     .minimumScaleFactor(0.8)
                 // Play only once it's on; before, the card says when.
-                Label { Text(verbatim: event.channelName).lineLimit(1) } icon: {
-                    Image(systemName: event.isLive(at: Date()) ? "play.fill" : "clock")
-                }
-                .font(.system(size: 19, weight: .semibold))
-                .foregroundStyle(Color.lumeAccent)
-                .padding(.top, 10)
+                SportsPayPerViewChannelLabel(event: event)
+                    .font(.system(size: 19, weight: .semibold))
+                    .foregroundStyle(Color.lumeAccent)
+                    .padding(.top, 10)
             }
-            .foregroundStyle(.white)
-            .padding(26)
-            .frame(width: 404, height: 400, alignment: .topLeading)
-            .background(
-                LinearGradient(
-                    colors: [Color(red: 0.32, green: 0.08, blue: 0.12), Color(red: 0.08, green: 0.04, blue: 0.1)],
-                    startPoint: .topLeading, endPoint: .bottomTrailing
-                )
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 30, style: .continuous)
-                    .strokeBorder(.white.opacity(isFocused ? 1 : 0.08), lineWidth: isFocused ? 4 : 1)
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
+            .sportsHighlightCardSurface { SportsPayPerViewBackdrop() }
         }
     }
 
@@ -211,7 +173,6 @@
         let availability: SportsChannelAvailability
         let onWatch: (ResolvedChannel) -> Void
         let onOpen: () -> Void
-        @State private var reminders = SportsReminders.shared
         @State private var follows = SportsFollowService.shared
 
         private var fixture: SportsFixture {
@@ -221,12 +182,7 @@
         var body: some View {
             VStack(alignment: .leading, spacing: 22) {
                 HStack(spacing: 14) {
-                    Text("Biggest This Week")
-                        .font(.system(size: 20, weight: .heavy))
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 6)
-                        .background(Capsule().fill(.white))
-                        .foregroundStyle(.black)
+                    SportsHighlightChip(title: Text("Biggest This Week"), style: .headline)
                     Text(verbatim: "\(fixture.leagueName) · \(highlight.chip)")
                         .font(.system(size: 24))
                         .foregroundStyle(.white.opacity(0.8))
@@ -257,9 +213,8 @@
                     .buttonStyle(TVGlassButtonStyle())
                     .frame(width: 640)
                 } else if fixture.status.state == .scheduled {
-                    let reminded = reminders.isReminded(fixture.id)
-                    Button { reminders.toggle(fixture) } label: {
-                        Label(reminded ? "Reminder Set" : "Remind Me", systemImage: reminded ? "bell.fill" : "bell")
+                    SportsReminderButton(fixture: fixture) { label in
+                        label
                             .font(.system(size: 28, weight: .bold))
                             .padding(.horizontal, 36)
                     }

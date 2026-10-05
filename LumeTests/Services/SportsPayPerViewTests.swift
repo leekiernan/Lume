@@ -13,6 +13,23 @@ import Foundation
 import Testing
 
 struct SportsPayPerViewTests {
+    @Test func `the card action symbol follows live boundaries and explicit live markers`() {
+        let start = Date(timeIntervalSince1970: 1_800_000_000)
+        let event = SportsPayPerView.Event(
+            id: "event", title: "Fight", start: start, end: start.addingTimeInterval(3600),
+            channelName: "PPV", streamId: "stream", logoURL: nil
+        )
+        #expect(event.actionSymbol(at: start.addingTimeInterval(-1)) == "clock")
+        #expect(event.actionSymbol(at: start) == "play.fill")
+        #expect(event.actionSymbol(at: start.addingTimeInterval(3600)) == "clock")
+        var untimed = SportsPayPerView.Event(
+            id: "untimed", title: "Fight", start: nil, end: nil, channelName: "PPV", streamId: "stream", logoURL: nil
+        )
+        #expect(untimed.actionSymbol(at: start) == "clock")
+        untimed.isMarkedLive = true
+        #expect(untimed.actionSymbol(at: start) == "play.fill")
+    }
+
     private let now = Date(timeIntervalSince1970: 1_800_000_000)
 
     @Test(arguments: [

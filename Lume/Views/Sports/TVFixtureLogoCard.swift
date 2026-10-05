@@ -77,7 +77,6 @@
         let fixture: SportsFixture
         let showsLeagueMark: Bool
         let showsScore: Bool
-        @Environment(\.isFocused) private var isFocused
 
         /// The header line pins to the top on every card so a row of mixed team
         /// and event cards lines up; the crests centre in the space below it.
@@ -100,16 +99,11 @@
             .padding(.horizontal, 22)
             .padding(.vertical, 20)
             .frame(width: 320, height: 200)
-            .background(
+            .tvSportsCardSurface(cornerRadius: 22) {
                 RoundedRectangle(cornerRadius: 22, style: .continuous)
                     .fill(Color.black.opacity(0.55))
                     .overlay(TeamPalette.gradient(home: fixture.homePalette, away: fixture.awayPalette))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .strokeBorder(.white.opacity(isFocused ? 1 : 0.1), lineWidth: isFocused ? 4 : 1)
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+            }
         }
 
         /// The competition's crest (its abbreviation only when no crest is

@@ -21,8 +21,7 @@ struct SportsHighlightsRail: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Big This Week")
-                .font(.headline)
+            SportsSectionHeading(title: Text("Big This Week"))
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 12) {
                     ForEach(highlights) { highlight in
@@ -48,18 +47,13 @@ struct SportsHighlightsRail: View {
     }
 }
 
-/// A pay-per-view or event channel's listing; tapping plays the channel.
+/// An event listing; its host confirms playback when the event isn't live yet.
 private struct SportsPayPerViewCard: View {
     let event: SportsPayPerView.Event
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("Pay-per-view")
-                .font(.caption.weight(.heavy))
-                .padding(.horizontal, 8)
-                .padding(.vertical, 3)
-                .background(Capsule().fill(.white))
-                .foregroundStyle(.black)
+            SportsHighlightChip(title: Text("Pay-per-view"))
             Spacer(minLength: 4)
             Text(verbatim: event.title)
                 .font(.subheadline.weight(.bold))
@@ -67,21 +61,11 @@ private struct SportsPayPerViewCard: View {
             Text(verbatim: event.whenText(now: Date()))
                 .font(.caption)
                 .foregroundStyle(.white.opacity(0.8))
-            Label { Text(verbatim: event.channelName).lineLimit(1) } icon: { Image(systemName: "play.fill") }
+            SportsPayPerViewChannelLabel(event: event)
                 .font(.caption2.weight(.semibold))
                 .foregroundStyle(Color.lumeAccent)
         }
-        .foregroundStyle(.white)
-        .padding(12)
-        .frame(width: 220, height: 190, alignment: .topLeading)
-        .background(
-            LinearGradient(
-                colors: [Color(red: 0.32, green: 0.08, blue: 0.12), Color(red: 0.08, green: 0.04, blue: 0.1)],
-                startPoint: .topLeading, endPoint: .bottomTrailing
-            ),
-            in: RoundedRectangle(cornerRadius: 16, style: .continuous)
-        )
-        .accessibilityElement(children: .combine)
+        .sportsHighlightCardSurface { SportsPayPerViewBackdrop() }
     }
 }
 
@@ -96,12 +80,7 @@ private struct SportsHighlightCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Text(verbatim: highlight.chip)
-                    .font(.caption.weight(.heavy))
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
-                    .background(Capsule().fill(.white))
-                    .foregroundStyle(.black)
+                SportsHighlightChip(title: Text(verbatim: highlight.chip))
                 Spacer(minLength: 4)
                 // When, on the top line, as on tvOS.
                 Text(verbatim: fixture.isInProgress ? String(localized: "Live now") : fixture.cardWhenText)
@@ -131,17 +110,12 @@ private struct SportsHighlightCard: View {
                     .lineLimit(1)
             }
         }
-        .foregroundStyle(.white)
-        .padding(12)
-        .frame(width: 220, height: 190, alignment: .topLeading)
-        .background {
+        .sportsHighlightCardSurface {
             ZStack {
                 SportsArtworkBackdrop(fixture: fixture, size: .card)
                 LinearGradient(colors: [.black.opacity(0.3), .black.opacity(0.85)], startPoint: .top, endPoint: .bottom)
             }
-            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         }
-        .accessibilityElement(children: .combine)
     }
 }
 
@@ -344,7 +318,6 @@ struct SportsHeroInfo: View {
     let onOpen: () -> Void
     @AppStorage(SportsSyncService.hideScoresKey) private var hideScoresSetting = false
     @State private var reveal = SportsScoreReveal.shared
-    @State private var reminders = SportsReminders.shared
 
     private var showsScore: Bool {
         fixture.showsScore(hidingScores: hideScoresSetting, reveal: reveal)
@@ -399,11 +372,8 @@ struct SportsHeroInfo: View {
                     .buttonStyle(.borderedProminent)
                     .tint(Color.lumeAccent)
                 } else if fixture.status.state == .scheduled {
-                    let reminded = reminders.isReminded(fixture.id)
-                    Button {
-                        reminders.toggle(fixture)
-                    } label: {
-                        Label(reminded ? "Reminder Set" : "Remind Me", systemImage: reminded ? "bell.fill" : "bell")
+                    SportsReminderButton(fixture: fixture) { label in
+                        label
                             .font(.subheadline.weight(.bold))
                             .frame(maxWidth: .infinity)
                     }
