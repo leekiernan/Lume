@@ -9,16 +9,8 @@
 //  single full-screen stream, not to one of four tiles.
 //
 
-import AVFoundation
 import KSPlayer
-import OSLog
 import SwiftUI
-
-#if canImport(UIKit)
-    import UIKit
-#elseif canImport(AppKit)
-    import AppKit
-#endif
 
 // MARK: - KSPlayer
 
@@ -112,7 +104,7 @@ struct MultiViewVLCTile: View {
     @StateObject private var coordinator = VLCPlayerCoordinator(isEmbedded: true)
 
     var body: some View {
-        MultiViewVLCSurface(coordinator: coordinator)
+        VLCVideoContainer(coordinator: coordinator)
             .onAppear {
                 coordinator.isMuted = isMuted
                 coordinator.startupTimeout = PlaybackPolicy.tileStartupTimeout(quick: usesQuickStartupTimeout)
@@ -144,7 +136,7 @@ struct MultiViewAVTile: View {
     @StateObject private var coordinator = AVPlayerCoordinator(isEmbedded: true)
 
     var body: some View {
-        MultiViewAVSurface(coordinator: coordinator)
+        AVPlayerVideoContainer(coordinator: coordinator)
             .onAppear {
                 coordinator.isMuted = isMuted
                 coordinator.startupTimeout = PlaybackPolicy.tileStartupTimeout(quick: usesQuickStartupTimeout)
@@ -198,98 +190,3 @@ struct MultiViewLumeTile: View {
             }
     }
 }
-
-// MARK: - Platform view bridges
-
-// Hosts a view whose backing layer is an `AVPlayerLayer`, sized by the tile.
-#if os(macOS)
-    private struct MultiViewAVSurface: NSViewRepresentable {
-        let coordinator: AVPlayerCoordinator
-
-        func makeNSView(context _: Context) -> MultiViewAVHostView {
-            let view = MultiViewAVHostView()
-            coordinator.attach(layer: view.playerLayer)
-            return view
-        }
-
-        func updateNSView(_: MultiViewAVHostView, context _: Context) {}
-    }
-
-    private final class MultiViewAVHostView: NSView {
-        let playerLayer = AVPlayerLayer()
-
-        override init(frame frameRect: NSRect) {
-            super.init(frame: frameRect)
-            wantsLayer = true
-            playerLayer.frame = bounds
-            layer?.addSublayer(playerLayer)
-            layer?.backgroundColor = NSColor.black.cgColor
-        }
-
-        @available(*, unavailable)
-        required init?(coder _: NSCoder) {
-            fatalError("init(coder:) has not been implemented")
-        }
-
-        override func layout() {
-            super.layout()
-            playerLayer.frame = bounds
-        }
-    }
-#else
-    private struct MultiViewAVSurface: UIViewRepresentable {
-        let coordinator: AVPlayerCoordinator
-
-        func makeUIView(context _: Context) -> MultiViewAVHostView {
-            let view = MultiViewAVHostView()
-            view.backgroundColor = .black
-            coordinator.attach(layer: view.playerLayer)
-            return view
-        }
-
-        func updateUIView(_: MultiViewAVHostView, context _: Context) {}
-    }
-
-    private final class MultiViewAVHostView: UIView {
-        // swiftlint:disable:next static_over_final_class
-        override class var layerClass: AnyClass {
-            AVPlayerLayer.self
-        }
-
-        var playerLayer: AVPlayerLayer {
-            // swiftlint:disable:next force_cast
-            layer as! AVPlayerLayer
-        }
-    }
-#endif
-
-// Hosts the plain platform view VLC renders into.
-#if os(macOS)
-    private struct MultiViewVLCSurface: NSViewRepresentable {
-        let coordinator: VLCPlayerCoordinator
-
-        func makeNSView(context _: Context) -> NSView {
-            // Deliberately not layer-backed, for the same reason as the
-            // full-screen VLC host: VLCKit's macOS output inserts a legacy
-            // `NSOpenGLView`, which aborts inside a layer-backed tree.
-            let view = NSView()
-            coordinator.attach(hostView: view)
-            return view
-        }
-
-        func updateNSView(_: NSView, context _: Context) {}
-    }
-#else
-    private struct MultiViewVLCSurface: UIViewRepresentable {
-        let coordinator: VLCPlayerCoordinator
-
-        func makeUIView(context _: Context) -> UIView {
-            let view = UIView()
-            view.backgroundColor = .black
-            coordinator.attach(hostView: view)
-            return view
-        }
-
-        func updateUIView(_: UIView, context _: Context) {}
-    }
-#endif

@@ -11,6 +11,8 @@ import SwiftUI
 // Hosts the plain platform view that VLC renders into. The coordinator is
 // set as the player's `drawable`; VLC calls back into it to insert its
 // output surface and to query bounds.
+// Shared by full-screen playback and Multi-View. The caller owns the coordinator
+// and playback lifecycle; embedded mode must be set before this view mounts.
 #if os(macOS)
     struct VLCVideoContainer: NSViewRepresentable {
         let coordinator: VLCPlayerCoordinator

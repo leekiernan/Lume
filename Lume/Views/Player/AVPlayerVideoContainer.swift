@@ -12,6 +12,8 @@ import SwiftUI
 // Hosts a view whose backing layer is an `AVPlayerLayer`. The coordinator owns
 // the `AVPlayer` and is handed the layer once it mounts so it can drive content
 // gravity and Picture in Picture.
+// Shared by full-screen playback and Multi-View. The caller owns the coordinator
+// and playback lifecycle; embedded mode must be set before this view mounts.
 #if os(macOS)
     struct AVPlayerVideoContainer: NSViewRepresentable {
         let coordinator: AVPlayerCoordinator
