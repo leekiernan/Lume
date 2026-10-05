@@ -415,9 +415,9 @@ struct ContentManagementView: View {
             .listStyle(.inset(alternatesRowBackgrounds: true))
             #endif
             .searchable(text: $searchText, prompt: Text("Search Categories"))
-            // Embedded under an area, the screen *is* that area's categories, so
-            // it takes the area's name; standalone it keeps its own.
-            .platformNavigationTitle(fixedType.map(\.localizedLabel) ?? "Content")
+            // A fixed type is pushed from an area's Categories submenu. Keep
+            // its title distinct from the parent area's settings screen.
+            .platformNavigationTitle(fixedType == nil ? "Content" : "Categories")
             #if os(iOS)
                 .navigationBarTitleDisplayMode(.inline)
             #endif
