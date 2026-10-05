@@ -100,12 +100,12 @@
 
                 ScrollViewReader { proxy in
                     HStack(alignment: .top, spacing: 24) {
-                        column(title: "Categories", width: 400) { categoryRows }
-                        column(title: "Channels", width: 520) { channelRows }
+                        TVPlayerBrowserColumn(title: "Categories", width: 400) { categoryRows }
+                        TVPlayerBrowserColumn(title: "Channels", width: 520) { channelRows }
                             // Fresh scroll position whenever another category's
                             // channels replace the list.
                             .id(selectedSectionID)
-                        column(title: "Guide", width: 600) { guideRows }
+                        TVPlayerBrowserColumn(title: "Guide", width: 600) { guideRows }
                             // Fresh scroll position whenever another channel's
                             // guide replaces the list.
                             .id(guideChannelID)
@@ -150,35 +150,6 @@
             .allowsHitTesting(false)
         }
 
-        /// One scrollable glass column. Each column is its own focus section so
-        /// left/right hop between the rails rather than walking row by row.
-        private func column(
-            title: LocalizedStringKey,
-            width: CGFloat,
-            @ViewBuilder rows: () -> some View
-        ) -> some View {
-            VStack(alignment: .leading, spacing: 0) {
-                Text(title)
-                    .font(.system(size: 29, weight: .bold))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 36)
-                    .padding(.top, 30)
-                    .padding(.bottom, 14)
-
-                ScrollView {
-                    LazyVStack(spacing: 6) {
-                        rows()
-                    }
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, 24)
-                }
-            }
-            .frame(width: width)
-            .frame(maxHeight: .infinity)
-            .glassEffectCompat(.regular, in: RoundedRectangle(cornerRadius: 36))
-            .focusSection()
-        }
-
         // MARK: - Rows
 
         private var categoryRows: some View {
@@ -197,7 +168,7 @@
                         Spacer(minLength: 0)
                     }
                 }
-                .buttonStyle(TVBrowserRowStyle(isSelected: section.id == selectedSectionID))
+                .buttonStyle(TVPlayerBrowserRowStyle(isSelected: section.id == selectedSectionID))
                 .focused($focus, equals: .section(section.id))
                 .id(FocusTarget.section(section.id))
             }
@@ -219,7 +190,7 @@
                     } label: {
                         channelLabel(channel, isCurrent: isCurrent)
                     }
-                    .buttonStyle(TVBrowserRowStyle(isSelected: isCurrent))
+                    .buttonStyle(TVPlayerBrowserRowStyle(isSelected: isCurrent))
                     .focused($focus, equals: .channel(channel.id))
                     .id(FocusTarget.channel(channel.id))
                 }
@@ -228,18 +199,7 @@
 
         private func channelLabel(_ channel: LiveStream, isCurrent: Bool) -> some View {
             HStack(spacing: 16) {
-                CachedAsyncImage(url: URL(string: channel.streamIcon ?? ""), maxPixelSize: 120) { phase in
-                    switch phase {
-                    case let .success(image):
-                        image.resizable().aspectRatio(contentMode: .fit).padding(6)
-                    default:
-                        Image(systemName: "tv")
-                            .font(.system(size: 20))
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                .frame(width: 84, height: 56)
-                .background(.white.opacity(0.08), in: .rect(cornerRadius: 10))
+                TVPlayerBrowserChannelLogo(url: URL(string: channel.streamIcon ?? ""))
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(channel.name)
@@ -291,7 +251,7 @@
                             canReplay: stream?.isCatchupAvailable(start: entry.start, now: now) ?? false
                         )
                     }
-                    .buttonStyle(TVBrowserRowStyle(isSelected: entry.isLive(at: now)))
+                    .buttonStyle(TVPlayerBrowserRowStyle(isSelected: entry.isLive(at: now)))
                     .focused($focus, equals: .guide(entry.id))
                     .id(FocusTarget.guide(entry.id))
                 }
@@ -504,44 +464,6 @@
                     end: entry.end
                 ) else { return }
                 onSelect(target)
-            }
-        }
-    }
-
-    // MARK: - Row style
-
-    /// A full-width list row for the browser columns: white glass highlight
-    /// under focus (black content), a faint persistent fill for the selected
-    /// category / playing channel, clear otherwise. The scale stays subtle so
-    /// the lift survives the column's clipping.
-    private struct TVBrowserRowStyle: ButtonStyle {
-        var isSelected: Bool
-
-        func makeBody(configuration: Configuration) -> some View {
-            StyleBody(configuration: configuration, isSelected: isSelected)
-        }
-
-        struct StyleBody: View {
-            let configuration: ButtonStyleConfiguration
-            let isSelected: Bool
-            @Environment(\.isFocused) private var isFocused
-
-            var body: some View {
-                configuration.label
-                    .font(.system(size: 24, weight: .semibold))
-                    .foregroundStyle(isFocused ? .black : .white)
-                    .padding(.horizontal, 18)
-                    .padding(.vertical, 12)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(fill, in: .rect(cornerRadius: 14))
-                    .scaleEffect(configuration.isPressed ? 0.99 : (isFocused ? 1.02 : 1.0))
-                    .animation(.easeOut(duration: 0.16), value: isFocused)
-            }
-
-            private var fill: AnyShapeStyle {
-                if isFocused { return AnyShapeStyle(.white) }
-                if isSelected { return AnyShapeStyle(.white.opacity(0.16)) }
-                return AnyShapeStyle(.clear)
             }
         }
     }
