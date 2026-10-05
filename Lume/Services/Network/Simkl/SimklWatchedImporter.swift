@@ -56,7 +56,7 @@ nonisolated enum SimklWatchedImporter {
         in context: ModelContext,
         pendingScope: TrackerScope = .simkl
     ) -> SimklImportSummary {
-        let moviesMarked = importMovies(movies, in: context)
+        let moviesMarked = importMovies(movies, in: context, profileID: pendingScope.profileID)
         let shows = importShows(shows, in: context, pendingScope: pendingScope)
 
         if context.hasChanges {
@@ -81,7 +81,7 @@ nonisolated enum SimklWatchedImporter {
 
     // MARK: - Movies
 
-    private static func importMovies(_ watched: [SimklWatchedMovie], in context: ModelContext) -> Int {
+    private static func importMovies(_ watched: [SimklWatchedMovie], in context: ModelContext, profileID: UUID?) -> Int {
         var watchedIDs = Set<Int>()
         var dates: [Int: Date] = [:]
         for item in watched where item.isWatched {
@@ -98,6 +98,7 @@ nonisolated enum SimklWatchedImporter {
         var count = 0
         for movie in candidates where !movie.isWatched {
             guard let tmdb = movie.tmdbId, watchedIDs.contains(tmdb) else { continue }
+            guard WatchHistoryClears.shared.allows(dates[tmdb], for: movie.id, profileID: profileID) else { continue }
             // A rewatch or local unwatched decision made after the remote play
             // must survive the import, as on Trakt.
             if let local = movie.lastWatchedDate, (dates[tmdb] ?? .distantPast) <= local { continue }
@@ -146,7 +147,7 @@ nonisolated enum SimklWatchedImporter {
             // Home's Recently Watched row queries this column, and playback
             // stamps it too (`WatchProgressWriter`). Set it whether or not the
             // episodes exist yet, so an imported show surfaces right away.
-            if let newest = progress.newest, newest > (series.lastWatchedDate ?? .distantPast) {
+            if series.episodes.isEmpty, let newest = progress.newest, newest > (series.lastWatchedDate ?? .distantPast) {
                 series.lastWatchedDate = newest
             }
 
@@ -157,7 +158,8 @@ nonisolated enum SimklWatchedImporter {
                 pendingChanged = true
                 queued += 1
             } else {
-                marked += markEpisodes(of: series, using: progress)
+                marked += markEpisodes(of: series, using: progress, profileID: pendingScope.profileID)
+                series.refreshWatchRecency(onlyAdvancing: true)
                 // Episodes are present, so anything parked by an earlier import
                 // has just been superseded.
                 if pending[tmdb] != nil {
@@ -226,28 +228,20 @@ nonisolated enum SimklWatchedImporter {
         guard let parked = pending[tmdb] else { return 0 }
 
         let progress = Progress(parked: parked)
-        let marked = markEpisodes(of: series, using: progress)
-        if let newest = progress.newest, newest > (series.lastWatchedDate ?? .distantPast) {
-            series.lastWatchedDate = newest
-        }
+        let marked = markEpisodes(of: series, using: progress, profileID: ActiveProfileStore.current)
+        series.refreshWatchRecency(onlyAdvancing: true)
         SimklPendingWatchedStore.clear(tmdbID: tmdb)
         return marked
     }
 
     /// Marks the episodes of `series` that Simkl reports watched, returning how
     /// many changed.
-    private static func markEpisodes(of series: Series, using progress: Progress) -> Int {
+    private static func markEpisodes(of series: Series, using progress: Progress, profileID: UUID?) -> Int {
         var count = 0
-        for episode in series.episodes where !episode.isWatched {
+        for episode in series.episodes {
             let key = SeasonEpisode(season: episode.seasonNum, episode: episode.episodeNum)
             guard let date = progress.dates[key] else { continue }
-            if let local = episode.lastWatchedDate, (date ?? .distantPast) <= local { continue }
-            episode.isWatched = true
-            episode.watchProgress = Double(episode.durationSecs ?? 0)
-            if let date {
-                episode.lastWatchedDate = date
-            }
-            count += 1
+            if TrackerEpisodeHistory.applyCompletion(date, to: episode, profileID: profileID) { count += 1 }
         }
         return count
     }

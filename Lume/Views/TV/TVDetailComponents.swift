@@ -270,7 +270,7 @@
     struct TVEpisodeCard: View {
         let episode: Episode
         var onPlay: () -> Void
-        var onToggleWatched: () -> Void = {}
+        var onSetWatched: (Bool) -> Void = { _ in }
         var onMarkPreviousWatched: () -> Void = {}
         var onMarkFollowingUnwatched: () -> Void = {}
 
@@ -305,7 +305,7 @@
             .contextMenu {
                 EpisodeWatchedMenu(
                     episode: episode,
-                    onToggleWatched: onToggleWatched,
+                    onSetWatched: onSetWatched,
                     onMarkPreviousWatched: onMarkPreviousWatched,
                     onMarkFollowingUnwatched: onMarkFollowingUnwatched
                 )

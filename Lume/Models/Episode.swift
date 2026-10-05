@@ -76,8 +76,15 @@ extension Episode {
             lastWatchedDate = Date()
         } else {
             watchProgress = 0
+            lastWatchedDate = nil
             // Only ever the viewer's doing — see `ContentClearLedger`.
             ContentClearLedger.shared.record(id)
+            WatchHistoryClears.shared.record(id)
+        }
+        RecentResumePoints.record(watchProgress, for: .episode(id))
+        if let series {
+            series.refreshWatchRecency()
+            if series.lastWatchedDate == nil { ContentClearLedger.shared.record(series.id) }
         }
     }
 

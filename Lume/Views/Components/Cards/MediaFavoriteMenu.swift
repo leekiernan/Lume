@@ -21,6 +21,30 @@ import SwiftUI
 #endif
 
 extension View {
+    /// Typed catalog grids and Home rails share the same movie actions.
+    /// Series keep their own episode-level reset rather than erasing a whole
+    /// show's history from a poster's boolean toggle.
+    func mediaFavoriteMenu(
+        _ item: some WatchlistFavoritable,
+        in context: ModelContext,
+        onRemoveFromRecents: (() -> Void)? = nil,
+        onVote: ((RecommendationVote) -> Void)? = nil
+    ) -> some View {
+        let movie = item as? Movie
+        return mediaFavoriteMenu(
+            isFavorite: { item.isFavorite },
+            onToggleFavorite: { MediaFavorites.toggle(item, in: context) },
+            onRemoveFromRecents: onRemoveFromRecents,
+            onVote: onVote,
+            watchedState: movie.map { movie in
+                { .init(isWatched: movie.isWatched, progress: movie.watchProgress, lastWatchedDate: movie.lastWatchedDate) }
+            },
+            onSetWatched: movie.map { movie in
+                { MediaWatchState.setWatched($0, movie: movie, in: context) }
+            }
+        )
+    }
+
     /// - Parameters:
     ///   - isFavorite: drives the favorite item's wording and glyph. A closure,
     ///     not a value, so the read happens inside the `contextMenu` builder
@@ -34,12 +58,18 @@ extension View {
         isFavorite: @escaping () -> Bool,
         onToggleFavorite: @escaping () -> Void,
         onRemoveFromRecents: (() -> Void)? = nil,
-        onVote: ((RecommendationVote) -> Void)? = nil
+        onVote: ((RecommendationVote) -> Void)? = nil,
+        watchedState: (() -> MediaWatchedMenu.State)? = nil,
+        onSetWatched: ((Bool) -> Void)? = nil
     ) -> some View {
         contextMenu {
             FavoriteMenuItems.favorite(isFavorite: isFavorite()) {
                 onToggleFavorite()
                 favoriteToggleFeedback()
+            }
+
+            if let watchedState, let onSetWatched {
+                MediaWatchedMenu(state: watchedState(), onSetWatched: onSetWatched)
             }
 
             if let onVote {
@@ -76,15 +106,13 @@ extension View {
         switch item {
         case let .movie(movie):
             mediaFavoriteMenu(
-                isFavorite: { movie.isFavorite },
-                onToggleFavorite: { MediaFavorites.toggle(movie, in: context) },
+                movie, in: context,
                 onRemoveFromRecents: onRemoveFromRecents,
                 onVote: onVote
             )
         case let .series(series):
             mediaFavoriteMenu(
-                isFavorite: { series.isFavorite },
-                onToggleFavorite: { MediaFavorites.toggle(series, in: context) },
+                series, in: context,
                 onRemoveFromRecents: onRemoveFromRecents,
                 onVote: onVote
             )
@@ -97,17 +125,24 @@ extension View {
 extension View {
     /// The favorite menu for a downloaded episode row. Favoriting an episode
     /// favorites its show — episodes have no `isFavorite` of their own, the same
-    /// routing `PlayerFavorites` uses. An orphan episode gets no menu rather
-    /// than one whose favorite item would silently do nothing.
+    /// routing `PlayerFavorites` uses. An orphan still offers watched actions,
+    /// but not a favorite item that would silently do nothing.
     @ViewBuilder
     func episodeFavoriteMenu(_ episode: Episode, in context: ModelContext) -> some View {
         if let series = episode.series {
             mediaFavoriteMenu(
                 isFavorite: { series.isFavorite },
-                onToggleFavorite: { MediaFavorites.toggle(series, in: context) }
+                onToggleFavorite: { MediaFavorites.toggle(series, in: context) },
+                watchedState: { .init(isWatched: episode.isWatched, progress: episode.watchProgress, lastWatchedDate: episode.lastWatchedDate) },
+                onSetWatched: { MediaWatchState.setWatched($0, episode: episode, in: context) }
             )
         } else {
-            self
+            contextMenu {
+                MediaWatchedMenu(
+                    state: .init(isWatched: episode.isWatched, progress: episode.watchProgress, lastWatchedDate: episode.lastWatchedDate),
+                    onSetWatched: { MediaWatchState.setWatched($0, episode: episode, in: context) }
+                )
+            }
         }
     }
 }

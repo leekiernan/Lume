@@ -186,6 +186,7 @@ extension FullScreenPlayerView {
         guard case .episode = activeMedia.contentRef, let writer = progressWriter else { return }
         let ref = activeMedia.contentRef
         let total = clock.duration
+        let recordedAt = Date.now
         completedRef = ref
         RecentResumePoints.record(total, for: ref)
         let previous = pendingProgressWrite
@@ -193,7 +194,7 @@ extension FullScreenPlayerView {
             // Ordered, not raced: whatever was already in flight for this
             // stream settles first, so the completion is the last word.
             await previous?.value
-            if let change = await writer.markWatched(ref: ref, duration: total) {
+            if let change = await writer.markWatched(ref: ref, duration: total, recordedAt: recordedAt) {
                 applyWatchedChange(change)
             }
         }

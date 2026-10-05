@@ -6,7 +6,7 @@ import SwiftUI
     struct EpisodeCard: View {
         let episode: Episode
         var onPlay: () -> Void
-        var onToggleWatched: () -> Void = {}
+        var onSetWatched: (Bool) -> Void = { _ in }
         var onMarkPreviousWatched: () -> Void = {}
         var onMarkFollowingUnwatched: () -> Void = {}
         var onDownload: (() -> Void)?
@@ -53,7 +53,7 @@ import SwiftUI
             .contextMenu {
                 EpisodeWatchedMenu(
                     episode: episode,
-                    onToggleWatched: onToggleWatched,
+                    onSetWatched: onSetWatched,
                     onMarkPreviousWatched: onMarkPreviousWatched,
                     onMarkFollowingUnwatched: onMarkFollowingUnwatched
                 )
@@ -174,7 +174,7 @@ import SwiftUI
         let episode: Episode
         let playlist: Playlist?
         var onPlay: () -> Void
-        var onToggleWatched: () -> Void
+        var onSetWatched: (Bool) -> Void
         var onMarkPreviousWatched: () -> Void
         var onMarkFollowingUnwatched: () -> Void
 
@@ -187,7 +187,7 @@ import SwiftUI
             EpisodeCard(
                 episode: episode,
                 onPlay: onPlay,
-                onToggleWatched: onToggleWatched,
+                onSetWatched: onSetWatched,
                 onMarkPreviousWatched: onMarkPreviousWatched,
                 onMarkFollowingUnwatched: onMarkFollowingUnwatched,
                 onDownload: playlist.flatMap { playlist in

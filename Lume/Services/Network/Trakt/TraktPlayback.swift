@@ -65,13 +65,13 @@ nonisolated enum TraktPlaybackImporter {
         var changed = 0
         for movie in TrackerCatalogLookup.movies(tmdbIDs: Set(movies.keys), in: context) {
             guard let tmdb = movie.tmdbId, let item = movies[tmdb] else { continue }
-            if applyMovie(item, to: movie) { changed += 1 }
+            if applyMovie(item, to: movie, profileID: pendingScope.profileID) { changed += 1 }
         }
         var pending = TraktPendingWatchedStore.load(scope: pendingScope)
         let before = pending
         for series in TrackerCatalogLookup.series(tmdbIDs: Set(episodes.keys), in: context) {
             guard let tmdb = series.tmdbId, let items = episodes[tmdb] else { continue }
-            let outcome = applyEpisodes(items, to: series, now: now)
+            let outcome = applyEpisodes(items, to: series, now: now, profileID: pendingScope.profileID)
             if outcome.changed { changed += 1 }
             pending[tmdb] = parking(outcome.waiting, in: pending[tmdb])
         }
@@ -88,10 +88,11 @@ nonisolated enum TraktPlaybackImporter {
         return updated.isEmpty ? nil : updated
     }
 
-    private static func applyMovie(_ item: TraktPlaybackItem, to movie: Movie) -> Bool {
+    private static func applyMovie(_ item: TraktPlaybackItem, to movie: Movie, profileID: UUID?) -> Bool {
         guard !movie.isWatched,
               let paused = TraktWatchedImporter.parse(item.pausedAt),
-              paused > (movie.lastWatchedDate ?? .distantPast)
+              paused > (movie.lastWatchedDate ?? .distantPast),
+              WatchHistoryClears.shared.allows(paused, for: movie.id, profileID: profileID)
         else { return false }
         movie.lastWatchedDate = paused
         if let duration = movie.durationSecs, duration > 0 {
@@ -104,7 +105,8 @@ nonisolated enum TraktPlaybackImporter {
     private static func applyEpisodes(
         _ items: [TraktPlaybackItem],
         to series: Series,
-        now: Date
+        now: Date,
+        profileID: UUID?
     ) -> (changed: Bool, waiting: [String: TraktPendingPause]) {
         var changed = false
         var waiting: [String: TraktPendingPause] = [:]
@@ -112,11 +114,12 @@ nonisolated enum TraktPlaybackImporter {
             guard let target = item.episode,
                   let paused = TraktWatchedImporter.parse(item.pausedAt)
             else { continue }
-            if paused > (series.lastWatchedDate ?? .distantPast) {
+            let outcome = applyPause(item.progress, pausedAt: paused, target: target, to: series, profileID: profileID)
+            if outcome != .superseded, paused > (series.lastWatchedDate ?? .distantPast) {
                 series.lastWatchedDate = paused
                 changed = true
             }
-            switch applyPause(item.progress, pausedAt: paused, season: target.season, episode: target.number, to: series) {
+            switch outcome {
             case .applied: changed = true
             case .superseded: break
             case .missing:
@@ -143,7 +146,7 @@ nonisolated enum TraktPlaybackImporter {
             let parts = key.split(separator: "x")
             guard parts.count == 2, let season = Int(parts[0]), let episode = Int(parts[1]) else { continue }
             let pausedAt = Date(timeIntervalSince1970: TimeInterval(pause.pausedAt))
-            let outcome = applyPause(pause.progress, pausedAt: pausedAt, season: season, episode: episode, to: series)
+            let outcome = applyPause(pause.progress, pausedAt: pausedAt, target: .init(season: season, number: episode), to: series, profileID: ActiveProfileStore.current)
             let parkedAt = Date(timeIntervalSince1970: TimeInterval(pause.parkedAt))
             if outcome == .missing, now.timeIntervalSince(parkedAt) < parkedPauseLifetime {
                 waiting[key] = pause
@@ -163,14 +166,16 @@ nonisolated enum TraktPlaybackImporter {
     private static func applyPause(
         _ percent: Double,
         pausedAt paused: Date,
-        season: Int,
-        episode number: Int,
-        to series: Series
+        target: TraktPlaybackItem.Episode,
+        to series: Series,
+        profileID: UUID?
     ) -> PauseOutcome {
-        guard let episode = series.episodes.first(where: { $0.seasonNum == season && $0.episodeNum == number }) else {
+        guard let episode = series.episodes.first(where: { $0.seasonNum == target.season && $0.episodeNum == target.number }) else {
             return .missing
         }
-        guard !episode.isWatched, paused > (episode.lastWatchedDate ?? .distantPast) else { return .superseded }
+        guard !episode.isWatched, paused > (episode.lastWatchedDate ?? .distantPast),
+              WatchHistoryClears.shared.allows(paused, for: episode.id, profileID: profileID)
+        else { return .superseded }
         episode.lastWatchedDate = paused
         if let duration = episode.durationSecs, duration > 0 {
             episode.watchProgress = position(percent, of: duration)

@@ -175,6 +175,15 @@ final class Series {
 }
 
 extension Series {
+    /// Episode history owns rail recency once episodes exist. Imports only
+    /// advance it; an explicit reset may move it backwards or clear it.
+    func refreshWatchRecency(onlyAdvancing: Bool = false) {
+        let newest = episodes.filter { $0.isWatched || $0.watchProgress > 0 }
+            .compactMap(\.lastWatchedDate).max()
+        if onlyAdvancing, (newest ?? .distantPast) <= (lastWatchedDate ?? .distantPast) { return }
+        lastWatchedDate = newest
+    }
+
     /// The user's "For You" vote, or nil when unvoted.
     var recommendationVote: RecommendationVote? {
         get { RecommendationVote(rawValue: recommendationVoteRaw) }

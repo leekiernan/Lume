@@ -198,7 +198,7 @@
                                 TVEpisodeCard(
                                     episode: episode,
                                     onPlay: { playEpisode(episode) },
-                                    onToggleWatched: { toggleWatched(episode) },
+                                    onSetWatched: { MediaWatchState.setWatched($0, episode: episode, in: modelContext) },
                                     onMarkPreviousWatched: { markPreviousWatched(episode) },
                                     onMarkFollowingUnwatched: { markFollowingUnwatched(episode) }
                                 )
@@ -403,13 +403,6 @@
 
         func toggleFavorite() {
             MediaFavorites.toggle(series, in: modelContext)
-        }
-
-        func toggleWatched(_ episode: Episode) {
-            episode.setWatched(!episode.isWatched)
-            TraktService.shared.syncWatched(episode: episode, watched: episode.isWatched)
-            SimklService.shared.syncWatched(episode: episode, watched: episode.isWatched)
-            try? modelContext.save()
         }
 
         func markPreviousWatched(_ episode: Episode) {
