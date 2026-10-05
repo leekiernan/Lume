@@ -92,12 +92,7 @@ final class AVPlayerCoordinator: NSObject, ObservableObject {
     /// those are single-stream affordances belonging to the full-screen player,
     /// and four players each grabbing external playback fight over one route.
     var isEmbedded = false {
-        didSet {
-            player.allowsExternalPlayback = !isEmbedded
-            #if os(iOS)
-                player.usesExternalPlaybackWhileExternalScreenIsActive = !isEmbedded
-            #endif
-        }
+        didSet { applyExternalPlaybackPolicy() }
     }
 
     var onTime: ((TimeInterval) -> Void)?
@@ -164,11 +159,8 @@ final class AVPlayerCoordinator: NSObject, ObservableObject {
         // Hand video to an AirPlay receiver natively when one is picked — the
         // other two engines render into their own layers and can't do this, so
         // AVPlayer is the engine that delivers full-screen AirPlay video (#103).
-        player.allowsExternalPlayback = true
-        #if os(iOS)
-            player.usesExternalPlaybackWhileExternalScreenIsActive = true
-        #endif
         super.init()
+        applyExternalPlaybackPolicy()
     }
 
     /// Multi-View tiles must be marked embedded *before* the container mounts —
@@ -177,6 +169,16 @@ final class AVPlayerCoordinator: NSObject, ObservableObject {
     convenience init(isEmbedded: Bool) {
         self.init()
         self.isEmbedded = isEmbedded
+        // Property observers do not run for this initializer's assignment.
+        // Apply routing now, before the render container can attach its layer.
+        applyExternalPlaybackPolicy()
+    }
+
+    private func applyExternalPlaybackPolicy() {
+        player.allowsExternalPlayback = !isEmbedded
+        #if os(iOS)
+            player.usesExternalPlaybackWhileExternalScreenIsActive = !isEmbedded
+        #endif
     }
 
     // MARK: - Layer attachment
