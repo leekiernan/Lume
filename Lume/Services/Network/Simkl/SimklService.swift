@@ -285,7 +285,7 @@ final class SimklService {
 
     /// Off the main actor, on a context of its own — see `TraktService`.
     @concurrent
-    static func applyImport(items: SimklAllItems, container: ModelContainer, profileID: UUID?, accountID: String? = nil) async -> SimklImportSummary {
+    static func applyImport(items: SimklAllItems, container: ModelContainer, profileID: UUID?, accountID: String?) async -> SimklImportSummary {
         let scope = TrackerProgressScope(profileID: profileID, accountID: accountID)
         guard scope.matches(.simkl) else { return .failure }
         return SimklWatchedImporter.apply(items: items, in: ModelContext(container), pendingScope: scope)

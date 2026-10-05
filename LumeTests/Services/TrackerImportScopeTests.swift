@@ -104,11 +104,50 @@ struct TrackerImportRunTests {
         #expect(live.fetches == 0)
     }
 
-    @Test func `simkl apply refuses a profile other than the one fetched for`() async throws {
+    @Test(.trackerIdentity(.simkl))
+    func `simkl apply refuses a profile other than the one fetched for`() async throws {
         let saved = ActiveProfileStore.current
         defer { ActiveProfileStore.current = saved }
         ActiveProfileStore.current = UUID()
-        let summary = try await SimklService.applyImport(items: SimklAllItems(movies: [], shows: []), container: makeTestContainer(), profileID: UUID())
+        let account = try #require(SimklAccountIdentityStore.load()?.scope)
+        let summary = try await SimklService.applyImport(
+            items: SimklAllItems(movies: [], shows: []), container: makeTestContainer(), profileID: UUID(), accountID: account
+        )
         #expect(summary.failed)
+    }
+
+    @Test(.trackerIdentity(.simkl))
+    func `simkl apply accepts the matching account and profile`() async throws {
+        let saved = ActiveProfileStore.current
+        defer { ActiveProfileStore.current = saved }
+        ActiveProfileStore.current = UUID()
+        let account = try #require(SimklAccountIdentityStore.load()?.scope)
+        let summary = try await SimklService.applyImport(
+            items: SimklAllItems(movies: [], shows: []), container: makeTestContainer(),
+            profileID: ActiveProfileStore.current, accountID: account
+        )
+        #expect(!summary.failed)
+    }
+
+    @Test(.trackerIdentity(.simkl))
+    func `simkl apply refuses a changed or missing account under the matching profile`() async throws {
+        let saved = ActiveProfileStore.current
+        defer { ActiveProfileStore.current = saved }
+        ActiveProfileStore.current = UUID()
+        let account = try #require(SimklAccountIdentityStore.load()?.scope)
+        let container = try makeTestContainer()
+        for accountID in ["another-account", nil] as [String?] {
+            let summary = await SimklService.applyImport(
+                items: SimklAllItems(movies: [], shows: []), container: container,
+                profileID: ActiveProfileStore.current, accountID: accountID
+            )
+            #expect(summary.failed)
+        }
+        SimklAccountIdentityStore.clear()
+        let disconnected = await SimklService.applyImport(
+            items: SimklAllItems(movies: [], shows: []), container: container,
+            profileID: ActiveProfileStore.current, accountID: account
+        )
+        #expect(disconnected.failed)
     }
 }
