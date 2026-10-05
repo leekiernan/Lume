@@ -1,6 +1,40 @@
+import Foundation
+
+/// Presentation only: the player's session machine still owns playback.
+nonisolated enum PlaybackActivityStatus: String, Codable, Hashable {
+    case loading, playing, paused, buffering, unavailable
+
+    var advancesProgress: Bool {
+        self == .playing
+    }
+}
+
+/// A short lease, not the title's duration. A killed process cannot report its
+/// final state, so the widget must stop claiming playback when updates cease.
+nonisolated enum PlaybackActivityFreshness {
+    static let renewalInterval: TimeInterval = 15
+    static let lifetime: TimeInterval = 45
+
+    static func deadline(now: Date, windowEnd: Date?) -> Date {
+        let lease = now.addingTimeInterval(lifetime)
+        return windowEnd.map { min($0, lease) } ?? lease
+    }
+
+    static func needsRenewal(lastUpdate: Date?, now: Date) -> Bool {
+        guard let lastUpdate else { return true }
+        return now < lastUpdate || now.timeIntervalSince(lastUpdate) >= renewalInterval
+    }
+
+    static func presentation(
+        status: PlaybackActivityStatus, isStale: Bool, freshUntil: Date?, now: Date
+    ) -> PlaybackActivityStatus {
+        if isStale || freshUntil.map({ $0 <= now }) == true { return .unavailable }
+        return status
+    }
+}
+
 #if os(iOS)
     import ActivityKit
-    import Foundation
 
     /// Shared between the app (which starts/updates the activity) and the
     /// LumeWidgets extension (which renders it). Everything that can change
@@ -16,6 +50,9 @@
             var subtitle: String?
             var isLive: Bool
             var isPaused: Bool
+            /// Optional so activities created before this schema still decode.
+            var status: PlaybackActivityStatus?
+            var freshUntil: Date?
             /// Artwork copy in the app-group container, if one could be written.
             var artworkFileName: String?
             /// The EPG programme currently airing (live TV only).
@@ -32,6 +69,13 @@
             /// The EPG "up next" programme (live TV only).
             var nextTitle: String?
             var nextStart: Date?
+
+            func presentation(isStale: Bool, now: Date = .now) -> PlaybackActivityStatus {
+                PlaybackActivityFreshness.presentation(
+                    status: status ?? (isPaused ? .paused : .playing),
+                    isStale: isStale, freshUntil: freshUntil, now: now
+                )
+            }
         }
 
         /// One activity per player session; the id only disambiguates requests.

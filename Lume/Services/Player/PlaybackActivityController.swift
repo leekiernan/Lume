@@ -21,6 +21,8 @@
         /// The media id the current artwork file belongs to, so a channel surf
         /// swaps the image but a duplicate set for the same stream is skipped.
         private var artworkMediaID: String?
+        private var lastUpdate: Date?
+        private var updateTask: Task<Void, Never>?
 
         private init() {}
 
@@ -29,9 +31,17 @@
             guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
             var state = state
             state.artworkFileName = artworkFileName
-            let content = ActivityContent(state: state, staleDate: Self.staleDate(for: state))
+            let now = Date.now
+            state.freshUntil = Self.staleDate(for: state, now: now)
+            let content = ActivityContent(state: state, staleDate: state.freshUntil)
             if let activity {
-                Task { await activity.update(content) }
+                lastUpdate = now
+                let previous = updateTask
+                updateTask = Task { [weak self] in
+                    await previous?.value
+                    guard self?.activity?.id == activity.id else { return }
+                    await activity.update(content)
+                }
                 return
             }
             // One playback activity at a time: anything still showing belongs to
@@ -42,9 +52,17 @@
                     attributes: PlaybackActivityAttributes(sessionID: UUID().uuidString),
                     content: content
                 )
+                lastUpdate = now
             } catch {
                 Logger.player.error("Live Activity request failed: \(error.localizedDescription, privacy: .public)")
             }
+        }
+
+        /// Renew independently of clock drift: healthy steady playback used to
+        /// produce no activity updates until a seek, pause or artwork change.
+        func refreshIfNeeded(state: PlaybackActivityAttributes.ContentState) {
+            guard PlaybackActivityFreshness.needsRenewal(lastUpdate: lastUpdate, now: .now) else { return }
+            startOrUpdate(state: state)
         }
 
         /// Write a downscaled artwork copy into the app-group container. The
@@ -68,27 +86,22 @@
 
         /// When the activity's content stops being trustworthy without an update.
         ///
-        /// - Live: at the programme boundary (a refresh follows).
-        /// - Playing VOD: at the projected end of the title — the bar is a
-        ///   self-running timer, so past that point it only describes a session
-        ///   that stopped reporting.
-        /// - Paused VOD: the bar is frozen, so it stays accurate; allow a long
-        ///   pause.
-        static func staleDate(for state: PlaybackActivityAttributes.ContentState, now: Date = .now) -> Date? {
-            if state.isLive { return state.windowEnd }
-            if !state.isPaused, let end = state.windowEnd, end > now { return end }
-            return now.addingTimeInterval(4 * 60 * 60)
+        /// Every state needs a heartbeat, including a long pause. Live programme
+        /// boundaries and a playing title's end can invalidate it sooner.
+        static func staleDate(for state: PlaybackActivityAttributes.ContentState, now: Date = .now) -> Date {
+            let advancing = state.status.map { $0 == .playing } ?? !state.isPaused
+            let end = state.isLive || advancing ? state.windowEnd : nil
+            return PlaybackActivityFreshness.deadline(now: now, windowEnd: end)
         }
 
         /// Ends playback activities this process doesn't own.
         ///
         /// The controller only knows the activity it requested itself. When the
         /// app goes away without the player closing — killed in the background,
-        /// swiped away mid-playback, a crash — that activity outlives the process,
-        /// its self-running progress bar ticking on for hours with nothing left to
-        /// pause, update or end it; a relaunch never learned of it. Called at
-        /// launch and before every request, so a stranded activity is cleared the
-        /// next time the app runs.
+        /// swiped away mid-playback, a crash — that activity outlives the process.
+        /// Freshness prevents it claiming ongoing playback, but only another app
+        /// run can remove it. Called at launch and before every request so the
+        /// new process clears activities it has no in-memory ownership of.
         func endOrphanedActivities() {
             for orphan in Activity<PlaybackActivityAttributes>.activities where orphan.id != activity?.id {
                 Task { await orphan.end(nil, dismissalPolicy: .immediate) }
@@ -96,13 +109,17 @@
         }
 
         func end() {
+            lastUpdate = nil
             artworkFileName = nil
             artworkMediaID = nil
             guard let activity else { return }
             self.activity = nil
+            let pendingUpdate = updateTask
+            updateTask = nil
             Task {
+                await pendingUpdate?.value
                 await activity.end(nil, dismissalPolicy: .immediate)
-                if let directory = PlaybackActivityArtworkStore.directoryURL {
+                if self.activity == nil, let directory = PlaybackActivityArtworkStore.directoryURL {
                     try? FileManager.default.removeItem(at: directory)
                 }
             }

@@ -16,20 +16,21 @@ struct PlaybackLiveActivity: Widget {
 
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: PlaybackActivityAttributes.self) { context in
-            PlaybackLockScreenView(state: context.state)
+            PlaybackLockScreenView(state: context.state, status: context.state.presentation(isStale: context.isStale))
                 .widgetURL(Self.resumeURL)
         } dynamicIsland: { context in
-            DynamicIsland {
+            let status = context.state.presentation(isStale: context.isStale)
+            return DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
                     PlaybackArtworkView(fileName: context.state.artworkFileName, size: 52)
                         .padding(.leading, 4)
                 }
                 DynamicIslandExpandedRegion(.trailing) {
-                    if context.state.isLive {
+                    if context.state.isLive, status == .playing {
                         LiveBadge()
                             .padding(.trailing, 4)
                     } else {
-                        Image(systemName: context.state.isPaused ? "pause.fill" : "play.fill")
+                        Image(systemName: status.symbolName)
                             .foregroundStyle(.secondary)
                             .padding(.trailing, 4)
                     }
@@ -50,16 +51,17 @@ struct PlaybackLiveActivity: Widget {
                 }
                 DynamicIslandExpandedRegion(.bottom) {
                     VStack(alignment: .leading, spacing: 4) {
-                        PlaybackProgressView(state: context.state)
-                        PlaybackUpNextView(state: context.state)
+                        PlaybackProgressView(state: context.state, status: status)
+                        PlaybackStatusLabel(status: status)
+                        if status != .unavailable { PlaybackUpNextView(state: context.state) }
                     }
                     .padding(.horizontal, 4)
                 }
             } compactLeading: {
                 PlaybackArtworkView(fileName: context.state.artworkFileName, size: 23)
             } compactTrailing: {
-                if context.state.isPaused {
-                    Image(systemName: "pause.fill")
+                if !status.advancesProgress {
+                    Image(systemName: status.symbolName)
                         .foregroundStyle(.secondary)
                 } else if context.state.isLive {
                     Image(systemName: "dot.radiowaves.left.and.right")
@@ -70,8 +72,8 @@ struct PlaybackLiveActivity: Widget {
                         .tint(.white)
                 }
             } minimal: {
-                Image(systemName: context.state.isPaused ? "pause.fill" : "play.fill")
-                    .foregroundStyle(context.state.isLive ? .red : .white)
+                Image(systemName: status.symbolName)
+                    .foregroundStyle(context.state.isLive && status == .playing ? .red : .white)
             }
             .widgetURL(Self.resumeURL)
         }
@@ -81,6 +83,7 @@ struct PlaybackLiveActivity: Widget {
 /// The lock-screen / banner presentation.
 private struct PlaybackLockScreenView: View {
     let state: PlaybackActivityAttributes.ContentState
+    let status: PlaybackActivityStatus
 
     var body: some View {
         HStack(spacing: 12) {
@@ -91,10 +94,10 @@ private struct PlaybackLockScreenView: View {
                         .font(.headline)
                         .lineLimit(1)
                     Spacer(minLength: 8)
-                    if state.isLive {
+                    if state.isLive, status == .playing {
                         LiveBadge()
-                    } else if state.isPaused {
-                        Image(systemName: "pause.fill")
+                    } else if status != .playing {
+                        Image(systemName: status.symbolName)
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -105,8 +108,9 @@ private struct PlaybackLockScreenView: View {
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
-                PlaybackProgressView(state: state)
-                PlaybackUpNextView(state: state)
+                PlaybackProgressView(state: state, status: status)
+                PlaybackStatusLabel(status: status)
+                if status != .unavailable { PlaybackUpNextView(state: state) }
             }
         }
         .padding(14)
@@ -116,17 +120,18 @@ private struct PlaybackLockScreenView: View {
 }
 
 /// Progress for the current programme (live) or the stream position (VOD).
-/// While playing it ticks on its own via the timer interval; while paused it
-/// freezes at the last reported position.
+/// Only fresh, confirmed playback advances. Loading, buffering, paused and
+/// stale sessions show the last reported position, not a synthetic clock.
 private struct PlaybackProgressView: View {
     let state: PlaybackActivityAttributes.ContentState
+    let status: PlaybackActivityStatus
 
     var body: some View {
-        if state.isPaused, let elapsed = state.elapsed, let duration = state.duration, duration > 0 {
-            ProgressView(value: min(elapsed / duration, 1))
+        if !status.advancesProgress, let elapsed = state.elapsed, let duration = state.duration, duration > 0 {
+            ProgressView(value: min(max(elapsed / duration, 0), 1))
                 .progressViewStyle(.linear)
                 .tint(.white)
-        } else if let start = state.windowStart, let end = state.windowEnd, start < end {
+        } else if status.advancesProgress, let start = state.windowStart, let end = state.windowEnd, start < end {
             HStack(spacing: 8) {
                 if state.isLive {
                     Text(start, style: .time)
@@ -145,6 +150,36 @@ private struct PlaybackProgressView: View {
                 }
             }
         }
+    }
+}
+
+private nonisolated extension PlaybackActivityStatus {
+    var symbolName: String {
+        switch self {
+        case .loading: "hourglass"
+        case .playing: "play.fill"
+        case .paused: "pause.fill"
+        case .buffering: "arrow.trianglehead.2.clockwise.rotate.90"
+        case .unavailable: "exclamationmark.circle"
+        }
+    }
+}
+
+private struct PlaybackStatusLabel: View {
+    let status: PlaybackActivityStatus
+
+    var body: some View {
+        Group {
+            switch status {
+            case .loading: Text("Loading…", comment: "Live Activity: playback has not started")
+            case .buffering: Text("Buffering…", comment: "Live Activity: playback is waiting for data")
+            case .paused: Text("Paused", comment: "Live Activity: playback is paused")
+            case .unavailable: Text("Playback unavailable", comment: "Live Activity: playback failed or stopped reporting")
+            case .playing: EmptyView()
+            }
+        }
+        .font(.caption2)
+        .foregroundStyle(.secondary)
     }
 }
 

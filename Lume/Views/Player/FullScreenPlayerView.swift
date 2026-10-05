@@ -310,7 +310,8 @@ struct FullScreenPlayerView: View {
             // channel surf / next episode republishes; cancelled on swap. A
             // catch-up seek keeps the session (`playbackSessionID`).
             await NowPlayingService.shared.runSession(
-                media: activeMedia, clock: clock, container: modelContext.container
+                media: activeMedia, clock: clock, container: modelContext.container,
+                playbackState: { [session] in session.state }
             )
         }
         .task(id: activeMedia.playbackSessionID) {

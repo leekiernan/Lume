@@ -54,6 +54,7 @@ final class NowPlayingService {
     private var artwork: MPMediaItemArtwork?
     private var channelName: String?
     private var channelEPG: ChannelEPG?
+    private var playbackState: (() -> PlaybackSessionMachine.State)?
 
     private init() {}
 
@@ -85,9 +86,13 @@ final class NowPlayingService {
     /// episode). Registers remote commands, publishes metadata + artwork,
     /// keeps live-TV EPG now/next fresh across programme boundaries, and
     /// drives the iOS Live Activity.
-    func runSession(media: PlayableMedia, clock: PlaybackClock, container: ModelContainer) async {
+    func runSession(
+        media: PlayableMedia, clock: PlaybackClock, container: ModelContainer,
+        playbackState: @escaping () -> PlaybackSessionMachine.State
+    ) async {
         currentMedia = media
         self.clock = clock
+        self.playbackState = playbackState
         channelName = nil
         channelEPG = nil
         artwork = nil
@@ -131,6 +136,7 @@ final class NowPlayingService {
             )
         }
         currentMedia = nil
+        playbackState = nil
         clock = nil
         artwork = nil
         channelEPG = nil
@@ -297,6 +303,9 @@ final class NowPlayingService {
         // empty dict — fall back to a full publish so the metadata comes back.
         guard info[MPMediaItemPropertyTitle] != nil else {
             publish()
+            #if os(iOS)
+                PlaybackActivityController.shared.startOrUpdate(state: makeActivityState())
+            #endif
             return
         }
         let playing = forcePlaying ?? transport?.isPlaying() ?? true
@@ -310,7 +319,7 @@ final class NowPlayingService {
         MPNowPlayingInfoCenter.default().nowPlayingInfo = info
         setPlaybackState(playing: playing)
         #if os(iOS)
-            PlaybackActivityController.shared.startOrUpdate(state: makeActivityState(isPaused: !playing))
+            PlaybackActivityController.shared.startOrUpdate(state: makeActivityState(isPaused: forcePlaying.map { !$0 }))
         #endif
     }
 
@@ -390,6 +399,9 @@ final class NowPlayingService {
         var lastDuration = clock?.duration ?? 0
         var lastPlaying = transport?.isPlaying() ?? true
         var lastWall = Date.now
+        #if os(iOS)
+            var lastActivityStatus = Self.activityStatus(for: playbackState?() ?? .idle)
+        #endif
         while !Task.isCancelled {
             try? await Task.sleep(for: .seconds(1))
             guard !Task.isCancelled, let clock else { return }
@@ -398,15 +410,26 @@ final class NowPlayingService {
             let expected = lastElapsed + (lastPlaying ? wallDelta : 0)
             let drifted = abs(clock.current - expected) > 3
             let durationChanged = clock.duration != lastDuration
+            let activityChanged: Bool
+            #if os(iOS)
+                let activityStatus = Self.activityStatus(for: playbackState?() ?? .idle)
+                activityChanged = activityStatus != lastActivityStatus
+                lastActivityStatus = activityStatus
+            #else
+                activityChanged = false
+            #endif
             let cleared = MPNowPlayingInfoCenter.default().nowPlayingInfo?[MPMediaItemPropertyTitle] == nil
             if cleared, let media = currentMedia {
                 // An engine teardown wiped the info center (and, for KSPlayer,
                 // the command targets with it) — take the session back.
                 registerCommands(for: media)
             }
-            if playing != lastPlaying || drifted || durationChanged || cleared {
+            if playing != lastPlaying || drifted || durationChanged || cleared || activityChanged {
                 publishDynamic()
             }
+            #if os(iOS)
+                PlaybackActivityController.shared.refreshIfNeeded(state: makeActivityState())
+            #endif
             lastElapsed = clock.current
             lastDuration = clock.duration
             lastPlaying = playing
@@ -416,16 +439,33 @@ final class NowPlayingService {
 
     // MARK: - Live Activity state
 
+    /// Do not infer first frames from a transport's play intent. Several engines
+    /// report `isPlaying` while they are still joining or buffering.
+    static func activityStatus(for state: PlaybackSessionMachine.State, isPaused: Bool? = nil) -> PlaybackActivityStatus {
+        let status: PlaybackActivityStatus = switch state {
+        case .idle, .resolving, .starting: .loading
+        case .playing: .playing
+        case .paused: .paused
+        case .rebuffering: .buffering
+        case .failed, .closed: .unavailable
+        }
+        // Remote commands can publish a pause/resume before the engine reports
+        // it, but a play request is not evidence that startup succeeded.
+        guard let isPaused, status != .loading, status != .unavailable else { return status }
+        return isPaused ? .paused : .playing
+    }
+
     #if os(iOS)
         private func makeActivityState(isPaused: Bool? = nil) -> PlaybackActivityAttributes.ContentState {
             let media = currentMedia
-            let paused = isPaused ?? !(transport?.isPlaying() ?? true)
+            let status = Self.activityStatus(for: playbackState?() ?? .idle, isPaused: isPaused)
             var state = PlaybackActivityAttributes.ContentState(
                 title: media?.title ?? "",
                 subtitle: media?.subtitle,
                 isLive: media?.isLive ?? false,
-                isPaused: paused
+                isPaused: status == .paused
             )
+            state.status = status
             if media?.isLive == true {
                 state.programmeTitle = channelEPG?.current?.title
                 state.windowStart = channelEPG?.current?.start
