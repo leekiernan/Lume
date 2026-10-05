@@ -34,7 +34,7 @@ struct MultiViewKSTile: View {
         KSVideoPlayer(
             coordinator: coordinator,
             url: media.url,
-            options: KSPlayerOptionsFactory.make(for: media, allowsPictureInPicture: false)
+            options: KSPlayerOptionsFactory.make(for: media, isEmbedded: true)
         )
         .onStateChanged { _, state in
             // Deferred so the mutations below never land inside a SwiftUI view
