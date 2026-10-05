@@ -36,7 +36,9 @@ struct EpisodeOverlayMachineTests {
         #expect(zone(20) == .recap(recap))
         #expect(zone(240) == .intro(intro))
         #expect(zone(259) == .content)
-        #expect(zone(2800) == .outro) // past 90%
+        #expect(zone(2800) == .content) // watched, but outside the final two minutes
+        #expect(zone(2879) == .content)
+        #expect(zone(2880) == .outro)
         #expect(zone(2998) == .ending)
     }
 
@@ -93,6 +95,17 @@ struct EpisodeOverlayMachineTests {
     }
 
     // MARK: - Next episode
+
+    @Test func `the capped prompt does not auto advance until the ending`() {
+        var machine = machine()
+        _ = machine.handle(.zone(EpisodeOverlayMachine.zone(current: 2700, duration: 3000, segments: nil)))
+        #expect(machine.activeOffer == nil)
+        let prompt = machine.handle(.zone(EpisodeOverlayMachine.zone(current: 2880, duration: 3000, segments: nil)))
+        #expect(machine.activeOffer == .nextEpisode)
+        #expect(prompt.isEmpty)
+        let ending = machine.handle(.zone(EpisodeOverlayMachine.zone(current: 2998, duration: 3000, segments: nil)))
+        #expect(ending == [.playNext])
+    }
 
     @Test func `the outro offers the next episode`() {
         var machine = machine()

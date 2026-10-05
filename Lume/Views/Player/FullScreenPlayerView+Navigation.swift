@@ -170,8 +170,8 @@ extension FullScreenPlayerView {
     /// for the next one, before the swap takes the clock away.
     ///
     /// The transport button is available from the first frame, deliberately —
-    /// it is not armed by `OutroTrigger`, whose 90% line is what
-    /// `WatchProgressWriter` measures completion against. So an explicit press
+    /// independently of the outro prompt and the writer's 90% watched line.
+    /// So an explicit press
     /// has to record the intent itself: left to the progress write, an episode
     /// skipped at 20 minutes would sit in Continue Watching forever and never
     /// scrobble. Auto-advance is untouched — it only fires past that same line,

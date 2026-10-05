@@ -199,7 +199,7 @@ enum PlayerSettings {
         nonisolated static let autoPlayNextKey = "player.autoPlayNext"
         /// Surface a focused "Next Episode" button once the current episode is
         /// near its end — IntroDB's outro window when one is known and plausible,
-        /// otherwise the ≥90% "watched" line, and never before it.
+        /// otherwise the final 10% capped at two minutes, never before 90%.
         nonisolated static let showNextEpisodeButtonKey = "player.showNextEpisodeButton"
         /// Surface a "Skip Intro" / "Skip Recap" button while the playhead sits
         /// inside an intro or recap window known to IntroDB (TV episodes only).
