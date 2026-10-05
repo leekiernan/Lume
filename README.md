@@ -124,7 +124,7 @@ adapted per size class
 - Full **program guide** with a scrollable timeline
 - **Custom EPG sources**: add external XMLTV feeds, refresh the guide on its own schedule, and sync manually — managed separately from playlist content
 - Catchup / time-shift support
-- **Multi-View**: watch up to four channels at once in a 2 / 3 / 2×2 grid, with the audio on whichever tile you pick — channels can come from different playlists, so a provider limited to one concurrent connection is no obstacle
+- **Multi-View**: watch up to four channels at once in a 2 / 3 / 2×2 grid, with the audio on whichever tile you pick. Each tile can come from a different playlist, which helps if your provider allows only one connection per account (two tiles on the same account still need two connections)
 - Channel zapping with recently-watched history
 - **In-player channel browser** on tvOS (left-press overlay with category/channel grid)
 - Favorite channels and per-channel management
