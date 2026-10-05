@@ -79,6 +79,7 @@ nonisolated extension EnrichedTitle {
         tagline = nil
         contentRating = nil
         tmdbEnrichedAt = nil
+        tmdbArtworkEnrichedAt = nil
         similarTMDBIds = nil
         trailersData = nil
         imdbId = nil

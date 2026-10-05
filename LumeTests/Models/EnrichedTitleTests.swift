@@ -19,6 +19,8 @@ struct EnrichedTitleTests {
         applySeriesDetails(details, to: series, context: context)
         movie.isFavorite = true
         movie.watchProgress = 123
+        movie.tmdbArtworkEnrichedAt = Date()
+        series.tmdbArtworkEnrichedAt = Date()
         movie.clearCommonEnrichment(in: context)
         series.clearCommonEnrichment(in: context)
         try context.save()
@@ -26,6 +28,7 @@ struct EnrichedTitleTests {
         #expect(movie.posterPath == "/poster.jpg" && series.posterPath == "/poster.jpg")
         #expect(movie.backdropPath == nil && series.backdropPath == nil)
         #expect(movie.tmdbEnrichedAt == nil && series.tmdbEnrichedAt == nil)
+        #expect(movie.tmdbArtworkEnrichedAt == nil && series.tmdbArtworkEnrichedAt == nil)
         #expect(movie.similarTMDBIds == nil && series.trailersData == nil)
         #expect(movie.isFavorite && movie.watchProgress == 123 && movie.genre == "Drama")
     }

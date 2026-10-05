@@ -38,6 +38,7 @@ struct StorageManagerTests {
         movie.tagline = "A tagline"
         movie.contentRating = "PG-13"
         movie.tmdbEnrichedAt = Date(timeIntervalSince1970: 1)
+        movie.tmdbArtworkEnrichedAt = Date()
         movie.similarTMDBIds = [1, 2, 3]
         movie.trailers = [TitleVideo(key: "abc", name: "Trailer", type: "Trailer")]
         movie.imdbId = "tt1234567"
@@ -70,6 +71,7 @@ struct StorageManagerTests {
         #expect(refetched.tagline == nil)
         #expect(refetched.contentRating == nil)
         #expect(refetched.tmdbEnrichedAt == nil)
+        #expect(refetched.tmdbArtworkEnrichedAt == nil)
         #expect(refetched.similarTMDBIds == nil)
         #expect(refetched.trailers.isEmpty)
         #expect(refetched.imdbId == nil)
@@ -93,6 +95,7 @@ struct StorageManagerTests {
         let show = Series(id: "s1", seriesId: 1, name: "Keep Me Too")
         show.tagline = "A tagline"
         show.tmdbEnrichedAt = Date(timeIntervalSince1970: 1)
+        show.tmdbArtworkEnrichedAt = Date()
         show.similarTMDBIds = [4, 5, 6]
         show.isFavorite = true
         context.insert(show)
@@ -108,7 +111,60 @@ struct StorageManagerTests {
         #expect(refetched.isFavorite == true)
         #expect(refetched.tagline == nil)
         #expect(refetched.tmdbEnrichedAt == nil)
+        #expect(refetched.tmdbArtworkEnrichedAt == nil)
         #expect(refetched.similarTMDBIds == nil)
+    }
+
+    @Test func `clear metadata reaches artwork-only rows and rearms artwork requests`() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("LumeArtworkClear-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let schema = OnDiskCatalogStore.catalogSchema
+        let configuration = ModelConfiguration(schema: schema, url: directory.appendingPathComponent("catalog.store"), cloudKitDatabase: .none)
+        let container = try ModelContainer(for: schema, configurations: configuration)
+        let context = container.mainContext
+        let movie = Movie(id: "artwork-movie", streamId: 1, name: "Movie")
+        let series = Series(id: "artwork-series", seriesId: 1, name: "Series")
+        context.insert(movie)
+        context.insert(series)
+        movie.tmdbId = 123
+        series.tmdbId = 456
+        seedArtworkOnly(movie)
+        seedArtworkOnly(series)
+        movie.isFavorite = true
+        movie.watchProgress = 123
+        let untouched = Movie(id: "provider-only", streamId: 2, name: "Provider")
+        untouched.backdropPath = "/provider.jpg"
+        context.insert(untouched)
+        try context.save()
+        #expect(ContinueWatchingArtworkRequest(.movie(movie)) == nil)
+        #expect(ContinueWatchingArtworkRequest(.series(series)) == nil)
+
+        await StorageManager.clearMetadataEnrichment(container: container)
+
+        let verify = ModelContext(container)
+        let storedMovie = try #require(verify.fetch(FetchDescriptor<Movie>(predicate: #Predicate { $0.id == "artwork-movie" })).first)
+        let storedSeries = try #require(verify.fetch(FetchDescriptor<Series>()).first)
+        for title in [storedMovie as any EnrichedTitle, storedSeries as any EnrichedTitle] {
+            #expect(title.tmdbArtworkEnrichedAt == nil)
+            #expect(title.tmdbEnrichedAt == nil && title.ratingsEnrichedAt == nil)
+            #expect(title.backdropPath == nil && title.logoPath == nil)
+            #expect(title.posterPath == "/poster.jpg" && title.plot == "Provider plot")
+        }
+        #expect(storedMovie.isFavorite && storedMovie.watchProgress == 123)
+        #expect(ContinueWatchingArtworkRequest(.movie(storedMovie)) != nil)
+        #expect(ContinueWatchingArtworkRequest(.series(storedSeries)) != nil)
+        let storedProvider = try #require(verify.fetch(FetchDescriptor<Movie>(predicate: #Predicate { $0.id == "provider-only" })).first)
+        #expect(storedProvider.backdropPath == "/provider.jpg")
+    }
+
+    private func seedArtworkOnly(_ title: some EnrichedTitle) {
+        title.backdropPath = "/backdrop.jpg"
+        title.logoPath = "/logo.png"
+        title.posterPath = "/poster.jpg"
+        title.plot = "Provider plot"
+        title.tmdbArtworkEnrichedAt = Date()
+        #expect(title.tmdbEnrichedAt == nil && title.ratingsEnrichedAt == nil)
     }
 
     /// The language-change invalidation only re-arms enrichment; the cached

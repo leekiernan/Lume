@@ -87,12 +87,12 @@ enum StorageManager {
             do {
                 // Filter in SQLite so only already-enriched rows are hydrated.
                 let movies = try context.fetch(FetchDescriptor<Movie>(
-                    predicate: #Predicate { $0.tmdbEnrichedAt != nil || $0.ratingsEnrichedAt != nil }
+                    predicate: #Predicate { $0.tmdbEnrichedAt != nil || $0.tmdbArtworkEnrichedAt != nil || $0.ratingsEnrichedAt != nil }
                 ))
                 try mutateInBatches(movies, in: context) { clearEnrichment(of: $0, in: context) }
 
                 let series = try context.fetch(FetchDescriptor<Series>(
-                    predicate: #Predicate { $0.tmdbEnrichedAt != nil || $0.ratingsEnrichedAt != nil }
+                    predicate: #Predicate { $0.tmdbEnrichedAt != nil || $0.tmdbArtworkEnrichedAt != nil || $0.ratingsEnrichedAt != nil }
                 ))
                 try mutateInBatches(series, in: context) { clearEnrichment(of: $0, in: context) }
             } catch {
