@@ -34,12 +34,7 @@ extension ContentSyncManager {
         since lastRequestFinishedAt: ContinuousClock.Instant?,
         now: ContinuousClock.Instant = ContinuousClock.now
     ) -> Duration {
-        guard let lastRequestFinishedAt else { return .zero }
-        let remaining = contentPhaseRequestSpacing - (now - lastRequestFinishedAt)
-        // Clamped at both ends: a negative gap means the spacing is already
-        // paid for, and a clock that jumped backwards must not inflate it past
-        // the configured spacing.
-        return max(.zero, min(contentPhaseRequestSpacing, remaining))
+        ProviderRequestSpacing.remaining(minimum: contentPhaseRequestSpacing, since: lastRequestFinishedAt, now: now)
     }
 
     /// Waits out whatever spacing the previous content phase did not already

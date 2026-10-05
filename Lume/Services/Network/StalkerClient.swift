@@ -165,7 +165,7 @@ final nonisolated class StalkerClient: Sendable {
         return components.url ?? endpoint
     }
 
-    private static let maxAttempts = 3
+    private static let retryPolicy = ProviderRetryPolicy.catalog
 
     /// Issues an authorized request for the given action, retrying once on an
     /// auth failure with a fresh handshake, and with backoff on transient
@@ -192,7 +192,7 @@ final nonisolated class StalkerClient: Sendable {
                     refreshedAuth = true
                     continue
                 }
-                guard error.isRetriable, attempt < Self.maxAttempts else {
+                guard error.isRetriable, let delay = Self.retryPolicy.delay(afterFailedAttempt: attempt) else {
                     // Only here, not in `perform`: the handshake's endpoint
                     // probing decodes HTML from the wrong candidates by design.
                     let returned = lastResponseFingerprint ?? "no response"
@@ -201,9 +201,8 @@ final nonisolated class StalkerClient: Sendable {
                     )
                     throw error
                 }
-                let delay = pow(2.0, Double(attempt))
                 Logger.network.warning(
-                    "Stalker request failed (\(error)); retry \(attempt)/\(Self.maxAttempts - 1) in \(delay)s"
+                    "Stalker request failed (\(error)); retry \(attempt)/\(Self.retryPolicy.maxAttempts - 1) in \(delay)s"
                 )
                 try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
             }
