@@ -11,20 +11,17 @@
 //  supplied by the caller as `collectionRow`, because Movies and Series each
 //  have their own @Query-backed row and card type. Everything remote —
 //  trending, the Trakt watchlist and the user's custom list rows — comes from
-//  the shared feed and renders through `HomeRow`.
+//  the shared feed and renders through `HomeRow`. Loading and first-use hero
+//  seeding belong to LibraryAreaView, outside this lazy presentation subtree.
 //
 
 import SwiftUI
 
 struct LibrarySectionsView<CollectionRow: View>: View {
     let surface: SectionSurface
-    /// Identity of the catalog the rows are matched against: changes when the
-    /// playlist, its last sync or the viewer's hidden categories change.
-    let catalogKey: String
     /// Owned by the page rather than here: the hero above these rows renders
     /// from the same feed, and on tvOS it sits outside them entirely.
     let feed: SectionFeed
-    let feedContext: SectionFeed.Context
     /// Resume fractions keyed by series id, resolved once for the screen.
     var seriesResume: [String: Double] = [:]
     var animationNamespace: Namespace.ID?
@@ -35,27 +32,21 @@ struct LibrarySectionsView<CollectionRow: View>: View {
     /// The caller's @Query-backed row for one of the local collections.
     @ViewBuilder let collectionRow: (LibraryCollection.Kind) -> CollectionRow
 
-    @State private var trakt = TraktService.shared
     @AppStorage private var sectionOrderRaw: String
     @AppStorage private var disabledSectionsRaw: String
     @AppStorage private var customSectionsRaw: String
     @AppStorage private var heroSectionRaw: String
-    @AppStorage private var heroSeeded: Bool
 
     init(
         surface: SectionSurface,
-        catalogKey: String,
         feed: SectionFeed,
-        feedContext: SectionFeed.Context,
         seriesResume: [String: Double] = [:],
         animationNamespace: Namespace.ID? = nil,
         onRevealBrowse: (() -> Void)? = nil,
         @ViewBuilder collectionRow: @escaping (LibraryCollection.Kind) -> CollectionRow
     ) {
         self.surface = surface
-        self.catalogKey = catalogKey
         self.feed = feed
-        self.feedContext = feedContext
         self.seriesResume = seriesResume
         self.animationNamespace = animationNamespace
         self.onRevealBrowse = onRevealBrowse
@@ -64,7 +55,6 @@ struct LibrarySectionsView<CollectionRow: View>: View {
         _disabledSectionsRaw = AppStorage(wrappedValue: "", HomeLayoutSettings.disabledSectionsKey(surface))
         _customSectionsRaw = AppStorage(wrappedValue: "", CustomHomeSections.storageKey(surface))
         _heroSectionRaw = AppStorage(wrappedValue: "", HomeLayoutSettings.heroSectionKey(surface))
-        _heroSeeded = AppStorage(wrappedValue: false, HomeLayoutSettings.heroSeededKey(surface))
     }
 
     var body: some View {
@@ -73,11 +63,6 @@ struct LibrarySectionsView<CollectionRow: View>: View {
                 row(for: ref)
             }
         }
-        .sectionFeedLoads(
-            feed: feed, configuration: .init(context: feedContext, catalogKey: catalogKey,
-                                             heroRef: heroRef, heroSelection: heroSectionRaw, customSections: visibleCustomSections,
-                                             traktAccount: trakt.username, prepareCustomSections: seedDefaultHeroIfNeeded)
-        )
     }
 
     // MARK: - Rows
@@ -168,40 +153,7 @@ struct LibrarySectionsView<CollectionRow: View>: View {
         return ref
     }
 
-    /// Creates this surface's starting hero the first time it is needed, as an
-    /// ordinary section. Runs once: deleting it leaves it deleted.
-    private func seedDefaultHeroIfNeeded() {
-        switch CustomHomeSections.seedingDefaultHero(
-            surface: surface,
-            sections: customSections,
-            heroRaw: heroSectionRaw,
-            orderRaw: sectionOrderRaw,
-            seeded: heroSeeded
-        ) {
-        case let .seed(sections, heroToken, orderRaw):
-            customSectionsRaw = CustomHomeSections.encode(sections)
-            sectionOrderRaw = orderRaw
-            heroSectionRaw = heroToken
-            heroSeeded = true
-        case .alreadyHasHero:
-            heroSeeded = true
-        case .nothingToDo:
-            break
-        }
-    }
-
     private var customSections: [CustomHomeSection] {
         CustomHomeSections.decode(customSectionsRaw)
-    }
-
-    /// The custom sections that should actually be fetched: the user's list
-    /// minus the ones they've hidden. A hidden row costs no network.
-    private var visibleCustomSections: [CustomHomeSection] {
-        customSections.filter {
-            // The promoted section is still fetched — it feeds the hero even
-            // though it draws no row.
-            .custom($0.id) == heroRef
-                || HomeLayoutSettings.isEnabled(.custom($0.id), disabledRaw: disabledSectionsRaw)
-        }
     }
 }

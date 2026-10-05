@@ -73,6 +73,9 @@ private struct SectionFeedLoading: ViewModifier {
 }
 
 extension View {
+    /// Attach to a stable page host outside ScrollView/LazyVStack content.
+    /// Otherwise reserving a cold hero can unmount the rows and cancel the
+    /// loads that are required to populate that hero in the first place.
     func sectionFeedLoads(feed: SectionFeed, configuration: SectionFeedLoadConfiguration) -> some View {
         modifier(SectionFeedLoading(feed: feed, configuration: configuration))
     }

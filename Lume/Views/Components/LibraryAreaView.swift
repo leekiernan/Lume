@@ -26,10 +26,13 @@ struct LibraryAreaView<Kind: LibraryAreaKind>: View {
     /// tvOS the hero sits outside the rows, wrapping them.
     @State private var feed: SectionFeed
     @State private var genreLoader = LibraryGenreLoadMachine()
+    @State private var trakt = TraktService.shared
 
     @AppStorage private var heroSectionRaw: String
+    @AppStorage private var sectionOrderRaw: String
     @AppStorage private var disabledSectionsRaw: String
     @AppStorage private var customSectionsRaw: String
+    @AppStorage private var heroSeeded: Bool
     @State private var heroWarmStart: HeroWarmStartState
 
     /// The playlist scope and the viewer's hidden/restricted categories are
@@ -43,8 +46,10 @@ struct LibraryAreaView<Kind: LibraryAreaKind>: View {
         _feed = State(initialValue: SectionFeed(surface: Kind.surface))
         _heroWarmStart = State(initialValue: HeroWarmStartState(surface: Kind.surface))
         _heroSectionRaw = AppStorage(wrappedValue: "", HomeLayoutSettings.heroSectionKey(Kind.surface))
+        _sectionOrderRaw = AppStorage(wrappedValue: "", HomeLayoutSettings.sectionOrderKey(Kind.surface))
         _disabledSectionsRaw = AppStorage(wrappedValue: "", HomeLayoutSettings.disabledSectionsKey(Kind.surface))
         _customSectionsRaw = AppStorage(wrappedValue: "", CustomHomeSections.storageKey(Kind.surface))
+        _heroSeeded = AppStorage(wrappedValue: false, HomeLayoutSettings.heroSeededKey(Kind.surface))
         _categories = Query(LibraryCategoryQuery.descriptor(
             type: Kind.categoryType,
             playlistPrefix: playlistPrefix ?? "",
@@ -122,6 +127,18 @@ struct LibraryAreaView<Kind: LibraryAreaKind>: View {
 
     private var sections: some View {
         heroAndRows
+            // Feed tasks belong to the page, not its lazy rows: a reserved
+            // cold hero can place those rows outside the viewport and cancel
+            // the very loads needed to fill the hero and reveal the rails.
+            .sectionFeedLoads(
+                feed: feed, configuration: .init(
+                    context: SectionFeed.Context(modelContext: modelContext, restriction: restriction,
+                                                 playlistPrefix: playlistPrefix.isEmpty ? nil : playlistPrefix),
+                    catalogKey: catalogKey, heroRef: heroRef, heroSelection: heroSectionRaw,
+                    customSections: visibleCustomSections, traktAccount: trakt.username,
+                    prepareCustomSections: seedDefaultHeroIfNeeded
+                )
+            )
             .browseActivity()
             .onChange(of: feed.heroItems.first, initial: true) { _, hero in
                 rememberHeroWarmStart(hero?.imageURL)
@@ -165,13 +182,7 @@ struct LibraryAreaView<Kind: LibraryAreaKind>: View {
     private var rowsContent: some View {
         LibrarySectionsView(
             surface: Kind.surface,
-            catalogKey: catalogKey,
             feed: feed,
-            feedContext: SectionFeed.Context(
-                modelContext: modelContext,
-                restriction: restriction,
-                playlistPrefix: playlistPrefix.isEmpty ? nil : playlistPrefix
-            ),
             seriesResume: resumeKey.flatMap { resumeLoader?.snapshot(for: $0).fractions } ?? [:],
             animationNamespace: animationNamespace,
             onRevealBrowse: { showingBrowse = true },
@@ -248,6 +259,36 @@ struct LibraryAreaView<Kind: LibraryAreaKind>: View {
             hero: heroRef,
             customSections: CustomHomeSections.decode(customSectionsRaw)
         )
+    }
+
+    private var customSections: [CustomHomeSection] {
+        CustomHomeSections.decode(customSectionsRaw)
+    }
+
+    private var visibleCustomSections: [CustomHomeSection] {
+        customSections.filter {
+            .custom($0.id) == heroRef
+                || HomeLayoutSettings.isEnabled(.custom($0.id), disabledRaw: disabledSectionsRaw)
+        }
+    }
+
+    /// First-use configuration belongs with the page's loads, not the lazy
+    /// rail subtree. Deleting an already-seeded hero still leaves it deleted.
+    private func seedDefaultHeroIfNeeded() {
+        switch CustomHomeSections.seedingDefaultHero(
+            surface: Kind.surface, sections: customSections, heroRaw: heroSectionRaw,
+            orderRaw: sectionOrderRaw, seeded: heroSeeded
+        ) {
+        case let .seed(sections, heroToken, orderRaw):
+            customSectionsRaw = CustomHomeSections.encode(sections)
+            sectionOrderRaw = orderRaw
+            heroSectionRaw = heroToken
+            heroSeeded = true
+        case .alreadyHasHero:
+            heroSeeded = true
+        case .nothingToDo:
+            break
+        }
     }
 
     private var heroWarmStartBackdropURL: URL? {
