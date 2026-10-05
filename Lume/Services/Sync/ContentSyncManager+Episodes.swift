@@ -44,9 +44,9 @@ extension Series {
     /// progress. Call only after a *successful* fetch — it stamps the episode
     /// cache, which suppresses further refreshes until it goes stale again.
     func insertEpisodes(_ parsed: [ParsedEpisode], into context: ModelContext) {
-        let existingIds = Set(episodes.map(\.id))
+        var existingIds = Set(episodes.map(\.id))
         var inserted = false
-        for parsed in parsed where !existingIds.contains(parsed.id) {
+        for parsed in parsed where existingIds.insert(parsed.id).inserted {
             inserted = true
             let episode = Episode(
                 id: parsed.id,

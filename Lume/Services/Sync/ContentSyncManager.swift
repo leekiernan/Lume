@@ -269,7 +269,7 @@ actor ContentSyncManager {
                 guard let episodeIdString = episodeDTO.id else { continue }
                 let plot = episodeDTO.info?.plot
                 result.append(ParsedEpisode(
-                    id: "\(seriesElementId)-episode-\(episodeIdString)",
+                    id: CatalogID.episode(ownerID: seriesElementId, key: episodeIdString),
                     episodeId: episodeIdString,
                     title: Self.cleanEpisodeTitle(episodeDTO.title),
                     containerExtension: episodeDTO.containerExtension ?? "mkv",

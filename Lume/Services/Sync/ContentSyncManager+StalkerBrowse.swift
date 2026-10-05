@@ -30,7 +30,7 @@ extension ContentSyncManager {
         let walk = try await client.getAllOrderedItems(
             type: type == .vod ? "vod" : "series", categoryId: apiId
         )
-        let playlistPrefix = "\(playlistId.uuidString)-\(type.rawValue)-"
+        let playlistPrefix = CatalogID.prefix(playlistId, infix: type.rawValue)
         let entries: [StalkerCatalogEntry] = walk.items.map { (item: $0, categoryId: apiId) }
 
         var seen = Set<String>()
@@ -78,7 +78,7 @@ extension ContentSyncManager {
     func markAllStalkerCategoriesImported(type: CategoryType, playlistId: UUID) {
         let context = ModelContext(modelContainer)
         context.autosaveEnabled = false
-        let prefix = "\(playlistId.uuidString)-\(type.rawValue)-"
+        let prefix = CatalogID.prefix(playlistId, infix: type.rawValue)
         let cats = (try? context.fetch(
             FetchDescriptor<Category>(predicate: #Predicate { $0.id.starts(with: prefix) })
         )) ?? []
@@ -133,7 +133,7 @@ extension ContentSyncManager {
         playlistId: UUID
     ) -> [String] {
         guard !items.isEmpty else { return [] }
-        let playlistPrefix = "\(playlistId.uuidString)-\(kind.rawValue)-"
+        let playlistPrefix = CatalogID.prefix(playlistId, infix: kind.rawValue)
         // A hit's own `category_id` when the portal sends one; otherwise the
         // row stays wherever it is already filed (see `stalkerCategoryId`).
         let entries: [StalkerCatalogEntry] = items.map { (item: $0, categoryId: $0.categoryId) }

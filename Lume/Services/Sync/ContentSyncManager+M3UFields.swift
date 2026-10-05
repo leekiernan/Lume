@@ -3,7 +3,8 @@
 //  Lume
 //
 //  The fetch-before-write lookups and dirty-checked field application for the
-//  m3u pipeline: the counterpart of `existingMovies`/`applyMovieFields` and
+//  m3u pipeline: shared CatalogUpsert lookups and the counterparts of
+//  `applyMovieFields` and
 //  friends for entries that carry no provider DTO. Split out of
 //  ContentSyncManager+M3U.swift, which sits against SwiftLint's file-length
 //  limit.
@@ -82,30 +83,15 @@ extension ContentSyncManager {
     // which is what lets `LumePerformanceTests` time the shipped descriptors
     // instead of a copy of them.
 
-    /// The m3u counterpart of `existingSeries(in:playlistId:context:)`: a batch
-    /// names the same series once per episode, so the ids are deduplicated
-    /// before the fetch.
+    /// The streaming m3u batch names a series once per episode, so deduplicate
+    /// before the shared lookup. Retains this path's best-effort read contract.
     nonisolated func existingSeries(ids: [String], context: ModelContext) -> [String: Series] {
         let uniqueIds = Array(Set(ids))
-        var lookup: [String: Series] = [:]
-        let fetched = (try? context.fetch(
-            FetchDescriptor<Series>(predicate: #Predicate { uniqueIds.contains($0.id) })
-        )) ?? []
-        for series in fetched {
-            lookup[series.id] = series
-        }
-        return lookup
+        return (try? CatalogUpsert.lookup(Series.self, ids: uniqueIds, context: context)) ?? [:]
     }
 
     nonisolated func existingEpisodes(ids: [String], context: ModelContext) -> [String: Episode] {
-        var lookup: [String: Episode] = [:]
-        let fetched = (try? context.fetch(
-            FetchDescriptor<Episode>(predicate: #Predicate { ids.contains($0.id) })
-        )) ?? []
-        for episode in fetched {
-            lookup[episode.id] = episode
-        }
-        return lookup
+        (try? CatalogUpsert.lookup(Episode.self, ids: ids, context: context)) ?? [:]
     }
 }
 

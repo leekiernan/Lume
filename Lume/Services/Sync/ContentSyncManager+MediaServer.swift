@@ -232,28 +232,14 @@ extension ContentSyncManager {
     private func upsertJellyfinMovies(_ items: [JellyfinItem], scope: JellyfinViewScope) throws -> Set<String> {
         let context = ModelContext(modelContainer)
         context.autosaveEnabled = false
-        let ids = items.map { scope.idPrefix + $0.id }
-        var lookup: [String: Movie] = [:]
-        let existing = (try? context.fetch(FetchDescriptor<Movie>(predicate: #Predicate { ids.contains($0.id) }))) ?? []
-        for movie in existing {
-            lookup[movie.id] = movie
-        }
-
-        for item in items {
-            let id = scope.idPrefix + item.id
-            let movie: Movie
-            if let found = lookup[id] {
-                movie = found
-            } else {
-                movie = Movie(id: id, streamId: M3UIdentity.numericId(for: item.id), name: item.name ?? "")
-                context.insert(movie)
-            }
-            applyJellyfinMovieFields(item, to: movie, scope: scope)
-        }
+        let seen = try CatalogUpsert.batch(items, context: context,
+                                           identity: { scope.idPrefix + $0.id },
+                                           create: { item, id in Movie(id: id, streamId: M3UIdentity.numericId(for: item.id), name: item.name ?? "") },
+                                           apply: { applyJellyfinMovieFields($0, to: $1, scope: scope) })
         if context.hasChanges {
             try context.save()
         }
-        return Set(ids)
+        return Set(seen)
     }
 
     /// Copies the server-owned fields onto the row, leaving user state
@@ -338,6 +324,6 @@ extension ContentSyncManager {
     /// The prefix every row of `flavor` for this playlist carries — the same
     /// string `JellyfinViewScope.idPrefix` builds.
     nonisolated static func mediaServerIdPrefix(_ playlistId: UUID, flavor: MediaServerFlavor) -> String {
-        "\(playlistId.uuidString)-\(flavor.idInfix)-"
+        CatalogID.prefix(playlistId, infix: flavor.idInfix)
     }
 }

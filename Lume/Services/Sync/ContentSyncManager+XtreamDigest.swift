@@ -115,7 +115,7 @@ extension ContentSyncManager {
     /// `id` index, since every id starts with the playlist UUID.
     private func storedRowCount(_ endpoint: XtreamDigestStore.Endpoint, playlistId: UUID) -> Int {
         let context = ModelContext(modelContainer)
-        let prefix = "\(playlistId.uuidString)-\(endpoint.idInfix)-"
+        let prefix = CatalogID.prefix(playlistId, infix: endpoint.idInfix)
         let count: Int? = switch endpoint {
         case .movies:
             try? context.fetchCount(FetchDescriptor<Movie>(predicate: #Predicate { $0.id.starts(with: prefix) }))

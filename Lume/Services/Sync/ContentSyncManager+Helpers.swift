@@ -74,60 +74,15 @@ extension ContentSyncManager {
         }
     }
 
-    // MARK: - Existing-row lookups for in-place upsert
+    // MARK: - Provider field application
 
     // Content sync updates existing rows in place rather than inserting a fresh
     // model with the same unique id: an upsert replaces the whole stored row and
     // resets every field the sync doesn't set (isFavorite, watchProgress,
     // lastWatchedDate, isHidden, customOrder, favoriteOrder, TMDB enrichment…),
-    // which previously wiped favorites and recently-watched on every sync. These
-    // helpers fetch the rows for a batch, keyed by id, so the caller can mutate
-    // the stored instance when present and insert only genuinely new items.
-
-    func existingMovies(in batch: ArraySlice<XtreamVODStream>, playlistId: UUID, context: ModelContext) -> [String: Movie] {
-        let ids = batch.compactMap { dto -> String? in
-            guard let streamId = dto.streamId else { return nil }
-            return "\(playlistId.uuidString)-movie-\(streamId)"
-        }
-        var lookup: [String: Movie] = [:]
-        lookup.reserveCapacity(ids.count)
-        for movie in (try? context.fetch(
-            FetchDescriptor<Movie>(predicate: #Predicate { ids.contains($0.id) })
-        )) ?? [] {
-            lookup[movie.id] = movie
-        }
-        return lookup
-    }
-
-    func existingSeries(in batch: ArraySlice<XtreamSeries>, playlistId: UUID, context: ModelContext) -> [String: Series] {
-        let ids = batch.compactMap { dto -> String? in
-            guard let seriesId = dto.seriesId else { return nil }
-            return "\(playlistId.uuidString)-series-\(seriesId)"
-        }
-        var lookup: [String: Series] = [:]
-        lookup.reserveCapacity(ids.count)
-        for series in (try? context.fetch(
-            FetchDescriptor<Series>(predicate: #Predicate { ids.contains($0.id) })
-        )) ?? [] {
-            lookup[series.id] = series
-        }
-        return lookup
-    }
-
-    func existingLiveStreams(in batch: ArraySlice<XtreamLiveStream>, playlistId: UUID, context: ModelContext) -> [String: LiveStream] {
-        let ids = batch.compactMap { dto -> String? in
-            guard let streamId = dto.streamId else { return nil }
-            return "\(playlistId.uuidString)-live-\(streamId)"
-        }
-        var lookup: [String: LiveStream] = [:]
-        lookup.reserveCapacity(ids.count)
-        for stream in (try? context.fetch(
-            FetchDescriptor<LiveStream>(predicate: #Predicate { ids.contains($0.id) })
-        )) ?? [] {
-            lookup[stream.id] = stream
-        }
-        return lookup
-    }
+    // which previously wiped favorites and recently-watched on every sync.
+    // CatalogUpsert owns batch identity; the appliers below mutate only the
+    // provider fields of that instance and avoid dirtying unchanged rows.
 
     /// Copies the provider-owned fields from a movie DTO onto an existing or
     /// freshly-inserted `Movie`, leaving user state and TMDB enrichment intact.
@@ -249,7 +204,7 @@ extension ContentSyncManager {
     /// Strict imports must stop on a failed lookup rather than replace stored
     /// user state. The legacy streaming M3U path retains its best-effort wrapper.
     func fetchCategoryLookup(context: ModelContext, playlistId: UUID, type: CategoryType) throws -> [String: Category] {
-        let prefix = "\(playlistId.uuidString)-\(type.rawValue)-"
+        let prefix = CatalogID.prefix(playlistId, infix: type.rawValue)
         let descriptor = FetchDescriptor<Category>(
             predicate: #Predicate { $0.id.starts(with: prefix) }
         )

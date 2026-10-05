@@ -253,28 +253,14 @@ extension ContentSyncManager {
     private func upsertPlexMovies(_ items: [PlexMetadata], scope: PlexSectionScope) throws -> Set<String> {
         let context = ModelContext(modelContainer)
         context.autosaveEnabled = false
-        let ids = items.map { scope.idPrefix + $0.ratingKey }
-        var lookup: [String: Movie] = [:]
-        let existing = (try? context.fetch(FetchDescriptor<Movie>(predicate: #Predicate { ids.contains($0.id) }))) ?? []
-        for movie in existing {
-            lookup[movie.id] = movie
-        }
-
-        for item in items {
-            let id = scope.idPrefix + item.ratingKey
-            let movie: Movie
-            if let found = lookup[id] {
-                movie = found
-            } else {
-                movie = Movie(id: id, streamId: Self.plexStreamId(item.ratingKey), name: item.title ?? "")
-                context.insert(movie)
-            }
-            applyPlexMovieFields(item, to: movie, scope: scope)
-        }
+        let seen = try CatalogUpsert.batch(items, context: context,
+                                           identity: { scope.idPrefix + $0.ratingKey },
+                                           create: { item, id in Movie(id: id, streamId: Self.plexStreamId(item.ratingKey), name: item.title ?? "") },
+                                           apply: { applyPlexMovieFields($0, to: $1, scope: scope) })
         if context.hasChanges {
             try context.save()
         }
-        return Set(ids)
+        return Set(seen)
     }
 
     /// Copies the server-owned fields onto the row, leaving user state
@@ -357,7 +343,7 @@ extension ContentSyncManager {
 
     /// The prefix every Plex row of this playlist carries.
     nonisolated static func plexIdPrefix(_ playlistId: UUID) -> String {
-        "\(playlistId.uuidString)-plex-"
+        CatalogID.prefix(playlistId, infix: "plex")
     }
 
     // MARK: - Helpers

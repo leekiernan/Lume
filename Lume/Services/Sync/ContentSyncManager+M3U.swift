@@ -194,11 +194,11 @@ nonisolated enum M3UIdentity {
     // the shape by hand would silently measure inserts once this changed.
 
     static func seriesId(playlistId: UUID, name: String) -> String {
-        "\(playlistId.uuidString)-series-\(key(for: name))"
+        CatalogID.content(playlistId, kind: .series, key: key(for: name))
     }
 
     static func episodeId(seriesId: String, url: String) -> String {
-        "\(seriesId)-episode-\(key(for: url))"
+        CatalogID.episode(ownerID: seriesId, key: key(for: url))
     }
 }
 
@@ -340,15 +340,9 @@ extension ContentSyncManager {
 
     private func importLive(_ entries: [M3UEntry], playlistId: UUID, state: M3UImportState, context: ModelContext) {
         guard !entries.isEmpty else { return }
-        let ids = entries.map { "\(playlistId.uuidString)-live-\(M3UIdentity.key(for: $0.url))" }
+        let ids = entries.map { CatalogID.content(playlistId, kind: .live, key: M3UIdentity.key(for: $0.url)) }
         state.seenLiveIds.formUnion(ids.lazy.map(M3UIdentity.hash64))
-        var existing: [String: LiveStream] = [:]
-        let fetched = (try? context.fetch(
-            FetchDescriptor<LiveStream>(predicate: #Predicate { ids.contains($0.id) })
-        )) ?? []
-        for stream in fetched {
-            existing[stream.id] = stream
-        }
+        var existing = (try? CatalogUpsert.lookup(LiveStream.self, ids: ids, context: context)) ?? [:]
 
         for (entry, id) in zip(entries, ids) {
             let stream: LiveStream
@@ -376,15 +370,9 @@ extension ContentSyncManager {
 
     private func importMovies(_ entries: [M3UEntry], playlistId: UUID, state: M3UImportState, context: ModelContext) {
         guard !entries.isEmpty else { return }
-        let ids = entries.map { "\(playlistId.uuidString)-movie-\(M3UIdentity.key(for: $0.url))" }
+        let ids = entries.map { CatalogID.content(playlistId, kind: .movie, key: M3UIdentity.key(for: $0.url)) }
         state.seenMovieIds.formUnion(ids.lazy.map(M3UIdentity.hash64))
-        var existing: [String: Movie] = [:]
-        let fetched = (try? context.fetch(
-            FetchDescriptor<Movie>(predicate: #Predicate { ids.contains($0.id) })
-        )) ?? []
-        for movie in fetched {
-            existing[movie.id] = movie
-        }
+        var existing = (try? CatalogUpsert.lookup(Movie.self, ids: ids, context: context)) ?? [:]
 
         for (entry, id) in zip(entries, ids) {
             let movie: Movie

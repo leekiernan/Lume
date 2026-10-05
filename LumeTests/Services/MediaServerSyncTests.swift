@@ -179,6 +179,45 @@ struct MediaServerSyncTests {
 
     // MARK: Full sync
 
+    @Test func `duplicate page identities preserve a single stored title and episode`() async throws {
+        let host = uniqueHost()
+        defer { JellyfinServerStubProtocol.remove(host: host) }
+        let episode = jellyfinEpisode(id: "e1", name: "Pilot", seriesId: "s1", seriesName: "Show", season: 1, number: 1)
+        installFullServer(host: host,
+                          movies: [jellyfinMovie(id: "m1", name: "First"), jellyfinMovie(id: "m1", name: "Last")],
+                          series: [jellyfinSeries(id: "s1", name: "Show"), jellyfinSeries(id: "s1", name: "Show")],
+                          episodes: [episode, episode])
+        let container = try makeTestContainer()
+        let playlist = try makePlaylist(container: container, host: host)
+        let manager = makeManager(container: container)
+        try await manager.syncPlaylist(playlist)
+        let context = ModelContext(container)
+        #expect(try context.fetchCount(FetchDescriptor<Movie>()) == 1)
+        #expect(try context.fetchCount(FetchDescriptor<Series>()) == 1)
+        #expect(try context.fetchCount(FetchDescriptor<Episode>()) == 1)
+        let movie = try #require(try context.fetch(FetchDescriptor<Movie>()).first)
+        let show = try #require(try context.fetch(FetchDescriptor<Series>()).first)
+        let storedEpisode = try #require(try context.fetch(FetchDescriptor<Episode>()).first)
+        #expect(movie.name == "Last")
+        movie.isFavorite = true
+        movie.watchProgress = 123
+        movie.posterPath = "/enriched.jpg"
+        show.isFavorite = true
+        storedEpisode.watchProgress = 456
+        try context.save()
+        let identity = storedEpisode.persistentModelID
+        try await manager.syncPlaylist(playlist)
+        let check = ModelContext(container)
+        let checkedMovie = try #require(try check.fetch(FetchDescriptor<Movie>()).first)
+        let checkedShow = try #require(try check.fetch(FetchDescriptor<Series>()).first)
+        let checkedEpisode = try #require(try check.fetch(FetchDescriptor<Episode>()).first)
+        #expect(checkedMovie.isFavorite && checkedMovie.watchProgress == 123)
+        #expect(checkedMovie.posterPath == "/enriched.jpg")
+        #expect(checkedShow.isFavorite && checkedEpisode.watchProgress == 456)
+        #expect(checkedEpisode.persistentModelID == identity)
+        #expect(checkedEpisode.series?.id == checkedShow.id)
+    }
+
     @Test func `a full sync imports movies, series, episodes and categories`() async throws {
         let host = uniqueHost()
         defer { JellyfinServerStubProtocol.remove(host: host) }
