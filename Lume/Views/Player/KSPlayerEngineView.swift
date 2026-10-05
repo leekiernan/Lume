@@ -381,38 +381,21 @@ struct KSPlayerEngineView: View {
         }
 
         func showControls() {
-            chrome.show()
-            scheduleHide()
-        }
-
-        /// Dismiss the controls overlay (Menu button when no panel is open). A
-        /// second Menu press, with the controls hidden, dismisses the player.
-        private func hideControls() {
-            chrome.hide()
+            chrome.show(mayHide: { canAutoHideControls })
         }
 
         private func handleMenuPress() {
-            if loadFailed {
-                closePlayer()
-            } else if isChannelBrowserOpen {
-                closeChannelBrowser()
-            } else if isPanelOpen {
-                panelCloseToken += 1
-            } else if isControlsVisible {
-                hideControls()
-            } else if remoteBridge?.claimsBack() != true {
-                closePlayer()
-            }
+            chrome.menu(
+                .init(failed: loadFailed, browserOpen: isChannelBrowserOpen, panelOpen: isPanelOpen),
+                claimsBack: { remoteBridge?.claimsBack() == true }, closeBrowser: closeChannelBrowser,
+                closePanel: { panelCloseToken += 1 }, closePlayer: closePlayer
+            )
         }
 
         /// Keep the controls pinned open while an overlay panel is showing.
         private func setPanelOpen(_ open: Bool) {
             isPanelOpen = open
-            if open {
-                chrome.suspend()
-            } else {
-                scheduleHide()
-            }
+            chrome.panelChanged(isOpen: open, mayHide: { canAutoHideControls })
         }
     #endif
 

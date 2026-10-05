@@ -52,8 +52,7 @@ import SwiftUI
         }
 
         func toggleControls() {
-            chrome.toggle()
-            if isControlsVisible { scheduleHide() }
+            chrome.toggle(mayHide: { canAutoHideControls })
         }
     }
 

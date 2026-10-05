@@ -332,79 +332,54 @@ struct VLCPlayerEngineView: View {
         /// edge. Picking a channel switches the stream and surfaces the controls
         /// briefly so the new channel's name and EPG act as a banner.
         private var channelBrowser: some View {
-            TVChannelBrowserOverlay(
-                media: media,
-                onSelect: { target in
-                    onSelectMedia?(target)
-                    withAnimation(.easeInOut(duration: 0.25)) { isChannelBrowserOpen = false }
-                    showControls()
-                },
+            TVPlayerChannelBrowser(
+                media: media, isPresented: $isChannelBrowserOpen, chrome: chrome,
+                mayHide: { canAutoHideControls }, onSelect: { onSelectMedia?($0) },
                 onClose: { closeChannelBrowser() }
             )
-            .transition(.move(edge: .leading).combined(with: .opacity))
         }
 
         private func openChannelBrowser() {
-            guard media.isLive, !isChannelBrowserOpen else { return }
-            chrome.suspend()
-            withAnimation(.easeInOut(duration: 0.25)) { isChannelBrowserOpen = true }
+            chrome.openBrowser(isLive: media.isLive, isPresented: $isChannelBrowserOpen)
         }
 
         private func closeChannelBrowser() {
-            withAnimation(.easeInOut(duration: 0.25)) { isChannelBrowserOpen = false }
-            scheduleHide()
+            chrome.closeBrowser(isPresented: $isChannelBrowserOpen, mayHide: { canAutoHideControls })
             // Hand focus back to the tap-catcher so the remote keeps working.
             Task { @MainActor in catcherFocused = true }
         }
     #endif
 
     private func toggleControls() {
-        chrome.toggle()
-        if isControlsVisible { scheduleHide() }
+        chrome.toggle(mayHide: { canAutoHideControls })
     }
 
     func showControls() {
-        chrome.show()
-        scheduleHide()
-    }
-
-    /// Dismiss the controls overlay (Menu button when no panel is open). A
-    /// second Menu press, with the controls hidden, dismisses the player.
-    private func hideControls() {
-        chrome.hide()
+        chrome.show(mayHide: { canAutoHideControls })
     }
 
     /// Menu/back routing: close the channel browser or an open panel first,
     /// then hide the controls, and only dismiss the player once the controls
     /// are already hidden.
     private func handleMenuPress() {
-        if loadFailed {
-            closePlayer()
-            return
-        }
         #if os(tvOS)
-            if isChannelBrowserOpen {
-                closeChannelBrowser()
-                return
-            }
+            let browserOpen = isChannelBrowserOpen
+            let closeBrowser = closeChannelBrowser
+        #else
+            let browserOpen = false
+            let closeBrowser = {}
         #endif
-        if isPanelOpen {
-            panelCloseToken += 1
-        } else if isControlsVisible {
-            hideControls()
-        } else if remoteBridge?.claimsBack() != true {
-            closePlayer()
-        }
+        chrome.menu(
+            .init(failed: loadFailed, browserOpen: browserOpen, panelOpen: isPanelOpen),
+            claimsBack: { remoteBridge?.claimsBack() == true }, closeBrowser: closeBrowser,
+            closePanel: { panelCloseToken += 1 }, closePlayer: closePlayer
+        )
     }
 
     /// Keep the controls pinned open while an overlay panel is showing.
     private func setPanelOpen(_ open: Bool) {
         isPanelOpen = open
-        if open {
-            chrome.suspend()
-        } else {
-            scheduleHide()
-        }
+        chrome.panelChanged(isOpen: open, mayHide: { canAutoHideControls })
     }
 
     private var canAutoHideControls: Bool {
