@@ -48,4 +48,24 @@ final class SettingsTests: XCTestCase {
         let nameLabel = app.staticTexts["Name"]
         XCTAssertTrue(nameLabel.waitForExistence(timeout: 10))
     }
+
+    func testLiveTVCategoriesRemainASeparateSettingsDestination() {
+        openSettings()
+        let library = app.buttons["Library"].firstMatch
+        XCTAssertTrue(app.scrollUntilExists(library), "Library settings row never appeared")
+        library.tap()
+        XCTAssertTrue(app.navigationBars["Library"].waitForExistence(timeout: 10))
+        app.buttons["Live TV"].firstMatch.tap()
+        XCTAssertTrue(app.navigationBars["Live TV"].waitForExistence(timeout: 10))
+
+        let categories = app.buttons["Categories"].firstMatch
+        XCTAssertTrue(categories.waitForExistence(timeout: 10))
+        XCTAssertFalse(app.navigationBars["Categories"].exists)
+        categories.tap()
+        XCTAssertTrue(app.navigationBars["Categories"].waitForExistence(timeout: 10))
+
+        app.navigationBars["Categories"].buttons.element(boundBy: 0).tap()
+        XCTAssertTrue(app.navigationBars["Live TV"].waitForExistence(timeout: 10))
+        XCTAssertTrue(categories.exists)
+    }
 }

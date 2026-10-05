@@ -101,9 +101,30 @@
             if let surface = area.sectionSurface {
                 SectionLayoutSettingsView(surface: surface, categoryType: area.categoryType)
             } else if let type = area.categoryType {
-                // Live TV has no configurable rows — its categories *are* the
-                // screen, so skip the intermediate level entirely.
-                ContentManagementView(fixedType: type)
+                // Provider categories are a separate drill-in, just as they
+                // are for Movies/Series, not a substitute for home sections.
+                List {
+                    LibraryCategorySettingsSection(categoryType: type)
+                }
+                .platformNavigationTitle(area.title)
+            }
+        }
+    }
+
+    /// Provider-category management stays distinct from an area's home rows.
+    /// Shared by the section-based areas and Live TV's category-only settings.
+    struct LibraryCategorySettingsSection: View {
+        let categoryType: CategoryType
+
+        var body: some View {
+            Section {
+                NavigationLink {
+                    ContentManagementView(fixedType: categoryType)
+                } label: {
+                    Label("Categories", systemImage: "square.grid.2x2")
+                }
+            } footer: {
+                Text("Hide and reorder the categories your provider supplies, and choose what appears in the browse sidebar.")
             }
         }
     }

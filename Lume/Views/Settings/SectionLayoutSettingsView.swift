@@ -83,15 +83,7 @@
                 }
 
                 if let categoryType {
-                    Section {
-                        NavigationLink {
-                            ContentManagementView(fixedType: categoryType)
-                        } label: {
-                            Label("Categories", systemImage: "square.grid.2x2")
-                        }
-                    } footer: {
-                        Text("Hide and reorder the categories your provider supplies, and choose what appears in the browse sidebar.")
-                    }
+                    LibraryCategorySettingsSection(categoryType: categoryType)
                 }
             }
             // Seeded here as well as on the page itself, so the starting hero is
