@@ -172,14 +172,12 @@ import SwiftUI
                     Button {
                         playlist.syncEnabled.toggle()
                     } label: {
-                        HStack(spacing: 16) {
+                        TVSettingsToggleLabel(isOn: playlist.syncEnabled) {
                             Text("Sync Enabled")
-                            Spacer(minLength: 0)
-                            Text(playlist.syncEnabled ? "On" : "Off")
-                                .foregroundStyle(.secondary)
                         }
                     }
                     .buttonStyle(TVSettingsRowButtonStyle())
+                    .accessibilityValue(playlist.syncEnabled ? Text("On") : Text("Off"))
 
                     // Unconditional — see the iOS pane: the states worth
                     // reading were the ones that used to render as no row.

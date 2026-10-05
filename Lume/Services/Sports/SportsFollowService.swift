@@ -56,6 +56,12 @@ final class SportsFollowService {
     private var container: ModelContainer?
     private var profileManager: ProfileManager?
     private let defaults: UserDefaults
+    private let preferences: UserDefaults
+    /// Sync retains its follow source; the back-reference must not keep both
+    /// services (and the preferences observer) alive after their owner releases them.
+    @ObservationIgnored private weak var sync: SportsSyncService?
+    private var lastAvailability: SportsAvailability?
+    @ObservationIgnored private nonisolated(unsafe) var preferencesObserver: (any NSObjectProtocol)?
 
     /// The followed ids, mirrored into a lock so `SportsSyncService` can read them
     /// off the main actor through `SportsFollowSource`. Kept in step with `follows`.
@@ -66,8 +72,14 @@ final class SportsFollowService {
         var teams: [String] = []
     }
 
-    init(defaults: UserDefaults = .standard) {
+    init(defaults: UserDefaults = .standard, preferences: UserDefaults = .standard, sync: SportsSyncService? = nil) {
         self.defaults = defaults
+        self.preferences = preferences
+        self.sync = sync ?? .shared
+    }
+
+    deinit {
+        if let preferencesObserver { NotificationCenter.default.removeObserver(preferencesObserver) }
     }
 
     /// Wire the cloud store (and, in the app, the `ProfileManager` whose active
@@ -77,6 +89,7 @@ final class SportsFollowService {
         self.container = container
         self.profileManager = profileManager
         reload()
+        observePreferences()
         observeProfileSwitch()
     }
 
@@ -89,6 +102,10 @@ final class SportsFollowService {
     /// `CloudSyncEngine`.
     private var currentProfileID: UUID {
         profileManager?.activeProfileID ?? ActiveProfileStore.current ?? UserProfile.defaultProfileID
+    }
+
+    private var availability: SportsAvailability {
+        SportsAvailability.read(defaults: preferences)
     }
 
     // MARK: - Reads
@@ -108,7 +125,7 @@ final class SportsFollowService {
     /// Follow a league or team, appended to the end of the profile's order. A
     /// no-op when it is already followed.
     func follow(_ key: String, kind: SportsFollowKind) {
-        guard SportsSyncService.isEnabled, let context, !isFollowing(key) else { return }
+        guard availability.isEnabled, let context, !isFollowing(key) else { return }
         let nextOrder = (follows.map(\.sortOrder).max() ?? -1) + 1
         context.insert(SyncedSportsFollow(
             key: key,
@@ -132,7 +149,7 @@ final class SportsFollowService {
 
     /// Unfollow, removing every mirror row for this key under the active profile.
     func unfollow(_ key: String) {
-        guard SportsSyncService.isEnabled, let context else { return }
+        guard availability.isEnabled, let context else { return }
         for row in fetchRows() where row.key == key {
             context.delete(row)
         }
@@ -143,7 +160,7 @@ final class SportsFollowService {
     /// Reorder the follow list (from an `onMove`), rewriting every row's
     /// `sortOrder` to its new position.
     func move(fromOffsets source: IndexSet, toOffset destination: Int) {
-        guard SportsSyncService.isEnabled, let context else { return }
+        guard availability.isEnabled, let context else { return }
         var reordered = follows
         reordered.move(fromOffsets: source, toOffset: destination)
         let rowsByKey = Dictionary(fetchRows().map { ($0.key, $0) }, uniquingKeysWith: { first, _ in first })
@@ -162,7 +179,7 @@ final class SportsFollowService {
     /// `IndexSet`/offset move the iOS list uses), so it hands back the finished
     /// array here.
     func setOrder(_ ordered: [SportsFollow]) {
-        guard SportsSyncService.isEnabled, let context else { return }
+        guard availability.isEnabled, let context else { return }
         let rowsByKey = Dictionary(fetchRows().map { ($0.key, $0) }, uniquingKeysWith: { first, _ in first })
         let now = Date()
         for (index, follow) in ordered.enumerated() {
@@ -181,10 +198,17 @@ final class SportsFollowService {
     /// switch, and after each reconcile.
     func reload() {
         guard container != nil else { return }
-        SportsSyncService.shared.availabilityDidChange()
-        guard SportsSyncService.isEnabled else {
+        // A switch persists its id before the cloud swap returns to the manager.
+        // Wait for the manager's publication rather than pairing old follows with
+        // the new profile's preferences during that interval.
+        if let profileManager, profileManager.activeProfileID != ActiveProfileStore.current { return }
+        let availability = availability
+        let availabilityChanged = lastAvailability != availability
+        lastAvailability = availability
+        guard availability.isEnabled else {
             follows = []
             publishSnapshot([])
+            if availabilityChanged { sync?.availabilityDidChange() }
             return
         }
         bootstrapPreFollowsIfNeeded()
@@ -196,14 +220,17 @@ final class SportsFollowService {
             )
         }
         let gained = Set(loaded.map(\.key)).subtracting(follows.map(\.key))
+        let followsChanged = loaded != follows
         follows = loaded
         publishSnapshot(loaded)
+        // Warm only after the sync service can read the newly published follows.
+        if availabilityChanged || followsChanged { sync?.availabilityDidChange() }
         // Follows that arrived from elsewhere — an iCloud reconcile landing
         // another device's teams, a profile switch, the first-run pre-follows —
         // need their leagues fetched now. The Home rail hides itself while it
         // has no fixtures, so it can never ask for them on its own.
-        if !gained.isEmpty {
-            SportsSyncService.shared.refreshIfStale()
+        if availabilityChanged || !gained.isEmpty {
+            sync?.refreshIfStale()
         }
     }
 
@@ -230,7 +257,7 @@ final class SportsFollowService {
     /// profile. The stamp is set on the first attempt whether or not rows are
     /// written, so a user who later removes every pre-follow is not re-seeded.
     private func bootstrapPreFollowsIfNeeded() {
-        guard SportsSyncService.isEnabled, let context else { return }
+        guard availability.isEnabled, let context else { return }
         let profileID = currentProfileID
         let stampKey = Self.preFollowStampKey(for: profileID)
         guard !defaults.bool(forKey: stampKey) else { return }
@@ -258,6 +285,21 @@ final class SportsFollowService {
     }
 
     // MARK: - Profile-switch observation
+
+    /// Settings and cloud preference imports both write defaults. Observing at
+    /// the service boundary also works when no tab or Settings view is mounted.
+    /// Defer out of the write/view update and ignore unrelated preference churn.
+    private func observePreferences() {
+        guard preferencesObserver == nil else { return }
+        preferencesObserver = NotificationCenter.default.addObserver(
+            forName: UserDefaults.didChangeNotification, object: preferences, queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                guard let self, availability != lastAvailability else { return }
+                reload()
+            }
+        }
+    }
 
     /// Re-read follows whenever the active profile changes. `withObservationTracking`
     /// fires once, so the change handler re-arms it.

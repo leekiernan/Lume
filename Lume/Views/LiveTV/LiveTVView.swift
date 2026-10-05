@@ -9,25 +9,10 @@
 import SwiftData
 import SwiftUI
 
-/// How the Live TV detail area presents channels: a scannable list (default) or
-/// the EPG timeline grid. Persisted across launches.
-enum LiveTVLayoutMode: String, CaseIterable, Identifiable {
-    case list
-    case guide
-
-    var id: String {
-        rawValue
-    }
-
+extension LiveTVLayoutMode {
     var label: LocalizedStringKey {
         self == .list ? "List" : "Guide"
     }
-
-    var systemImage: String {
-        self == .list ? "list.bullet" : "tablecells"
-    }
-
-    static let storageKey = "lume.liveTV.layoutMode"
 }
 
 struct LiveTVView: View {
@@ -93,7 +78,7 @@ struct LiveTVView: View {
     @AppStorage(LiveTVLayoutMode.storageKey) private var layoutModeRaw: String = LiveTVLayoutMode.list.rawValue
 
     private var layoutMode: LiveTVLayoutMode {
-        LiveTVLayoutMode(rawValue: layoutModeRaw) ?? .list
+        LiveTVLayoutMode.resolved(layoutModeRaw)
     }
 
     /// MainTabView supplies the same active scope as Movies/Series. Query
@@ -107,9 +92,12 @@ struct LiveTVView: View {
 
     /// Guide/List segmented switch shared across platforms.
     private var layoutModePicker: some View {
-        Picker("Layout", selection: $layoutModeRaw) {
+        Picker("Layout", selection: Binding(
+            get: { layoutMode },
+            set: { layoutModeRaw = $0.rawValue }
+        )) {
             ForEach(LiveTVLayoutMode.allCases) { mode in
-                Label(mode.label, systemImage: mode.systemImage).tag(mode.rawValue)
+                Label(mode.label, systemImage: mode.systemImage).tag(mode)
             }
         }
         .pickerStyle(.segmented)

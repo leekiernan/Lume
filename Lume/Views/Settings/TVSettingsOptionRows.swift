@@ -4,22 +4,41 @@
 #if os(tvOS)
     import SwiftUI
 
+    /// Presentation only: rich source subtitles, saves and focus restoration
+    /// remain owned by the button's host rather than a generic toggle action.
+    struct TVSettingsToggleLabel<Title: View>: View {
+        let isOn: Bool
+        var showsIndicator = false
+        @ViewBuilder let title: () -> Title
+
+        var body: some View {
+            HStack(spacing: 16) {
+                if showsIndicator {
+                    Image(systemName: isOn ? "checkmark.circle.fill" : "circle")
+                }
+                title()
+                Spacer(minLength: 0)
+                Text(isOn ? "On" : "Off")
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
     /// A flat toggle row matching the Apple-TV settings rows: shows On/Off and
     /// flips on Select.
     struct TVOptionToggleRow: View {
         let title: LocalizedStringKey
         @Binding var isOn: Bool
+        var showsIndicator = false
 
         var body: some View {
             Button { isOn.toggle() } label: {
-                HStack(spacing: 16) {
+                TVSettingsToggleLabel(isOn: isOn, showsIndicator: showsIndicator) {
                     Text(title)
-                    Spacer(minLength: 0)
-                    Text(isOn ? "On" : "Off")
-                        .foregroundStyle(.secondary)
                 }
             }
             .buttonStyle(TVSettingsRowButtonStyle())
+            .accessibilityValue(isOn ? Text("On") : Text("Off"))
         }
     }
 

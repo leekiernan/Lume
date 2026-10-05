@@ -166,17 +166,7 @@ import SwiftUI
                 VStack(alignment: .leading, spacing: 8) {
                     TVSettingsSectionLabel("Sports")
 
-                    Button { enabled.toggle() } label: {
-                        HStack(spacing: 16) {
-                            Image(systemName: enabled ? "checkmark.circle.fill" : "circle")
-                            Text("Show Sports")
-                            Spacer(minLength: 0)
-                            Text(enabled ? "On" : "Off")
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    .buttonStyle(TVSettingsRowButtonStyle())
-                    .accessibilityValue(enabled ? Text("On") : Text("Off"))
+                    TVOptionToggleRow(title: "Show Sports", isOn: $enabled, showsIndicator: true)
 
                     if enabled {
                         Button {
@@ -231,10 +221,6 @@ import SwiftUI
             }
             .fullScreenCover(isPresented: $showManageTeams) {
                 TVManageTeamsPane()
-            }
-            .onChange(of: enabled) { _, _ in
-                SportsSyncService.shared.availabilityDidChange()
-                SportsFollowService.shared.reload()
             }
         }
 

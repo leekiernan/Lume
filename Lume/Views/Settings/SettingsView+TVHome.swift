@@ -61,8 +61,8 @@ import SwiftUI
                         } label: {
                             Text(area.title)
                         }
-                        .buttonStyle(TVSettingsActionButtonStyle(prominent: layoutArea == area))
-                        .accessibilityAddTraits(layoutArea == area ? [.isSelected] : [])
+                        .buttonStyle(TVSettingsActionButtonStyle(prominent: !showingSportsSettings && layoutArea == area))
+                        .accessibilityAddTraits(!showingSportsSettings && layoutArea == area ? [.isSelected] : [])
                     }
 
                     Button {
@@ -88,12 +88,8 @@ import SwiftUI
                 restoringLibraryAreaToggleFocus = true
                 AppAreaSettings.setEnabled(!enabled, for: layoutArea)
             } label: {
-                HStack(spacing: 16) {
-                    Image(systemName: enabled ? "checkmark.circle.fill" : "circle")
+                TVSettingsToggleLabel(isOn: enabled, showsIndicator: true) {
                     Text("Show \(layoutArea.displayName)")
-                    Spacer(minLength: 0)
-                    Text(enabled ? "On" : "Off")
-                        .foregroundStyle(.secondary)
                 }
             }
             .buttonStyle(TVSettingsRowButtonStyle())

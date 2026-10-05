@@ -276,7 +276,7 @@
         let sourceType: PlaylistSourceType?
 
         private var layoutMode: LiveTVLayoutMode {
-            LiveTVLayoutMode(rawValue: layoutModeRaw) ?? .list
+            LiveTVLayoutMode.resolved(layoutModeRaw)
         }
 
         let contentFocusRequest: TVContentFocusRequest?
@@ -356,7 +356,7 @@
         @FocusState private var focused: Item?
 
         private var layoutMode: LiveTVLayoutMode {
-            LiveTVLayoutMode(rawValue: layoutModeRaw) ?? .list
+            LiveTVLayoutMode.resolved(layoutModeRaw)
         }
 
         var body: some View {
@@ -435,6 +435,7 @@
             }
             .buttonStyle(TVCardButtonStyle(focusScale: 1.04))
             .focused($focused, equals: .mode(mode.rawValue))
+            .accessibilityAddTraits(isActive ? [.isSelected] : [])
             .animation(.easeOut(duration: 0.18), value: isItemFocused)
         }
 

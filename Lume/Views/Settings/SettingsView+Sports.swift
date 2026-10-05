@@ -50,10 +50,6 @@ import SwiftUI
                 .sheet(isPresented: $showingManageTeams) {
                     ManageTeamsSheet()
                 }
-                .onChange(of: enabled) { _, _ in
-                    SportsSyncService.shared.availabilityDidChange()
-                    SportsFollowService.shared.reload()
-                }
         }
 
         private var teamsSection: some View {

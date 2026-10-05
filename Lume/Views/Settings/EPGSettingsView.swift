@@ -293,7 +293,7 @@ struct EPGSettingsView: View {
                     source.isEnabled.toggle()
                     try? modelContext.save()
                 } label: {
-                    HStack(spacing: 16) {
+                    TVSettingsToggleLabel(isOn: source.isEnabled) {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(source.name)
                             Text(tvSubtitle(source))
@@ -302,12 +302,10 @@ struct EPGSettingsView: View {
                                 .lineLimit(1)
                                 .truncationMode(.middle)
                         }
-                        Spacer(minLength: 0)
-                        Text(source.isEnabled ? "On" : "Off")
-                            .foregroundStyle(.secondary)
                     }
                 }
                 .buttonStyle(TVSettingsRowButtonStyle())
+                .accessibilityValue(source.isEnabled ? Text("On") : Text("Off"))
 
                 if source.isManual {
                     Button {

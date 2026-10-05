@@ -181,13 +181,6 @@ struct MainTabView: View {
         #endif
             .onChange(of: policy, initial: true) { _, _ in repairSelectionIfNeeded() }
             .onChange(of: activeProfileToken) { _, _ in repairSelectionIfNeeded() }
-            .onChange(of: disabledAreasRaw) { _, _ in
-                SportsSyncService.shared.availabilityDidChange()
-                SportsFollowService.shared.reload()
-            }
-            .onChange(of: sportsEnabled) { _, _ in
-                SportsSyncService.shared.availabilityDidChange()
-            }
         #if os(tvOS)
             .disabled(blockingOverlayOwnsScreen || router.isQuickSwitchPresented)
             .background(
