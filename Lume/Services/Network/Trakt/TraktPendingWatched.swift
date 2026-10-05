@@ -148,6 +148,9 @@ nonisolated enum TraktPendingWatchedStore {
                 return
             }
             do {
+                // Resolving Application Support does not create it on a fresh
+                // install. Ensure it exists before the atomic file write.
+                try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
                 try JSONEncoder().encode(state).write(to: url, options: .atomic)
                 var resourceValues = URLResourceValues()
                 resourceValues.isExcludedFromBackup = true
