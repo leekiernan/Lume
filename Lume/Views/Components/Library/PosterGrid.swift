@@ -32,8 +32,7 @@ struct CatalogPosterLink<Item: Identifiable & Hashable & WatchlistFavoritable, C
         }
         .posterCardButtonStyle()
         .mediaFavoriteMenu(
-            isFavorite: { item.isFavorite },
-            onToggleFavorite: { MediaFavorites.toggle(item, in: modelContext) },
+            item, in: modelContext,
             onRemoveFromRecents: onRemoveFromRecents
         )
     }

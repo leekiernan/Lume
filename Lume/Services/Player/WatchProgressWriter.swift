@@ -72,7 +72,8 @@ actor WatchProgressWriter {
         ref: PlayableMedia.ContentRef,
         progress: TimeInterval,
         duration: TimeInterval,
-        holdLive: Bool = false
+        holdLive: Bool = false,
+        recordedAt: Date = .now
     ) -> WatchedChange? {
         guard progress > 0 else { return nil }
 
@@ -81,8 +82,10 @@ actor WatchProgressWriter {
         do {
             switch ref {
             case let .movie(id):
+                guard WatchHistoryClears.shared.allows(recordedAt, for: id) else { return nil }
                 return try writeMovie(id: id, progress: progress, completed: completed, ref: ref)
             case let .episode(id):
+                guard WatchHistoryClears.shared.allows(recordedAt, for: id) else { return nil }
                 return try writeEpisode(id: id, progress: progress, completed: completed, ref: ref)
             case let .live(id):
                 if holdLive {
@@ -107,12 +110,14 @@ actor WatchProgressWriter {
     /// from the first frame, and without this the episode left behind would keep
     /// its place in Continue Watching and never reach Trakt.
     @discardableResult
-    func markWatched(ref: PlayableMedia.ContentRef, duration: TimeInterval) -> WatchedChange? {
+    func markWatched(ref: PlayableMedia.ContentRef, duration: TimeInterval, recordedAt: Date = .now) -> WatchedChange? {
         do {
             switch ref {
             case let .movie(id):
+                guard WatchHistoryClears.shared.allows(recordedAt, for: id) else { return nil }
                 return try writeMovie(id: id, progress: duration, completed: true, ref: ref)
             case let .episode(id):
+                guard WatchHistoryClears.shared.allows(recordedAt, for: id) else { return nil }
                 return try writeEpisode(id: id, progress: duration, completed: true, ref: ref)
             case .live:
                 return nil

@@ -287,13 +287,7 @@
         }
 
         private func toggleWatched() {
-            movie.isWatched.toggle()
-            if !movie.isWatched { ContentClearLedger.shared.record(movie.id) }
-            if movie.isWatched {
-                movie.watchProgress = Double(movie.durationSecs ?? 0)
-            }
-            TraktService.shared.syncWatched(movie: movie, watched: movie.isWatched)
-            SimklService.shared.syncWatched(movie: movie, watched: movie.isWatched)
+            MediaWatchState.setWatched(!movie.isWatched, movie: movie, in: modelContext)
         }
     }
 

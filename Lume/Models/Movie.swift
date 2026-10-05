@@ -1,6 +1,20 @@
 import Foundation
 import SwiftData
 
+extension Movie {
+    /// Manual finish/reset, not clock-driven playback progress.
+    func setWatched(_ watched: Bool) {
+        isWatched = watched
+        watchProgress = watched ? Double(durationSecs ?? 0) : 0
+        lastWatchedDate = watched ? .now : nil
+        if !watched {
+            ContentClearLedger.shared.record(id)
+            WatchHistoryClears.shared.record(id)
+        }
+        RecentResumePoints.record(watchProgress, for: .movie(id))
+    }
+}
+
 @Model
 final class Movie {
     // Home's trending/watchlist rows look titles up by `tmdbId`. The home

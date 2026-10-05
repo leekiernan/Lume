@@ -385,7 +385,7 @@ struct SeriesDetailView: View {
                                 episode: episode,
                                 playlist: seriesPlaylist,
                                 onPlay: { playEpisode(episode) },
-                                onToggleWatched: { toggleWatched(episode) },
+                                onSetWatched: { MediaWatchState.setWatched($0, episode: episode, in: modelContext) },
                                 onMarkPreviousWatched: { markPreviousWatched(episode) },
                                 onMarkFollowingUnwatched: { markFollowingUnwatched(episode) }
                             )
@@ -414,18 +414,6 @@ private extension SeriesDetailView {
 
     func toggleFavorite() {
         MediaFavorites.toggle(series, in: modelContext)
-    }
-
-    func toggleWatched(_ episode: Episode) {
-        episode.setWatched(!episode.isWatched)
-        TraktService.shared.syncWatched(episode: episode, watched: episode.isWatched)
-        SimklService.shared.syncWatched(episode: episode, watched: episode.isWatched)
-        #if !os(tvOS)
-            if episode.isWatched {
-                downloads.checkAutoDelete(id: episode.id)
-            }
-        #endif
-        try? modelContext.save()
     }
 
     func markPreviousWatched(_ episode: Episode) {

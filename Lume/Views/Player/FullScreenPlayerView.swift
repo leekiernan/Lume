@@ -533,6 +533,7 @@ struct FullScreenPlayerView: View {
         if ref == completedRef { return }
         let now = clock.current
         let total = clock.duration
+        let recordedAt = Date.now
         // What was written, so a resume point that looks wrong can be checked
         // against a diagnostics report.
         Logger.player.info("progress saved: \(now, format: .fixed(precision: 1))s of \(total, format: .fixed(precision: 0))s")
@@ -546,7 +547,7 @@ struct FullScreenPlayerView: View {
         let previous = pendingProgressWrite
         pendingProgressWrite = Task { @MainActor in
             await previous?.value
-            if let change = await writer.record(ref: ref, progress: now, duration: total, holdLive: holdingLive) {
+            if let change = await writer.record(ref: ref, progress: now, duration: total, holdLive: holdingLive, recordedAt: recordedAt) {
                 applyWatchedChange(change)
             }
         }

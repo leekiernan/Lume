@@ -301,6 +301,7 @@ final class ProfileManager {
         }
         await coordinator.purgeProfileData(profile.id)
         LiveChannelHistory.purge(profileID: profile.id)
+        WatchHistoryClears.shared.purge(profileID: profile.id)
         context.delete(profile)
         try? context.save()
         refreshProfiles()
