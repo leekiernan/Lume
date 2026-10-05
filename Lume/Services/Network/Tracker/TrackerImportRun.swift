@@ -1,5 +1,5 @@
 //
-//  TrackerImportScope.swift
+//  TrackerImportRun.swift
 //  Lume
 //
 //  Whose history a tracker import may write. An import fetches the account's
@@ -11,18 +11,25 @@
 
 import Foundation
 
-struct TrackerImportScope: Equatable {
-    let account: String?
-    let profileID: UUID?
+/// Import and parked-progress authorization use the same identity value.
+/// Outbox readiness remains an import-only gate, not part of that identity.
+nonisolated extension TrackerScope {
+    var account: String? {
+        accountID
+    }
+
+    init(account: String?, profileID: UUID?) {
+        self.init(profileID: profileID, accountID: account)
+    }
 
     /// Taken once the outbox has been flushed: local changes go up before the
     /// history comes down, so the import can't undo them. `nil` while some are
     /// still pending (offline, or the flush failed); the import waits for the
     /// next one.
     @MainActor
-    static func begin(after queue: TrackerMutationQueue<some Any>) async -> TrackerImportScope? {
+    static func begin(after queue: TrackerMutationQueue<some Any>) async -> TrackerScope? {
         guard let account = queue.account, !account.isEmpty else { return nil }
-        let scope = TrackerImportScope(account: account, profileID: ActiveProfileStore.current)
+        let scope = TrackerScope(account: account, profileID: ActiveProfileStore.current)
         await queue.flush()
         guard scope.isCurrent(isConnected: true, account: queue.account, pendingCount: queue.pendingCount) else {
             return nil
@@ -38,7 +45,7 @@ struct TrackerImportScope: Equatable {
         pendingCount: Int,
         profileID: UUID? = ActiveProfileStore.current
     ) -> Bool {
-        isConnected && account == self.account && pendingCount == 0 && profileID == self.profileID
+        isConnected && pendingCount == 0 && matches(Self(profileID: profileID, accountID: account))
     }
 }
 
@@ -60,13 +67,13 @@ enum TrackerImportOutcome<Summary> {
 /// provider-specific steps; the order and the gates are fixed here, where a
 /// test can change the scope mid-fetch.
 struct TrackerImportRun<Items, Summary> {
-    var begin: () async -> TrackerImportScope?
+    var begin: () async -> TrackerScope?
     var accessToken: () async -> String?
     var fetch: (String) async throws -> Items
     /// Whether the scope taken at `begin` still holds after the fetch.
-    var isCurrent: (TrackerImportScope) -> Bool
+    var isCurrent: (TrackerScope) -> Bool
     /// Applies under the scope's profile; implementations re-check it there.
-    var apply: (Items, TrackerImportScope) async -> Summary
+    var apply: (Items, TrackerScope) async -> Summary
 
     func perform() async -> TrackerImportOutcome<Summary> {
         guard let scope = await begin(), !Task.isCancelled else { return .deferred }

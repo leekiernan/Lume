@@ -5,9 +5,21 @@ import Testing
 /// Fetched tracker history is applied only to the account and profile it was
 /// fetched for, with nothing local still waiting to go up.
 struct TrackerImportScopeTests {
+    @Test func `import and parked progress share the same authorization identity`() {
+        let importScope = TrackerScope(account: "a", profileID: profile)
+        let parked = TrackerScope(profileID: profile, accountID: "a")
+        #expect(importScope == parked)
+        #expect(importScope.matches(parked))
+        for account in [nil, ""] as [String?] {
+            let missing = TrackerScope(account: account, profileID: profile)
+            #expect(!missing.isCurrent(isConnected: true, account: account, pendingCount: 0, profileID: profile))
+            #expect(!missing.matches(missing))
+        }
+    }
+
     private let profile = UUID()
-    private var scope: TrackerImportScope {
-        TrackerImportScope(account: "a", profileID: profile)
+    private var scope: TrackerScope {
+        TrackerScope(account: "a", profileID: profile)
     }
 
     @Test func `unchanged scope may apply`() {
@@ -41,12 +53,12 @@ struct TrackerImportRunTests {
         var applied: [UUID?] = []
     }
 
-    private func run(_ live: Live, scope: TrackerImportScope? = nil, token: String? = "t",
+    private func run(_ live: Live, scope: TrackerScope? = nil, token: String? = "t",
                      duringFetch: @escaping () -> Void = {}) async -> TrackerImportOutcome<Int>
     {
         let profile = ActiveProfileStore.current
         return await TrackerImportRun(
-            begin: { scope ?? TrackerImportScope(account: live.account, profileID: profile) },
+            begin: { scope ?? TrackerScope(account: live.account, profileID: profile) },
             accessToken: { token },
             fetch: { _ in
                 live.fetches += 1
@@ -111,7 +123,7 @@ struct TrackerImportRunTests {
         ActiveProfileStore.current = UUID()
         let account = try #require(SimklAccountIdentityStore.load()?.scope)
         let summary = try await SimklService.applyImport(
-            items: SimklAllItems(movies: [], shows: []), container: makeTestContainer(), profileID: UUID(), accountID: account
+            items: SimklAllItems(movies: [], shows: []), container: makeTestContainer(), scope: .init(profileID: UUID(), accountID: account)
         )
         #expect(summary.failed)
     }
@@ -124,7 +136,7 @@ struct TrackerImportRunTests {
         let account = try #require(SimklAccountIdentityStore.load()?.scope)
         let summary = try await SimklService.applyImport(
             items: SimklAllItems(movies: [], shows: []), container: makeTestContainer(),
-            profileID: ActiveProfileStore.current, accountID: account
+            scope: .init(profileID: ActiveProfileStore.current, accountID: account)
         )
         #expect(!summary.failed)
     }
@@ -139,14 +151,14 @@ struct TrackerImportRunTests {
         for accountID in ["another-account", nil] as [String?] {
             let summary = await SimklService.applyImport(
                 items: SimklAllItems(movies: [], shows: []), container: container,
-                profileID: ActiveProfileStore.current, accountID: accountID
+                scope: .init(profileID: ActiveProfileStore.current, accountID: accountID)
             )
             #expect(summary.failed)
         }
         SimklAccountIdentityStore.clear()
         let disconnected = await SimklService.applyImport(
             items: SimklAllItems(movies: [], shows: []), container: container,
-            profileID: ActiveProfileStore.current, accountID: account
+            scope: .init(profileID: ActiveProfileStore.current, accountID: account)
         )
         #expect(disconnected.failed)
     }

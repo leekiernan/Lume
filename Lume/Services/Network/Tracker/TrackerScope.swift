@@ -1,8 +1,8 @@
 import Foundation
 
-/// Identity of derived progress waiting for episode rows. Provider files remain
-/// separate; neither another profile nor another provider account may replay it.
-nonisolated struct TrackerProgressScope: Equatable {
+/// Shared account/profile identity for imports and parked progress. Each
+/// provider supplies its own account source; neither lifecycle can cross scopes.
+nonisolated struct TrackerScope: Equatable {
     let profileID: UUID?
     let accountID: String?
 

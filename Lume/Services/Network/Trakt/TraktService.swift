@@ -289,7 +289,7 @@ final class TraktService {
 
         let container = context.container
         let outcome = await TrackerImportRun(
-            begin: { await TrackerImportScope.begin(after: self.mutations) },
+            begin: { await TrackerScope.begin(after: self.mutations) },
             accessToken: { await self.session.validAccessToken() },
             fetch: { token in
                 async let movies = self.client.watchedMovies(accessToken: token)
@@ -304,7 +304,7 @@ final class TraktService {
             apply: { history, scope in
                 await Self.applyImport(
                     movies: history.movies, shows: history.shows, paused: history.paused, container: container,
-                    scope: TrackerProgressScope(profileID: scope.profileID, accountID: scope.account)
+                    scope: scope
                 )
             }
         ).perform()
@@ -332,7 +332,7 @@ final class TraktService {
         shows: [TraktWatchedShow],
         paused: [TraktPlaybackItem]?,
         container: ModelContainer,
-        scope: TrackerProgressScope
+        scope: TrackerScope
     ) async -> TraktImportSummary {
         guard scope.matches(.trakt) else { return .failure }
         let context = ModelContext(container)

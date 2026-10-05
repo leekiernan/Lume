@@ -119,13 +119,9 @@ extension ContentSyncManager {
         try syncJellyfinCategories(views: views, type: .vod, playlistId: playlistId)
         await progress?.start(.movies)
         var seenMovies = Set<String>()
-        var incomplete: ProviderImportError?
-        for view in views {
+        let incomplete = try await walkLibraries(views, name: \.name) { view in
             let viewScope = scope(connection, playlistId: playlistId, view: view, type: .vod)
-            let walked = try await walkLibrary(view.name) {
-                try await syncJellyfinMovies(scope: viewScope, seenIds: &seenMovies, progress: progress)
-            }
-            incomplete = incomplete ?? walked
+            try await syncJellyfinMovies(scope: viewScope, seenIds: &seenMovies, progress: progress)
         }
         if incomplete == nil {
             pruneJellyfinMovies(playlistId: playlistId, flavor: connection.flavor, seenIds: seenMovies, fetched: !views.isEmpty)
@@ -143,13 +139,9 @@ extension ContentSyncManager {
         await progress?.start(.series)
         var seenSeries = Set<String>()
         var seenEpisodes = Set<String>()
-        var incomplete: ProviderImportError?
-        for view in views {
+        let incomplete = try await walkLibraries(views, name: \.name) { view in
             let viewScope = scope(connection, playlistId: playlistId, view: view, type: .series)
-            let walked = try await walkLibrary(view.name) {
-                try await syncJellyfinShows(scope: viewScope, seenSeries: &seenSeries, seenEpisodes: &seenEpisodes, progress: progress)
-            }
-            incomplete = incomplete ?? walked
+            try await syncJellyfinShows(scope: viewScope, seenSeries: &seenSeries, seenEpisodes: &seenEpisodes, progress: progress)
         }
         if incomplete == nil {
             pruneJellyfinSeries(
@@ -164,7 +156,7 @@ extension ContentSyncManager {
     private func scope(_ connection: JellyfinConnection, playlistId: UUID, view: JellyfinLibrary, type: CategoryType) -> JellyfinViewScope {
         JellyfinViewScope(
             connection: connection, playlistId: playlistId, view: view,
-            categoryId: "\(playlistId.uuidString)-\(type.rawValue)-\(view.id)"
+            categoryId: CatalogID.category(playlistId, type: type.rawValue, key: view.id)
         )
     }
 

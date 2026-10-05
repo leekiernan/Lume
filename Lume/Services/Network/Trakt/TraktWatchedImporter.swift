@@ -49,7 +49,7 @@ nonisolated enum TraktWatchedImporter {
         movies: [TraktWatchedMovie],
         shows: [TraktWatchedShow],
         in context: ModelContext,
-        pendingScope: TrackerProgressScope = .trakt
+        pendingScope: TrackerScope = .trakt
     ) -> TraktImportSummary {
         let moviesMarked = importMovies(movies, in: context)
         let shows = importShows(shows, in: context, pendingScope: pendingScope)
@@ -124,7 +124,7 @@ nonisolated enum TraktWatchedImporter {
     private static func importShows(
         _ watched: [TraktWatchedShow],
         in context: ModelContext,
-        pendingScope: TrackerProgressScope
+        pendingScope: TrackerScope
     ) -> (marked: Int, queued: Int) {
         var showsByTMDB: [Int: TraktWatchedShow] = [:]
         for show in watched {

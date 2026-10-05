@@ -65,7 +65,7 @@ extension ContentSyncManager {
     private func markStalkerCategoryImported(apiId: String, type: CategoryType, playlistId: UUID) {
         let context = ModelContext(modelContainer)
         context.autosaveEnabled = false
-        let categoryId = "\(playlistId.uuidString)-\(type.rawValue)-\(apiId)"
+        let categoryId = CatalogID.category(playlistId, type: type.rawValue, key: apiId)
         guard let category = try? context.fetch(
             FetchDescriptor<Category>(predicate: #Predicate { $0.id == categoryId })
         ).first else { return }
@@ -161,7 +161,7 @@ extension ContentSyncManager {
         for item in items {
             guard let stalkerId = item.id else { continue }
             if kind == .vod, item.cmd == nil { continue }
-            let id = "\(playlistId.uuidString)-\(elementKind)-\(Self.streamId(for: stalkerId))"
+            let id = CatalogID.prefix(playlistId, infix: elementKind) + String(Self.streamId(for: stalkerId))
             if unique.insert(id).inserted { ordered.append(id) }
         }
         return ordered

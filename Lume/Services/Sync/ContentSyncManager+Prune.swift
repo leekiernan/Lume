@@ -22,7 +22,7 @@
 //  count alone cannot: `XtreamList` drops the elements that fail to decode and
 //  only rethrows when *every* element fails, and a truncated m3u download
 //  parses cleanly into a short but valid playlist. Either arrives as a small
-//  non-empty payload that would wave the sweep through (see `sweepIsSafe`).
+//  non-empty payload that would wave the sweep through (see `allowSweep`).
 //  Every pipeline — Xtream, m3u/WebDAV, Stalker, Jellyfin/Emby and Plex —
 //  prunes through those entry points; `pruneStale*` stay visible only for the
 //  tests and benchmarks that drive a sweep directly.
@@ -141,8 +141,8 @@ extension ContentSyncManager {
     // survives in iCloud: the reconcile never reads a missing row as the user
     // clearing its state, see `ContentIntentMerge`). So the m3u sweeps take
     // the same gate as the Xtream ones: a payload must cover at least a tenth
-    // of the rows already stored, tolerated `maximumConsecutiveSweepSkips`
-    // times before a shrink is believed.
+    // of the rows already stored; CatalogSweepPolicy holds twice before a
+    // repeated shrink is believed. Unreadable storage never grants a sweep.
     //
     // Deliberate behaviour change: a provider that genuinely drops a whole
     // section now keeps those dead rows for up to two extra syncs.
@@ -203,7 +203,7 @@ extension ContentSyncManager {
     /// signal is — the m3u import's total, or a category list's own length.
     func pruneCategories(playlistId: UUID, type: CategoryType, seenApiIds: Set<String>, importedCount: Int) {
         guard importedCount > 0 else { return }
-        let prefix = "\(playlistId.uuidString)-\(type.rawValue)-"
+        let prefix = CatalogID.prefix(playlistId, infix: type.rawValue)
         let scope = FetchDescriptor<Category>(predicate: #Predicate { $0.id.starts(with: prefix) })
         guard sweepIsAllowed(
             playlistId: playlistId,
@@ -329,9 +329,9 @@ extension ContentSyncManager {
         let context = ModelContext(modelContainer)
         context.autosaveEnabled = false
 
-        // Match buildExistingCategoryLookup: the "<playlist>-<type>-" prefix
+        // Match fetchCategoryLookup: the "<playlist>-<type>-" prefix
         // scopes to this playlist and type in one index seek.
-        let prefix = "\(playlistId.uuidString)-\(type.rawValue)-"
+        let prefix = CatalogID.prefix(playlistId, infix: type.rawValue)
         let typeRaw = type.rawValue
         let descriptor = FetchDescriptor<Category>(
             predicate: #Predicate { $0.id.starts(with: prefix) }

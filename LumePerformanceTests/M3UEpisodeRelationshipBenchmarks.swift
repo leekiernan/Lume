@@ -259,27 +259,33 @@ final class M3UEpisodeRelationshipBenchmarks: XCTestCase {
             lookups = ContentSyncManager(modelContainer: store.container)
 
             startMeasuring()
-            insertEpisodes(shape: shape, playlistId: playlistId, container: store.container)
+            do {
+                try insertEpisodes(shape: shape, playlistId: playlistId, container: store.container)
+            } catch {
+                stopMeasuring()
+                XCTFail("catalog read/write failed: \(error)")
+                return
+            }
             stopMeasuring()
 
             assertCatalogWasWritten(container: store.container, shape: shape)
         }
     }
 
-    private func insertEpisodes(shape: M3UEpisodeInsertShape, playlistId: UUID, container: ModelContainer) {
+    private func insertEpisodes(shape: M3UEpisodeInsertShape, playlistId: UUID, container: ModelContainer) throws {
         let plan = Self.plan
         for batchStart in stride(from: 0, to: plan.entries.count, by: batchSize) {
-            autoreleasepool {
+            try autoreleasepool {
                 let context = ModelContext(container)
                 context.autosaveEnabled = false
-                upsert(
+                try upsert(
                     range: batchStart ..< min(batchStart + batchSize, plan.entries.count),
                     plan: plan,
                     shape: shape,
                     playlistId: playlistId,
                     context: context
                 )
-                if context.hasChanges { try? context.save() }
+                if context.hasChanges { try context.save() }
             }
         }
     }
@@ -293,7 +299,7 @@ final class M3UEpisodeRelationshipBenchmarks: XCTestCase {
         shape: M3UEpisodeInsertShape,
         playlistId: UUID,
         context: ModelContext
-    ) {
+    ) throws {
         let order = shape.order(of: range, plan: plan)
         let seriesIds = order.map { index -> String in
             let name = plan.shows[Int(plan.entries[index].show)].name
@@ -302,7 +308,7 @@ final class M3UEpisodeRelationshipBenchmarks: XCTestCase {
         let episodeIds = order.enumerated().map { position, index in
             M3UIdentity.episodeId(seriesId: seriesIds[position], url: plan.url(plan.entries[index]))
         }
-        let batch = BatchContext(
+        let batch = try BatchContext(
             playlistId: playlistId,
             order: order,
             seriesIds: seriesIds,

@@ -75,8 +75,8 @@ nonisolated struct TraktPendingWatched: Codable, Equatable {
     /// Stable provider account partition; absent legacy files are not replayed.
     var accountID: String?
 
-    var scope: TrackerProgressScope {
-        get { TrackerProgressScope(profileID: profileID, accountID: accountID) }
+    var scope: TrackerScope {
+        get { TrackerScope(profileID: profileID, accountID: accountID) }
         set { profileID = newValue.profileID; accountID = newValue.accountID }
     }
 
@@ -113,7 +113,7 @@ nonisolated enum TraktPendingWatchedStore {
 
     /// A captured import scope, or the active profile/account on episode open.
     /// Unstamped legacy files and unknown accounts cannot authorize replay.
-    static func load(scope: TrackerProgressScope = .trakt) -> TraktPendingWatched {
+    static func load(scope: TrackerScope = .trakt) -> TraktPendingWatched {
         let stored = loadStored()
         if stored.scope.matches(scope) { return stored }
         return TraktPendingWatched(profileID: scope.profileID, accountID: scope.accountID)

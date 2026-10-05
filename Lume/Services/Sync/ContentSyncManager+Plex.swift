@@ -93,13 +93,9 @@ extension ContentSyncManager {
         try syncPlexCategories(sections: sections, type: .vod, playlistId: connection.playlistId)
         await progress?.start(.movies)
         var seenMovies = Set<String>()
-        var incomplete: ProviderImportError?
-        for section in sections {
+        let incomplete = try await walkLibraries(sections, name: \.title) { section in
             let scope = scope(server: connection.server, token: connection.token, playlistId: connection.playlistId, section: section, type: .vod)
-            let walked = try await walkLibrary(section.title) {
-                try await syncPlexMovies(scope: scope, seenIds: &seenMovies, progress: progress)
-            }
-            incomplete = incomplete ?? walked
+            try await syncPlexMovies(scope: scope, seenIds: &seenMovies, progress: progress)
         }
         if incomplete == nil {
             prunePlexMovies(playlistId: connection.playlistId, seenIds: seenMovies, fetched: !sections.isEmpty)
@@ -117,13 +113,9 @@ extension ContentSyncManager {
         await progress?.start(.series)
         var seenSeries = Set<String>()
         var seenEpisodes = Set<String>()
-        var incomplete: ProviderImportError?
-        for section in sections {
+        let incomplete = try await walkLibraries(sections, name: \.title) { section in
             let scope = scope(server: connection.server, token: connection.token, playlistId: connection.playlistId, section: section, type: .series)
-            let walked = try await walkLibrary(section.title) {
-                try await syncPlexShows(scope: scope, seenSeries: &seenSeries, seenEpisodes: &seenEpisodes, progress: progress)
-            }
-            incomplete = incomplete ?? walked
+            try await syncPlexShows(scope: scope, seenSeries: &seenSeries, seenEpisodes: &seenEpisodes, progress: progress)
         }
         if incomplete == nil {
             prunePlexSeries(playlistId: connection.playlistId, seenSeries: seenSeries, seenEpisodes: seenEpisodes, fetched: !sections.isEmpty)
@@ -135,7 +127,7 @@ extension ContentSyncManager {
     private func scope(server: URL, token: String?, playlistId: UUID, section: PlexSection, type: CategoryType) -> PlexSectionScope {
         PlexSectionScope(
             server: server, token: token, playlistId: playlistId, section: section,
-            categoryId: "\(playlistId.uuidString)-\(type.rawValue)-\(section.key)"
+            categoryId: CatalogID.category(playlistId, type: type.rawValue, key: section.key)
         )
     }
 

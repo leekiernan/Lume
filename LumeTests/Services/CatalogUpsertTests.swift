@@ -25,6 +25,9 @@ struct CatalogUpsertTests {
     @Test func `historical catalog keys retain exact bytes`() throws {
         let id = try #require(UUID(uuidString: "00000000-0000-0000-0000-000000000123"))
         let prefix = id.uuidString
+        #expect(PlaylistContentScope.prefix(for: id) == "\(prefix)-")
+        #expect(CatalogID.category(id, type: "vod", key: "genre-name") == "\(prefix)-vod-genre-name")
+        #expect(CatalogID.category(nil, type: "series", key: "001") == "unknown-series-001")
         #expect(CatalogID.content(id, kind: .movie, key: 42) == "\(prefix)-movie-42")
         #expect(CatalogID.content(id, kind: .series, key: "abc") == "\(prefix)-series-abc")
         #expect(CatalogID.content(id, kind: .live, key: -4) == "\(prefix)-live--4")

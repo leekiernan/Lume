@@ -90,12 +90,22 @@ nonisolated enum CatalogUpsert {
 nonisolated enum CatalogID {
     enum Kind: String { case movie, series, live }
 
+    static func playlistPrefix(_ playlistId: UUID) -> String {
+        "\(playlistId.uuidString)-"
+    }
+
     static func prefix(_ playlistId: UUID, infix: String) -> String {
-        "\(playlistId.uuidString)-\(infix)-"
+        playlistPrefix(playlistId) + infix + "-"
     }
 
     static func content(_ playlistId: UUID, kind: Kind, key: some CustomStringConvertible) -> String {
         prefix(playlistId, infix: kind.rawValue) + key.description
+    }
+
+    static func category(_ playlistId: UUID?, type: String, key: String) -> String {
+        // Orphan categories have historically used this sentinel. Do not mint
+        // a random owner: the string is persisted and mirrored as user state.
+        (playlistId.map { prefix($0, infix: type) } ?? "unknown-\(type)-") + key
     }
 
     static func episode(prefix: String, key: String) -> String {

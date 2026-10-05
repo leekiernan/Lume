@@ -19,11 +19,11 @@ extension ContentSyncManager {
     /// Primes an import's cross-batch state with what this playlist already
     /// holds: the categories previous syncs created, and the `num` each kind's
     /// next insert should take.
-    func seedImportState(_ state: M3UImportState, playlistId: UUID) {
+    func seedImportState(_ state: M3UImportState, playlistId: UUID) throws {
         // Categories from previous syncs are updated in place — re-inserting
         // would be an upsert that wipes isHidden / customOrder.
         for type in CategoryType.allCases {
-            let lookup = buildExistingCategoryLookup(
+            let lookup = try fetchCategoryLookup(
                 context: ModelContext(modelContainer), playlistId: playlistId, type: type
             )
             for apiId in lookup.keys {
@@ -31,7 +31,7 @@ extension ContentSyncManager {
             }
             state.categoryOrder[type.rawValue] = lookup.count
         }
-        seedInsertOrder(playlistId: playlistId, state: state, context: ModelContext(modelContainer))
+        try seedInsertOrder(playlistId: playlistId, state: state, context: ModelContext(modelContainer))
     }
 
     /// The `num` values a fresh import should start handing to newly-inserted
@@ -49,7 +49,7 @@ extension ContentSyncManager {
     /// under 6% of import cost. Not worth an index that every write would pay
     /// for. On a first import all three return 0 and the result is exactly the
     /// file order.
-    func seedInsertOrder(playlistId: UUID, state: M3UImportState, context: ModelContext) {
+    func seedInsertOrder(playlistId: UUID, state: M3UImportState, context: ModelContext) throws {
         let prefix = playlistId.uuidString
         var live = FetchDescriptor<LiveStream>(
             predicate: #Predicate { $0.id.starts(with: prefix) },
@@ -67,9 +67,9 @@ extension ContentSyncManager {
         )
         series.fetchLimit = 1
 
-        let highestLive = (try? context.fetch(live))?.first?.num
-        let highestMovie = (try? context.fetch(movie))?.first?.num
-        let highestSeries = (try? context.fetch(series))?.first?.num
+        let highestLive = try context.fetch(live).first?.num
+        let highestMovie = try context.fetch(movie).first?.num
+        let highestSeries = try context.fetch(series).first?.num
         state.liveNum = highestLive.map { $0 + 1 } ?? 0
         state.movieNum = highestMovie.map { $0 + 1 } ?? 0
         state.seriesNum = highestSeries.map { $0 + 1 } ?? 0
@@ -84,14 +84,14 @@ extension ContentSyncManager {
     // instead of a copy of them.
 
     /// The streaming m3u batch names a series once per episode, so deduplicate
-    /// before the shared lookup. Retains this path's best-effort read contract.
-    nonisolated func existingSeries(ids: [String], context: ModelContext) -> [String: Series] {
+    /// before the shared lookup. Unreadable storage must stop the import.
+    nonisolated func existingSeries(ids: [String], context: ModelContext) throws -> [String: Series] {
         let uniqueIds = Array(Set(ids))
-        return (try? CatalogUpsert.lookup(Series.self, ids: uniqueIds, context: context)) ?? [:]
+        return try CatalogUpsert.lookup(Series.self, ids: uniqueIds, context: context)
     }
 
-    nonisolated func existingEpisodes(ids: [String], context: ModelContext) -> [String: Episode] {
-        (try? CatalogUpsert.lookup(Episode.self, ids: ids, context: context)) ?? [:]
+    nonisolated func existingEpisodes(ids: [String], context: ModelContext) throws -> [String: Episode] {
+        try CatalogUpsert.lookup(Episode.self, ids: ids, context: context)
     }
 }
 

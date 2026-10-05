@@ -63,6 +63,21 @@ extension ContentSyncManager {
         }
     }
 
+    /// Continue after structural truncation, retaining the first error as the
+    /// phase's prune veto. Transport/auth/storage/cancellation failures stop.
+    func walkLibraries<Library>(
+        _ libraries: [Library], name: KeyPath<Library, String>, walk: (Library) async throws -> Void
+    ) async throws -> ProviderImportError? {
+        var incomplete: ProviderImportError?
+        for library in libraries {
+            try Task.checkCancellation()
+            let failure = try await walkLibrary(library[keyPath: name]) { try await walk(library) }
+            incomplete = incomplete ?? failure
+        }
+        try Task.checkCancellation()
+        return incomplete
+    }
+
     /// Provider order/metadata are refreshed in place. User visibility, order,
     /// icons and on-demand freshness belong to the stored row, never the DTO.
     /// The lookup includes new inserts, so repeated IDs cannot replace them.

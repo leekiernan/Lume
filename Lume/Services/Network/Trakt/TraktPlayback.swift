@@ -52,7 +52,7 @@ nonisolated enum TraktPlaybackImporter {
     static let parkedPauseLifetime: TimeInterval = 30 * 24 * 60 * 60
 
     /// Applies paused positions and dates; returns how many titles changed.
-    static func apply(_ items: [TraktPlaybackItem], in context: ModelContext, now: Date = .now, pendingScope: TrackerProgressScope = .trakt) -> Int {
+    static func apply(_ items: [TraktPlaybackItem], in context: ModelContext, now: Date = .now, pendingScope: TrackerScope = .trakt) -> Int {
         var movies: [Int: TraktPlaybackItem] = [:]
         var episodes: [Int: [TraktPlaybackItem]] = [:]
         for item in items {

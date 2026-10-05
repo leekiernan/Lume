@@ -73,7 +73,7 @@ final class Category {
     var contentImportedAt: Date?
 
     init(apiId: String, name: String, parentId: Int, typeRaw: String, playlist: Playlist? = nil) {
-        id = "\(playlist?.id.uuidString ?? "unknown")-\(typeRaw)-\(apiId)"
+        id = CatalogID.category(playlist?.id, type: typeRaw, key: apiId)
         self.apiId = apiId
         self.name = name
         self.parentId = parentId

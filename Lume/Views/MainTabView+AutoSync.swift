@@ -80,12 +80,12 @@ extension MainTabView {
     /// attempt; one still on screen in the failed cover retries itself (see
     /// `SyncProgressView`), so it's already queued and skipped here.
     func retryFailedSyncs(_ ids: Set<UUID>) {
-        let failed = playlists.filter { ids.contains($0.id) && $0.syncStatus == .error }
-        autoSyncAttempted.subtract(failed.map(\.id))
-        for playlist in failed {
-            repairLedger.reset(playlist.id)
-        }
-        enqueueDueSyncs(failed)
+        let plan = AutoSync.ReconnectionPlan(
+            playlists: playlists, reconnectedIDs: ids,
+            queuedIDs: Set(syncQueue.map(\.id)).union(backgroundSyncIDs).union(activeSyncRequest.map { [$0.id] } ?? [])
+        )
+        plan.resetAttempts(&autoSyncAttempted, ledger: &repairLedger)
+        enqueueDueSyncs(playlists.filter { plan.enqueueIDs.contains($0.id) })
     }
 
     func isQueued(_ playlist: Playlist) -> Bool {

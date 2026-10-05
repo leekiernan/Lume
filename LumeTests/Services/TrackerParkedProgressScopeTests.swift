@@ -34,7 +34,7 @@ struct TraktParkedProgressScopeTests {
         #expect(TraktPendingWatchedStore.load().isEmpty)
         TraktAccountIdentityStore.clear()
         #expect(TraktPendingWatchedStore.load().isEmpty)
-        #expect(!TrackerProgressScope.trakt.matches(.trakt))
+        #expect(!TrackerScope.trakt.matches(.trakt))
     }
 }
 
@@ -68,7 +68,7 @@ struct SimklParkedProgressScopeTests {
         #expect(SimklPendingWatchedStore.load().isEmpty)
         SimklAccountIdentityStore.clear()
         #expect(SimklPendingWatchedStore.load().isEmpty)
-        #expect(!TrackerProgressScope.simkl.matches(.simkl))
+        #expect(!TrackerScope.simkl.matches(.simkl))
     }
 }
 

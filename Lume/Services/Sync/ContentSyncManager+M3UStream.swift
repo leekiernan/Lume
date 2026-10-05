@@ -223,7 +223,7 @@ extension ContentSyncManager {
         // stays 0, which SyncProgress renders as indeterminate.
         let totalBytes = (try? fileURL.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0
 
-        seedImportState(state, playlistId: playlistId)
+        try seedImportState(state, playlistId: playlistId)
 
         let channel = M3UBatchChannel(capacity: Self.m3uChannelCapacity)
         async let parsed = M3UBatchProducer.run(

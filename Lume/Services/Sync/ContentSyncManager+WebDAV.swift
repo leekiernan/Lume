@@ -41,7 +41,7 @@ extension ContentSyncManager {
         }
 
         let state = M3UImportState(areas: areas)
-        seedImportState(state, playlistId: playlistId)
+        try seedImportState(state, playlistId: playlistId)
 
         let channel = M3UBatchChannel(capacity: WebDAVWalkProducer.channelCapacity)
         async let fed: Void = WebDAVWalkProducer.feed(walk.entries, into: channel)

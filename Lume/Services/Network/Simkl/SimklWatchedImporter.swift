@@ -44,7 +44,7 @@ nonisolated struct SimklImportSummary: Equatable {
 nonisolated enum SimklWatchedImporter {
     /// Marks the local movies and episodes that Simkl reports as watched,
     /// writing through the given catalog context. Returns what changed.
-    static func apply(items: SimklAllItems, in context: ModelContext, pendingScope: TrackerProgressScope = .simkl) -> SimklImportSummary {
+    static func apply(items: SimklAllItems, in context: ModelContext, pendingScope: TrackerScope = .simkl) -> SimklImportSummary {
         apply(movies: items.movies, shows: items.shows, in: context, pendingScope: pendingScope)
     }
 
@@ -54,7 +54,7 @@ nonisolated enum SimklWatchedImporter {
         movies: [SimklWatchedMovie],
         shows: [SimklWatchedShow],
         in context: ModelContext,
-        pendingScope: TrackerProgressScope = .simkl
+        pendingScope: TrackerScope = .simkl
     ) -> SimklImportSummary {
         let moviesMarked = importMovies(movies, in: context)
         let shows = importShows(shows, in: context, pendingScope: pendingScope)
@@ -121,7 +121,7 @@ nonisolated enum SimklWatchedImporter {
     private static func importShows(
         _ watched: [SimklWatchedShow],
         in context: ModelContext,
-        pendingScope: TrackerProgressScope
+        pendingScope: TrackerScope
     ) -> (marked: Int, queued: Int) {
         var showsByTMDB: [Int: SimklWatchedShow] = [:]
         for show in watched {

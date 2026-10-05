@@ -74,17 +74,17 @@ final class M3UExistingRowFetchBenchmarks: XCTestCase {
             )
             let series = seriesIds(forEpisodesFrom: stage / 2, count: Self.idsPerFetch, playlistId: playlistId)
 
-            let contiguousMs = timeFetch(expected: contiguous.count, container: store.container) {
-                lookups.existingEpisodes(ids: contiguous, context: $0).count
+            let contiguousMs = try timeFetch(expected: contiguous.count, container: store.container) {
+                try lookups.existingEpisodes(ids: contiguous, context: $0).count
             }
-            let spreadMs = timeFetch(expected: spread.count, container: store.container) {
-                lookups.existingEpisodes(ids: spread, context: $0).count
+            let spreadMs = try timeFetch(expected: spread.count, container: store.container) {
+                try lookups.existingEpisodes(ids: spread, context: $0).count
             }
             // `existingSeries` deduplicates the ids before it fetches — 2,000
             // episode rows name only ~59 shows, so the IN-clause it builds is
             // two orders of magnitude smaller than the episode one.
-            let seriesMs = timeFetch(expected: Set(series).count, container: store.container) {
-                lookups.existingSeries(ids: series, context: $0).count
+            let seriesMs = try timeFetch(expected: Set(series).count, container: store.container) {
+                try lookups.existingSeries(ids: series, context: $0).count
             }
 
             lines.append(
@@ -108,15 +108,15 @@ final class M3UExistingRowFetchBenchmarks: XCTestCase {
     private func timeFetch(
         expected: Int,
         container: ModelContainer,
-        fetch: (ModelContext) -> Int
-    ) -> Double {
+        fetch: (ModelContext) throws -> Int
+    ) rethrows -> Double {
         var total: Duration = .zero
         for _ in 0 ..< Self.repetitions {
-            autoreleasepool {
+            try autoreleasepool {
                 let context = ModelContext(container)
                 let clock = ContinuousClock()
                 let start = clock.now
-                let count = fetch(context)
+                let count = try fetch(context)
                 total += clock.now - start
                 XCTAssertEqual(count, expected, "sample ids must all exist")
             }

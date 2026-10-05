@@ -265,11 +265,11 @@ final class SimklService {
         // is applied only to the account and profile it was fetched for.
         let container = context.container
         let outcome = await TrackerImportRun(
-            begin: { await TrackerImportScope.begin(after: self.mutations) },
+            begin: { await TrackerScope.begin(after: self.mutations) },
             accessToken: { await self.session.validAccessToken() },
             fetch: { try await self.client.watchedItems(accessToken: $0) },
             isCurrent: { $0.isCurrent(isConnected: self.isConnected, account: self.mutations.account, pendingCount: self.mutations.pendingCount) },
-            apply: { items, scope in await Self.applyImport(items: items, container: container, profileID: scope.profileID, accountID: scope.account) }
+            apply: { items, scope in await Self.applyImport(items: items, container: container, scope: scope) }
         ).perform()
         switch outcome {
         case .deferred:
@@ -285,8 +285,7 @@ final class SimklService {
 
     /// Off the main actor, on a context of its own — see `TraktService`.
     @concurrent
-    static func applyImport(items: SimklAllItems, container: ModelContainer, profileID: UUID?, accountID: String?) async -> SimklImportSummary {
-        let scope = TrackerProgressScope(profileID: profileID, accountID: accountID)
+    static func applyImport(items: SimklAllItems, container: ModelContainer, scope: TrackerScope) async -> SimklImportSummary {
         guard scope.matches(.simkl) else { return .failure }
         return SimklWatchedImporter.apply(items: items, in: ModelContext(container), pendingScope: scope)
     }
