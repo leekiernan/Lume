@@ -9,6 +9,7 @@
 //  background repair both run through here, so neither can skip a step.
 //
 
+import Foundation
 import SwiftData
 
 @MainActor
@@ -17,8 +18,12 @@ enum PlaylistSyncRun {
         _ playlist: Playlist,
         container: ModelContainer,
         plan: PlaylistSyncPlan,
-        progress: SyncProgress? = nil
+        progress: SyncProgress? = nil,
+        notifications: SyncCompletionNotifications? = nil
     ) async throws {
+        let notifications = notifications ?? .shared
+        let profileToken = ActiveProfileStore.current?.uuidString ?? ""
+        let subject = SyncCompletionNotifications.Subject.playlist(playlist.id, name: playlist.name)
         // Reported to the guide refresh so the two never share the provider's
         // connection allowance: it stands aside (or is cut short) while this
         // runs, and catches up once nothing else is pending — see
@@ -29,16 +34,28 @@ enum PlaylistSyncRun {
         defer { epgSync.contentSyncDidFinish(succeeded: succeeded, refreshedLiveTV: succeeded && plan.refreshesGuide) }
 
         let syncManager = ContentSyncManager(modelContainer: container)
-        try await BackgroundActivity.perform("Playlist sync") {
-            try await syncManager.syncPlaylist(
-                playlist,
-                progress: progress,
-                full: plan.full,
-                repairingAreas: plan.repairingAreas,
-                syncAreas: plan.syncAreas
+        do {
+            try await BackgroundActivity.perform("Playlist sync") {
+                try await syncManager.syncPlaylist(
+                    playlist,
+                    progress: progress,
+                    full: plan.full,
+                    repairingAreas: plan.repairingAreas,
+                    syncAreas: plan.syncAreas
+                )
+            }
+            try Task.checkCancellation()
+        } catch {
+            notifications.report(
+                Task.isCancelled || error is CancellationError ? .cancelled : .failed,
+                subject: subject, startedUnder: profileToken, currentProfileToken: ActiveProfileStore.current?.uuidString ?? ""
             )
+            throw error
         }
         succeeded = true
+        notifications.report(
+            .succeeded, subject: subject, startedUnder: profileToken, currentProfileToken: ActiveProfileStore.current?.uuidString ?? ""
+        )
         // Newly synced titles need indexing; the launch-time pass may already
         // be finished, so kick a fresh one — but hold it off a few seconds so
         // loading the embedding model and the per-chunk saves don't fight the

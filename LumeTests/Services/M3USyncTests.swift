@@ -331,7 +331,7 @@ struct M3USyncTests {
 
         // The dedicated EPG sync imports the guide, filtered to known channels.
         let didSync = await EPGSyncManager(modelContainer: container).syncAllSources()
-        #expect(didSync)
+        #expect(didSync == .succeeded)
 
         let context = ModelContext(container)
         let listings = try context.fetch(FetchDescriptor<EPGListing>())
@@ -343,7 +343,7 @@ struct M3USyncTests {
         // source is fetched before the old listings are cleared.
         try FileManager.default.removeItem(at: epgFile)
         let refreshed = await EPGSyncManager(modelContainer: container).syncAllSources()
-        #expect(!refreshed)
+        #expect(refreshed == .failed)
         #expect(try ModelContext(container).fetchCount(FetchDescriptor<EPGListing>()) == 1)
     }
 

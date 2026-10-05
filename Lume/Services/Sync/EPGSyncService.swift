@@ -203,22 +203,27 @@ final class EPGSyncService {
         isSyncing = true
         isBackgroundRefresh = background
         let manager = EPGSyncManager(modelContainer: container)
+        let profileToken = ActiveProfileStore.current?.uuidString ?? ""
         // Background guide refresh: run below the UI so an in-flight sync (which
         // saves into the shared catalog container, churning browse `@Query`s)
         // yields CPU to the main thread instead of competing with it. The
         // profile showed EPG ingest pegging a background thread at 100% in
         // lockstep with a frozen main thread right after a playlist sync.
         task = Task(priority: .utility) {
-            let succeeded = await BackgroundActivity.perform("Guide refresh") {
+            let outcome = await BackgroundActivity.perform("Guide refresh") {
                 await manager.syncAllSources()
             }
-            if succeeded {
+            if outcome == .succeeded, !Task.isCancelled {
                 EPGSyncSchedule.lastSyncDate = Date()
                 EPGSyncSchedule.schemaVersion = SyncFrequency.epgCurrentSchemaVersion
             }
             isSyncing = false
             task = nil
-            Logger.database.info("EPG refresh finished (success: \(succeeded))")
+            SyncCompletionNotifications.shared.report(
+                Task.isCancelled ? .cancelled : outcome,
+                subject: .guide, startedUnder: profileToken, currentProfileToken: ActiveProfileStore.current?.uuidString ?? ""
+            )
+            Logger.database.info("EPG refresh finished (outcome: \(String(describing: outcome), privacy: .public))")
             // A refresh cancelled for a content sync may wind down after that
             // sync already finished and found this task still set.
             runOwedRefresh()
