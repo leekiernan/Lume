@@ -26,26 +26,27 @@ extension ContentSyncManager {
     @discardableResult
     func enrichMovieArtwork(id: String, tmdbId: Int) async -> TMDBTitleDetails? {
         guard let details = try? await fetchTMDBMovieDetails(tmdbId: tmdbId), !Task.isCancelled else { return nil }
-        let context = ModelContext(modelContainer)
-        context.autosaveEnabled = false
-        var descriptor = FetchDescriptor<Movie>(predicate: #Predicate { $0.id == id })
-        descriptor.fetchLimit = 1
-        guard let movie = try? context.fetch(descriptor).first else { return nil }
-        applyMovieArtwork(details, to: movie)
-        try? context.save()
-        return details
+        return persistArtwork(details, descriptor: FetchDescriptor<Movie>(predicate: #Predicate { $0.id == id }), apply: applyMovieArtwork)
     }
 
     /// Series counterpart of ``enrichMovieArtwork(id:tmdbId:)``.
     @discardableResult
     func enrichSeriesArtwork(id: String, tmdbId: Int) async -> TMDBTitleDetails? {
         guard let details = try? await fetchTMDBTVDetails(tmdbId: tmdbId), !Task.isCancelled else { return nil }
+        return persistArtwork(details, descriptor: FetchDescriptor<Series>(predicate: #Predicate { $0.id == id }), apply: applySeriesArtwork)
+    }
+
+    /// The network await is over before creating this context. Scalar appliers
+    /// are explicit; no generic path can accidentally replace cast relationships.
+    private func persistArtwork<Row: PersistentModel>(
+        _ details: TMDBTitleDetails, descriptor: FetchDescriptor<Row>, apply: (TMDBTitleDetails, Row) -> Void
+    ) -> TMDBTitleDetails? {
         let context = ModelContext(modelContainer)
         context.autosaveEnabled = false
-        var descriptor = FetchDescriptor<Series>(predicate: #Predicate { $0.id == id })
+        var descriptor = descriptor
         descriptor.fetchLimit = 1
-        guard let series = try? context.fetch(descriptor).first else { return nil }
-        applySeriesArtwork(details, to: series)
+        guard let row = try? context.fetch(descriptor).first else { return nil }
+        apply(details, row)
         try? context.save()
         return details
     }
@@ -63,25 +64,7 @@ extension ContentSyncManager {
 /// Scalar metadata/artwork only: safe for background enrichment while a
 /// detail screen holds cast faults. Does not claim full-detail freshness.
 nonisolated func applyMovieArtwork(_ details: TMDBTitleDetails, to movie: Movie) {
-    movie.backdropPath = details.backdropPath ?? movie.backdropPath
-    movie.posterPath = details.posterPath ?? movie.posterPath
-    movie.posterCheckedAt = Date()
-    movie.logoPath = details.logoPath ?? movie.logoPath
-    movie.tagline = details.tagline ?? movie.tagline
-    movie.contentRating = details.contentRating ?? movie.contentRating
-    movie.imdbId = details.imdbId ?? movie.imdbId
-    movie.similarTitleIds = details.similarIDs
-    movie.trailers = details.videos
-
-    if (movie.plot ?? "").isEmpty, let overview = details.overview {
-        movie.plot = overview
-    }
-    // TMDB is the primary genre source: its normalized genre names overwrite any
-    // provider-supplied genre once enrichment runs. The provider value is only a
-    // fallback shown until then (see `applySeriesFields`; VOD lists carry no genre).
-    if !details.genreNames.isEmpty {
-        movie.genre = details.genreNames.joined(separator: ", ")
-    }
+    movie.applyCommonArtwork(details)
     if (movie.durationSecs ?? 0) == 0, let mins = details.runtimeMinutes, mins > 0 {
         movie.durationSecs = mins * 60
     }
@@ -95,7 +78,6 @@ nonisolated func applyMovieArtwork(_ details: TMDBTitleDetails, to movie: Movie)
         movie.collectionPosterPath = details.collectionPosterPath
         movie.collectionBackdropPath = details.collectionBackdropPath
     }
-    movie.tmdbArtworkEnrichedAt = Date()
 }
 
 /// Full-detail enrichment on the context that owns the displayed cast. Never
@@ -112,24 +94,7 @@ nonisolated func applyMovieDetails(_ details: TMDBTitleDetails, to movie: Movie,
 /// Scalar metadata/artwork only: safe for background enrichment while a
 /// detail screen holds cast faults. Does not claim full-detail freshness.
 nonisolated func applySeriesArtwork(_ details: TMDBTitleDetails, to series: Series) {
-    series.backdropPath = details.backdropPath ?? series.backdropPath
-    series.posterPath = details.posterPath ?? series.posterPath
-    series.posterCheckedAt = Date()
-    series.logoPath = details.logoPath ?? series.logoPath
-    series.tagline = details.tagline ?? series.tagline
-    series.contentRating = details.contentRating ?? series.contentRating
-    series.imdbId = details.imdbId ?? series.imdbId
-    series.similarTitleIds = details.similarIDs
-    series.trailers = details.videos
-
-    if (series.plot ?? "").isEmpty, let overview = details.overview {
-        series.plot = overview
-    }
-    // TMDB is the primary genre source: it overwrites the provider genre seeded
-    // at sync (see `applySeriesFields`), which serves only as the fallback.
-    if !details.genreNames.isEmpty {
-        series.genre = details.genreNames.joined(separator: ", ")
-    }
+    series.applyCommonArtwork(details)
     if (series.cast ?? "").isEmpty, !details.cast.isEmpty {
         series.cast = details.cast.prefix(6).map(\.name).joined(separator: ", ")
     }
@@ -137,7 +102,6 @@ nonisolated func applySeriesArtwork(_ details: TMDBTitleDetails, to series: Seri
     if currentRating == 0, let vote = details.voteAverage, vote > 0 {
         series.rating = String(format: "%.1f", vote)
     }
-    series.tmdbArtworkEnrichedAt = Date()
 }
 
 /// Full-detail enrichment on the context that owns the displayed cast. Never

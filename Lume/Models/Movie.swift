@@ -194,39 +194,6 @@ enum DownloadStatus: String, Codable {
 }
 
 extension Movie {
-    /// TMDB ids of similar titles. `similarTMDBIds` stores `nil` for "none" —
-    /// an empty array still archives a BLOB per row — and reads back as `[]` on
-    /// rows the previous schema wrote, so both ends of that rule live here.
-    var similarTitleIds: [Int] {
-        get { similarTMDBIds ?? [] }
-        set { similarTMDBIds = newValue.isEmpty ? nil : newValue }
-    }
-
-    /// YouTube videos (trailers, teasers, clips) from TMDB, in display order.
-    /// Backed by `trailersData` so SwiftData persists it as a plain `Data` blob.
-    var trailers: [TitleVideo] {
-        get {
-            guard let trailersData else { return [] }
-            return (try? JSONDecoder().decode([TitleVideo].self, from: trailersData)) ?? []
-        }
-        set { trailersData = try? JSONEncoder().encode(newValue) }
-    }
-
-    /// Cast in TMDB billing order (top-billed first).
-    var orderedCast: [CastMember] {
-        castMembers.sorted { $0.order < $1.order }
-    }
-
-    /// External aggregator ratings, in display order. Backed by
-    /// `externalRatingsData` so SwiftData persists it as a plain `Data` blob.
-    var externalRatings: [ExternalRating] {
-        get {
-            guard let externalRatingsData else { return [] }
-            return (try? JSONDecoder().decode([ExternalRating].self, from: externalRatingsData)) ?? []
-        }
-        set { externalRatingsData = try? JSONEncoder().encode(newValue) }
-    }
-
     var downloadStatus: DownloadStatus? {
         get {
             guard let raw = downloadStatusRaw else { return nil }
