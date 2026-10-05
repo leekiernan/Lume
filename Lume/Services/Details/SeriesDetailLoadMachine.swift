@@ -5,6 +5,16 @@ import SwiftData
 /// tvOS focus. Cached episode refresh is a separate lane from initial details.
 @Observable
 final class SeriesDetailLoadMachine {
+    struct Snapshot {
+        var isLoadingTMDB: Bool
+        var isLoadingEpisodes = false
+        var similar: [HomeMediaItem] = []
+        var otherSources: [OtherSources.Source] = []
+        var availableSeasons: [Int] = []
+        var episodesBySeason: [Int: [Episode]] = [:]
+        var selectedSeason = 1
+    }
+
     private(set) var contentID: String
     private var detail: DetailLoadState
     private var episodeLoad = DetailLoadState()
@@ -24,7 +34,19 @@ final class SeriesDetailLoadMachine {
 
     init(series: Series) {
         contentID = series.id
-        detail = DetailLoadState(isBlocking: detailNeedsTMDBFetch(tmdbId: series.tmdbId, enrichedAt: series.tmdbEnrichedAt))
+        detail = Self.initialDetail(for: series)
+    }
+
+    /// Publication belongs to one title even before the replacement task runs.
+    func snapshot(for series: Series) -> Snapshot {
+        guard contentID == series.id else {
+            return Snapshot(isLoadingTMDB: Self.initialDetail(for: series).isBlocking)
+        }
+        return Snapshot(
+            isLoadingTMDB: isLoadingTMDB, isLoadingEpisodes: isLoadingEpisodes,
+            similar: similar, otherSources: otherSources, availableSeasons: availableSeasons,
+            episodesBySeason: episodesBySeason, selectedSeason: selectedSeason
+        )
     }
 
     func load(_ series: Series, playlist: Playlist?, in context: ModelContext) async {
@@ -105,6 +127,10 @@ final class SeriesDetailLoadMachine {
         availableSeasons = []
         episodesBySeason = [:]
         selectedSeason = 1
-        detail = DetailLoadState(isBlocking: detailNeedsTMDBFetch(tmdbId: series.tmdbId, enrichedAt: series.tmdbEnrichedAt))
+        detail = Self.initialDetail(for: series)
+    }
+
+    private static func initialDetail(for series: Series) -> DetailLoadState {
+        DetailLoadState(isBlocking: detailNeedsTMDBFetch(tmdbId: series.tmdbId, enrichedAt: series.tmdbEnrichedAt))
     }
 }

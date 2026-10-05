@@ -9,25 +9,10 @@
 import SwiftData
 import SwiftUI
 
-/// How the Live TV detail area presents channels: a scannable list (default) or
-/// the EPG timeline grid. Persisted across launches.
-enum LiveTVLayoutMode: String, CaseIterable, Identifiable {
-    case list
-    case guide
-
-    var id: String {
-        rawValue
-    }
-
+extension LiveTVLayoutMode {
     var label: LocalizedStringKey {
         self == .list ? "List" : "Guide"
     }
-
-    var systemImage: String {
-        self == .list ? "list.bullet" : "tablecells"
-    }
-
-    static let storageKey = "lume.liveTV.layoutMode"
 }
 
 struct LiveTVView: View {
@@ -37,8 +22,7 @@ struct LiveTVView: View {
         @Environment(\.openWindow) private var openWindow
     #endif
     @Query private var playlists: [Playlist]
-    @Query(filter: #Predicate<Category> { $0.typeRaw == "live" && $0.isHidden == false })
-    private var categories: [Category]
+    @Query private var categories: [Category]
 
     /// Keeps the sidebar's categories from being filtered and sorted on every body
     /// pass — see `LiveTVCategoryMemo`. Whether the two virtual sections appear
@@ -76,13 +60,10 @@ struct LiveTVView: View {
     @State private var browseSections: [LiveTVSection]?
     #if os(tvOS)
         @Environment(DeepLinkRouter.self) private var router
-        /// Bumped whenever the content should take focus deliberately rather
+        /// Owns a request whenever the content should take focus deliberately rather
         /// than let the engine pick: after a category change, and on the way
         /// back out of the browse panel.
-        @State private var contentFocusToken = 0
-        /// Where that focus should land — the channel the panel was opened
-        /// from, or nil for the top of the list.
-        @State private var contentFocusTarget: String?
+        @State private var contentFocus = TVContentFocusMachine()
         /// The channel focus left when the browse panel was opened, so closing
         /// it without picking anything puts the viewer back where they were.
         @State private var browseReturnChannelID: String?
@@ -97,14 +78,26 @@ struct LiveTVView: View {
     @AppStorage(LiveTVLayoutMode.storageKey) private var layoutModeRaw: String = LiveTVLayoutMode.list.rawValue
 
     private var layoutMode: LiveTVLayoutMode {
-        LiveTVLayoutMode(rawValue: layoutModeRaw) ?? .list
+        LiveTVLayoutMode.resolved(layoutModeRaw)
+    }
+
+    /// MainTabView supplies the same active scope as Movies/Series. Query
+    /// construction stays separate from category ordering and section probes.
+    init(playlistPrefix: String? = nil, restriction: ContentRestriction = ContentRestriction()) {
+        _categories = Query(LibraryCategoryQuery.descriptor(
+            type: .live, playlistPrefix: playlistPrefix ?? "",
+            excludedCategoryIDs: restriction.excludedCategoryIDs
+        ))
     }
 
     /// Guide/List segmented switch shared across platforms.
     private var layoutModePicker: some View {
-        Picker("Layout", selection: $layoutModeRaw) {
+        Picker("Layout", selection: Binding(
+            get: { layoutMode },
+            set: { layoutModeRaw = $0.rawValue }
+        )) {
             ForEach(LiveTVLayoutMode.allCases) { mode in
-                Label(mode.label, systemImage: mode.systemImage).tag(mode.rawValue)
+                Label(mode.label, systemImage: mode.systemImage).tag(mode)
             }
         }
         .pickerStyle(.segmented)
@@ -173,6 +166,12 @@ struct LiveTVView: View {
                 )
             }
         }
+        #if os(tvOS)
+        .onChange(of: playlistPrefix) { _, _ in contentFocus.cancel() }
+        .onChange(of: restriction.visibilityToken) { _, _ in contentFocus.cancel() }
+        .onChange(of: layoutModeRaw) { _, _ in contentFocus.cancel() }
+        .onDisappear { contentFocus.cancel() }
+        #endif
     }
 
     /// Attaches the browse panel to the same navigation-content root as Movies
@@ -202,7 +201,7 @@ struct LiveTVView: View {
             ))
             .browseSidebarToolbar(
                 isPresented: $showingBrowse,
-                isEnabled: !playlists.isEmpty && !categories.isEmpty
+                isEnabled: sections?.isEmpty == false
             )
             // Hands the sections up to the panel, which sits above the stack.
             .onChange(of: sections?.map(\.id), initial: true) { _, _ in browseSections = sections }
@@ -227,19 +226,17 @@ struct LiveTVView: View {
                     systemImage: "antenna.radiowaves.left.and.right",
                     description: Text("Add a playlist in Settings to start watching live TV")
                 )
-            } else if categories.isEmpty || sourceHasNoLiveChannels {
-                VStack(spacing: 20) {
-                    LiveTVEmptyState(sourceType: activePlaylist?.knownSourceType)
-                }
-            } else if let sections {
+            } else if let sections, !sections.isEmpty {
                 layout(for: sections)
                     .task(id: playlistPrefix) { seedSelection(from: sections) }
+            } else {
+                LiveTVEmptyState(sourceType: activePlaylist?.knownSourceType, playlistPrefix: playlistPrefix, restriction: restriction)
             }
         }
     }
 
     private var shouldResolveSections: Bool {
-        !playlists.isEmpty && !categories.isEmpty && !sourceHasNoLiveChannels
+        !playlists.isEmpty && !playlistPrefix.isEmpty
     }
 
     // MARK: - Platform-specific layouts
@@ -249,15 +246,12 @@ struct LiveTVView: View {
     @ViewBuilder
     private func layout(for sections: [LiveTVSection]) -> some View {
         let displayed = displayedSection(in: sections)
-        VStack(spacing: 0) {
+        Group {
             #if os(tvOS)
                 tvOSLayout(displayed: displayed)
             #else
                 contentLayout(displayed: displayed)
             #endif
-
-            BrowseCategoriesButton(isPresented: $showingBrowse)
-                .padding(.bottom, PosterCardMetrics.sectionVerticalPadding)
         }
     }
 
@@ -291,6 +285,7 @@ struct LiveTVView: View {
                         description: Text("Choose a category from the sidebar")
                     )
                 }
+                BrowseCategoriesButton(isPresented: $showingBrowse)
             }
         }
     #endif
@@ -307,8 +302,8 @@ struct LiveTVView: View {
                 onStartMultiView: { startMultiView(with: $0) },
                 playlistPrefix: playlistPrefix,
                 sourceType: activePlaylist?.knownSourceType,
-                contentFocusToken: $contentFocusToken,
-                contentFocusTarget: contentFocusTarget
+                contentFocusRequest: contentFocus.request,
+                onDidClaimFocus: { contentFocus.didClaim($0) }
             )
         }
     #endif
@@ -319,14 +314,14 @@ struct LiveTVView: View {
         #if os(tvOS)
             // A different category is a different list: nothing to return to,
             // so the new one takes focus at the top.
-            contentFocusTarget = nil
-            contentFocusToken += 1
+            requestContentFocus(for: section)
         #endif
     }
 
     #if os(tvOS)
         /// Opens the browse panel, remembering the channel focus is leaving.
         private func openBrowse(from channelID: String?) {
+            contentFocus.cancel()
             browseReturnChannelID = channelID
             showingBrowse = true
         }
@@ -334,8 +329,14 @@ struct LiveTVView: View {
         /// Leaving the panel without picking a category: the list is unchanged,
         /// so focus goes back to the channel it came from.
         private func returnFromBrowse() {
-            contentFocusTarget = browseReturnChannelID
-            contentFocusToken += 1
+            guard let section = displayedSection(in: browseSections ?? []) else { return }
+            requestContentFocus(for: section, channelID: browseReturnChannelID)
+        }
+
+        private func requestContentFocus(for section: LiveTVSection, channelID: String? = nil) {
+            contentFocus.requestFocus(in: TVContentFocusRequest.Scope(
+                playlistPrefix: playlistPrefix, channelScope: section.scope, visibilityToken: restriction.visibilityToken
+            ), channelID: channelID)
         }
     #endif
 
@@ -355,24 +356,15 @@ struct LiveTVView: View {
         playlists.active(for: selectedPlaylistID)
     }
 
-    /// A WebDAV share carries no live channels, so its rail stays empty even
-    /// when another playlist has live categories — the unscoped `categories`
-    /// query cannot see that on its own. Same for the media servers, whose
-    /// Live TV tuner APIs are not synced.
-    private var sourceHasNoLiveChannels: Bool {
-        activePlaylist?.knownSourceType.map { !$0.canCarryLiveChannels } == true && categorySections.isEmpty
-    }
-
     /// The id prefix every Category / LiveStream of the active playlist shares.
     private var playlistPrefix: String {
-        activePlaylist.map { "\($0.id.uuidString)-" } ?? ""
+        activePlaylist?.contentIDPrefix ?? ""
     }
 
     /// The rail's category entries: the active playlist's live categories this
-    /// viewer may see, in the chosen order. The `@Query` fetches every playlist's
-    /// categories (SwiftData can't parameterize a `@Query` on view state), so the
-    /// isolation by playlist-prefixed `id` — and the sort — happen here, memoized
-    /// so a body pass that changed nothing about them costs a key comparison.
+    /// viewer may see, in provider/custom order. SQL already selects the active
+    /// playlist and exclusions; the memo retains ordering and a defensive
+    /// visibility check without sorting again on unrelated body passes.
     private var categorySections: [LiveTVSection] {
         categoryMemo.sections(
             categories: categories,

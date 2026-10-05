@@ -39,6 +39,11 @@ nonisolated enum SportsPayPerView {
             guard let start, let end else { return false }
             return start <= now && end > now
         }
+
+        /// Presentation follows the same live gate as the playback action.
+        func actionSymbol(at now: Date) -> String {
+            isLive(at: now) ? "play.fill" : "clock"
+        }
     }
 
     static let window: TimeInterval = 7 * 86400

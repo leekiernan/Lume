@@ -198,3 +198,13 @@ nonisolated enum Perf {
         return try await body()
     }
 }
+
+// MARK: - Elapsed time in the log
+
+nonisolated extension Duration {
+    /// Seconds to a hundredth, for log lines that sit beside a signpost: the
+    /// signpost serves Instruments, the line serves the diagnostic journal.
+    var logSeconds: String {
+        formatted(.units(allowed: [.seconds], fractionalPart: .show(length: 2)))
+    }
+}

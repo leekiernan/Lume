@@ -219,50 +219,24 @@ struct PlaylistDetailView: View {
             Section(connectionSectionTitle) {
                 TextField("Name", text: $editName)
                 TextField(serverURLFieldTitle, text: $editServerURL)
-                #if os(iOS)
-                    .textInputAutocapitalization(.never)
-                    .keyboardType(.URL)
-                #endif
-                    .autocorrectionDisabled()
-                    .textContentType(.URL)
+                    .urlEntry()
                 if isM3U {
                     TextField("EPG URL (optional)", text: $editEPGURL)
-                    #if os(iOS)
-                        .textInputAutocapitalization(.never)
-                        .keyboardType(.URL)
-                    #endif
-                        .autocorrectionDisabled()
-                        .textContentType(.URL)
+                        .urlEntry()
                 } else if isStalker {
-                    TextField("MAC Address", text: $editMacAddress)
-                    #if os(iOS)
-                        .textInputAutocapitalization(.characters)
-                    #endif
-                        .autocorrectionDisabled()
+                    StalkerMACEntry(address: $editMacAddress)
                     TextField("Username (optional)", text: $editUsername)
-                    #if os(iOS)
-                        .textInputAutocapitalization(.never)
-                    #endif
-                        .autocorrectionDisabled()
-                        .textContentType(.username)
+                        .usernameEntry()
                     SecureField("Password (optional)", text: $editPassword)
                         .textContentType(.password)
                 } else if isWebDAV {
                     TextField("Username (optional)", text: $editUsername)
-                    #if os(iOS)
-                        .textInputAutocapitalization(.never)
-                    #endif
-                        .autocorrectionDisabled()
-                        .textContentType(.username)
+                        .usernameEntry()
                     SecureField("Password (optional)", text: $editPassword)
                         .textContentType(.password)
                 } else {
                     TextField("Username", text: $editUsername)
-                    #if os(iOS)
-                        .textInputAutocapitalization(.never)
-                    #endif
-                        .autocorrectionDisabled()
-                        .textContentType(.username)
+                        .usernameEntry()
                     SecureField("Password", text: $editPassword)
                         .textContentType(.password)
                 }

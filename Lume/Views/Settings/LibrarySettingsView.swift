@@ -45,10 +45,6 @@
                 }
             }
             .platformNavigationTitle("Library")
-            .onChange(of: sportsEnabled) { _, _ in
-                SportsSyncService.shared.availabilityDidChange()
-                SportsFollowService.shared.reload()
-            }
         }
 
         /// An area's row: the drill-in on the left, its on/off switch on the

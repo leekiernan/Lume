@@ -5,6 +5,7 @@
 //  The Live TV browse empty state, phrased for the active playlist's source.
 //
 
+import SwiftData
 import SwiftUI
 
 /// A WebDAV playlist is a tree of media files on a file share — it can never
@@ -13,9 +14,26 @@ import SwiftUI
 /// Live TV tuner APIs are not synced.
 struct LiveTVEmptyState: View {
     let sourceType: PlaylistSourceType?
+    var emptyDescription: LocalizedStringKey
+    @Query private var excludedChannels: [LiveStream]
+
+    init(
+        sourceType: PlaylistSourceType?, playlistPrefix: String = "", restriction: ContentRestriction = ContentRestriction(),
+        scope: LiveChannelScope? = nil, emptyDescription: LocalizedStringKey = "Sync your playlist to load live TV channels"
+    ) {
+        self.sourceType = sourceType
+        self.emptyDescription = emptyDescription
+        _excludedChannels = Query(LiveChannelQuery.excludedChannelsProbe(playlistPrefix: playlistPrefix, restriction: restriction, scope: scope))
+    }
 
     var body: some View {
-        if sourceType == .webdav {
+        if !excludedChannels.isEmpty {
+            ContentUnavailableView(
+                "No Channels",
+                systemImage: "antenna.radiowaves.left.and.right",
+                description: Text("No channels are available with your current visibility settings.")
+            )
+        } else if sourceType == .webdav {
             ContentUnavailableView(
                 "No Live Channels",
                 systemImage: "folder",
@@ -31,7 +49,7 @@ struct LiveTVEmptyState: View {
             ContentUnavailableView(
                 "No Channels",
                 systemImage: "antenna.radiowaves.left.and.right",
-                description: Text("Sync your playlist to load live TV channels")
+                description: Text(emptyDescription)
             )
         }
     }

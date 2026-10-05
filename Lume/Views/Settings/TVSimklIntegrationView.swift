@@ -43,7 +43,7 @@
         private var connect: some View {
             VStack(alignment: .leading, spacing: 16) {
                 Text("Sync the movies and episodes you watch to Simkl, and surface your Simkl watchlist on Home.")
-                    .font(.system(size: 24))
+                    .font(.system(size: TVSettingsMetrics.statusFontSize))
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, TVSettingsMetrics.rowHPadding)
 
@@ -54,19 +54,14 @@
                         showPaywall = true
                     }
                 } label: {
-                    HStack(spacing: 16) {
-                        Image(systemName: premium.isPremium ? "link" : "crown")
-                            .font(.system(size: 22, weight: .medium))
-                        Text("Connect Simkl Account")
-                        Spacer(minLength: 0)
-                    }
+                    SettingsActionLabel(title: "Connect Simkl Account", systemImage: premium.isPremium ? "link" : "crown")
                 }
                 .buttonStyle(TVSettingsRowButtonStyle())
                 .disabled(simkl.isConnecting)
 
                 if let error = simkl.connectionError {
                     Text(error)
-                        .font(.system(size: 22))
+                        .font(.system(size: TVSettingsMetrics.explanatoryFontSize))
                         .foregroundStyle(.red)
                         .padding(.horizontal, TVSettingsMetrics.rowHPadding)
                 }
@@ -84,22 +79,14 @@
                 TrackerConnectedAccount(username: simkl.username)
 
                 Text("Watched movies and episodes sync to your Simkl history. Import marks titles you've already watched on Simkl as watched here.")
-                    .font(.system(size: 22))
+                    .font(.system(size: TVSettingsMetrics.explanatoryFontSize))
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, TVSettingsMetrics.rowHPadding)
 
                 Button {
                     Task { await simkl.importWatched(into: modelContext) }
                 } label: {
-                    HStack(spacing: 16) {
-                        Image(systemName: "arrow.down.circle")
-                            .font(.system(size: 22, weight: .medium))
-                        Text("Import Watched from Simkl")
-                        Spacer(minLength: 0)
-                        if simkl.isImporting {
-                            ProgressView()
-                        }
-                    }
+                    SettingsActionLabel(title: "Import Watched from Simkl", systemImage: "arrow.down.circle", isBusy: simkl.isImporting)
                 }
                 .buttonStyle(TVSettingsRowButtonStyle())
                 .disabled(simkl.isImporting)
@@ -108,15 +95,28 @@
                     importStatus(summary)
                 }
 
+                // An import waits for these to upload first, so without them
+                // on screen a chosen import looked like it did nothing.
+                if simkl.pendingMutationCount > 0 {
+                    Button {
+                        simkl.retryPendingMutations()
+                    } label: {
+                        SettingsActionLabel(title: "Retry Pending Simkl Changes", systemImage: "arrow.clockwise", isBusy: simkl.isSyncingMutations)
+                    }
+                    .buttonStyle(TVSettingsRowButtonStyle())
+                    .disabled(simkl.isSyncingMutations)
+
+                    (simkl.mutationSyncError.map { Text($0) }
+                        ?? Text("\(simkl.pendingMutationCount) Simkl changes waiting to sync."))
+                        .font(.system(size: TVSettingsMetrics.explanatoryFontSize))
+                        .foregroundStyle(simkl.mutationSyncError != nil ? .red : .secondary)
+                        .padding(.horizontal, TVSettingsMetrics.rowHPadding)
+                }
+
                 Button {
                     Task { await simkl.disconnect() }
                 } label: {
-                    HStack(spacing: 16) {
-                        Image(systemName: "link.badge.plus")
-                            .font(.system(size: 22, weight: .medium))
-                        Text("Disconnect")
-                        Spacer(minLength: 0)
-                    }
+                    SettingsActionLabel(title: "Disconnect", systemImage: "xmark.circle")
                 }
                 .buttonStyle(TVSettingsRowButtonStyle(isDestructive: true))
             }

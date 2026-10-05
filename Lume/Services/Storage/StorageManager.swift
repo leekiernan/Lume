@@ -87,12 +87,12 @@ enum StorageManager {
             do {
                 // Filter in SQLite so only already-enriched rows are hydrated.
                 let movies = try context.fetch(FetchDescriptor<Movie>(
-                    predicate: #Predicate { $0.tmdbEnrichedAt != nil || $0.ratingsEnrichedAt != nil }
+                    predicate: #Predicate { $0.tmdbEnrichedAt != nil || $0.tmdbArtworkEnrichedAt != nil || $0.ratingsEnrichedAt != nil }
                 ))
                 try mutateInBatches(movies, in: context) { clearEnrichment(of: $0, in: context) }
 
                 let series = try context.fetch(FetchDescriptor<Series>(
-                    predicate: #Predicate { $0.tmdbEnrichedAt != nil || $0.ratingsEnrichedAt != nil }
+                    predicate: #Predicate { $0.tmdbEnrichedAt != nil || $0.tmdbArtworkEnrichedAt != nil || $0.ratingsEnrichedAt != nil }
                 ))
                 try mutateInBatches(series, in: context) { clearEnrichment(of: $0, in: context) }
             } catch {
@@ -141,22 +141,7 @@ enum StorageManager {
     }
 
     private nonisolated static func clearEnrichment(of movie: Movie, in context: ModelContext) {
-        // Clearing the relationship array only disassociates the rows; delete
-        // them explicitly so the orphaned cast doesn't linger and keep
-        // occupying the store.
-        for cast in movie.castMembers {
-            context.delete(cast)
-        }
-        movie.backdropPath = nil
-        movie.logoPath = nil
-        movie.tagline = nil
-        movie.contentRating = nil
-        movie.tmdbEnrichedAt = nil
-        movie.similarTMDBIds = nil
-        movie.trailersData = nil
-        movie.imdbId = nil
-        movie.externalRatingsData = nil
-        movie.ratingsEnrichedAt = nil
+        movie.clearCommonEnrichment(in: context)
         movie.collectionId = nil
         movie.collectionName = nil
         movie.collectionPosterPath = nil
@@ -164,19 +149,7 @@ enum StorageManager {
     }
 
     private nonisolated static func clearEnrichment(of show: Series, in context: ModelContext) {
-        for cast in show.castMembers {
-            context.delete(cast)
-        }
-        show.backdropPath = nil
-        show.logoPath = nil
-        show.tagline = nil
-        show.contentRating = nil
-        show.tmdbEnrichedAt = nil
-        show.similarTMDBIds = nil
-        show.trailersData = nil
-        show.imdbId = nil
-        show.externalRatingsData = nil
-        show.ratingsEnrichedAt = nil
+        show.clearCommonEnrichment(in: context)
     }
 
     /// Wipes the active profile's watch history: resets `watchProgress`,

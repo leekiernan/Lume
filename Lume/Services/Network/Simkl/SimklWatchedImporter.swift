@@ -44,8 +44,8 @@ nonisolated struct SimklImportSummary: Equatable {
 nonisolated enum SimklWatchedImporter {
     /// Marks the local movies and episodes that Simkl reports as watched,
     /// writing through the given catalog context. Returns what changed.
-    static func apply(items: SimklAllItems, in context: ModelContext) -> SimklImportSummary {
-        apply(movies: items.movies, shows: items.shows, in: context)
+    static func apply(items: SimklAllItems, in context: ModelContext, pendingScope: TrackerScope = .simkl) -> SimklImportSummary {
+        apply(movies: items.movies, shows: items.shows, in: context, pendingScope: pendingScope)
     }
 
     /// Marks the local movies and episodes that Simkl reports as watched,
@@ -53,10 +53,11 @@ nonisolated enum SimklWatchedImporter {
     static func apply(
         movies: [SimklWatchedMovie],
         shows: [SimklWatchedShow],
-        in context: ModelContext
+        in context: ModelContext,
+        pendingScope: TrackerScope = .simkl
     ) -> SimklImportSummary {
         let moviesMarked = importMovies(movies, in: context)
-        let shows = importShows(shows, in: context)
+        let shows = importShows(shows, in: context, pendingScope: pendingScope)
 
         if context.hasChanges {
             do {
@@ -97,6 +98,9 @@ nonisolated enum SimklWatchedImporter {
         var count = 0
         for movie in candidates where !movie.isWatched {
             guard let tmdb = movie.tmdbId, watchedIDs.contains(tmdb) else { continue }
+            // A rewatch or local unwatched decision made after the remote play
+            // must survive the import, as on Trakt.
+            if let local = movie.lastWatchedDate, (dates[tmdb] ?? .distantPast) <= local { continue }
             movie.isWatched = true
             movie.watchProgress = Double(movie.durationSecs ?? 0)
             if let date = dates[tmdb] {
@@ -116,7 +120,8 @@ nonisolated enum SimklWatchedImporter {
 
     private static func importShows(
         _ watched: [SimklWatchedShow],
-        in context: ModelContext
+        in context: ModelContext,
+        pendingScope: TrackerScope
     ) -> (marked: Int, queued: Int) {
         var showsByTMDB: [Int: SimklWatchedShow] = [:]
         for show in watched {
@@ -129,7 +134,7 @@ nonisolated enum SimklWatchedImporter {
 
         let candidates = TrackerCatalogLookup.series(tmdbIDs: Set(showsByTMDB.keys), in: context)
 
-        var pending = SimklPendingWatchedStore.load()
+        var pending = SimklPendingWatchedStore.load(scope: pendingScope)
         var pendingChanged = false
         var marked = 0
         var queued = 0
@@ -236,6 +241,7 @@ nonisolated enum SimklWatchedImporter {
         for episode in series.episodes where !episode.isWatched {
             let key = SeasonEpisode(season: episode.seasonNum, episode: episode.episodeNum)
             guard let date = progress.dates[key] else { continue }
+            if let local = episode.lastWatchedDate, (date ?? .distantPast) <= local { continue }
             episode.isWatched = true
             episode.watchProgress = Double(episode.durationSecs ?? 0)
             if let date {

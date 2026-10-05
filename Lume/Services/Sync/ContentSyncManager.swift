@@ -222,48 +222,9 @@ actor ContentSyncManager {
     private func syncCategories(_ dtos: [XtreamCategory], type: CategoryType, playlistId: UUID) throws {
         let interval = Perf.begin(.syncCategories)
         defer { Perf.end(interval) }
-
-        let context = ModelContext(modelContainer)
-        context.autosaveEnabled = false
-
-        let categoryLookup = buildExistingCategoryLookup(context: context, playlistId: playlistId, type: type)
-
-        guard let playlist = try context.fetch(
-            FetchDescriptor<Playlist>(predicate: #Predicate { $0.id == playlistId })
-        ).first else { return }
-
-        for (index, categoryDTO) in dtos.enumerated() {
-            if let existingCat = categoryLookup[categoryDTO.categoryId] {
-                // Guarded like the content rows: an unchanged category list
-                // then leaves the context clean and skips the save.
-                if existingCat.name != categoryDTO.categoryName { existingCat.name = categoryDTO.categoryName }
-                let parentId = categoryDTO.parentId ?? 0
-                if existingCat.parentId != parentId { existingCat.parentId = parentId }
-                if existingCat.sortOrder != index { existingCat.sortOrder = index }
-            } else {
-                let category = Category(
-                    apiId: categoryDTO.categoryId,
-                    name: categoryDTO.categoryName,
-                    parentId: categoryDTO.parentId ?? 0,
-                    type: type,
-                    playlist: playlist
-                )
-                category.sortOrder = index
-                context.insert(category)
-            }
-        }
-
-        if context.hasChanges {
-            try context.save()
-        }
-
-        // Remove categories of this type the provider has dropped. The guarded
-        // entry skips an empty list (the transient-failure signature) and holds
-        // back a list too short to cover the stored categories, exactly as the
-        // content sweeps do.
-        pruneCategories(
-            playlistId: playlistId, type: type, seenApiIds: Set(dtos.map(\.categoryId)), importedCount: dtos.count
-        )
+        try syncProviderCategories(dtos.map {
+            ProviderCategory(id: $0.categoryId, name: $0.categoryName, parentID: $0.parentId ?? 0)
+        }, type: type, playlistId: playlistId, keepsEmptyIDs: true)
     }
 
     /// Syncs episodes for a series
@@ -308,7 +269,7 @@ actor ContentSyncManager {
                 guard let episodeIdString = episodeDTO.id else { continue }
                 let plot = episodeDTO.info?.plot
                 result.append(ParsedEpisode(
-                    id: "\(seriesElementId)-episode-\(episodeIdString)",
+                    id: CatalogID.episode(ownerID: seriesElementId, key: episodeIdString),
                     episodeId: episodeIdString,
                     title: Self.cleanEpisodeTitle(episodeDTO.title),
                     containerExtension: episodeDTO.containerExtension ?? "mkv",

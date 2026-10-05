@@ -124,31 +124,7 @@ extension ContentSyncManager {
     }
 
     private func syncStalkerCategories(_ cats: [StalkerCategory], type: CategoryType, playlistId: UUID) throws {
-        let context = ModelContext(modelContainer)
-        context.autosaveEnabled = false
-
-        let lookup = buildExistingCategoryLookup(context: context, playlistId: playlistId, type: type)
-        guard let playlist = try context.fetch(
-            FetchDescriptor<Playlist>(predicate: #Predicate { $0.id == playlistId })
-        ).first else { return }
-
-        for (index, cat) in cats.enumerated() where !cat.id.isEmpty {
-            if let existing = lookup[cat.id] {
-                if existing.name != cat.title { existing.name = cat.title }
-                if existing.sortOrder != index { existing.sortOrder = index }
-            } else {
-                let category = Category(apiId: cat.id, name: cat.title, parentId: 0, type: type, playlist: playlist)
-                category.sortOrder = index
-                context.insert(category)
-            }
-        }
-        if context.hasChanges {
-            try context.save()
-        }
-
-        // A failed list request arrives here as `[]` (see `performStalkerSync`),
-        // which the guarded entry never sweeps on.
-        pruneCategories(playlistId: playlistId, type: type, seenApiIds: Set(cats.map(\.id)), importedCount: cats.count)
+        try syncProviderCategories(cats.map { ProviderCategory(id: $0.id, name: $0.title) }, type: type, playlistId: playlistId)
     }
 
     // MARK: - Catalog walk (vod / series)
@@ -231,7 +207,7 @@ extension ContentSyncManager {
         progress: SyncProgress?
     ) async throws {
         await progress?.start(.movies)
-        let playlistPrefix = "\(playlistId.uuidString)-\(CategoryType.vod.rawValue)-"
+        let playlistPrefix = CatalogID.prefix(playlistId, infix: CategoryType.vod.rawValue)
         let result = try await syncStalkerCatalog(
             client: client, type: "vod", categories: categories, progress: progress
         ) { batch, seenIds in
@@ -283,29 +259,19 @@ extension ContentSyncManager {
         context.autosaveEnabled = false
         let ids = items.compactMap { entry -> String? in
             guard let stalkerId = entry.item.id else { return nil }
-            return "\(playlistId.uuidString)-movie-\(Self.streamId(for: stalkerId))"
+            return CatalogID.content(playlistId, kind: .movie, key: Self.streamId(for: stalkerId))
         }
-        var existing: [String: Movie] = [:]
-        let fetched = (try? context.fetch(
-            FetchDescriptor<Movie>(predicate: #Predicate { ids.contains($0.id) })
-        )) ?? []
-        for movie in fetched {
-            existing[movie.id] = movie
-        }
+        var existing = try CatalogUpsert.lookup(Movie.self, ids: ids, context: context)
 
         var imported = 0
         for (item, categoryId) in items {
             guard let stalkerId = item.id, let cmd = item.cmd else { continue }
             let streamId = Self.streamId(for: stalkerId)
-            let movieId = "\(playlistId.uuidString)-movie-\(streamId)"
+            let movieId = CatalogID.content(playlistId, kind: .movie, key: streamId)
             seenIds.insert(movieId)
 
-            let movie: Movie
-            if let found = existing[movieId] {
-                movie = found
-            } else {
-                movie = Movie(id: movieId, streamId: streamId, name: "")
-                context.insert(movie)
+            let movie = CatalogUpsert.row(id: movieId, lookup: &existing, context: context) {
+                Movie(id: movieId, streamId: streamId, name: "")
             }
             Self.applyStalkerFields(from: item, categoryId: categoryId, cmd: cmd, to: movie, playlistPrefix: playlistPrefix)
             imported += 1
@@ -359,7 +325,7 @@ extension ContentSyncManager {
         progress: SyncProgress?
     ) async throws {
         await progress?.start(.series)
-        let playlistPrefix = "\(playlistId.uuidString)-\(CategoryType.series.rawValue)-"
+        let playlistPrefix = CatalogID.prefix(playlistId, infix: CategoryType.series.rawValue)
         let result = try await syncStalkerCatalog(
             client: client, type: "series", categories: categories, progress: progress
         ) { batch, seenIds in
@@ -397,29 +363,19 @@ extension ContentSyncManager {
         context.autosaveEnabled = false
         let ids = items.compactMap { entry -> String? in
             guard let stalkerId = entry.item.id else { return nil }
-            return "\(playlistId.uuidString)-series-\(Self.streamId(for: stalkerId))"
+            return CatalogID.content(playlistId, kind: .series, key: Self.streamId(for: stalkerId))
         }
-        var existing: [String: Series] = [:]
-        let fetched = (try? context.fetch(
-            FetchDescriptor<Series>(predicate: #Predicate { ids.contains($0.id) })
-        )) ?? []
-        for series in fetched {
-            existing[series.id] = series
-        }
+        var existing = try CatalogUpsert.lookup(Series.self, ids: ids, context: context)
 
         var imported = 0
         for (item, categoryId) in items {
             guard let stalkerId = item.id else { continue }
             let seriesId = Self.streamId(for: stalkerId)
-            let id = "\(playlistId.uuidString)-series-\(seriesId)"
+            let id = CatalogID.content(playlistId, kind: .series, key: seriesId)
             seenIds.insert(id)
 
-            let series: Series
-            if let found = existing[id] {
-                series = found
-            } else {
-                series = Series(id: id, seriesId: seriesId, name: "")
-                context.insert(series)
+            let series = CatalogUpsert.row(id: id, lookup: &existing, context: context) {
+                Series(id: id, seriesId: seriesId, name: "")
             }
             Self.applyStalkerFields(from: item, categoryId: categoryId, to: series, playlistPrefix: playlistPrefix)
             imported += 1
@@ -472,7 +428,7 @@ extension ContentSyncManager {
             for episodeNum in episodeNumbers {
                 let episodeKey = "\(item.id ?? "\(index)")-\(episodeNum)"
                 result.append(ParsedEpisode(
-                    id: "\(seriesElementId)-episode-\(episodeKey)",
+                    id: CatalogID.episode(ownerID: seriesElementId, key: episodeKey),
                     episodeId: episodeKey,
                     title: item.name ?? "",
                     containerExtension: "mpegts",
@@ -503,7 +459,7 @@ extension ContentSyncManager {
         let totalCount = channels.count
         await progress?.update(detail: "0 of \(totalCount)", fraction: 0)
 
-        let playlistPrefix = "\(playlistId.uuidString)-\(CategoryType.live.rawValue)-"
+        let playlistPrefix = CatalogID.prefix(playlistId, infix: CategoryType.live.rawValue)
         var seenIds = Set<String>()
         // Local copy: ContentSyncManager.batchSize is file-private to the main
         // file, so it isn't visible from this extension.
@@ -541,28 +497,18 @@ extension ContentSyncManager {
         context.autosaveEnabled = false
         let ids = channels.compactMap { channel -> String? in
             guard let stalkerId = channel.id else { return nil }
-            return "\(playlistId.uuidString)-live-\(Self.streamId(for: stalkerId))"
+            return CatalogID.content(playlistId, kind: .live, key: Self.streamId(for: stalkerId))
         }
-        var existing: [String: LiveStream] = [:]
-        let fetched = (try? context.fetch(
-            FetchDescriptor<LiveStream>(predicate: #Predicate { ids.contains($0.id) })
-        )) ?? []
-        for stream in fetched {
-            existing[stream.id] = stream
-        }
+        var existing = try CatalogUpsert.lookup(LiveStream.self, ids: ids, context: context)
 
         for channel in channels {
             guard let stalkerId = channel.id, let cmd = channel.cmd else { continue }
             let streamId = Self.streamId(for: stalkerId)
-            let id = "\(playlistId.uuidString)-live-\(streamId)"
+            let id = CatalogID.content(playlistId, kind: .live, key: streamId)
             seenIds.insert(id)
 
-            let stream: LiveStream
-            if let found = existing[id] {
-                stream = found
-            } else {
-                stream = LiveStream(id: id, streamId: streamId, name: "")
-                context.insert(stream)
+            let stream = CatalogUpsert.row(id: id, lookup: &existing, context: context) {
+                LiveStream(id: id, streamId: streamId, name: "")
             }
             Self.applyStalkerFields(from: channel, cmd: cmd, to: stream, playlistPrefix: playlistPrefix)
         }

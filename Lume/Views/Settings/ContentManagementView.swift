@@ -128,7 +128,7 @@ struct ContentManagementView: View {
     /// The id prefix every Category of the active playlist shares. Empty only
     /// when there is no playlist at all, and then there is nothing to scope.
     private var playlistPrefix: String {
-        activePlaylist.map { "\($0.id.uuidString)-" } ?? ""
+        activePlaylist?.contentIDPrefix ?? ""
     }
 
     /// Everything the scoped group depends on, folded into one comparable value.
@@ -245,7 +245,7 @@ struct ContentManagementView: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 28) {
                         Text("Content")
-                            .font(.system(size: 34, weight: .bold))
+                            .font(.system(size: TVSettingsMetrics.paneTitleFontSize, weight: .bold))
                             .padding(.horizontal, TVSettingsMetrics.rowHPadding)
 
                         if let name = activePlaylist?.name {
@@ -274,8 +274,8 @@ struct ContentManagementView: View {
                     }
                     .frame(maxWidth: TVSettingsMetrics.detailMaxWidth, alignment: .leading)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 48)
-                    .padding(.vertical, 72)
+                    .padding(.horizontal, TVSettingsMetrics.pageHorizontalInset)
+                    .padding(.vertical, TVSettingsMetrics.pageVerticalInset)
                 }
             }
             .tvSettingsBackground()
@@ -311,10 +311,7 @@ struct ContentManagementView: View {
             }
 
             if isReordering {
-                Text("Move up or down to position, then select to place. Press Menu to cancel.")
-                    .font(.system(size: 20))
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, TVSettingsMetrics.rowHPadding)
+                TVReorderHint()
             }
 
             if categories.isEmpty {
@@ -457,6 +454,7 @@ struct ContentManagementView: View {
     struct ContentManageRow<Icon: View>: View {
         let title: String
         let isHidden: Bool
+        var titleLineLimit: Int?
         var isRestricted = false
         var drillInValue: Category?
         let onToggleHidden: () -> Void
@@ -485,8 +483,14 @@ struct ContentManagementView: View {
                 }
 
                 icon()
-                Text(title)
-                    .foregroundStyle(isHidden ? .secondary : .primary)
+                Group {
+                    if let titleLineLimit {
+                        Text(title).lineLimit(titleLineLimit)
+                    } else {
+                        Text(title)
+                    }
+                }
+                .foregroundStyle(isHidden ? .secondary : .primary)
 
                 Spacer()
 

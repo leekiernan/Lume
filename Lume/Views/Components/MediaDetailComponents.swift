@@ -56,41 +56,6 @@ enum DetailMetrics {
     }
 }
 
-// MARK: - Backdrop image
-
-/// A wide artwork fill that prefers the TMDB backdrop and gracefully falls back
-/// to the provider poster, then to a symbol. Mirrors the home hero treatment.
-struct BackdropImage: View {
-    let url: URL?
-    var fallbackSymbol: String = "film"
-
-    var body: some View {
-        GeometryReader { geo in
-            CachedAsyncImage(url: url) { phase in
-                switch phase {
-                case .empty:
-                    Rectangle().fill(Color.gray.opacity(0.25))
-                        .overlay { ProgressView() }
-                case let .success(image):
-                    image.resizable().aspectRatio(contentMode: .fill)
-                        .frame(width: geo.size.width, height: geo.size.height)
-                        .clipped()
-                case .failure:
-                    Rectangle().fill(Color.gray.opacity(0.25))
-                        .overlay {
-                            Image(systemName: fallbackSymbol)
-                                .font(.largeTitle)
-                                .foregroundStyle(.secondary)
-                        }
-                @unknown default:
-                    EmptyView()
-                }
-            }
-            .frame(width: geo.size.width, height: geo.size.height)
-        }
-    }
-}
-
 // MARK: - Hero
 
 /// The cinematic header: backdrop artwork dimmed by a bottom gradient, with the
@@ -108,7 +73,7 @@ struct DetailHero: View {
 
     var body: some View {
         ZStack(alignment: .bottomLeading) {
-            BackdropImage(url: backdropURL ?? posterFallbackURL, fallbackSymbol: fallbackSymbol)
+            DetailBackdropArtwork(backdropURL: backdropURL, posterFallbackURL: posterFallbackURL, fallbackSymbol: fallbackSymbol)
 
             LinearGradient(
                 colors: [.clear, .black.opacity(0.35), .black.opacity(0.92)],
@@ -362,13 +327,13 @@ struct SimilarRow: View {
                         switch item {
                         case let .movie(movie):
                             NavigationLink(value: movie) {
-                                DetailPosterCard(title: item.title, imageURL: item.imageURL)
+                                DetailPosterCard(item: item)
                                     .matchedTransitionSourceIfAvailable(id: movie.id, in: animationNamespace)
                             }
                             .buttonStyle(.plain)
                         case let .series(series):
                             NavigationLink(value: series) {
-                                DetailPosterCard(title: item.title, imageURL: item.imageURL, isSeries: true)
+                                DetailPosterCard(item: item)
                                     .matchedTransitionSourceIfAvailable(id: series.id, in: animationNamespace)
                             }
                             .buttonStyle(.plain)
@@ -380,48 +345,6 @@ struct SimilarRow: View {
                 }
             }
             .padding(.horizontal, DetailMetrics.contentPadding)
-        }
-    }
-}
-
-/// A poster-style card matching the home rows, for the similar-titles strip.
-struct DetailPosterCard: View {
-    let title: String
-    let imageURL: URL?
-    var badge: String?
-    /// Picks the series fallback symbol, matching `SeriesCardView`.
-    var isSeries: Bool = false
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: PosterCardMetrics.titleSpacing) {
-            CachedAsyncImage(url: imageURL, maxPixelSize: PosterCardMetrics.posterHeight) { phase in
-                switch phase {
-                case .empty:
-                    Rectangle().fill(Color.gray.opacity(0.3)).overlay { ProgressView() }
-                case let .success(image):
-                    image.resizable().aspectRatio(contentMode: .fill)
-                case .failure:
-                    Rectangle().fill(Color.gray.opacity(0.3))
-                        .overlay {
-                            Image(systemName: isSeries ? "tv" : "film")
-                                .foregroundStyle(.secondary)
-                                .font(.largeTitle)
-                        }
-                @unknown default:
-                    EmptyView()
-                }
-            }
-            .posterArtworkFrame(fillsWidth: false)
-            .clipShape(RoundedRectangle(cornerRadius: PosterCardMetrics.cornerRadius))
-            .posterBadge(badge)
-            #if !os(tvOS)
-                .shadow(radius: 2)
-            #endif
-
-            Text(title)
-                .font(PosterCardMetrics.titleFont)
-                .lineLimit(2)
-                .posterTitleFrame(fillsWidth: false)
         }
     }
 }

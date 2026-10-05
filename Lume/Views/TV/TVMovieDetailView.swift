@@ -23,19 +23,19 @@
         @State private var playingMedia: PlayableMedia?
         @State private var loader: MovieDetailLoadMachine
         private var isLoadingTMDB: Bool {
-            loader.contentID == movie.id ? loader.isLoadingTMDB : detailNeedsTMDBFetch(tmdbId: movie.tmdbId, enrichedAt: movie.tmdbEnrichedAt)
+            loader.snapshot(for: movie).isLoadingTMDB
         }
 
         private var similar: [HomeMediaItem] {
-            loader.contentID == movie.id ? loader.similar : []
+            loader.snapshot(for: movie).similar
         }
 
         private var otherSources: [OtherSources.Source] {
-            loader.contentID == movie.id ? loader.otherSources : []
+            loader.snapshot(for: movie).otherSources
         }
 
         private var collectionMovies: [HomeMediaItem] {
-            loader.contentID == movie.id && loader.collectionID == movie.collectionId ? loader.collectionMovies : []
+            loader.snapshot(for: movie).collectionMovies
         }
 
         @State private var showYouTubeUnavailable = false
@@ -204,12 +204,12 @@
             switch item {
             case let .movie(movie):
                 NavigationLink(value: movie) {
-                    TVPosterCard(title: item.title, imageURL: item.imageURL, badge: badge)
+                    TVPosterCard(item: item, badge: badge)
                 }
                 .buttonStyle(TVCardButtonStyle())
             case let .series(series):
                 NavigationLink(value: series) {
-                    TVPosterCard(title: item.title, imageURL: item.imageURL, badge: badge)
+                    TVPosterCard(item: item, badge: badge)
                 }
                 .buttonStyle(TVCardButtonStyle())
             case .live:
@@ -270,7 +270,7 @@
         /// The playlist this movie actually belongs to (ids are `"<playlistUUID>-…"`),
         /// so playback uses the correct credentials. Falls back to the first.
         private var moviePlaylist: Playlist? {
-            playlists.first { movie.id.hasPrefix($0.id.uuidString) } ?? playlists.first
+            PlaylistOwner.playlist(forContentID: movie.id, in: playlists, fallback: .firstAvailable)
         }
 
         // MARK: - Actions

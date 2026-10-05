@@ -73,7 +73,7 @@ final class Category {
     var contentImportedAt: Date?
 
     init(apiId: String, name: String, parentId: Int, typeRaw: String, playlist: Playlist? = nil) {
-        id = "\(playlist?.id.uuidString ?? "unknown")-\(typeRaw)-\(apiId)"
+        id = CatalogID.category(playlist?.id, type: typeRaw, key: apiId)
         self.apiId = apiId
         self.name = name
         self.parentId = parentId
@@ -94,8 +94,9 @@ extension Category {
 
     /// How long an on-demand Stalker category import stays fresh. Past this,
     /// opening the category revalidates it against the portal in the background
-    /// (see `MovieCategoryView` / `SeriesCategoryView`) so provider-added titles
-    /// surface without a manual refresh — the only refresh path tvOS has.
+    /// (see `CatalogCategoryLoadMachine`) so provider-added titles
+    /// surface without a manual refresh. The category's explicit refresh action
+    /// remains available on tvOS as well.
     static let stalkerContentTTL: TimeInterval = 24 * 60 * 60
 
     /// Whether the last on-demand import is old enough to revalidate. `true`

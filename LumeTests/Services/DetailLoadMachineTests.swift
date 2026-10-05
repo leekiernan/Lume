@@ -81,4 +81,41 @@ struct DetailLoadMachineTests {
         #expect(machine.collectionID == nil)
         #expect(machine.collectionMovies.isEmpty)
     }
+
+    @Test func `series snapshots do not expose the previous title before replacement preparation`() {
+        let original = Series(id: "first", seriesId: 1, name: "First")
+        original.episodes = [episode(1, season: 3, series: original)]
+        let machine = SeriesDetailLoadMachine(series: original)
+        machine.recomputeSeasons(original)
+        #expect(machine.snapshot(for: original).availableSeasons == [3])
+        #expect(machine.snapshot(for: original).selectedSeason == 3)
+
+        let replacement = Series(id: "second", seriesId: 2, name: "Second")
+        let snapshot = machine.snapshot(for: replacement)
+        #expect(snapshot.availableSeasons.isEmpty)
+        #expect(snapshot.episodesBySeason.isEmpty)
+        #expect(snapshot.similar.isEmpty)
+        #expect(snapshot.otherSources.isEmpty)
+        #expect(snapshot.selectedSeason == 1)
+        #expect(!snapshot.isLoadingEpisodes)
+        #expect(snapshot.isLoadingTMDB == detailNeedsTMDBFetch(tmdbId: replacement.tmdbId, enrichedAt: replacement.tmdbEnrichedAt))
+        // Reading the safe snapshot does not reset the original presentation.
+        #expect(machine.contentID == original.id)
+        #expect(machine.snapshot(for: original).availableSeasons == [3])
+    }
+
+    @Test func `movie snapshot readiness uses the requested title rather than the previous load`() async throws {
+        let container = try makeTestContainer()
+        let original = Movie(id: "first", streamId: 1, name: "First")
+        let machine = MovieDetailLoadMachine(movie: original)
+        await machine.load(original, in: container.mainContext)
+        let replacement = Movie(id: "second", streamId: 2, name: "Second")
+        replacement.tmdbId = 123
+        let snapshot = machine.snapshot(for: replacement)
+        #expect(snapshot.isLoadingTMDB == detailNeedsTMDBFetch(tmdbId: replacement.tmdbId, enrichedAt: nil))
+        #expect(snapshot.collectionMovies.isEmpty)
+        #expect(snapshot.similar.isEmpty)
+        #expect(snapshot.otherSources.isEmpty)
+        #expect(machine.contentID == original.id)
+    }
 }

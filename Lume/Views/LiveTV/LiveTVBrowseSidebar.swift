@@ -1,5 +1,5 @@
 //
-//  LiveTVCategorySelectors.swift
+//  LiveTVBrowseSidebar.swift
 //  Lume
 //
 //  Live TV's browse panel: its virtual sections (Favorites, Recents, …) then

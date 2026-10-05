@@ -30,7 +30,7 @@ extension ContentSyncManager {
         let walk = try await client.getAllOrderedItems(
             type: type == .vod ? "vod" : "series", categoryId: apiId
         )
-        let playlistPrefix = "\(playlistId.uuidString)-\(type.rawValue)-"
+        let playlistPrefix = CatalogID.prefix(playlistId, infix: type.rawValue)
         let entries: [StalkerCatalogEntry] = walk.items.map { (item: $0, categoryId: apiId) }
 
         var seen = Set<String>()
@@ -65,7 +65,7 @@ extension ContentSyncManager {
     private func markStalkerCategoryImported(apiId: String, type: CategoryType, playlistId: UUID) {
         let context = ModelContext(modelContainer)
         context.autosaveEnabled = false
-        let categoryId = "\(playlistId.uuidString)-\(type.rawValue)-\(apiId)"
+        let categoryId = CatalogID.category(playlistId, type: type.rawValue, key: apiId)
         guard let category = try? context.fetch(
             FetchDescriptor<Category>(predicate: #Predicate { $0.id == categoryId })
         ).first else { return }
@@ -78,7 +78,7 @@ extension ContentSyncManager {
     func markAllStalkerCategoriesImported(type: CategoryType, playlistId: UUID) {
         let context = ModelContext(modelContainer)
         context.autosaveEnabled = false
-        let prefix = "\(playlistId.uuidString)-\(type.rawValue)-"
+        let prefix = CatalogID.prefix(playlistId, infix: type.rawValue)
         let cats = (try? context.fetch(
             FetchDescriptor<Category>(predicate: #Predicate { $0.id.starts(with: prefix) })
         )) ?? []
@@ -133,7 +133,7 @@ extension ContentSyncManager {
         playlistId: UUID
     ) -> [String] {
         guard !items.isEmpty else { return [] }
-        let playlistPrefix = "\(playlistId.uuidString)-\(kind.rawValue)-"
+        let playlistPrefix = CatalogID.prefix(playlistId, infix: kind.rawValue)
         // A hit's own `category_id` when the portal sends one; otherwise the
         // row stays wherever it is already filed (see `stalkerCategoryId`).
         let entries: [StalkerCatalogEntry] = items.map { (item: $0, categoryId: $0.categoryId) }
@@ -161,7 +161,7 @@ extension ContentSyncManager {
         for item in items {
             guard let stalkerId = item.id else { continue }
             if kind == .vod, item.cmd == nil { continue }
-            let id = "\(playlistId.uuidString)-\(elementKind)-\(Self.streamId(for: stalkerId))"
+            let id = CatalogID.prefix(playlistId, infix: elementKind) + String(Self.streamId(for: stalkerId))
             if unique.insert(id).inserted { ordered.append(id) }
         }
         return ordered

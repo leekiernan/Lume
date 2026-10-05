@@ -119,7 +119,7 @@ private extension ContentSyncManager {
     /// The import-then-sweep half of `importM3UFile`, on an in-memory batch.
     func importFixture(_ entries: [M3UEntry], playlistId: UUID, areas: Set<AppArea>) throws {
         let state = M3UImportState(areas: areas)
-        seedImportState(state, playlistId: playlistId)
+        try seedImportState(state, playlistId: playlistId)
         try importBatch(M3UBatchClassifier.classify(entries), playlistId: playlistId, state: state)
         pruneStaleM3URows(playlistId: playlistId, state: state)
     }

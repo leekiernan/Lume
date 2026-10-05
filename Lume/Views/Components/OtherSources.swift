@@ -78,7 +78,7 @@ enum OtherSources {
         let playlists = (try? context.fetch(FetchDescriptor<Playlist>())) ?? []
         let labelled = foreign
             .compactMap { candidate in
-                playlists.first { candidate.id.hasPrefix($0.id.uuidString) }
+                playlists.owner(ofContentID: candidate.id)
                     .map { Source(item: candidate.item, playlistName: $0.name) }
             }
             .sorted { ($0.playlistName ?? "").localizedStandardCompare($1.playlistName ?? "") == .orderedAscending }

@@ -45,12 +45,8 @@ import SwiftUI
                         presentPaywall(.multiplePlaylists)
                     }
                 } label: {
-                    HStack(spacing: 16) {
-                        Image(systemName: canAddPlaylist ? "plus" : "crown")
-                            .font(.system(size: 22, weight: .medium))
-                        Text("Add Playlist")
-                        Spacer(minLength: 0)
-                    }
+                    Label("Add Playlist", systemImage: canAddPlaylist ? "plus" : "crown")
+                        .labelStyle(TVSettingsIconLabelStyle())
                 }
                 .buttonStyle(TVSettingsRowButtonStyle())
 
@@ -60,27 +56,18 @@ import SwiftUI
                 Button {
                     showingEPGSources = true
                 } label: {
-                    HStack(spacing: 16) {
-                        Image(systemName: "list.clipboard")
-                            .font(.system(size: 22, weight: .medium))
-                        Text("TV Guide Sources")
-                        Spacer(minLength: 0)
-                        Image(systemName: "chevron.right")
-                    }
+                    Label("TV Guide Sources", systemImage: "list.clipboard")
+                        .labelStyle(TVSettingsIconLabelStyle(showsChevron: true))
                 }
                 .buttonStyle(TVSettingsRowButtonStyle())
 
                 if !premium.isPremium {
                     Text("Free includes one playlist. Upgrade to Lume Pro to add more.")
-                        .font(.system(size: 20))
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, TVSettingsMetrics.rowHPadding)
+                        .tvSettingsFooter()
                         .padding(.top, 6)
                 } else if playlists.count > 1 {
                     Text("Switching playlist changes the content shown across Home, Movies, Series and Live TV.")
-                        .font(.system(size: 20))
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, TVSettingsMetrics.rowHPadding)
+                        .tvSettingsFooter()
                         .padding(.top, 6)
                 }
             }

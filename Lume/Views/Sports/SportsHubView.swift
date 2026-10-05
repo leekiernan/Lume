@@ -36,8 +36,12 @@ struct SportsHubView: View {
     /// Follows taken off the hub in Settings ▸ Sports.
     @AppStorage(SportsHubLayout.hiddenKey) private var hiddenFollowsRaw = ""
     @State private var resolution = SportsFixtureResolutionMachine()
+    /// Rebuilt when either machine or the visibility changes — see
+    /// `keepingSportsHubChannels`.
+    @State private var hubChannels = SportsHubChannels.empty
+
     private var resolved: [String: [ResolvedChannel]] {
-        resolution.resolved(for: restriction.visibilityToken)
+        hubChannels.resolved
     }
 
     @State private var heroSelection = SportsHeroSelectionMachine()
@@ -124,6 +128,9 @@ struct SportsHubView: View {
                 lockedState
             }
         }
+        .keepingSportsHubChannels(
+            $hubChannels, resolution: resolution, highlights: highlightsLoad, visibilityToken: restriction.visibilityToken
+        )
         .sheet(isPresented: $showManageTeams) { ManageTeamsSheet() }
         .sheet(item: $selectedFixture, onDismiss: presentPendingMedia) { fixture in
             GameDetailSheet(fixture: fixture, resolved: resolved[fixture.id] ?? [], onWatch: watch)
@@ -154,6 +161,9 @@ struct SportsHubView: View {
                     }
                     .padding()
                 }
+                .task(id: resolveKey(highlightsResult.highlights.map(\.fixture))) {
+                    await runResolve(highlightsResult.highlights.map(\.fixture))
+                }
             } else if pageKey != nil {
                 followPage(grouping.pageFixtures(season: grouping.scopedTeam.flatMap { seasonLoad.season(for: $0.id) }))
             } else {
@@ -175,7 +185,7 @@ struct SportsHubView: View {
                 highlights: picks,
                 payPerView: highlights.payPerView,
                 availability: { fixture in
-                    SportsChannelAvailability(highlights.resolved[fixture.id], startDate: fixture.headlineDate, preference: .current)
+                    SportsChannelAvailability(resolved[fixture.id], startDate: fixture.headlineDate, preference: .current)
                 },
                 onOpen: { selectedFixture = $0 },
                 onWatchEvent: watchEvent
@@ -196,20 +206,22 @@ struct SportsHubView: View {
     }
 
     private var heroAvailableIDs: Set<String> {
-        Set(
-            (resolved.merging(highlightsResult.resolved) { current, cached in current.isEmpty ? cached : current })
-                .filter { !$0.value.isEmpty }
-                .map(\.key)
-        )
+        hubChannels.availableIDs
     }
 
     private func followedContent(_ fixtures: [SportsFixture]) -> some View {
         let candidates = grouping.heroCandidates(
             in: fixtures, highlights: highlightsResult.highlights.map(\.fixture), availableIDs: heroAvailableIDs
         )
-        let hero = heroSelection.displayed(in: candidates, context: heroSelectionContext)?.fixture
-        let carouselCandidates = Array(heroSelection.carouselCandidates(in: candidates, context: heroSelectionContext).prefix(5))
-        let carouselFixtureIDs = Set(carouselCandidates.map(\.id))
+        let plan = SportsHubPresentationPlan(
+            fixtures: fixtures,
+            candidates: heroSelection.carouselCandidates(in: candidates, context: heroSelectionContext),
+            surface: .standard,
+            highlights: scope == .all ? highlightsResult.highlights.map(\.fixture) : []
+        )
+        let carouselCandidates = plan.carousel
+        let carouselFixtureIDs = plan.carouselIDs
+        let groups = grouping.groups(for: plan.rowFixtures)
         // Movies' structure: the hero opens the scroll view and runs under the
         // bar; the rows follow.
         return ScrollView {
@@ -219,8 +231,9 @@ struct SportsHubView: View {
                     .padding(.horizontal)
                 SportsSectionsView(
                     // Carousel pages lead on their own, not again below.
-                    groups: grouping.groups(for: fixtures.filter { !carouselFixtureIDs.contains($0.id) }),
+                    groups: groups,
                     resolved: resolved,
+                    showsEmptyState: plan.showsNoGames(groupsAreEmpty: groups.isEmpty),
                     isFollowed: isFollowed,
                     onOpenDetail: { selectedFixture = $0 },
                     onWatch: watch,
@@ -239,10 +252,10 @@ struct SportsHubView: View {
             .padding(.bottom, PosterCardMetrics.sectionVerticalPadding)
         }
         .ignoresSafeArea(edges: carouselCandidates.isEmpty ? [] : .top)
-        // A headline from later in the week isn't on screen, but still wants
-        // its channel once the guide reaches it.
-        .task(id: resolveKey(fixtures + offScreen(hero, in: fixtures))) {
-            await runResolve(fixtures + offScreen(hero, in: fixtures))
+        // All slides and the displayed highlights rail refresh with the rows;
+        // later-week fixtures can gain a channel once the guide reaches them.
+        .task(id: resolveKey(plan.resolutionFixtures)) {
+            await runResolve(plan.resolutionFixtures)
         }
         .task(id: heroSelectionKey(for: candidates)) {
             heroSelection.reconcile(candidates: candidates, context: heroSelectionContext)
@@ -251,7 +264,7 @@ struct SportsHubView: View {
 
     private func heroAvailability(_ fixture: SportsFixture) -> SportsChannelAvailability {
         SportsChannelAvailability(
-            resolved[fixture.id] ?? highlightsResult.resolved[fixture.id],
+            resolved[fixture.id],
             startDate: fixture.headlineDate,
             preference: .current
         )
@@ -298,15 +311,7 @@ struct SportsHubView: View {
     }
 
     private var lockedState: some View {
-        ContentUnavailableView {
-            Label {
-                Text(PremiumFeature.sportsHub.title)
-            } icon: {
-                Image(systemName: "sportscourt")
-            }
-        } description: {
-            Text(PremiumFeature.sportsHub.subtitle)
-        } actions: {
+        SportsUnavailableState(title: PremiumFeature.sportsHub.title, message: PremiumFeature.sportsHub.subtitle) {
             Button("Unlock Sports Hub") { showPaywall = true }
                 .buttonStyle(.borderedProminent)
         }
@@ -330,11 +335,6 @@ struct SportsHubView: View {
     /// Resolves the currently visible fixtures to the viewer's channels in one
     /// off-main pass, re-running when the fixture set changes or an EPG refresh
     /// finishes (fresh sub-titles sharpen matching).
-    private func offScreen(_ hero: SportsFixture?, in fixtures: [SportsFixture]) -> [SportsFixture] {
-        guard let hero, !fixtures.contains(where: { $0.id == hero.id }) else { return [] }
-        return [hero]
-    }
-
     private func resolveKey(_ fixtures: [SportsFixture]) -> String {
         SportsFixtureResolutionMachine.requestKey(for: fixtures, visibilityToken: restriction.visibilityToken, refreshingOn: [epg.isSyncing])
     }
@@ -425,15 +425,6 @@ struct SportsHubView: View {
 
     private var scopeTitle: String {
         grouping.scopeTitle
-    }
-
-    // MARK: - Static helpers
-
-    /// The league id embedded in a team follow key ("espn:soccer/ger.1:132" →
-    /// "espn:soccer/ger.1").
-    static func leagueId(fromTeamKey key: String) -> String? {
-        guard let separator = key.lastIndex(of: ":"), separator > key.startIndex else { return nil }
-        return String(key[..<separator])
     }
 }
 

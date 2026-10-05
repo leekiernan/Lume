@@ -63,6 +63,8 @@ final class SportsSyncService {
     private let crestTints: SportsCrestTintCache
     private let defaults: UserDefaults
     private var task: Task<Void, Never>?
+    private var refreshToken = RequestToken()
+    private var availability: SportsAvailability?
     /// When each league was last sent a full refresh, successful or not. ESPN
     /// answers a failure and an off-season league alike with nothing, and either
     /// leaves the league stale — this keeps it from being re-asked on every
@@ -168,25 +170,28 @@ final class SportsSyncService {
     /// the service boundary so background callers cannot keep ESPN work alive
     /// after the user switches either feature off.
     func availabilityDidChange() {
-        guard Self.isEnabled else {
+        let current = SportsAvailability.read()
+        let profileChanged = availability.map { $0.profileID != current.profileID } ?? false
+        availability = current
+        if profileChanged || !current.isEnabled {
+            refreshToken = RequestToken()
             task?.cancel()
             liveTask?.cancel()
             task = nil
             liveTask = nil
-            liveClients = 0
+            if !current.isEnabled { liveClients = 0 }
             isSyncing = false
             lastAttempt.removeAll()
-            return
         }
+        guard current.isEnabled else { return }
         store.loadCached(leagueIds: leaguesToRefresh())
+        if profileChanged { startLiveLoopIfNeeded() }
     }
 
     /// A Sports surface is meaningful only when both the parent Live TV area
     /// and this profile's optional Sports feature are on.
     static var isEnabled: Bool {
-        AppAreaSettings.isEnabled(.liveTV)
-            && (UserDefaults.standard.object(forKey: enabledKey) == nil
-                || UserDefaults.standard.bool(forKey: enabledKey))
+        SportsAvailability.read().isEnabled
     }
 
     // MARK: - Triggers
@@ -240,12 +245,14 @@ final class SportsSyncService {
     /// joined rather than doubled — it was started moments ago by another surface
     /// and covers the same followed set.
     private func refresh(leagueIds: [String]) async {
-        guard Self.isEnabled, provider != nil else { return }
+        guard !Task.isCancelled, Self.isEnabled, provider != nil else { return }
         if let task {
             await task.value
             return
         }
         guard !leagueIds.isEmpty else { return }
+        let token = RequestToken()
+        refreshToken = token
         let months = Self.monthsToFetch(for: Date())
         let pass = Task(priority: .utility) { [weak self] in
             guard let self else { return }
@@ -254,6 +261,8 @@ final class SportsSyncService {
         task = pass
         isSyncing = true
         await pass.value
+        // A cancelled pass may finish after a new profile has started its own.
+        guard refreshToken == token else { return }
         task = nil
         isSyncing = false
     }
@@ -303,7 +312,7 @@ final class SportsSyncService {
                 }
                 try? await Task.sleep(for: .seconds(Self.livePollInterval))
             }
-            self?.liveTask = nil
+            if !Task.isCancelled { self?.liveTask = nil }
         }
     }
 
@@ -327,7 +336,8 @@ final class SportsSyncService {
     /// opposed to which were merely attempted.
     @discardableResult
     private func performRefresh(leagueIds: [String], months: [DateComponents]) async -> Set<String> {
-        guard Self.isEnabled else { return [] }
+        guard !Task.isCancelled, Self.isEnabled else { return [] }
+        let scope = SportsAvailability.read()
         let interval = Perf.begin(.sportsFixtureRefresh)
         defer { Perf.end(interval) }
         let leagues = leagueIds.compactMap { SportsCatalog.league(id: $0) }
@@ -344,13 +354,13 @@ final class SportsSyncService {
             var succeeded: Set<String> = []
             while let (leagueId, success) = await group.next() {
                 if success { succeeded.insert(leagueId) }
-                if let league = iterator.next() {
+                if !Task.isCancelled, let league = iterator.next() {
                     group.addTask { await (league.id, self.refreshLeague(league, months: months)) }
                 }
             }
             return succeeded
         }
-        guard Self.isEnabled else { return [] }
+        guard !Task.isCancelled, scope == SportsAvailability.read(), Self.isEnabled else { return [] }
         // "Scores unavailable" only when nothing followed is current: a pass over
         // one off-season league that answered empty is not an outage while the
         // other leagues refreshed a minute ago.
@@ -369,7 +379,7 @@ final class SportsSyncService {
     /// standings, then publishes a merged snapshot. Returns whether anything fresh
     /// arrived; on a total failure it leaves the existing snapshot untouched.
     private func refreshLeague(_ league: SportsLeague, months: [DateComponents]) async -> Bool {
-        guard Self.isEnabled, let provider else { return false }
+        guard !Task.isCancelled, Self.isEnabled, let provider else { return false }
         let existing = store.snapshot(for: league.id)
         let teamsCacheFresh = Self.teamsCacheIsFresh(existing)
 
@@ -408,7 +418,7 @@ final class SportsSyncService {
 
         let standings = standingsResult.isEmpty ? (existing?.standings ?? []) : standingsResult
 
-        guard Self.isEnabled, gotFixtures || gotTeams || !standingsResult.isEmpty else { return false }
+        guard !Task.isCancelled, Self.isEnabled, gotFixtures || gotTeams || !standingsResult.isEmpty else { return false }
 
         let snapshot = SportsLeagueSnapshot(
             fetchedAt: Date(),
@@ -427,12 +437,13 @@ final class SportsSyncService {
     private func publish(_ snapshot: SportsLeagueSnapshot, for leagueId: String) async {
         let crests = snapshot.crestsNeedingTint
         let known = await crestTints.cachedTints(for: crests)
+        guard !Task.isCancelled, Self.isEnabled else { return }
         store.update(snapshot.withCrestTints(from: known), for: leagueId)
 
         let unseen = await crestTints.unseen(crests)
-        guard !unseen.isEmpty else { return }
+        guard !Task.isCancelled, Self.isEnabled, !unseen.isEmpty else { return }
         let learned = await crestTints.learnTints(for: unseen)
-        guard !learned.isEmpty, let current = store.snapshot(for: leagueId) else { return }
+        guard !Task.isCancelled, Self.isEnabled, !learned.isEmpty, let current = store.snapshot(for: leagueId) else { return }
         store.update(current.withCrestTints(from: learned), for: leagueId)
     }
 
@@ -479,7 +490,7 @@ final class SportsSyncService {
     /// full refresh, and a live game polled all afternoon must not keep the rest
     /// of its league's schedule from ever counting as stale.
     private func refreshDays(leagueIds: [String], days: [Date]) async {
-        guard Self.isEnabled, let provider, !days.isEmpty else { return }
+        guard !Task.isCancelled, Self.isEnabled, let provider, !days.isEmpty else { return }
         let leagues = leagueIds.compactMap { SportsCatalog.league(id: $0) }
         let fetchedByLeague = await withTaskGroup(of: (String, [SportsFixture]).self) { group in
             for league in leagues {
@@ -497,8 +508,9 @@ final class SportsSyncService {
         }
 
         var updated = false
-        guard Self.isEnabled else { return }
+        guard !Task.isCancelled, Self.isEnabled else { return }
         for (leagueId, fetched) in fetchedByLeague {
+            guard !Task.isCancelled, Self.isEnabled else { return }
             guard !fetched.isEmpty else { continue }
             var snapshot = store.snapshot(for: leagueId) ?? SportsLeagueSnapshot(fetchedAt: .distantPast)
             var byId = Dictionary(snapshot.fixtures.map { ($0.id, $0) }, uniquingKeysWith: { _, new in new })
@@ -509,7 +521,7 @@ final class SportsSyncService {
             await publish(snapshot, for: leagueId)
             updated = true
         }
-        if updated { store.noteLiveScoreUpdate() }
+        if !Task.isCancelled, Self.isEnabled, updated { store.noteLiveScoreUpdate() }
     }
 
     // MARK: - Helpers
@@ -524,7 +536,7 @@ final class SportsSyncService {
             ids.append(leagueId)
         }
         for teamId in followSource.followedTeamIds {
-            guard let leagueId = Self.leagueId(fromTeamID: teamId) else { continue }
+            guard let leagueId = SportsTeam.leagueID(fromTeamID: teamId) else { continue }
             if seen.insert(leagueId).inserted { ids.append(leagueId) }
         }
         return ids

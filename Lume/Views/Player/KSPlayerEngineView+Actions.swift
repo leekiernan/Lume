@@ -48,34 +48,25 @@ extension KSPlayerEngineView {
             // waiting for the next state callback.
             engine.syncState(playing ? .paused : .bufferFinished)
         #endif
-        resetHideTimer()
+        scheduleHide()
     }
 
-    func resetHideTimer() {
-        hideTask?.cancel()
-        if isControlsVisible {
-            scheduleHide()
-        }
+    var canAutoHideControls: Bool {
+        #if os(tvOS)
+            let playing = engine.isPlaying
+            let panelOpen = isPanelOpen || isChannelBrowserOpen
+        #else
+            let playing = isPlaying
+            let panelOpen = false
+        #endif
+        return PlayerControlsAutoHide.mayHide(
+            isPlaying: playing, isPanelOpen: panelOpen || isSeeking,
+            isSuppressed: PlayerControlsAutoHide.isSuppressed
+        )
     }
 
     func scheduleHide() {
-        hideTask?.cancel()
-        #if os(tvOS)
-            guard engine.isPlaying, !isPanelOpen else { return }
-        #else
-            guard isPlaying, !PlayerControlsAutoHide.isSuppressed else { return }
-        #endif
-        hideTask = Task { @MainActor in
-            try? await Task.sleep(nanoseconds: UInt64(autoHideInterval * 1_000_000_000))
-            #if os(tvOS)
-                guard !Task.isCancelled, engine.isPlaying else { return }
-            #else
-                guard !Task.isCancelled, isPlaying else { return }
-            #endif
-            withAnimation(.easeInOut(duration: 0.2)) {
-                isControlsVisible = false
-            }
-        }
+        chrome.schedule(mayHide: { canAutoHideControls })
     }
 
     func closePlayer() {

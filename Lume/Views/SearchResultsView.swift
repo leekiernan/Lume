@@ -20,8 +20,20 @@ import SwiftUI
 /// Which of the layouts above to show.
 enum SearchResultsLayout: Equatable {
     case overview
-    case filtered(ContentFilter)
-    case section(SearchSection)
+    case movies
+    case series
+    case channels
+    case nowPlaying
+    case upcoming
+
+    init(filter: ContentFilter) {
+        switch filter {
+        case .all: self = .overview
+        case .movies: self = .movies
+        case .series: self = .series
+        case .liveTV: self = .channels
+        }
+    }
 }
 
 struct SearchResultsView<Header: View>: View {
@@ -47,7 +59,7 @@ struct SearchResultsView<Header: View>: View {
 
     var body: some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: 32) {
+            LazyVStack(alignment: .leading, spacing: PosterCardMetrics.sectionSpacing) {
                 header()
                 switch layout {
                 case .overview:
@@ -55,16 +67,16 @@ struct SearchResultsView<Header: View>: View {
                     upcoming(limit: Self.channelPreviewCount)
                     movieRail
                     seriesRail
-                case .filtered(.movies), .section(.movies):
+                case .movies:
                     grid(results.movies) { MovieCardView(movie: $0, fillsWidth: true) }
-                case .filtered(.series), .section(.series):
+                case .series:
                     grid(results.series) { SeriesCardView(series: $0, fillsWidth: true) }
-                case .filtered(.liveTV), .filtered(.all):
+                case .channels:
                     nowPlaying(limit: nil)
                     upcoming(limit: nil)
-                case .section(.nowPlaying):
+                case .nowPlaying:
                     nowPlaying(limit: nil)
-                case .section(.upcoming):
+                case .upcoming:
                     upcoming(limit: nil)
                 }
             }
@@ -108,7 +120,7 @@ struct SearchResultsView<Header: View>: View {
                     }
                 }
                 #if os(tvOS)
-                .padding(.horizontal, 60)
+                .padding(.horizontal, TVLayoutMetrics.contentInset)
                 #endif
             }
             #if os(tvOS)
@@ -184,20 +196,9 @@ struct SearchResultsView<Header: View>: View {
         _ items: [Item],
         @ViewBuilder card: @escaping (Item) -> some View
     ) -> some View {
-        LazyVGrid(
-            columns: [GridItem(.adaptive(minimum: PosterCardMetrics.gridMinimum), spacing: PosterCardMetrics.gridSpacing)],
-            spacing: PosterCardMetrics.gridSpacing
-        ) {
+        PosterGrid {
             ForEach(items) { item in
-                NavigationLink(value: item) {
-                    card(item)
-                        .matchedTransitionSourceIfAvailable(id: item.id, in: animationNamespace)
-                }
-                .posterCardButtonStyle()
-                .mediaFavoriteMenu(
-                    isFavorite: { item.isFavorite },
-                    onToggleFavorite: { MediaFavorites.toggle(item, in: modelContext) }
-                )
+                CatalogPosterLink(item: item, animationNamespace: animationNamespace, card: card)
             }
         }
         .padding(.horizontal)
@@ -219,7 +220,11 @@ struct SearchResultsView<Header: View>: View {
                 }
             }
         }
+        #if os(tvOS)
+        .padding(.horizontal, TVLayoutMetrics.contentInset)
+        #else
         .padding(.horizontal)
+        #endif
     }
 }
 

@@ -287,38 +287,37 @@ final class TraktService {
         lastImport = nil
         defer { isImporting = false }
 
-        let profileID = ActiveProfileStore.current
-        let account = mutations.account
-        await mutations.flush()
-        guard !Task.isCancelled, mutations.pendingCount == 0,
-              mutations.account == account, ActiveProfileStore.current == profileID
-        else {
-            Logger.network.info("Trakt history import deferred: pending local changes or changed scope")
-            return
-        }
-        guard let accessToken = await session.validAccessToken() else {
-            lastImport = .failure
-            return
-        }
-        do {
-            async let movies = client.watchedMovies(accessToken: accessToken)
-            async let shows = client.watchedShows(accessToken: accessToken)
-            let watched = try await (movies: movies, shows: shows)
-            // What's paused part-way, for Continue Watching. Best effort: the
-            // watched history stands if this fails.
-            let paused = try? await client.playback(accessToken: accessToken)
-            guard !Task.isCancelled, isConnected, mutations.account == account,
-                  mutations.pendingCount == 0, ActiveProfileStore.current == profileID
-            else { return }
-            lastImport = await Self.applyImport(
-                movies: watched.movies, shows: watched.shows, paused: paused, container: context.container,
-                profileID: profileID
-            )
-            if let summary = lastImport {
-                Logger.network.info("Trakt history imported: movies \(summary.moviesMarked), episodes \(summary.episodesMarked), paused \(summary.inProgress), failed \(summary.failed)")
+        let container = context.container
+        let outcome = await TrackerImportRun(
+            begin: { await TrackerScope.begin(after: self.mutations) },
+            accessToken: { await self.session.validAccessToken() },
+            fetch: { token in
+                async let movies = self.client.watchedMovies(accessToken: token)
+                async let shows = self.client.watchedShows(accessToken: token)
+                let watched = try await (movies: movies, shows: shows)
+                // What's paused part-way, for Continue Watching. Best effort:
+                // the watched history stands if this fails.
+                let paused = try? await self.client.playback(accessToken: token)
+                return (movies: watched.movies, shows: watched.shows, paused: paused)
+            },
+            isCurrent: { $0.isCurrent(isConnected: self.isConnected, account: self.mutations.account, pendingCount: self.mutations.pendingCount) },
+            apply: { history, scope in
+                await Self.applyImport(
+                    movies: history.movies, shows: history.shows, paused: history.paused, container: container,
+                    scope: scope
+                )
             }
-        } catch {
+        ).perform()
+        switch outcome {
+        case .deferred:
+            Logger.network.info("Trakt history import deferred: pending local changes or changed scope")
+        case .failed:
             lastImport = .failure
+        case .discarded:
+            Logger.network.info("Trakt history import discarded: account, profile or pending changes moved during the fetch")
+        case let .applied(summary):
+            lastImport = summary
+            Logger.network.info("Trakt history imported: movies \(summary.moviesMarked), episodes \(summary.episodesMarked), paused \(summary.inProgress), failed \(summary.failed)")
         }
     }
 
@@ -333,13 +332,13 @@ final class TraktService {
         shows: [TraktWatchedShow],
         paused: [TraktPlaybackItem]?,
         container: ModelContainer,
-        profileID: UUID?
+        scope: TrackerScope
     ) async -> TraktImportSummary {
-        guard ActiveProfileStore.current == profileID else { return .failure }
+        guard scope.matches(.trakt) else { return .failure }
         let context = ModelContext(container)
-        var summary = TraktWatchedImporter.apply(movies: movies, shows: shows, in: context)
+        var summary = TraktWatchedImporter.apply(movies: movies, shows: shows, in: context, pendingScope: scope)
         if !summary.failed, let paused {
-            summary.inProgress = TraktPlaybackImporter.apply(paused, in: context)
+            summary.inProgress = TraktPlaybackImporter.apply(paused, in: context, pendingScope: scope)
             if context.hasChanges { try? context.save() }
         }
         return summary

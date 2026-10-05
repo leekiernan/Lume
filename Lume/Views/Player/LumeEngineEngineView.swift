@@ -74,7 +74,11 @@ struct LumeEngineEngineView: View {
     @StateObject var coordinator = LumeEngineCoordinator()
     /// Drives bounded backoff reconnects when the stream drops mid-playback.
     @State private var reconnector = PlaybackRetryController()
-    @State private var isControlsVisible = true
+    @State private var chrome = PlayerChromeController()
+    private var isControlsVisible: Bool {
+        chrome.isVisible
+    }
+
     @Environment(PlayerControlsBridge.self) private var remoteBridge: PlayerControlsBridge?
     /// Presents the OpenSubtitles browser. Held here rather than in the controls
     /// overlay: the overlay is removed when the controls auto-hide, which would
@@ -86,8 +90,6 @@ struct LumeEngineEngineView: View {
     @State var loadFailed = false
     @State private var isSeeking = false
     @State private var seekPosition: TimeInterval = 0
-    @State private var hideTask: Task<Void, Never>?
-    @State private var hoverHideTask: Task<Void, Never>?
     /// While an overlay panel (episodes / info) is open the controls must not
     /// auto-hide out from under the viewer.
     @State private var isPanelOpen = false
@@ -122,8 +124,6 @@ struct LumeEngineEngineView: View {
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
-
-    private let autoHideInterval: TimeInterval = 4
 
     var engineBody: some View {
         ZStack {
@@ -195,6 +195,7 @@ struct LumeEngineEngineView: View {
         }
         .preferredColorScheme(.dark)
         .onAppear {
+            chrome.activate()
             wireCoordinator()
             coordinator.startupTimeout = PlaybackPolicy.startupTimeout(quick: usesQuickStartupTimeout)
             coordinator.retriesStartupErrors = PlaybackPolicy.retriesStartupError(canFallBack: reportsStartupFailure)
@@ -206,22 +207,21 @@ struct LumeEngineEngineView: View {
             scheduleHide()
         }
         .onDisappear {
-            hideTask?.cancel()
-            hoverHideTask?.cancel()
+            chrome.deactivate()
             reconnector.cancel()
             NowPlayingService.shared.detachTransport(owner: coordinator)
             coordinator.tearDown()
         }
         .onChange(of: coordinator.isPlaying) { _, playing in
             clock.isPlaying = playing
-            resetHideTimer()
+            scheduleHide()
         }
         .onChange(of: coordinator.hasStartedPlayback) { _, started in
             // Once the first frame lands the controls become eligible; start the
             // auto-hide countdown so they don't linger.
             if started {
                 isCatchupSegmentLoading = false
-                resetHideTimer()
+                scheduleHide()
             }
         }
         .onChange(of: scenePhase) { _, phase in
@@ -241,10 +241,13 @@ struct LumeEngineEngineView: View {
             // A catch-up seek within one programme: the host already placed
             // the clock on the new segment, and a reset would zero it.
             let isCatchupSeek = newMedia.catchup?.isSameProgramme(as: oldMedia.catchup) == true
-            isCatchupSegmentLoading = isCatchupSeek && (coordinator.hasStartedPlayback || isCatchupSegmentLoading)
+            isCatchupSegmentLoading = PlayerChrome.keepsCatchupControls(
+                previous: oldMedia.catchup, next: newMedia.catchup,
+                started: coordinator.hasStartedPlayback, alreadyLoading: isCatchupSegmentLoading
+            )
             if isCatchupSeek { clock.rebase(onto: newMedia) } else { clock.reset(for: newMedia) }
             coordinator.configure(media: newMedia)
-            resetHideTimer()
+            scheduleHide()
         }
         #if os(tvOS)
         // Focus returns to the tap-catcher as the controls vanish, unless an
@@ -255,41 +258,19 @@ struct LumeEngineEngineView: View {
         #endif
         // Handle the Menu/back button at the player root so it reliably overrides
         // the fullScreenCover's default dismiss-on-Menu.
-        .onMenuPress { handleMenuPress() }
         // The Siri Remote's dedicated Play/Pause button is a distinct press type
         // from a click-pad Select, so the on-screen button never sees it.
-        .onPlayPausePress {
-            if remoteBridge?.claimsPlayPause() != true { togglePlay() }
-        }
-        .onChange(of: isControlsVisible, initial: true) { _, visible in
-            remoteBridge?.controlsVisible = visible
-        }
+        .playerRemoteControls(controlsVisible: isControlsVisible, onBack: handleMenuPress, onPlayPause: togglePlay)
         #if os(macOS)
-        .onContinuousHover(coordinateSpace: .local) { phase in
-            switch phase {
-            case .active:
-                if !isControlsVisible {
-                    withAnimation(.easeInOut(duration: 0.2)) { isControlsVisible = true }
-                }
-                resetHideTimer()
-                hoverHideTask?.cancel()
-            case .ended:
-                hoverHideTask?.cancel()
-                hoverHideTask = Task { @MainActor in
-                    try? await Task.sleep(nanoseconds: 600_000_000)
-                    guard !Task.isCancelled else { return }
-                    withAnimation(.easeInOut(duration: 0.2)) { isControlsVisible = false }
-                }
-            }
-        }
-        .onKeyPress(.leftArrow) { coordinator.skip(by: -media.skipInterval(default: 15)); resetHideTimer(); return .handled }
-        .onKeyPress(.rightArrow) { coordinator.skip(by: media.skipInterval(default: 15)); resetHideTimer(); return .handled }
-        .liveChannelKeyNavigation(
-            neighbours: itemNeighbours, swapper: mediaSwapper,
-            onSelect: { onSelectMedia?($0) }, onResetHideTimer: resetHideTimer
-        )
-        .onKeyPress(.space) { togglePlay(); return .handled }
-        .onKeyPress(.escape) { closePlayer(); return .handled }
+            .playerPointerChrome(chrome, mayHide: { canAutoHideControls })
+            .onKeyPress(.leftArrow) { coordinator.skip(by: -media.skipInterval(default: 15)); scheduleHide(); return .handled }
+            .onKeyPress(.rightArrow) { coordinator.skip(by: media.skipInterval(default: 15)); scheduleHide(); return .handled }
+            .liveChannelKeyNavigation(
+                neighbours: itemNeighbours, swapper: mediaSwapper,
+                onSelect: { onSelectMedia?($0) }, onResetHideTimer: scheduleHide
+            )
+            .onKeyPress(.space) { togglePlay(); return .handled }
+            .onKeyPress(.escape) { closePlayer(); return .handled }
         #endif
     }
 
@@ -326,34 +307,14 @@ struct LumeEngineEngineView: View {
     @ViewBuilder
     private var tapCatcher: some View {
         #if os(tvOS)
-            // tvOS has no touch surface: drive the overlay from the Siri remote.
-            // The catcher only takes focus while controls are hidden, so the
-            // control buttons stay reachable otherwise.
-            Button(action: showControls) {
-                Color.clear.contentShape(Rectangle())
-            }
-            .buttonStyle(LumeEngineInvisibleButtonStyle())
-            // Yield focus to the failure overlay's buttons when a stream dies.
-            // Only while the controls are actually drawn — see KSPlayerEngineView.
-            .disabled(drawsControls || isChannelBrowserOpen || loadFailed)
-            .focused($catcherFocused)
-            .tvRemoteMoveCommand { direction in
-                // Watching live TV with the controls hidden, left opens the
-                // channel browser, up/down surf adjacent channels and right
-                // recalls the last channel watched. Any other move summons the
-                // controls.
-                if media.isLive, direction == .left {
-                    openChannelBrowser()
-                } else if media.isLive, direction == .up || direction == .down || direction == .right {
-                    switchLiveChannel(direction)
-                } else {
-                    showControls()
-                }
-            }
+            PlayerTapCatcher(
+                isLive: media.isLive, controlsDrawn: drawsControls,
+                browserOpen: isChannelBrowserOpen, failed: loadFailed,
+                focused: $catcherFocused, showControls: showControls,
+                openBrowser: openChannelBrowser, surf: switchLiveChannel
+            )
         #else
-            Color.clear
-                .contentShape(Rectangle())
-                .onTapGesture { toggleControls() }
+            PlayerTapCatcher(toggleControls: toggleControls)
         #endif
     }
 
@@ -368,7 +329,7 @@ struct LumeEngineEngineView: View {
                 clock: clock,
                 panelCloseToken: panelCloseToken,
                 onTogglePlay: { togglePlay() },
-                onResetHideTimer: { resetHideTimer() },
+                onResetHideTimer: { scheduleHide() },
                 onSelectMedia: { onSelectMedia?($0) },
                 onPanelOpenChange: { setPanelOpen($0) },
                 onSwitchChannel: { switchLiveChannel($0) },
@@ -382,10 +343,10 @@ struct LumeEngineEngineView: View {
                 isSeeking: $isSeeking,
                 seekPosition: $seekPosition,
                 clock: clock,
-                hideTask: $hideTask,
+                onSuspendHide: { chrome.suspend() },
                 onClose: { closePlayer() },
                 onTogglePlay: { togglePlay() },
-                onResetHideTimer: { resetHideTimer() },
+                onResetHideTimer: { scheduleHide() },
                 onScheduleHide: { scheduleHide() },
                 onSearchSubtitles: subtitleSearchAction,
                 itemNeighbours: itemNeighbours,
@@ -398,16 +359,14 @@ struct LumeEngineEngineView: View {
     /// (a live channel, no API key in the build, or an engine that can't
     /// side-load a subtitle file).
     private var subtitleSearchAction: (() -> Void)? {
-        guard OpenSubtitlesService.supportsSearch(for: media),
-              coordinator.supportsExternalSubtitles else { return nil }
-        return { isSearchingSubtitles = true }
+        coordinator.subtitleSearchAction(for: media, isPresented: $isSearchingSubtitles)
     }
 
     // MARK: - Actions
 
     private func togglePlay() {
         coordinator.togglePlay()
-        resetHideTimer()
+        scheduleHide()
     }
 
     #if os(tvOS)
@@ -444,33 +403,32 @@ struct LumeEngineEngineView: View {
 
         private func openChannelBrowser() {
             guard media.isLive, !isChannelBrowserOpen else { return }
-            hideTask?.cancel()
+            chrome.suspend()
             withAnimation(.easeInOut(duration: 0.25)) { isChannelBrowserOpen = true }
         }
 
         private func closeChannelBrowser() {
             withAnimation(.easeInOut(duration: 0.25)) { isChannelBrowserOpen = false }
+            scheduleHide()
             // Hand focus back to the tap-catcher so the remote keeps working.
             Task { @MainActor in catcherFocused = true }
         }
     #endif
 
     private func toggleControls() {
-        withAnimation(.easeInOut(duration: 0.2)) { isControlsVisible.toggle() }
+        chrome.toggle()
         if isControlsVisible { scheduleHide() }
     }
 
     private func showControls() {
-        guard !isControlsVisible else { resetHideTimer(); return }
-        withAnimation(.easeInOut(duration: 0.2)) { isControlsVisible = true }
+        chrome.show()
         scheduleHide()
     }
 
     /// Dismiss the controls overlay (Menu button when no panel is open). A
     /// second Menu press, with the controls hidden, dismisses the player.
     private func hideControls() {
-        hideTask?.cancel()
-        withAnimation(.easeInOut(duration: 0.2)) { isControlsVisible = false }
+        chrome.hide()
     }
 
     /// Menu/back routing: close the channel browser or an open panel first,
@@ -496,29 +454,31 @@ struct LumeEngineEngineView: View {
         }
     }
 
-    private func resetHideTimer() {
-        hideTask?.cancel()
-        if isControlsVisible { scheduleHide() }
-    }
-
     /// Keep the controls pinned open while an overlay panel is showing.
     private func setPanelOpen(_ open: Bool) {
         isPanelOpen = open
         if open {
-            hideTask?.cancel()
+            chrome.suspend()
         } else {
-            resetHideTimer()
+            scheduleHide()
         }
     }
 
+    private var canAutoHideControls: Bool {
+        #if os(tvOS)
+            let browserOpen = isChannelBrowserOpen
+        #else
+            let browserOpen = false
+        #endif
+        return PlayerControlsAutoHide.mayHide(
+            isPlaying: coordinator.isPlaying,
+            isPanelOpen: isPanelOpen || browserOpen || isSeeking,
+            isSuppressed: PlayerControlsAutoHide.isSuppressed
+        )
+    }
+
     private func scheduleHide() {
-        hideTask?.cancel()
-        guard coordinator.isPlaying, !isPanelOpen, !PlayerControlsAutoHide.isSuppressed else { return }
-        hideTask = Task { @MainActor in
-            try? await Task.sleep(nanoseconds: UInt64(autoHideInterval * 1_000_000_000))
-            guard !Task.isCancelled, coordinator.isPlaying else { return }
-            withAnimation(.easeInOut(duration: 0.2)) { isControlsVisible = false }
-        }
+        chrome.schedule(mayHide: { canAutoHideControls })
     }
 
     private func closePlayer() {
@@ -547,29 +507,5 @@ struct LumeEngineEngineView: View {
         withAnimation(.easeInOut(duration: 0.25)) { loadFailed = false }
         reconnector.reset()
         coordinator.reload()
-    }
-}
-
-private extension View {
-    /// Runs `action` on the Siri remote's Menu/back press (tvOS only); a no-op
-    /// elsewhere so the cross-platform body still compiles.
-    @ViewBuilder
-    func onMenuPress(perform action: @escaping () -> Void) -> some View {
-        #if os(tvOS)
-            onExitCommand(perform: action)
-        #else
-            self
-        #endif
-    }
-
-    /// Runs `action` on the Siri remote's dedicated Play/Pause button (tvOS
-    /// only); a no-op elsewhere so the cross-platform body still compiles.
-    @ViewBuilder
-    func onPlayPausePress(perform action: @escaping () -> Void) -> some View {
-        #if os(tvOS)
-            onPlayPauseCommand(perform: action)
-        #else
-            self
-        #endif
     }
 }

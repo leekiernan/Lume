@@ -65,4 +65,38 @@ struct ContinueWatchingTests {
         #expect(ContinueWatching.remainingLabel(20).contains("1"))
         #expect(ContinueWatching.remainingLabel(3900).contains("5"))
     }
+
+    @Test func `resume bars exclude watched and unstarted content without changing the continuation threshold`() {
+        #expect(ContinueWatching.resumeFraction(progress: 0, duration: 100, isWatched: false) == nil)
+        #expect(ContinueWatching.resumeFraction(progress: -5, duration: 100, isWatched: false) == nil)
+        #expect(ContinueWatching.resumeFraction(progress: .nan, duration: 100, isWatched: false) == nil)
+        #expect(ContinueWatching.resumeFraction(progress: 30, duration: 100, isWatched: true) == nil)
+        #expect(ContinueWatching.resumeFraction(progress: 0.5, duration: 100, isWatched: false) == 0.005)
+    }
+
+    @Test func `resume bars require a duration and clamp overrun without marking content watched`() {
+        for duration in [nil, 0, -1] as [Int?] {
+            #expect(ContinueWatching.resumeFraction(progress: 25, duration: duration, isWatched: false) == nil)
+        }
+        #expect(ContinueWatching.resumeFraction(progress: 25, duration: 100, isWatched: false) == 0.25)
+        #expect(ContinueWatching.resumeFraction(progress: 125, duration: 100, isWatched: false) == 1)
+    }
+
+    @Test @MainActor func `home cards use the shared resume gate but keep series lookup and live content separate`() {
+        let movie = Movie(id: "movie", streamId: 1, name: "Movie")
+        movie.durationSecs = 100
+        movie.watchProgress = 25
+        let item = HomeMediaItem.movie(movie)
+        #expect(item.progress(seriesResume: [:]) == 0.25)
+        movie.isWatched = true
+        #expect(item.progress(seriesResume: [:]) == nil)
+        movie.isWatched = false
+        movie.durationSecs = nil
+        #expect(item.progress(seriesResume: [:]) == nil)
+        let series = Series(id: "show", seriesId: 1, name: "Show")
+        #expect(HomeMediaItem.series(series).progress(seriesResume: [series.id: 0.4]) == 0.4)
+        #expect(HomeMediaItem.series(series).progress(seriesResume: [:]) == nil)
+        let channel = LiveStream(id: "live", streamId: 1, name: "Live")
+        #expect(HomeMediaItem.live(channel).progress(seriesResume: [channel.id: 0.4]) == nil)
+    }
 }

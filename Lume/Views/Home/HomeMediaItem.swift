@@ -39,6 +39,24 @@ enum HomeMediaItem: Identifiable, Hashable {
         }
     }
 
+    /// Detail rails share the stored fallback and scalar recovery request with
+    /// library cards. Live channel logos never participate in TMDB recovery.
+    var posterPath: String? {
+        switch self {
+        case let .movie(movie): movie.posterPath
+        case let .series(series): series.posterPath
+        case .live: nil
+        }
+    }
+
+    var posterRecoveryRequest: PosterArtworkRequest? {
+        switch self {
+        case let .movie(movie): .init(kind: .movie, id: movie.id, categoryID: movie.categoryId)
+        case let .series(series): .init(kind: .series, id: series.id, categoryID: series.categoryId)
+        case .live: nil
+        }
+    }
+
     var lastWatchedDate: Date? {
         switch self {
         case let .movie(movie): movie.lastWatchedDate
@@ -61,13 +79,13 @@ enum HomeMediaItem: Identifiable, Hashable {
     func progress(seriesResume: [String: Double]) -> Double? {
         switch self {
         case let .movie(movie):
-            guard let duration = movie.durationSecs, duration > 0,
-                  movie.watchProgress > 0, !movie.isWatched else { return nil }
-            return min(movie.watchProgress / Double(duration), 1)
+            ContinueWatching.resumeFraction(
+                progress: movie.watchProgress, duration: movie.durationSecs, isWatched: movie.isWatched
+            )
         case let .series(series):
-            return seriesResume[series.id]
+            seriesResume[series.id]
         case .live:
-            return nil
+            nil
         }
     }
 }
@@ -86,6 +104,12 @@ enum HomeMediaItem: Identifiable, Hashable {
 /// `ChannelEPGLoader` performs for the Live TV cards: one bounded fetch for the
 /// whole screen, plain values out.
 enum SeriesResumeLoader {
+    nonisolated static func loadAsync(container: ModelContainer) async -> [String: Double] {
+        await Task.detached(priority: .userInitiated) {
+            load(container: container)
+        }.value
+    }
+
     nonisolated static func load(container: ModelContainer) -> [String: Double] {
         let context = ModelContext(container)
         // Scoped by watch state, not by the series on screen: `watchProgress`
@@ -111,11 +135,9 @@ enum SeriesResumeLoader {
             let watched = episode.lastWatchedDate ?? .distantPast
             if let seen = newest[seriesId], seen >= watched { continue }
             newest[seriesId] = watched
-            if let duration = episode.durationSecs, duration > 0 {
-                resume[seriesId] = min(episode.watchProgress / Double(duration), 1)
-            } else {
-                resume.removeValue(forKey: seriesId)
-            }
+            // Assigning nil removes an older entry: the latest unfinished
+            // episode with no duration must never borrow an older one's bar.
+            resume[seriesId] = ContinueWatching.fraction(progress: episode.watchProgress, duration: episode.durationSecs)
         }
         return resume
     }

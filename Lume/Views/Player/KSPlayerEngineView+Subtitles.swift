@@ -15,11 +15,11 @@ extension KSPlayerEngineView {
     /// (a live channel, or no API key in the build). A `nil` action also drops
     /// the entry from the overlay's subtitle menu.
     var subtitleSearchAction: (() -> Void)? {
-        guard OpenSubtitlesService.supportsSearch(for: media) else { return nil }
         #if os(tvOS)
-            guard engine.supportsExternalSubtitles else { return nil }
+            return engine.subtitleSearchAction(for: media, isPresented: $isSearchingSubtitles)
+        #else
+            return coordinator.subtitleSearchAction(for: media, isPresented: $isSearchingSubtitles)
         #endif
-        return { isSearchingSubtitles = true }
     }
 
     /// Loads a downloaded subtitle file into the running player. On tvOS this

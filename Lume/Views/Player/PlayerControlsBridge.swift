@@ -51,6 +51,12 @@ final class PlayerControlsBridge {
     func claimsBack() -> Bool {
         backClaim?() ?? false
     }
+
+    /// Read the current claim on each press, not when a view/modifier is built.
+    /// Embedded players without a host bridge still control their own playback.
+    static func performPlayPause(using bridge: PlayerControlsBridge?, fallback: () -> Void) {
+        if bridge?.claimsPlayPause() != true { fallback() }
+    }
 }
 
 extension View {
@@ -58,6 +64,42 @@ extension View {
     /// without a host bridge (Multi-View tiles).
     func reportsControlsHeight() -> some View {
         modifier(ControlsHeightReporter())
+    }
+
+    /// Shared remote wiring at the engine root. Back priority (browser, panel,
+    /// controls, detour, dismissal) stays in the engine's handler; this only
+    /// installs the platform commands and reports control visibility.
+    func playerRemoteControls(
+        controlsVisible: Bool, onBack: @escaping () -> Void, onPlayPause: @escaping () -> Void
+    ) -> some View {
+        modifier(PlayerRemoteControls(controlsVisible: controlsVisible, onBack: onBack, onPlayPause: onPlayPause))
+    }
+}
+
+private struct PlayerRemoteControls: ViewModifier {
+    let controlsVisible: Bool
+    let onBack: () -> Void
+    let onPlayPause: () -> Void
+    @Environment(PlayerControlsBridge.self) private var bridge: PlayerControlsBridge?
+
+    func body(content: Content) -> some View {
+        remoteCommands(content)
+            .onChange(of: controlsVisible, initial: true) { _, visible in
+                bridge?.controlsVisible = visible
+            }
+    }
+
+    @ViewBuilder
+    private func remoteCommands(_ content: Content) -> some View {
+        #if os(tvOS)
+            content
+                .onExitCommand(perform: onBack)
+                .onPlayPauseCommand {
+                    PlayerControlsBridge.performPlayPause(using: bridge, fallback: onPlayPause)
+                }
+        #else
+            content
+        #endif
     }
 }
 

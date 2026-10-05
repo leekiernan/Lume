@@ -7,6 +7,24 @@ import Testing
 struct PlaylistSyncCoverageTests {
     private let now = Date(timeIntervalSince1970: 1_800_000_000)
 
+    @Test func `stamping coverage preserves unknown areas and other playlists`() throws {
+        try withDefaults { defaults in
+            let playlistID = UUID()
+            let other = UUID()
+            let key = PlaylistSyncCoverage.key(playlistID: playlistID)
+            defaults.set(["futureArea": 123.0, "liveTV": 456.0], forKey: key)
+            PlaylistSyncCoverage.record([.series], playlistID: other, at: now, defaults: defaults)
+            PlaylistSyncCoverage.record([.movies], playlistID: playlistID, at: now, defaults: defaults)
+
+            let raw = try #require(defaults.dictionary(forKey: key) as? [String: Double])
+            #expect(raw == ["futureArea": 123, "liveTV": 456, "movies": now.timeIntervalSince1970])
+            #expect(PlaylistSyncCoverage.refreshDates(playlistID: playlistID, defaults: defaults) == [
+                .liveTV: Date(timeIntervalSince1970: 456), .movies: now
+            ])
+            #expect(PlaylistSyncCoverage.refreshDates(playlistID: other, defaults: defaults) == [.series: now])
+        }
+    }
+
     private func withDefaults(_ body: (UserDefaults) throws -> Void) throws {
         let suiteName = "PlaylistSyncCoverageTests.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suiteName))

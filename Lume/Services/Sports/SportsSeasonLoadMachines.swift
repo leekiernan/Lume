@@ -12,7 +12,7 @@
 /// A team page's season: its competitions, leaders and games.
 nonisolated struct SportsTeamSeasonLoadMachine: Equatable {
     struct Request: Equatable {
-        fileprivate let generation: UInt
+        fileprivate let token = RequestToken()
         fileprivate let teamId: String
     }
 
@@ -23,7 +23,6 @@ nonisolated struct SportsTeamSeasonLoadMachine: Equatable {
         case unavailable(teamId: String)
     }
 
-    private var generation: UInt = 0
     private var state: State = .idle
 
     /// The season, while it belongs to `teamId`.
@@ -38,8 +37,7 @@ nonisolated struct SportsTeamSeasonLoadMachine: Equatable {
     }
 
     mutating func begin(teamId: String) -> Request {
-        generation &+= 1
-        let request = Request(generation: generation, teamId: teamId)
+        let request = Request(teamId: teamId)
         state = .loading(request)
         return request
     }
@@ -56,7 +54,7 @@ nonisolated struct SportsTeamSeasonLoadMachine: Equatable {
 /// A race series' season in the match centre.
 nonisolated struct SportsRacingSeasonLoadMachine: Equatable {
     struct Request: Equatable {
-        fileprivate let generation: UInt
+        fileprivate let token = RequestToken()
         fileprivate let leagueId: String
     }
 
@@ -67,7 +65,6 @@ nonisolated struct SportsRacingSeasonLoadMachine: Equatable {
         case unavailable(leagueId: String)
     }
 
-    private var generation: UInt = 0
     private var state: State = .idle
 
     /// The season, while it belongs to `leagueId`.
@@ -77,8 +74,7 @@ nonisolated struct SportsRacingSeasonLoadMachine: Equatable {
     }
 
     mutating func begin(leagueId: String) -> Request {
-        generation &+= 1
-        let request = Request(generation: generation, leagueId: leagueId)
+        let request = Request(leagueId: leagueId)
         state = .loading(request)
         return request
     }

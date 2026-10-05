@@ -8,6 +8,23 @@ import Foundation
 import Testing
 
 struct SportsFixtureResolutionMachineTests {
+    @Test func `recreated resolver rejects old passes while the current request remains incremental`() throws {
+        var machine = SportsFixtureResolutionMachine()
+        let begun25 = machine.begin([fixture("a")], visibilityToken: "same-profile")
+        let old = try #require(begun25)
+        machine = SportsFixtureResolutionMachine()
+        let begun26 = machine.begin([fixture("a")], visibilityToken: "same-profile")
+        let current = try #require(begun26)
+        #expect(old != current)
+        let accepted22 = machine.publish(old, answer("stale"))
+        #expect(!accepted22)
+        let accepted23 = machine.publish(current, answer("soon"))
+        #expect(accepted23)
+        let accepted24 = machine.publish(current, answer("soon", "later"))
+        #expect(accepted24)
+        #expect(machine.resolved.keys.sorted() == ["later", "soon"])
+    }
+
     private func fixture(_ id: String) -> SportsFixture {
         SportsFixture(
             id: id, leagueId: "espn:soccer/eng.1", leagueName: "", leagueAbbreviation: "",

@@ -75,11 +75,9 @@ struct MainTabView: View {
     /// launch / switch / foreground triggers don't re-present the cover for one
     /// that's already been handled.
     @State var autoSyncAttempted: Set<UUID> = []
-    /// Areas each playlist has had an automatic repair for this session. A
-    /// profile switch may still repair an area the launch refresh skipped, but
-    /// never the same one twice, so one that fails doesn't retry on every
-    /// trigger.
-    @State var repairsAttempted: [UUID: Set<AppArea>] = [:]
+    /// Areas each playlist has had an automatic repair for this session —
+    /// see `AutoSync.RepairLedger`.
+    @State var repairLedger = AutoSync.RepairLedger()
 
     /// Memo behind `contentRestriction` — see `ContentRestrictionMemo`.
     @State private var restrictionMemo = ContentRestrictionMemo()
@@ -154,13 +152,17 @@ struct MainTabView: View {
         if router.selectedTab != resolved { router.selectedTab = resolved }
     }
 
-    /// Home's local rails are bounded queries, and the Movies/Series category
+    /// Home's local rails are bounded queries, and the library category
     /// lists are playlist-scoped ones, so the scope has to be known when their
     /// `@Query` wrappers are constructed. Passing the prefix from this root keeps
     /// the selection in SQL rather than filtering another playlist's rows in
     /// memory.
     private var activePlaylistPrefix: String? {
-        playlists.active(for: selectedPlaylistID).map { "\($0.id.uuidString)-" }
+        playlists.active(for: selectedPlaylistID).map(\.contentIDPrefix)
+    }
+
+    private var liveTVRoot: some View {
+        LiveTVView(playlistPrefix: activePlaylistPrefix, restriction: contentRestriction)
     }
 
     var body: some View {
@@ -179,13 +181,6 @@ struct MainTabView: View {
         #endif
             .onChange(of: policy, initial: true) { _, _ in repairSelectionIfNeeded() }
             .onChange(of: activeProfileToken) { _, _ in repairSelectionIfNeeded() }
-            .onChange(of: disabledAreasRaw) { _, _ in
-                SportsSyncService.shared.availabilityDidChange()
-                SportsFollowService.shared.reload()
-            }
-            .onChange(of: sportsEnabled) { _, _ in
-                SportsSyncService.shared.availabilityDidChange()
-            }
         #if os(tvOS)
             .disabled(blockingOverlayOwnsScreen || router.isQuickSwitchPresented)
             .background(
@@ -338,7 +333,7 @@ struct MainTabView: View {
 
                 if isOn(.liveTV) {
                     Tab(value: AppTab.liveTV) {
-                        activeOnly(.liveTV, selection: selection.wrappedValue) { LiveTVView() }
+                        activeOnly(.liveTV, selection: selection.wrappedValue) { liveTVRoot }
                     } label: {
                         Text("Live TV")
                     }
@@ -455,7 +450,7 @@ struct MainTabView: View {
 
                 if isOn(.liveTV) {
                     Tab("Live TV", systemImage: "antenna.radiowaves.left.and.right", value: AppTab.liveTV) {
-                        IdleUnmountingTab(isSelected: selection.wrappedValue == .liveTV) { LiveTVView() }
+                        IdleUnmountingTab(isSelected: selection.wrappedValue == .liveTV) { liveTVRoot }
                     }
                 }
 
@@ -527,23 +522,18 @@ struct MainTabView: View {
     /// child profile.
     private func resolveMovie(tmdbId: Int) -> Movie? {
         let descriptor = FetchDescriptor<Movie>(predicate: #Predicate { $0.tmdbId == tmdbId })
-        let restriction = contentRestriction
-        let matches = ((try? modelContext.fetch(descriptor)) ?? [])
-            .filter { !restriction.hides(categoryID: $0.categoryId) }
-        return matches.first { belongsToActivePlaylist($0.id) } ?? matches.first
+        return CatalogMatchSelection.preferred(
+            in: (try? modelContext.fetch(descriptor)) ?? [], restriction: contentRestriction,
+            playlistPrefix: playlists.active(for: selectedPlaylistID)?.contentIDPrefix
+        )
     }
 
     private func resolveSeries(tmdbId: Int) -> Series? {
         let descriptor = FetchDescriptor<Series>(predicate: #Predicate { $0.tmdbId == tmdbId })
-        let restriction = contentRestriction
-        let matches = ((try? modelContext.fetch(descriptor)) ?? [])
-            .filter { !restriction.hides(categoryID: $0.categoryId) }
-        return matches.first { belongsToActivePlaylist($0.id) } ?? matches.first
-    }
-
-    private func belongsToActivePlaylist(_ id: String) -> Bool {
-        guard let activePlaylist = playlists.active(for: selectedPlaylistID) else { return true }
-        return id.hasPrefix("\(activePlaylist.id.uuidString)-")
+        return CatalogMatchSelection.preferred(
+            in: (try? modelContext.fetch(descriptor)) ?? [], restriction: contentRestriction,
+            playlistPrefix: playlists.active(for: selectedPlaylistID)?.contentIDPrefix
+        )
     }
 }
 

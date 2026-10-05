@@ -101,13 +101,6 @@ struct SkipAccelerationTests {
         #expect(SkipAcceleration.label(for: -10).hasPrefix("−"))
     }
 
-    @Test func `the landing time reads like the progress bar`() {
-        #expect(SkipAcceleration.timeLabel(for: 754).hasSuffix("34"))
-        #expect(SkipAcceleration.timeLabel(for: 754).hasPrefix("12"))
-        #expect(SkipAcceleration.timeLabel(for: 3725).hasPrefix("1"))
-        #expect(SkipAcceleration.timeLabel(for: -5) == SkipAcceleration.timeLabel(for: 0))
-    }
-
     /// The indicator stays through the seek's buffer — the spinner steps
     /// aside for it — but not for ever.
     @Test func `the indicator waits out a buffer, up to a limit`() {

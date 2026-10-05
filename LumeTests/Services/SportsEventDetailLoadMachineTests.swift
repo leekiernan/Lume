@@ -2,6 +2,23 @@
 import Testing
 
 struct SportsEventDetailLoadMachineTests {
+    @Test func `recreated event detail rejects old completion and failure`() {
+        var machine = SportsEventDetailLoadMachine()
+        let stale = machine.begin()
+        machine = SportsEventDetailLoadMachine()
+        let current = machine.begin()
+        #expect(stale != current)
+        let accepted18 = machine.finish(stale, detail: nil)
+        #expect(!accepted18)
+        let accepted19 = machine.fail(stale)
+        #expect(!accepted19)
+        #expect(machine.isLoading)
+        let accepted20 = machine.fail(current)
+        #expect(accepted20)
+        let accepted21 = machine.finish(current, detail: nil)
+        #expect(!accepted21)
+    }
+
     @Test func `a stale result cannot settle the replacement fixture request`() {
         var machine = SportsEventDetailLoadMachine()
         let stale = machine.begin()

@@ -29,6 +29,21 @@ enum LoginSourceType: String, CaseIterable {
         case .mediaServer: "Server"
         }
     }
+
+    /// Shared guidance; field/section geometry remains platform-specific.
+    var footer: LocalizedStringKey {
+        switch self {
+        case .xtream: "Your credentials are stored locally on this device."
+        case .m3u:
+            #if os(tvOS)
+                "The EPG URL is read from the playlist when left empty."
+            #else
+                "Enter the playlist URL or choose a local m3u/m3u8 file. The EPG URL is read from the playlist when left empty."
+            #endif
+        case .stalker: "Enter the portal URL and the MAC address your provider authorized. Most portals need only the portal URL and MAC."
+        case .mediaServer: MediaServerAddCheck.hint
+        }
+    }
 }
 
 struct LoginView: View {
@@ -223,21 +238,12 @@ struct LoginView: View {
     #endif
 
     #if os(tvOS)
-        private var stalkerHint: LocalizedStringKey {
-            switch sourceType {
-            case .xtream: "Your credentials are stored locally on this device."
-            case .m3u: "The EPG URL is read from the playlist when left empty."
-            case .stalker: "Enter the portal URL and the MAC address your provider authorized."
-            case .mediaServer: MediaServerAddCheck.hint
-            }
-        }
-
         private var tvBody: some View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 28) {
                     VStack(alignment: .leading, spacing: 6) {
                         Text("Add Playlist")
-                            .font(.system(size: 38, weight: .bold))
+                            .font(.system(size: TVSettingsMetrics.screenTitleFontSize, weight: .bold))
                         Text("Connect to your IPTV provider")
                             .font(.system(size: TVSettingsMetrics.secondaryFontSize))
                             .foregroundStyle(.secondary)
@@ -272,9 +278,8 @@ struct LoginView: View {
                         }
                     }
 
-                    Text(stalkerHint)
-                        .font(.system(size: TVSettingsMetrics.secondaryFontSize))
-                        .foregroundStyle(.secondary)
+                    Text(sourceType.footer)
+                        .tvSettingsFooter()
                         .padding(.horizontal, TVSettingsMetrics.rowHPadding)
 
                     if let xtreamHint {
@@ -323,8 +328,8 @@ struct LoginView: View {
                 }
                 .frame(maxWidth: TVSettingsMetrics.contentMaxWidth, alignment: .leading)
                 .frame(maxWidth: .infinity)
-                .padding(.horizontal, 48)
-                .padding(.vertical, 72)
+                .padding(.horizontal, TVSettingsMetrics.pageHorizontalInset)
+                .padding(.vertical, TVSettingsMetrics.pageVerticalInset)
             }
             .tvSettingsBackground()
             .fullScreenCover(isPresented: $showDiagnostics) {

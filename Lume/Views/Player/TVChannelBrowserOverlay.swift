@@ -100,12 +100,12 @@
 
                 ScrollViewReader { proxy in
                     HStack(alignment: .top, spacing: 24) {
-                        column(title: "Categories", width: 400) { categoryRows }
-                        column(title: "Channels", width: 520) { channelRows }
+                        TVPlayerBrowserColumn(title: "Categories", width: 400) { categoryRows }
+                        TVPlayerBrowserColumn(title: "Channels", width: 520) { channelRows }
                             // Fresh scroll position whenever another category's
                             // channels replace the list.
                             .id(selectedSectionID)
-                        column(title: "Guide", width: 600) { guideRows }
+                        TVPlayerBrowserColumn(title: "Guide", width: 600) { guideRows }
                             // Fresh scroll position whenever another channel's
                             // guide replaces the list.
                             .id(guideChannelID)
@@ -150,35 +150,6 @@
             .allowsHitTesting(false)
         }
 
-        /// One scrollable glass column. Each column is its own focus section so
-        /// left/right hop between the rails rather than walking row by row.
-        private func column(
-            title: LocalizedStringKey,
-            width: CGFloat,
-            @ViewBuilder rows: () -> some View
-        ) -> some View {
-            VStack(alignment: .leading, spacing: 0) {
-                Text(title)
-                    .font(.system(size: 29, weight: .bold))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 36)
-                    .padding(.top, 30)
-                    .padding(.bottom, 14)
-
-                ScrollView {
-                    LazyVStack(spacing: 6) {
-                        rows()
-                    }
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, 24)
-                }
-            }
-            .frame(width: width)
-            .frame(maxHeight: .infinity)
-            .glassEffectCompat(.regular, in: RoundedRectangle(cornerRadius: 36))
-            .focusSection()
-        }
-
         // MARK: - Rows
 
         private var categoryRows: some View {
@@ -197,7 +168,7 @@
                         Spacer(minLength: 0)
                     }
                 }
-                .buttonStyle(TVBrowserRowStyle(isSelected: section.id == selectedSectionID))
+                .buttonStyle(TVPlayerBrowserRowStyle(isSelected: section.id == selectedSectionID))
                 .focused($focus, equals: .section(section.id))
                 .id(FocusTarget.section(section.id))
             }
@@ -219,7 +190,7 @@
                     } label: {
                         channelLabel(channel, isCurrent: isCurrent)
                     }
-                    .buttonStyle(TVBrowserRowStyle(isSelected: isCurrent))
+                    .buttonStyle(TVPlayerBrowserRowStyle(isSelected: isCurrent))
                     .focused($focus, equals: .channel(channel.id))
                     .id(FocusTarget.channel(channel.id))
                 }
@@ -228,18 +199,7 @@
 
         private func channelLabel(_ channel: LiveStream, isCurrent: Bool) -> some View {
             HStack(spacing: 16) {
-                CachedAsyncImage(url: URL(string: channel.streamIcon ?? ""), maxPixelSize: 120) { phase in
-                    switch phase {
-                    case let .success(image):
-                        image.resizable().aspectRatio(contentMode: .fit).padding(6)
-                    default:
-                        Image(systemName: "tv")
-                            .font(.system(size: 20))
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                .frame(width: 84, height: 56)
-                .background(.white.opacity(0.08), in: .rect(cornerRadius: 10))
+                TVPlayerBrowserChannelLogo(url: URL(string: channel.streamIcon ?? ""))
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(channel.name)
@@ -291,7 +251,7 @@
                             canReplay: stream?.isCatchupAvailable(start: entry.start, now: now) ?? false
                         )
                     }
-                    .buttonStyle(TVBrowserRowStyle(isSelected: entry.isLive(at: now)))
+                    .buttonStyle(TVPlayerBrowserRowStyle(isSelected: entry.isLive(at: now)))
                     .focused($focus, equals: .guide(entry.id))
                     .id(FocusTarget.guide(entry.id))
                 }
@@ -341,47 +301,10 @@
         private func loadInitialContent() {
             guard let stream = TVPlayerContent.liveStream(for: media.contentRef, in: modelContext),
                   let playlist = LiveChannelNavigator.playlist(for: stream, in: modelContext) else { return }
-            let prefix = "\(playlist.id.uuidString)-"
+            let prefix = playlist.contentIDPrefix
             playlistPrefix = prefix
 
-            let categorySort = CategorySortOption.playlist
-            // Scoped in SQL. Unscoped this fetched every live category of every
-            // playlist — 1,734 rows on the measured store — and threw all but
-            // one playlist's away in Swift, from `onAppear`, with the stream
-            // already decoding. `starts(with:)` on the unique (and therefore
-            // indexed) `id` turns that into a range seek. `visibleCategories`
-            // still runs: it is what applies the parental filter, and sharing it
-            // with the Live TV rail is what keeps the two from disagreeing about
-            // what a category rail contains.
-            let descriptor = FetchDescriptor<Category>(
-                predicate: #Predicate {
-                    $0.typeRaw == "live" && $0.isHidden == false && $0.id.starts(with: prefix)
-                }
-            )
-            let categories = categorySort.sort(
-                LiveChannelQuery.visibleCategories(
-                    (try? modelContext.fetch(descriptor)) ?? [],
-                    playlistPrefix: prefix,
-                    restriction: restriction
-                )
-            )
-
-            // The two virtual collections used to be gated by
-            // `!fetchChannels(scope:).isEmpty`, which materialised the entire
-            // collection — 1,506 favorited channels on the measured store — to
-            // decide whether one rail row should exist, from `onAppear`, with
-            // the stream already decoding. `LiveChannelQuery`'s probes answer
-            // the same question with a `LIMIT 1` seek, and are the same
-            // descriptors the Live TV rail gates on, so the two surfaces can't
-            // disagree about which collections a rail offers.
-            var rail: [LiveTVSection] = []
-            if hasVisible(LiveChannelQuery.favoritesProbe(playlistPrefix: prefix, restriction: restriction)) {
-                rail.append(.favorites)
-            }
-            if hasVisible(LiveChannelQuery.recentlyWatchedProbe(playlistPrefix: prefix, restriction: restriction)) {
-                rail.append(.recentlyWatched)
-            }
-            rail.append(contentsOf: categories.map(LiveTVSection.category))
+            let rail = LiveChannelQuery.rail(in: modelContext, playlistPrefix: prefix, restriction: restriction)
             sections = rail
 
             // Open on the list playback was launched from, so the browser agrees
@@ -417,13 +340,6 @@
                 guard channels.map(\.id) == ids else { return }
                 nowTitles = titles
             }
-        }
-
-        /// Runs one of `LiveChannelQuery`'s existence probes. They carry their
-        /// own `fetchLimit = 1` and no `sortBy`, so this stops at the first
-        /// matching row instead of building a list to ask whether it is empty.
-        private func hasVisible(_ probe: FetchDescriptor<LiveStream>) -> Bool {
-            !((try? modelContext.fetch(probe)) ?? []).isEmpty
         }
 
         private func fetchChannels(scope: LiveChannelScope) -> [LiveStream] {
@@ -548,44 +464,6 @@
                     end: entry.end
                 ) else { return }
                 onSelect(target)
-            }
-        }
-    }
-
-    // MARK: - Row style
-
-    /// A full-width list row for the browser columns: white glass highlight
-    /// under focus (black content), a faint persistent fill for the selected
-    /// category / playing channel, clear otherwise. The scale stays subtle so
-    /// the lift survives the column's clipping.
-    private struct TVBrowserRowStyle: ButtonStyle {
-        var isSelected: Bool
-
-        func makeBody(configuration: Configuration) -> some View {
-            StyleBody(configuration: configuration, isSelected: isSelected)
-        }
-
-        struct StyleBody: View {
-            let configuration: ButtonStyleConfiguration
-            let isSelected: Bool
-            @Environment(\.isFocused) private var isFocused
-
-            var body: some View {
-                configuration.label
-                    .font(.system(size: 24, weight: .semibold))
-                    .foregroundStyle(isFocused ? .black : .white)
-                    .padding(.horizontal, 18)
-                    .padding(.vertical, 12)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(fill, in: .rect(cornerRadius: 14))
-                    .scaleEffect(configuration.isPressed ? 0.99 : (isFocused ? 1.02 : 1.0))
-                    .animation(.easeOut(duration: 0.16), value: isFocused)
-            }
-
-            private var fill: AnyShapeStyle {
-                if isFocused { return AnyShapeStyle(.white) }
-                if isSelected { return AnyShapeStyle(.white.opacity(0.16)) }
-                return AnyShapeStyle(.clear)
             }
         }
     }

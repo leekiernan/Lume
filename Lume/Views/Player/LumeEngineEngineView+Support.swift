@@ -40,14 +40,3 @@ struct LumeEngineSubtitleOverlay: View {
         }
     }
 }
-
-#if os(tvOS)
-    /// Draws only its (clear) label — no focus highlight, scale or background —
-    /// so the full-screen tap-catcher stays invisible even while it holds focus
-    /// with the controls hidden.
-    struct LumeEngineInvisibleButtonStyle: ButtonStyle {
-        func makeBody(configuration: Configuration) -> some View {
-            configuration.label
-        }
-    }
-#endif

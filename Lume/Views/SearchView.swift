@@ -158,7 +158,7 @@ struct SearchView: View {
         } else if results.isEmpty {
             withFilterBar { ContentUnavailableView.search }
         } else {
-            resultsView(selectedFilter == .all ? .overview : .filtered(selectedFilter)) { filterBar }
+            resultsView(SearchResultsLayout(filter: selectedFilter)) { filterBar }
         }
     }
 
@@ -222,7 +222,7 @@ struct SearchView: View {
                 card: { SeriesCardView(series: $0, fillsWidth: true) }
             )
         case .nowPlaying, .upcoming:
-            resultsView(.section(section))
+            resultsView(section == .nowPlaying ? .nowPlaying : .upcoming)
                 .navigationTitle(section == .nowPlaying ? "Now Playing" : "Coming Up")
         }
     }

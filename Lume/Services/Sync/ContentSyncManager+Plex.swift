@@ -63,38 +63,71 @@ extension ContentSyncManager {
             Logger.database.info("Plex sync: no movie or TV-show sections; catalog untouched")
         }
 
+        // A section the server cuts short keeps its rows and skips its kind's
+        // prune; the rest still import, and the sync reports it at the end.
+        let connection = PlexPhaseConnection(server: server, token: token, playlistId: playlistId)
+        var incomplete: ProviderImportError?
         if areas.contains(.movies) {
-            try syncPlexCategories(sections: movieSections, type: .vod, playlistId: playlistId)
-            await progress?.start(.movies)
-            var seenMovies = Set<String>()
-            for section in movieSections {
-                let scope = scope(server: server, token: token, playlistId: playlistId, section: section, type: .vod)
-                try await syncPlexMovies(scope: scope, seenIds: &seenMovies, progress: progress)
-            }
-            prunePlexMovies(playlistId: playlistId, seenIds: seenMovies, fetched: !movieSections.isEmpty)
-            await progress?.complete(.movies)
+            incomplete = try await syncPlexMoviePhase(sections: movieSections, connection: connection, progress: progress)
         }
-
         if areas.contains(.series) {
-            try syncPlexCategories(sections: showSections, type: .series, playlistId: playlistId)
-            await progress?.start(.series)
-            var seenSeries = Set<String>()
-            var seenEpisodes = Set<String>()
-            for section in showSections {
-                let scope = scope(server: server, token: token, playlistId: playlistId, section: section, type: .series)
-                try await syncPlexShows(scope: scope, seenSeries: &seenSeries, seenEpisodes: &seenEpisodes, progress: progress)
-            }
-            prunePlexSeries(playlistId: playlistId, seenSeries: seenSeries, seenEpisodes: seenEpisodes, fetched: !showSections.isEmpty)
-            await progress?.complete(.series)
+            let showsIncomplete = try await syncPlexShowPhase(sections: showSections, connection: connection, progress: progress)
+            incomplete = incomplete ?? showsIncomplete
         }
 
         markPlaylistUpdated(playlistId)
+        if let incomplete { throw incomplete }
+    }
+
+    private struct PlexPhaseConnection {
+        let server: URL
+        let token: String?
+        let playlistId: UUID
+    }
+
+    /// Every movie section, then the movie prune if all of them walked
+    /// completely. Returns the first incomplete walk.
+    private func syncPlexMoviePhase(
+        sections: [PlexSection], connection: PlexPhaseConnection, progress: SyncProgress?
+    ) async throws -> ProviderImportError? {
+        try syncPlexCategories(sections: sections, type: .vod, playlistId: connection.playlistId)
+        await progress?.start(.movies)
+        var seenMovies = Set<String>()
+        let incomplete = try await walkLibraries(sections, name: \.title) { section in
+            let scope = scope(server: connection.server, token: connection.token, playlistId: connection.playlistId, section: section, type: .vod)
+            try await syncPlexMovies(scope: scope, seenIds: &seenMovies, progress: progress)
+        }
+        if incomplete == nil {
+            prunePlexMovies(playlistId: connection.playlistId, seenIds: seenMovies, fetched: !sections.isEmpty)
+        }
+        await progress?.complete(.movies)
+        return incomplete
+    }
+
+    /// Every TV section, then the series/episode prune if all of them walked
+    /// completely. Returns the first incomplete walk.
+    private func syncPlexShowPhase(
+        sections: [PlexSection], connection: PlexPhaseConnection, progress: SyncProgress?
+    ) async throws -> ProviderImportError? {
+        try syncPlexCategories(sections: sections, type: .series, playlistId: connection.playlistId)
+        await progress?.start(.series)
+        var seenSeries = Set<String>()
+        var seenEpisodes = Set<String>()
+        let incomplete = try await walkLibraries(sections, name: \.title) { section in
+            let scope = scope(server: connection.server, token: connection.token, playlistId: connection.playlistId, section: section, type: .series)
+            try await syncPlexShows(scope: scope, seenSeries: &seenSeries, seenEpisodes: &seenEpisodes, progress: progress)
+        }
+        if incomplete == nil {
+            prunePlexSeries(playlistId: connection.playlistId, seenSeries: seenSeries, seenEpisodes: seenEpisodes, fetched: !sections.isEmpty)
+        }
+        await progress?.complete(.series)
+        return incomplete
     }
 
     private func scope(server: URL, token: String?, playlistId: UUID, section: PlexSection, type: CategoryType) -> PlexSectionScope {
         PlexSectionScope(
             server: server, token: token, playlistId: playlistId, section: section,
-            categoryId: "\(playlistId.uuidString)-\(type.rawValue)-\(section.key)"
+            categoryId: CatalogID.category(playlistId, type: type.rawValue, key: section.key)
         )
     }
 
@@ -167,30 +200,20 @@ extension ContentSyncManager {
         unit: String,
         body: ([PlexMetadata]) throws -> Void
     ) async throws -> Int {
-        var start = 0
-        var total = Int.max
-        var fetched = 0
-        while fetched < total {
-            try Task.checkCancellation()
+        try await walkProviderPages { start in
             let page = try await plexClient.items(
                 server: scope.server, token: scope.token, sectionKey: scope.section.key,
                 type: type, start: start
             )
-            total = page.totalSize
-            if !page.items.isEmpty {
-                try body(page.items)
-            }
-            fetched += page.items.count
-            start += page.items.count
+            return ProviderImportPage(items: page.items, total: page.totalSize)
+        } consume: { items in
+            try body(items)
+        } report: { fetched, total in
             await progress?.update(
                 detail: "\(fetched) of \(total) \(unit) in \(scope.section.title)",
                 fraction: total == 0 ? 1 : Double(fetched) / Double(total)
             )
-            if page.items.isEmpty {
-                break
-            }
         }
-        return fetched
     }
 
     // MARK: - Categories
@@ -200,32 +223,7 @@ extension ContentSyncManager {
     /// empty section list is the transient-failure signature, never a
     /// deletion.
     private func syncPlexCategories(sections: [PlexSection], type: CategoryType, playlistId: UUID) throws {
-        let context = ModelContext(modelContainer)
-        context.autosaveEnabled = false
-        let lookup = buildExistingCategoryLookup(context: context, playlistId: playlistId, type: type)
-        guard let playlist = try context.fetch(
-            FetchDescriptor<Playlist>(predicate: #Predicate { $0.id == playlistId })
-        ).first else { return }
-
-        for (index, section) in sections.enumerated() {
-            if let existing = lookup[section.key] {
-                if existing.name != section.title {
-                    existing.name = section.title
-                }
-                if existing.sortOrder != index {
-                    existing.sortOrder = index
-                }
-            } else {
-                let category = Category(apiId: section.key, name: section.title, parentId: 0, type: type, playlist: playlist)
-                category.sortOrder = index
-                context.insert(category)
-            }
-        }
-        if context.hasChanges {
-            try context.save()
-        }
-
-        pruneCategories(playlistId: playlistId, type: type, seenApiIds: Set(sections.map(\.key)), importedCount: sections.count)
+        try syncProviderCategories(sections.map { ProviderCategory(id: $0.key, name: $0.title) }, type: type, playlistId: playlistId)
     }
 
     // MARK: - Movies
@@ -247,28 +245,14 @@ extension ContentSyncManager {
     private func upsertPlexMovies(_ items: [PlexMetadata], scope: PlexSectionScope) throws -> Set<String> {
         let context = ModelContext(modelContainer)
         context.autosaveEnabled = false
-        let ids = items.map { scope.idPrefix + $0.ratingKey }
-        var lookup: [String: Movie] = [:]
-        let existing = (try? context.fetch(FetchDescriptor<Movie>(predicate: #Predicate { ids.contains($0.id) }))) ?? []
-        for movie in existing {
-            lookup[movie.id] = movie
-        }
-
-        for item in items {
-            let id = scope.idPrefix + item.ratingKey
-            let movie: Movie
-            if let found = lookup[id] {
-                movie = found
-            } else {
-                movie = Movie(id: id, streamId: Self.plexStreamId(item.ratingKey), name: item.title ?? "")
-                context.insert(movie)
-            }
-            applyPlexMovieFields(item, to: movie, scope: scope)
-        }
+        let seen = try CatalogUpsert.batch(items, context: context,
+                                           identity: { scope.idPrefix + $0.ratingKey },
+                                           create: { item, id in Movie(id: id, streamId: Self.plexStreamId(item.ratingKey), name: item.title ?? "") },
+                                           apply: { applyPlexMovieFields($0, to: $1, scope: scope) })
         if context.hasChanges {
             try context.save()
         }
-        return Set(ids)
+        return Set(seen)
     }
 
     /// Copies the server-owned fields onto the row, leaving user state
@@ -351,7 +335,7 @@ extension ContentSyncManager {
 
     /// The prefix every Plex row of this playlist carries.
     nonisolated static func plexIdPrefix(_ playlistId: UUID) -> String {
-        "\(playlistId.uuidString)-plex-"
+        CatalogID.prefix(playlistId, infix: "plex")
     }
 
     // MARK: - Helpers

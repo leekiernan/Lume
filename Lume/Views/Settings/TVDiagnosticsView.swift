@@ -32,7 +32,7 @@
                 VStack(alignment: .leading, spacing: 28) {
                     VStack(alignment: .leading, spacing: 6) {
                         Text("Send Diagnostics")
-                            .font(.system(size: 38, weight: .bold))
+                            .font(.system(size: TVSettingsMetrics.screenTitleFontSize, weight: .bold))
                         Text("Scan the code with your phone to email a diagnostic summary to \(SupportInfo.diagnosticsEmail). Add a sentence about what went wrong before you send it.")
                             .font(.system(size: TVSettingsMetrics.secondaryFontSize))
                             .foregroundStyle(.secondary)
@@ -48,9 +48,7 @@
                     VStack(alignment: .leading, spacing: 8) {
                         TVOptionToggleRow(title: "Detailed Logging", isOn: $detailedLogging)
                         Text("Diagnostics are always recorded on this device and never leave it unless you send them. Detailed logging adds verbose entries — turn it on only when asked to.")
-                            .font(.system(size: TVSettingsMetrics.secondaryFontSize))
-                            .foregroundStyle(.secondary)
-                            .padding(.horizontal, TVSettingsMetrics.rowHPadding)
+                            .tvSettingsFooter()
                     }
 
                     Button("Done") { dismiss() }
@@ -59,8 +57,8 @@
                 }
                 .frame(maxWidth: 1300, alignment: .leading)
                 .frame(maxWidth: .infinity)
-                .padding(.horizontal, 48)
-                .padding(.vertical, 72)
+                .padding(.horizontal, TVSettingsMetrics.pageHorizontalInset)
+                .padding(.vertical, TVSettingsMetrics.pageVerticalInset)
             }
             .tvSettingsBackground()
             .task { await loadSummary() }
@@ -116,9 +114,7 @@
                 }
                 .buttonStyle(TVSettingsRowButtonStyle())
                 Text("Something not working? Send a diagnostic summary to the developer.")
-                    .font(.system(size: TVSettingsMetrics.secondaryFontSize))
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, TVSettingsMetrics.rowHPadding)
+                    .tvSettingsFooter()
             }
             .fullScreenCover(isPresented: $isPresented) {
                 TVDiagnosticsView(origin: "Settings")

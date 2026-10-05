@@ -20,14 +20,19 @@
         var showsLeagueMark = true
         var onSelect: () -> Void
         @AppStorage(SportsSyncService.hideScoresKey) private var hidesScores = false
+        @State private var reveal = SportsScoreReveal.shared
+
+        private var showsScore: Bool {
+            fixture.showsScore(hidingScores: hidesScores, reveal: reveal)
+        }
 
         var body: some View {
             Button(action: onSelect) {
-                TVFixtureLogoCardContent(fixture: fixture, showsLeagueMark: showsLeagueMark, showsScore: !hidesScores)
+                TVFixtureLogoCardContent(fixture: fixture, showsLeagueMark: showsLeagueMark, showsScore: showsScore)
             }
             .buttonStyle(TVCardButtonStyle(focusScale: 1.06))
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel(Text(verbatim: fixture.tvSpokenSummary(showsScore: !hidesScores)))
+            .accessibilityLabel(Text(verbatim: fixture.tvSpokenSummary(showsScore: showsScore)))
         }
     }
 
@@ -72,7 +77,6 @@
         let fixture: SportsFixture
         let showsLeagueMark: Bool
         let showsScore: Bool
-        @Environment(\.isFocused) private var isFocused
 
         /// The header line pins to the top on every card so a row of mixed team
         /// and event cards lines up; the crests centre in the space below it.
@@ -95,16 +99,11 @@
             .padding(.horizontal, 22)
             .padding(.vertical, 20)
             .frame(width: 320, height: 200)
-            .background(
+            .tvSportsCardSurface(cornerRadius: 22) {
                 RoundedRectangle(cornerRadius: 22, style: .continuous)
                     .fill(Color.black.opacity(0.55))
                     .overlay(TeamPalette.gradient(home: fixture.homePalette, away: fixture.awayPalette))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .strokeBorder(.white.opacity(isFocused ? 1 : 0.1), lineWidth: isFocused ? 4 : 1)
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+            }
         }
 
         /// The competition's crest (its abbreviation only when no crest is

@@ -79,6 +79,20 @@ enum LiveTVSection: Identifiable, Hashable {
         case .category: false
         }
     }
+
+    /// Virtual collections remain independent of the synced category list: an
+    /// uncategorized channel can still be a visible favorite or recent.
+    static func resolve(
+        playlistPrefix: String, categories: [LiveTVSection],
+        hasFavorites: Bool, hasRecentlyWatched: Bool
+    ) -> [LiveTVSection] {
+        guard !playlistPrefix.isEmpty else { return categories }
+        var result: [LiveTVSection] = []
+        if hasFavorites { result.append(.favorites) }
+        if hasRecentlyWatched { result.append(.recentlyWatched) }
+        result.append(contentsOf: categories)
+        return result
+    }
 }
 
 // MARK: - Scope
@@ -215,6 +229,25 @@ nonisolated enum LiveChannelQuery {
         var descriptor = FetchDescriptor<LiveStream>(predicate: predicate)
         descriptor.fetchLimit = 1
         return descriptor
+    }
+
+    /// Empty-state copy only: content exists but none is browseable. Do not
+    /// reveal rows/counts or bind this unfiltered query to channel rendering.
+    static func excludedChannelsProbe(playlistPrefix: String, restriction: ContentRestriction, scope: LiveChannelScope? = nil) -> FetchDescriptor<LiveStream> {
+        let prefix = playlistPrefix
+        let hasPlaylist = !prefix.isEmpty
+        let excluded = excludedCategoryIDs(restriction)
+        let categoryID: String? = if case let .category(id) = scope { id } else { nil }
+        let hasCategory = categoryID != nil
+        let favoritesOnly = scope == .favorites
+        let recentsOnly = scope == .recentlyWatched
+        return probe(predicate: #Predicate { stream in
+            hasPlaylist && stream.id.starts(with: prefix)
+                && (!hasCategory || stream.categoryId == categoryID)
+                && (!favoritesOnly || stream.isFavorite)
+                && (!recentsOnly || stream.lastWatchedDate != nil)
+                && (stream.isHidden || excluded.contains(stream.categoryId))
+        })
     }
 
     /// The categories hidden from this viewer, as optionals, so a predicate can
@@ -371,9 +404,9 @@ final class LiveTVCategoryMemo {
 /// hands the result to `content`.
 ///
 /// The gates live here, in a child view, because a `@Query`'s descriptor is
-/// fixed at `init` and `LiveTVView` is a tab root whose `init` does not re-run
-/// when the selected playlist changes; this view is rebuilt by that body, so its
-/// probes always describe the playlist currently on screen. Resolving them as
+/// fixed at `init`; this child is rebuilt with the active playlist and visibility
+/// whenever the parent renders, so its probes describe the current scope.
+/// Resolving them as
 /// `@Query`s (rather than a fetch in a task) is what keeps the rail reacting to
 /// a channel being favorited or watched without a second render pass.
 struct LiveTVSections<Content: View>: View {
@@ -407,12 +440,10 @@ struct LiveTVSections<Content: View>: View {
         // An empty prefix means there is no active playlist at all, and
         // `starts(with: "")` matches every row — the guard the two `has…`
         // properties used to carry before the probes moved into SQL.
-        guard !playlistPrefix.isEmpty else { return categorySections }
-        var resolved: [LiveTVSection] = []
-        if !favoriteProbe.isEmpty { resolved.append(.favorites) }
-        if !recentProbe.isEmpty { resolved.append(.recentlyWatched) }
-        resolved.append(contentsOf: categorySections)
-        return resolved
+        LiveTVSection.resolve(
+            playlistPrefix: playlistPrefix, categories: categorySections,
+            hasFavorites: !favoriteProbe.isEmpty, hasRecentlyWatched: !recentProbe.isEmpty
+        )
     }
 
     var body: some View {

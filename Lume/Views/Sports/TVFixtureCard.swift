@@ -68,7 +68,6 @@
         let showsScore: Bool
         let offersReveal: Bool
         let fillsWidth: Bool
-        @Environment(\.isFocused) private var isFocused
 
         var body: some View {
             VStack(alignment: .leading, spacing: 0) {
@@ -88,19 +87,16 @@
             .padding(.horizontal, 24)
             .padding(.vertical, 20)
             .frame(
-                minWidth: fillsWidth ? 0 : 404, maxWidth: fillsWidth ? .infinity : 404,
-                minHeight: 236, maxHeight: 236, alignment: .topLeading
+                minWidth: fillsWidth ? 0 : TVSportsMetrics.fixtureCardWidth,
+                maxWidth: fillsWidth ? .infinity : TVSportsMetrics.fixtureCardWidth,
+                minHeight: TVSportsMetrics.fixtureCardHeight,
+                maxHeight: TVSportsMetrics.fixtureCardHeight, alignment: .topLeading
             )
-            .background(
+            .tvSportsCardSurface(cornerRadius: 26) {
                 RoundedRectangle(cornerRadius: 26, style: .continuous)
                     .fill(Color.black.opacity(0.55))
                     .overlay(TeamPalette.gradient(home: fixture.homePalette, away: fixture.awayPalette).opacity(0.7))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 26, style: .continuous)
-                    .strokeBorder(.white.opacity(isFocused ? 1 : 0.1), lineWidth: isFocused ? 4 : 1)
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
+            }
         }
 
         private var topLine: some View {

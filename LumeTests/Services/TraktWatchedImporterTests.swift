@@ -4,7 +4,7 @@ import SwiftData
 import Testing
 
 @MainActor
-@Suite(.serialized, .globalState)
+@Suite(.serialized, .globalState, .trackerIdentity(.trakt))
 struct TraktWatchedImporterTests {
     @Test func `old remote completion cannot erase newer local movie progress`() throws {
         let context = try makeContext()
@@ -162,6 +162,28 @@ struct TraktWatchedImporterTests {
         // Home's Recently Watched row works straight away, without the episodes.
         #expect(series.lastWatchedDate == watchedDate)
         #expect(TraktPendingWatchedStore.load()[300]?.episodes["1x2"] != nil)
+    }
+
+    @Test func `parked progress belongs to the profile whose import parked it`() throws {
+        let saved = ActiveProfileStore.current
+        defer { ActiveProfileStore.current = saved }
+        let first = UUID()
+        ActiveProfileStore.current = first
+        let context = try makeContext()
+        let series = Series(id: "s1", seriesId: 1, name: "Show")
+        series.tmdbId = 300
+        context.insert(series)
+        _ = TraktWatchedImporter.apply(movies: [], shows: [showProgress()], in: context)
+
+        // Another profile opens the show: none of the first profile's ticks.
+        ActiveProfileStore.current = UUID()
+        #expect(TraktPendingWatchedStore.load()[300] == nil)
+        series.insertEpisodes([parsedEpisode(1), parsedEpisode(2)], into: context)
+        #expect(series.episodes.allSatisfy { !$0.isWatched })
+
+        // Back on the profile that imported it, the parked state is still there.
+        ActiveProfileStore.current = first
+        #expect(TraktPendingWatchedStore.load()[300] != nil)
     }
 
     @Test func `parked progress is applied when the episodes arrive`() throws {

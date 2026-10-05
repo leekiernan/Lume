@@ -47,8 +47,12 @@
         @State var showingBrowse = false
         @State var browseReturnFocus: TVSportsFocus?
         @State var resolution = SportsFixtureResolutionMachine()
+        /// Rebuilt when either machine or the visibility changes — see
+        /// `keepingSportsHubChannels`.
+        @State var hubChannels = SportsHubChannels.empty
+
         var resolved: [String: [ResolvedChannel]] {
-            resolution.resolved(for: restriction.visibilityToken)
+            hubChannels.resolved
         }
 
         @State private var heroSelection = SportsHeroSelectionMachine()
@@ -106,6 +110,9 @@
                     lockedState
                 }
             }
+            .keepingSportsHubChannels(
+                $hubChannels, resolution: resolution, highlights: highlightsLoad, visibilityToken: restriction.visibilityToken
+            )
             .sheet(isPresented: $showManageTeams) { TVManageTeamsPane() }
             .fullScreenCover(item: $selectedFixture, onDismiss: presentPendingMedia) { fixture in
                 TVGameDetailSheet(fixture: fixture, resolved: resolved[fixture.id] ?? [], onWatch: watch)
@@ -149,25 +156,26 @@
             // rails, the default focus and the resolve key alike.
             let fixtures = grouping.visibleFixtures
             let preference = SportsChannelPreference.Context.current
-            let availableIDs = Set(
-                (resolved.merging(highlightsResult.resolved) { current, cached in current.isEmpty ? cached : current })
-                    .filter { !$0.value.isEmpty }
-                    .map(\.key)
-            )
+            let availableIDs = hubChannels.availableIDs
             let candidates = grouping.heroCandidates(
                 in: fixtures, highlights: highlightsResult.highlights.map(\.fixture), availableIDs: availableIDs
             )
-            let carousel = Array(heroSelection.carouselCandidates(in: candidates, context: heroSelectionContext).prefix(Self.carouselLimit))
-            let carouselIDs = Set(carousel.map(\.id))
+            let plan = SportsHubPresentationPlan(
+                fixtures: fixtures,
+                candidates: heroSelection.carouselCandidates(in: candidates, context: heroSelectionContext),
+                surface: .television,
+                highlights: scope == .all ? highlightsResult.highlights.map(\.fixture) : []
+            )
+            let carousel = plan.carousel
+            let carouselIDs = plan.carouselIDs
             let hero = heroModel.displayedHero?.fixture
             // Big this week leaves out whatever the carousel already shows.
             let highlights = highlightsResult.highlights.filter { !carouselIDs.contains($0.fixture.id) }
             // The carousel's games lead the page on their own, not again in a rail.
-            let groups = grouping.groups(for: fixtures.filter { !carouselIDs.contains($0.id) })
+            let groups = grouping.groups(for: plan.rowFixtures)
             let heroAvailability = hero.map { availability(of: $0, preference: preference) }
-            // Slides from later in the week aren't on screen, but still want
-            // their channels once the guide reaches them.
-            let toResolve = fixtures + carousel.map(\.fixture).filter { slide in !fixtures.contains { $0.id == slide.id } }
+            // The displayed slides and highlights refresh with the rows.
+            let toResolve = plan.resolutionFixtures
             return ZStack {
                 TVSportsHeroBackdrop(fixture: hero, belowFold: heroZone != .expanded)
                     .animation(.easeInOut(duration: 0.8), value: hero?.id)
@@ -187,7 +195,7 @@
                                 header: { header.padding(.top, TVSportsMetrics.contentTop) }
                             )
                         }
-                        if groups.isEmpty, carousel.isEmpty {
+                        if plan.showsNoGames(groupsAreEmpty: groups.isEmpty) {
                             noGamesState
                         } else {
                             ForEach(groups) { group in
@@ -236,15 +244,13 @@
             }
         }
 
-        private static let carouselLimit = 8
-
         private var showcaseHeight: CGFloat {
             max(containerHeight - TVHomeMetrics.rowPeek, 0)
         }
 
         private func availability(of fixture: SportsFixture, preference: SportsChannelPreference.Context) -> SportsChannelAvailability {
             SportsChannelAvailability(
-                resolved[fixture.id] ?? highlightsResult.resolved[fixture.id], startDate: fixture.headlineDate, preference: preference
+                resolved[fixture.id], startDate: fixture.headlineDate, preference: preference
             )
         }
 
@@ -317,24 +323,8 @@
 
         /// A row's crest and name, styled like `HomeRow`'s heading.
         private func rowHeader(for group: SportsFixtureGroup) -> some View {
-            HStack(spacing: 10) {
-                if let logoURL = group.logoURL {
-                    CachedAsyncImage(url: logoURL, maxPixelSize: 40) { phase in
-                        if case let .success(image) = phase {
-                            image.resizable().scaledToFit()
-                        } else {
-                            Color.clear
-                        }
-                    }
-                    .frame(width: 22, height: 22)
-                    .accessibilityHidden(true)
-                }
-                Text(verbatim: group.title)
-                    .font(.subheadline)
-                    .fontWeight(.bold)
-                    .foregroundStyle(.secondary)
-            }
-            .padding(.horizontal, TVSportsMetrics.railInset)
+            SportsSectionHeading(title: Text(verbatim: group.title), logoURL: group.logoURL, style: .rail)
+                .padding(.horizontal, TVSportsMetrics.railInset)
         }
 
         private func hintRow(_ text: LocalizedStringKey, icon: String) -> some View {
@@ -386,15 +376,9 @@
         }
     }
 
-    private extension TVSportsHubScreen {
-        // MARK: - Lifecycle
-
-        func onAppear() {
-            store.loadCached(leagueIds: displayLeagueIds)
-            SportsSyncService.shared.refreshIfStale()
-            SportsSyncService.shared.beginLivePolling()
-        }
-
+    /// Both the followed hub and the no-follows highlights page use this one
+    /// resolution owner; neither starts a competing request on the other's page.
+    extension TVSportsHubScreen {
         func resolveKey(_ fixtures: [SportsFixture]) -> String {
             SportsFixtureResolutionMachine.requestKey(for: fixtures, visibilityToken: restriction.visibilityToken, refreshingOn: [epg.isSyncing])
         }
@@ -403,6 +387,16 @@
             await SportsFixtureResolution.run(
                 $resolution, fixtures: fixtures, container: modelContext.container, restriction: restriction
             )
+        }
+    }
+
+    private extension TVSportsHubScreen {
+        // MARK: - Lifecycle
+
+        func onAppear() {
+            store.loadCached(leagueIds: displayLeagueIds)
+            SportsSyncService.shared.refreshIfStale()
+            SportsSyncService.shared.beginLivePolling()
         }
 
         var heroSelectionContext: String {
@@ -450,12 +444,7 @@
                     Color.clear.frame(height: 0).id(Self.pageTop)
                     if fixtures.isEmpty {
                         // A line, not a screenful: the season sits just below.
-                        Text("No games")
-                            .font(.title3)
-                            .foregroundStyle(.secondary)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.horizontal)
-                            .padding(.vertical, 24)
+                        SportsNoGamesView(presentation: .category)
                     } else {
                         // Four across: the width the hub's rows show, where Movies'
                         // narrower posters fit six.

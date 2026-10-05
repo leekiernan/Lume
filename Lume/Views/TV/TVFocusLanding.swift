@@ -26,22 +26,54 @@
 //  which is why the assertion here exists as well.
 //
 
+import SwiftUI
+
+extension View {
+    /// List and guide have synchronous, scoped channel queries. Yield out of
+    /// the render pass before acknowledging an empty answer; a changed request
+    /// or arriving channel cancels this task, just like a normal focus landing.
+    func completingEmptyTVFocus(
+        _ request: TVContentFocusRequest?, scope: TVContentFocusRequest.Scope,
+        hasChannels: Bool, onComplete: @escaping (TVContentFocusRequest) -> Void
+    ) -> some View {
+        let completion = request?.emptyCompletion(in: scope, hasChannels: hasChannels)
+        return task(id: completion) {
+            guard let completion else { return }
+            await Task.yield()
+            guard !Task.isCancelled else { return }
+            onComplete(completion)
+        }
+    }
+}
+
+/// The release/settle/assert boundary is tested independently of UIKit's focus
+/// engine. Cancellation or dismissal never asserts focus on a departed surface.
+@MainActor
+enum TVFocusLanding {
+    static let settleDelay: Duration = .milliseconds(150)
+
+    static func perform(
+        release: () -> Void,
+        scroll: () -> Void = {},
+        assert: () -> Void,
+        while stillPresented: () -> Bool = { true },
+        settle: () async throws -> Void = { try await Task.sleep(for: settleDelay) }
+    ) async -> Bool {
+        guard !Task.isCancelled, stillPresented() else { return false }
+        release()
+        scroll()
+        do { try await settle() } catch { return false }
+        guard !Task.isCancelled, stillPresented() else { return false }
+        assert()
+        return true
+    }
+}
+
 #if os(tvOS)
-
-    import SwiftUI
-
-    /// How long to let a newly-presented surface mount before asking for focus.
-    let tvFocusSettleDelay: Duration = .milliseconds(150)
-
-    /// Releases focus, waits for `target`'s view to mount, then asserts it.
-    /// Call from a `Task`/`task` so it runs outside the presenting update.
-    ///
-    /// Pass `scrollingTo` whenever the target sits in a lazy stack: a row below
-    /// the fold has not been realised, so a focus request naming it is dropped
-    /// exactly as if the surface weren't on screen yet — the surface opens
-    /// unfocused and whatever is behind it stays live. If the target is a child
-    /// of a lazy container, use `scrollTarget` for that stable container ID.
+    /// Release focus, realize a lazy target without animation, then assert it
+    /// outside the presenting/focus-engine update. A false result is not a claim.
     @MainActor
+    @discardableResult
     func landTVFocus<Value: Hashable>(
         _ focus: FocusState<Value?>.Binding,
         on target: Value?,
@@ -49,19 +81,21 @@
         scrollTarget: AnyHashable? = nil,
         scrollAnchor: UnitPoint = .center,
         while stillPresented: () -> Bool = { true }
-    ) async {
-        guard let target else { return }
-        focus.wrappedValue = nil
-        // Without animation: this is not a scroll the viewer asked for, it is
-        // putting the target where focus is about to land. Animating it would
-        // be seen as the list moving on its own, and can still be travelling
-        // when the focus highlight arrives.
-        var transaction = Transaction()
-        transaction.disablesAnimations = true
-        withTransaction(transaction) { proxy?.scrollTo(scrollTarget ?? AnyHashable(target), anchor: scrollAnchor) }
-        try? await Task.sleep(for: tvFocusSettleDelay)
-        guard stillPresented() else { return }
-        focus.wrappedValue = target
+    ) async -> Bool {
+        guard let target else { return false }
+        return await TVFocusLanding.perform(release: { focus.wrappedValue = nil }, scroll: {
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) { proxy?.scrollTo(scrollTarget ?? AnyHashable(target), anchor: scrollAnchor) }
+        }, assert: { focus.wrappedValue = target }, while: stillPresented)
     }
 
+    /// The guide has one Boolean focus strip, not one native target per cell.
+    @MainActor
+    @discardableResult
+    func landTVFocus(_ focus: FocusState<Bool>.Binding, while stillPresented: () -> Bool = { true }) async -> Bool {
+        await TVFocusLanding.perform(release: { focus.wrappedValue = false }, assert: {
+            focus.wrappedValue = true
+        }, while: stillPresented)
+    }
 #endif

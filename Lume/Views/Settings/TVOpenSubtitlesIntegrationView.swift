@@ -38,13 +38,13 @@
             VStack(alignment: .leading, spacing: 16) {
                 if !isCompact {
                     Text("Sign in with your free opensubtitles.com account to download subtitles for movies and episodes from the player's subtitle menu.")
-                        .font(.system(size: 24))
+                        .font(.system(size: TVSettingsMetrics.statusFontSize))
                         .foregroundStyle(.secondary)
                         .padding(.horizontal, TVSettingsMetrics.rowHPadding)
                 }
 
                 Text("Enter your username, not the email address you registered with — OpenSubtitles rejects an email here.")
-                    .font(.system(size: 22))
+                    .font(.system(size: TVSettingsMetrics.explanatoryFontSize))
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, TVSettingsMetrics.rowHPadding)
 
@@ -66,20 +66,14 @@
                 Button {
                     Task { await service.signIn(username: username, password: password) }
                 } label: {
-                    HStack(spacing: 16) {
-                        Image(systemName: "person.crop.circle.badge.checkmark")
-                            .font(.system(size: 22, weight: .medium))
-                        Text("Sign In")
-                        Spacer(minLength: 0)
-                        if service.isSigningIn { ProgressView() }
-                    }
+                    SettingsActionLabel(title: "Sign In", systemImage: "person.crop.circle.badge.checkmark", isBusy: service.isSigningIn)
                 }
                 .buttonStyle(TVSettingsRowButtonStyle())
                 .disabled(service.isSigningIn || username.isEmpty || password.isEmpty)
 
                 if let error = service.signInError {
                     Text(error)
-                        .font(.system(size: 22))
+                        .font(.system(size: TVSettingsMetrics.explanatoryFontSize))
                         .foregroundStyle(.red)
                         .padding(.horizontal, TVSettingsMetrics.rowHPadding)
                 }
@@ -90,20 +84,15 @@
             VStack(alignment: .leading, spacing: 16) {
                 TVSettingsValueRow("Signed In", value: service.username ?? "—")
 
-                Text("Search for subtitles from the player's subtitle menu while a movie or episode is playing.")
-                    .font(.system(size: 22))
+                Text(OpenSubtitlesAllowance.summary(remaining: service.remainingDownloads, allowed: service.allowedDownloads))
+                    .font(.system(size: TVSettingsMetrics.explanatoryFontSize))
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, TVSettingsMetrics.rowHPadding)
 
-                Button {
+                Button(role: .destructive) {
                     Task { await service.signOut() }
                 } label: {
-                    HStack(spacing: 16) {
-                        Image(systemName: "rectangle.portrait.and.arrow.right")
-                            .font(.system(size: 22, weight: .medium))
-                        Text("Sign Out")
-                        Spacer(minLength: 0)
-                    }
+                    SettingsActionLabel(title: "Sign Out", systemImage: "rectangle.portrait.and.arrow.right")
                 }
                 .buttonStyle(TVSettingsRowButtonStyle(isDestructive: true))
             }

@@ -77,6 +77,13 @@ nonisolated enum ContinueWatching {
         return min(max(progress / Double(duration), 0), 1)
     }
 
+    /// Poster/episode-card resume bars show only unfinished, started content.
+    /// This is not the continuation resolver's greater-than-one-second gate.
+    static func resumeFraction(progress: Double, duration: Int?, isWatched: Bool) -> Double? {
+        guard progress > 0, !isWatched else { return nil }
+        return fraction(progress: progress, duration: duration)
+    }
+
     /// "32m left", "1h 5m left" (localised).
     static func remainingLabel(_ seconds: TimeInterval) -> String {
         // Whole minutes, never "0m": under a minute left still reads 1m.

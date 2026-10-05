@@ -27,7 +27,7 @@
 
         func highlightAvailability(_ fixture: SportsFixture) -> SportsChannelAvailability {
             SportsChannelAvailability(
-                highlightsResult.resolved[fixture.id], startDate: fixture.headlineDate, preference: .current
+                resolved[fixture.id], startDate: fixture.headlineDate, preference: .current
             )
         }
 
@@ -55,9 +55,7 @@
                         showManageTeams = true
                     } label: {
                         Label("Follow Your Teams", systemImage: "person.2.badge.plus")
-                            .font(.title3.weight(.semibold))
-                            .padding(.horizontal, TVSportsMetrics.actionLabelInset)
-                            .padding(.vertical, 20)
+                            .tvSportsStateActionLabel()
                     }
                     .buttonStyle(TVCardButtonStyle(focusScale: 1.05))
                     .padding(.horizontal, TVSportsMetrics.railInset)
@@ -68,6 +66,9 @@
             .background(.black)
             .background(alignment: .top) {
                 TVSportsHubHeroBackdrop(fixture: first.fixture)
+            }
+            .task(id: resolveKey(highlightsResult.highlights.map(\.fixture))) {
+                await runResolve(highlightsResult.highlights.map(\.fixture))
             }
         }
     }

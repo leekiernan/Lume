@@ -17,6 +17,7 @@
 import Combine
 import Foundation
 import KSPlayer
+import SwiftUI
 import VLCKit
 
 /// A subtitle file on disk, ready to hand to an engine.
@@ -40,6 +41,13 @@ protocol ExternalSubtitleLoading: AnyObject {
 extension ExternalSubtitleLoading {
     var supportsExternalSubtitles: Bool {
         true
+    }
+
+    /// The host owns presentation; the engine only advertises sidecar support.
+    /// Search cancellation/download ownership remains in SubtitleSearchMachine.
+    func subtitleSearchAction(for media: PlayableMedia, isPresented: Binding<Bool>) -> (() -> Void)? {
+        guard OpenSubtitlesService.supportsSearch(for: media, supportsExternalSubtitles: supportsExternalSubtitles) else { return nil }
+        return { isPresented.wrappedValue = true }
     }
 }
 

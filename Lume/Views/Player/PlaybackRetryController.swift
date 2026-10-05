@@ -19,11 +19,61 @@ import OSLog
 final class PlaybackRetryController {
     /// Delay before each successive attempt, in seconds. The element count is
     /// the attempt budget (6 reconnects spanning ~31s before giving up).
-    private static let backoff: [TimeInterval] = [1, 2, 4, 8, 8, 8]
+    nonisolated static let defaultBackoff: [TimeInterval] = [1, 2, 4, 8, 8, 8]
 
+    private let backoff: [TimeInterval]
     private var attempt = 0
     private var pending: Task<Void, Never>?
     private var gaveUp = false
+    private var terminalFailure = false
+
+    init(backoff: [TimeInterval] = PlaybackRetryController.defaultBackoff) {
+        self.backoff = backoff
+    }
+
+    /// What the engine is doing with its stream, and what each means for the
+    /// budget. Engines report these rather than calling `reset`/`cancel`
+    /// directly, so who owns the budget at each point is spelled out once.
+    enum Lifecycle {
+        /// A different stream (or the first): a full budget, and nothing left
+        /// over from the last one may fire on it.
+        case newStream
+        /// Re-opening the same stream after a drop, or retrying a startup
+        /// error: the budget carries on, or a stream that never plays would
+        /// retry forever.
+        case reconnect
+        /// Failure reported to the viewer: nothing may reload behind the
+        /// error overlay — neither a pending retry nor one a later engine
+        /// error would schedule. Only a new stream or Try Again re-arms it.
+        case terminalFailure
+        /// The viewer pressed Try Again: a full budget.
+        case manualRetry
+        /// The player is going away.
+        case teardown
+    }
+
+    /// The event a `load` is: re-opening the same stream — including a
+    /// startup error retried before the first frame — carries the budget on;
+    /// anything else is a new stream. Keyed on the caller's intent, not on
+    /// whether playback had started, or a stream that never plays would
+    /// refill its budget on every retry.
+    nonisolated static func lifecycle(forLoadReconnecting reconnecting: Bool) -> Lifecycle {
+        reconnecting ? .reconnect : .newStream
+    }
+
+    func handle(_ event: Lifecycle) {
+        switch event {
+        case .newStream, .manualRetry:
+            terminalFailure = false
+            reset()
+        case .reconnect: break
+        case .terminalFailure:
+            cancel()
+            terminalFailure = true
+            gaveUp = true
+        case .teardown: cancel()
+        }
+    }
 
     /// Whether the budget is exhausted and no further retries will be made.
     var hasGivenUp: Bool {
@@ -31,9 +81,11 @@ final class PlaybackRetryController {
     }
 
     /// Mark playback healthy again (the player reached a playing state). Clears
-    /// the attempt counter and the give-up flag so a later, unrelated drop gets
-    /// a full budget.
+    /// the attempt counter so a later, unrelated drop gets a full budget.
+    /// Late healthy callbacks cannot undo a terminal failure/error overlay.
+    /// Only a new stream or explicit Try Again clears that latch.
     func reset() {
+        guard !terminalFailure else { return }
         attempt = 0
         gaveUp = false
         pending?.cancel()
@@ -52,16 +104,16 @@ final class PlaybackRetryController {
     /// single outage produces collapses into one scheduled attempt.
     func scheduleRetry(_ reload: @escaping () -> Void) {
         guard pending == nil, !gaveUp else { return }
-        guard attempt < Self.backoff.count else {
+        guard attempt < backoff.count else {
             gaveUp = true
             let spent = attempt
             Logger.player.error("reconnect: giving up after \(spent, privacy: .public) attempts")
             return
         }
 
-        let delay = Self.backoff[attempt]
+        let delay = backoff[attempt]
         let number = attempt + 1
-        let total = Self.backoff.count
+        let total = backoff.count
         attempt += 1
         Logger.player.log("reconnect: attempt \(number, privacy: .public)/\(total, privacy: .public) in \(delay, format: .fixed(precision: 0), privacy: .public)s")
 

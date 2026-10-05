@@ -18,6 +18,9 @@ struct HomeView: View {
     // row's loading in `HomeView+ForYou.swift` can drive them.
     @Environment(\.modelContext) var modelContext
     @Environment(\.contentRestriction) var restriction
+    /// Observed, so a profile switch restarts profile-scoped loads;
+    /// `ActiveProfileStore` alone is a UserDefaults read SwiftUI can't see change.
+    @Environment(ProfileManager.self) private var profiles: ProfileManager?
     /// tvOS's launch splash, waiting for Home to have something to show.
     @Environment(LaunchSplashModel.self) private var launchSplash: LaunchSplashModel?
     #if os(macOS)
@@ -48,11 +51,18 @@ struct HomeView: View {
     @State var feed = SectionFeed(surface: .home)
     /// Resume fractions for partially-watched series, keyed by series id and
     /// resolved off the main thread — see `SeriesResumeLoader`. Not `private`:
-    /// written by the HomeView+DerivedContent extension (separate file).
-    @State var seriesResume: [String: Double] = [:]
+    /// loaded by the HomeView+DerivedContent extension (separate file).
+    @State var resumeLoader = SeriesResumeLoadMachine()
+    var seriesResume: [String: Double] {
+        resumeLoader.snapshot(for: seriesResumeKey).fractions
+    }
+
     /// Where each watched series continues, or that it's finished — splits the
     /// series between Continue Watching and Recently Watched.
-    @State var seriesProgress = ContinueWatchingLoader.Result()
+    var seriesProgress: ContinueWatchingLoader.Result {
+        resumeLoader.snapshot(for: seriesResumeKey).progress
+    }
+
     @AppStorage(RecommendationSettings.enabledKey) var recommendationsEnabled = RecommendationSettings.enabledDefault
     /// The user's chosen Home row order (Settings › Layout › Home). Falls back to
     /// the surface's default order until they reorder.
@@ -155,6 +165,12 @@ struct HomeView: View {
         ))
     }
 
+    private func selectHero(_ hero: HeroItem) {
+        #if os(tvOS)
+            selectedHero = hero
+        #endif
+    }
+
     var body: some View {
         // Derived once per pass — see `DerivedContent`.
         let content = derivedContent()
@@ -175,40 +191,16 @@ struct HomeView: View {
                         description: Text("Watch something or mark titles as favorites and they'll show up here.")
                     )
                 case let .content(hero):
+                    HeroFeedPage(
+                        heroItems: feed.heroItems, reservesHero: hero.reservesSpace,
+                        warmStartBackdropURL: heroWarmStartBackdropURL,
+                        warmStartPosterURL: { heroWarmStartPosterURL }, hidesScrollIndicators: true,
+                        onSelectHero: selectHero, rows: { homeRows(content) }
+                    )
                     #if os(tvOS)
-                        // Immersive Apple TV-style home: full-screen backdrop,
-                        // teasing first row, fold-snapping scroll. Lives in
-                        // `TVHomeScreen.swift`.
-                        TVHomeScreen(
-                            heroItems: feed.heroItems,
-                            reservesHero: hero.reservesSpace,
-                            warmStartBackdropURL: heroWarmStartBackdropURL,
-                            onSelectHero: { selectedHero = $0 },
-                            rows: { homeRows(content) }
-                        )
-                        .tvQuickSwitchHint(interacted: selectedHero != nil)
+                    .tvQuickSwitchHint(interacted: selectedHero != nil)
                     #else
-                        ScrollView {
-                            LazyVStack(alignment: .leading, spacing: PosterCardMetrics.sectionSpacing) {
-                                if !feed.heroItems.isEmpty {
-                                    HomeHeroCarousel(items: feed.heroItems)
-                                } else if hero.reservesSpace {
-                                    HomeHeroWarmStart(backdropURL: heroWarmStartBackdropURL, posterURL: heroWarmStartPosterURL)
-                                }
-                                homeRows(content)
-                            }
-                            // The hero fills the top inset itself when it's
-                            // showing; without one, Home takes the same inset as
-                            // the Movies and Series pages.
-                            .padding(.top, hero.reservesSpace ? 0 : PosterCardMetrics.sectionVerticalPadding)
-                            .padding(.bottom, PosterCardMetrics.sectionVerticalPadding)
-                        }
-                        .browseActivity()
-                        .scrollIndicators(.hidden)
-                        // Only let content run under the nav bar when the hero
-                        // backdrop is there to fill it; otherwise the first row
-                        // would sit hidden behind the bar.
-                        .ignoresSafeArea(edges: hero.reservesSpace ? .top : [])
+                    .browseActivity()
                     #endif
                 }
             }
@@ -252,29 +244,13 @@ struct HomeView: View {
                 }
             }
             #endif
-            .task(id: trendingKey) {
-                feed.heroRef = heroRef
-                feed.update(context: feedContext)
-                await feed.loadTrending(cacheKey: trendingKey)
-            }
-            .task(id: watchlistKey(.trakt)) {
-                feed.heroRef = heroRef
-                feed.update(context: feedContext)
-                await feed.loadWatchlist(.trakt, cacheKey: watchlistKey(.trakt))
-            }
-            .task(id: watchlistKey(.simkl)) {
-                feed.heroRef = heroRef
-                feed.update(context: feedContext)
-                await feed.loadWatchlist(.simkl, cacheKey: watchlistKey(.simkl))
-            }
+            .sectionFeedLoads(
+                feed: feed, configuration: .init(context: feedContext, catalogKey: trendingKey,
+                                                 heroRef: heroRef, heroSelection: heroSectionRaw, customSections: visibleCustomSections,
+                                                 traktAccount: trakt.username, prepareCustomSections: seedDefaultHeroIfNeeded)
+            )
             .task(id: recommendationsKey) {
                 await loadRecommendations()
-            }
-            .task(id: customSectionsKey) {
-                seedDefaultHeroIfNeeded()
-                feed.heroRef = heroRef
-                feed.update(context: feedContext)
-                await feed.loadCustomSections(cacheKey: customSectionsCacheKey, sections: visibleCustomSections)
             }
             .task(id: seriesResumeKey) {
                 await loadSeriesResume()
@@ -422,29 +398,6 @@ struct HomeView: View {
         return "\(playlists.count)-\(selectedPlaylistID)-\(synced)-\(restriction.visibilityToken)"
     }
 
-    /// Same shape as `LibrarySectionsView`'s key — service, surface, account,
-    /// catalog — so one watchlist load key reads the same on every surface.
-    func watchlistKey(_ provider: WatchlistProvider) -> String {
-        "watchlist-\(provider)-\(feed.surface.rawValue)-\(provider.account ?? "disconnected")-\(trendingKey)"
-    }
-
-    /// Identity of the custom-section load. Shares the trending key's playlist /
-    /// sync / visibility inputs — the match is against the same catalog — plus a
-    /// signature of the sections themselves, so adding a row or editing its URL
-    /// reloads while renaming one doesn't — and, when a row reads from Trakt,
-    /// the connected account, since that decides which private lists open.
-    /// Includes the promoted section: choosing a hero changes neither the
-    /// catalog nor the section list, so without it the load never re-runs and
-    /// the feed is never told which section to build the hero from.
-    var customSectionsKey: String {
-        "\(customSectionsCacheKey)-hero-\(heroSectionRaw)"
-    }
-
-    private var customSectionsCacheKey: String {
-        "custom-\(trendingKey)-\(CustomHomeSections.contentSignature(visibleCustomSections))"
-            + CustomHomeSections.accountSignature(visibleCustomSections, traktUsername: trakt.username)
-    }
-
     /// Creates Home's starting hero the first time it is needed, as an ordinary
     /// section. Runs once: deleting it leaves it deleted.
     private func seedDefaultHeroIfNeeded() {
@@ -498,13 +451,12 @@ struct HomeView: View {
         )
     }
 
-    /// Identity of the series resume lookup. Resuming or finishing an episode
-    /// stamps its series' `lastWatchedDate` (`WatchProgressWriter`), which is
-    /// exactly what the Recently Watched query orders by — so the newest stamp
-    /// moves whenever a resume bar would.
-    private var seriesResumeKey: String {
-        let newest = watchedSeries.first?.lastWatchedDate?.timeIntervalSince1970 ?? 0
-        return "resume-\(watchedSeries.count)-\(newest)-\(selectedPlaylistID)"
+    /// Shared request identity, using Home's already-bounded watch window.
+    var seriesResumeKey: SeriesResumeLoadKey {
+        SeriesResumeLoadKey(
+            playlistPrefix: playlistPrefix, restriction: restriction, watched: watchedSeries,
+            profileID: profiles?.activeProfileID ?? ActiveProfileStore.current
+        )
     }
 
     // MARK: - Playlist scoping
@@ -513,7 +465,7 @@ struct HomeView: View {
     /// playlist shares (ids are stored as `"\(playlistID)-…"`). The `@Query`
     /// results span all playlists, so this scopes them in-memory.
     var playlistPrefix: String? {
-        activePlaylist.map { "\($0.id.uuidString)-" }
+        activePlaylist.map(\.contentIDPrefix)
     }
 
     func belongsToActivePlaylist(_ id: String) -> Bool {

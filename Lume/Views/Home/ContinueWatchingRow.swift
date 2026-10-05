@@ -65,51 +65,24 @@ struct ContinueWatchingRow: View {
     var body: some View {
         let visible = items
         if !visible.isEmpty {
-            VStack(alignment: .leading, spacing: 12) {
-                header
-                ScrollView(.horizontal, showsIndicators: false) {
-                    LazyHStack(spacing: PosterCardMetrics.railSpacing) {
-                        ForEach(Array(visible.enumerated()), id: \.element.id) { index, item in
-                            ContinueWatchingCell(
-                                item: item,
-                                continuation: continuation(for: item),
-                                artwork: artwork[item.id],
-                                onPlayLive: onPlayLive,
-                                onRemove: onRemove,
-                                onStartMultiView: onStartMultiView,
-                                animationNamespace: animationNamespace
-                            )
-                            .onLeadingEdgeLeft(index == 0 ? onLeadingLeft : nil)
-                        }
-                    }
-                    .padding(.horizontal)
-                    .padding(.vertical, PosterCardMetrics.railVerticalPadding)
+            PosterRail(title: Text("Continue Watching"), showAll: showAll,
+                       groupsFocus: true, rowHeight: ContinueWatchingMetrics.rowHeight)
+            {
+                ForEach(Array(visible.enumerated()), id: \.element.id) { index, item in
+                    ContinueWatchingCell(
+                        item: item,
+                        continuation: continuation(for: item),
+                        artwork: artwork[item.id],
+                        onPlayLive: onPlayLive,
+                        onRemove: onRemove,
+                        onStartMultiView: onStartMultiView,
+                        animationNamespace: animationNamespace
+                    )
+                    .onLeadingEdgeLeft(index == 0 ? onLeadingLeft : nil)
                 }
-                .scrollClipDisabled()
-                .frame(height: ContinueWatchingMetrics.rowHeight)
             }
-            #if os(tvOS)
-            .focusSection()
-            #endif
             .task(id: artworkKey) { await fetchMissingArtwork() }
         }
-    }
-
-    private var header: some View {
-        HStack {
-            Text("Continue Watching")
-                .font(PosterCardMetrics.railTitleFont)
-                .fontWeight(.bold)
-                .foregroundStyle(.secondary)
-            Spacer()
-            if let showAll {
-                NavigationLink(value: showAll) {
-                    Text("Show All")
-                        .font(.subheadline)
-                }
-            }
-        }
-        .padding(.horizontal)
     }
 
     private func continuation(for item: HomeMediaItem) -> SeriesContinuation? {
@@ -136,8 +109,8 @@ struct ContinueWatchingRow: View {
         for request in requests {
             guard !Task.isCancelled else { return }
             let details = switch request.kind {
-            case .movie: await manager.enrichMovie(id: request.modelID, tmdbId: request.tmdbId)
-            case .series: await manager.enrichSeries(id: request.modelID, tmdbId: request.tmdbId)
+            case .movie: await manager.enrichMovieArtwork(id: request.modelID, tmdbId: request.tmdbId)
+            case .series: await manager.enrichSeriesArtwork(id: request.modelID, tmdbId: request.tmdbId)
             }
             if let details {
                 artwork[request.id] = ContinueWatchingArtwork(backdropPath: details.backdropPath, logoPath: details.logoPath)
@@ -166,12 +139,12 @@ struct ContinueWatchingArtworkRequest {
         switch item {
         case let .movie(movie):
             guard let tmdbId = movie.tmdbId,
-                  Self.needsArtwork(movie.backdropPath, movie.logoPath, enrichedAt: movie.tmdbEnrichedAt)
+                  Self.needsArtwork(movie.backdropPath, movie.logoPath, enrichedAt: movie.tmdbArtworkEnrichedAt ?? movie.tmdbEnrichedAt)
             else { return nil }
             self.init(id: item.id, modelID: movie.id, tmdbId: tmdbId, kind: .movie)
         case let .series(show):
             guard let tmdbId = show.tmdbId,
-                  Self.needsArtwork(show.backdropPath, show.logoPath, enrichedAt: show.tmdbEnrichedAt)
+                  Self.needsArtwork(show.backdropPath, show.logoPath, enrichedAt: show.tmdbArtworkEnrichedAt ?? show.tmdbEnrichedAt)
             else { return nil }
             self.init(id: item.id, modelID: show.id, tmdbId: tmdbId, kind: .series)
         case .live:

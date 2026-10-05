@@ -33,6 +33,7 @@ Release would change what ships. Debug, Release and Sideload are untouched.
 | Layer | Where | What it catches |
 |---|---|---|
 | Microbenchmarks | `ParsingBenchmarks`, `PersistenceBenchmarks`, `M3UPersistenceBenchmarks` | Parser / import regressions |
+| Shared provider upserts | `CatalogUpsertBenchmarks` | Legacy/shared batch overhead, cold and unchanged |
 | Browse read path | `BrowseQueryBenchmarks`, `EPGQueryBenchmarks` | A browse fetch going back to scanning |
 | Sports resolve | `SportsQueryBenchmarks` | The fixture→channel resolve going back to an unbounded guide scan |
 | Player navigation | `BrowseQueryBenchmarks+Navigation` | A previous/next lookup going back to reading the whole list |
@@ -855,6 +856,27 @@ entered m3u URL is an Xtream `get.php` endpoint carrying credentials, the
 add-playlist screen says so and leaves the choice to the user.
 
 ## Baselines
+
+### Shared catalog-upsert comparison
+
+`CatalogUpsertBenchmarks` compares the pre-refactor movie loop with the shipping
+`CatalogUpsert.batch` helper: 20,000 movies, 2,000-row batches, fresh contexts,
+identical guarded fields and save boundaries, on disk under **Benchmark**.
+Cold iterations use a fresh playlist namespace; unchanged iterations seed the
+catalog outside measurement. It does not measure network, decode or the entire
+Xtream phase/sweep, and is not a physical-device result.
+
+2026-10-05, arm64 MacBook Air, macOS 27.2, three measured iterations each:
+
+- Cold: legacy **3.020 s**, shared **3.031 s** (+0.4%).
+- Unchanged: legacy **0.477 s**, shared **0.482 s** (+1.1%).
+
+The comparison is a guard against abstraction overhead, not a speedup claim.
+Absolute process peaks across sequential test cases include allocator high-water
+marks from earlier cases, so do not interpret their difference as the helper's
+memory cost. Within-iteration memory growth was effectively flat. Returning the
+batch's IDs to the existing phase accumulator avoids building and hashing a
+redundant temporary set on every refresh batch.
 
 Xcode stores accepted baselines in
 `Lume.xcodeproj/xcshareddata/xcbaselines/…` keyed by **device model and

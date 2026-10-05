@@ -50,7 +50,7 @@ extension [Playlist] {
     /// `nil` for an id no current playlist owns, so callers pick their own
     /// fallback.
     func owner(ofContentID contentID: String) -> Playlist? {
-        first { contentID.hasPrefix($0.id.uuidString) }
+        PlaylistOwner.playlist(forContentID: contentID, in: self)
     }
 
     /// The in-effect playlist's `id.uuidString`, or an empty string when there is
@@ -63,7 +63,32 @@ extension [Playlist] {
 
 // MARK: - Resolver
 
+nonisolated enum QuickSwitchFocusTarget: Hashable {
+    case playlist(UUID)
+    case profile(UUID)
+
+    var isPlaylist: Bool {
+        if case .playlist = self { return true }
+        return false
+    }
+}
+
 enum QuickSwitchResolver {
+    /// Start on the active playlist, not the first one. With a single playlist,
+    /// prefer the active profile; never nominate a disabled column.
+    static func initialFocus(
+        playlists: [QuickSwitchRow<Playlist>],
+        profiles: [QuickSwitchRow<UserProfile>],
+        canSwitchPlaylist: Bool = true,
+        canSwitchProfile: Bool = true
+    ) -> QuickSwitchFocusTarget? {
+        let playlist = playlists.first(where: \.isCurrent) ?? playlists.first
+        let profile = profiles.first(where: \.isCurrent) ?? profiles.first
+        if canSwitchPlaylist, playlists.count > 1, let playlist { return .playlist(playlist.id) }
+        if canSwitchProfile, let profile { return .profile(profile.id) }
+        return canSwitchPlaylist ? playlist.map { .playlist($0.id) } : nil
+    }
+
     // MARK: Playlists
 
     /// The playlist rows in the order they were handed in, each tagged with

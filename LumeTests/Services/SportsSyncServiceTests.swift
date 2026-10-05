@@ -201,17 +201,17 @@ struct SportsSyncMonthWindowTests {
     }
 }
 
-// MARK: - leagueId(fromTeamID:)
+// MARK: - League identity shared with follows and presentation
 
 struct SportsSyncLeagueIDTests {
     @Test func `team id yields its league id`() {
-        #expect(SportsSyncService.leagueId(fromTeamID: "espn:soccer/ger.1:132") == "espn:soccer/ger.1")
+        #expect(SportsTeam.leagueID(fromTeamID: "espn:soccer/ger.1:132") == "espn:soccer/ger.1")
     }
 
     @Test func `a bare league id has no trailing team segment`() {
         // "espn:soccer/ger.1" splits on its last ':' into "espn" — the seam is
         // documented as team-id-only input, so this just proves it never crashes.
-        #expect(SportsSyncService.leagueId(fromTeamID: "no-colon") == nil)
+        #expect(SportsTeam.leagueID(fromTeamID: "no-colon") == nil)
     }
 }
 

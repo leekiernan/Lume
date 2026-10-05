@@ -101,11 +101,19 @@ private struct BrowseSidebarToolbar: ViewModifier {
 /// nothing (a fresh catalog with no history, favorites or TMDB matches), and
 /// makes the demoted categories discoverable besides.
 struct BrowseCategoriesButton: View {
-    @Binding var isPresented: Bool
+    private let onOpen: () -> Void
+
+    init(isPresented: Binding<Bool>) {
+        onOpen = { isPresented.wrappedValue = true }
+    }
+
+    init(onOpen: @escaping () -> Void) {
+        self.onOpen = onOpen
+    }
 
     var body: some View {
         Button {
-            isPresented = true
+            onOpen()
         } label: {
             Label("Browse All Categories", systemImage: "square.grid.2x2")
                 .font(.subheadline.weight(.semibold))

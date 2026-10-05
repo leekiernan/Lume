@@ -43,7 +43,7 @@ import SwiftUI
         func tvEngineOptionsDetail(for engine: PlayerEngineKind) -> some View {
             VStack(alignment: .leading, spacing: 28) {
                 Text("\(engine.displayName) Options")
-                    .font(.system(size: 34, weight: .bold))
+                    .font(.system(size: TVSettingsMetrics.paneTitleFontSize, weight: .bold))
                     .padding(.horizontal, TVSettingsMetrics.rowHPadding)
 
                 switch engine {
@@ -55,9 +55,7 @@ import SwiftUI
                     LumeEngineSettingsTVDetail()
                 case .avPlayer:
                     Text("AVPlayer has no configurable options.")
-                        .font(.system(size: 20))
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, TVSettingsMetrics.rowHPadding)
+                        .tvSettingsFooter()
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -68,25 +66,7 @@ import SwiftUI
                 VStack(alignment: .leading, spacing: 8) {
                     TVSettingsSectionLabel("About")
 
-                    HStack(spacing: 18) {
-                        Image(systemName: "play.tv.fill")
-                            .font(.system(size: 28))
-                            .foregroundStyle(.tint)
-                            .frame(width: 60, height: 60)
-                            .background(.tint.opacity(0.12), in: .rect(cornerRadius: 14, style: .continuous))
-
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Lume")
-                                .font(.system(size: 26, weight: .semibold))
-                            Text("Version \(SupportInfo.appVersion)")
-                                .font(.system(size: 20))
-                                .foregroundStyle(.secondary)
-                        }
-
-                        Spacer(minLength: 0)
-                    }
-                    .padding(.horizontal, TVSettingsMetrics.rowHPadding)
-                    .padding(.vertical, 8)
+                    TVSettingsSummary(systemImage: "play.tv.fill", title: Text("Lume"), detail: Text("Version \(SupportInfo.appVersion)"))
                 }
 
                 tvSupportSection
@@ -105,7 +85,7 @@ import SwiftUI
                 TVSettingsSectionLabel("Acknowledgements")
 
                 Text("Lume is free, open-source software, licensed under the GNU Affero General Public License v3.")
-                    .font(.system(size: 22))
+                    .font(.system(size: TVSettingsMetrics.explanatoryFontSize))
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, TVSettingsMetrics.rowHPadding)
 
@@ -117,7 +97,7 @@ import SwiftUI
 
                 // swiftlint:disable:next line_length
                 Text("Artwork, ratings and details are provided by TMDB, MDBList, and Trakt, and intro/recap skip data by IntroDB. This product uses the TMDB API but is not endorsed or certified by TMDB.")
-                    .font(.system(size: 22))
+                    .font(.system(size: TVSettingsMetrics.explanatoryFontSize))
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, TVSettingsMetrics.rowHPadding)
 
@@ -168,17 +148,7 @@ import SwiftUI
                 VStack(alignment: .leading, spacing: 8) {
                     TVSettingsSectionLabel("Sports")
 
-                    Button { enabled.toggle() } label: {
-                        HStack(spacing: 16) {
-                            Image(systemName: enabled ? "checkmark.circle.fill" : "circle")
-                            Text("Show Sports")
-                            Spacer(minLength: 0)
-                            Text(enabled ? "On" : "Off")
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    .buttonStyle(TVSettingsRowButtonStyle())
-                    .accessibilityValue(enabled ? Text("On") : Text("Off"))
+                    TVOptionToggleRow(title: "Show Sports", isOn: $enabled, showsIndicator: true)
 
                     if enabled {
                         Button {
@@ -229,16 +199,10 @@ import SwiftUI
                 }
 
                 Text("Follow leagues and teams to build your Sports Hub. Fixtures, live scores and standings come from ESPN, and each game links to a channel in your playlists.")
-                    .font(.system(size: 20))
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, TVSettingsMetrics.rowHPadding)
+                    .tvSettingsFooter()
             }
             .fullScreenCover(isPresented: $showManageTeams) {
                 TVManageTeamsPane()
-            }
-            .onChange(of: enabled) { _, _ in
-                SportsSyncService.shared.availabilityDidChange()
-                SportsFollowService.shared.reload()
             }
         }
 
@@ -266,9 +230,7 @@ import SwiftUI
                     scrollProxy: proxy
                 )
                 Text("Hide a team or league to take its row off the Sports hub — it stays followed. Select a row to lift it, then move up or down and select again to place.")
-                    .font(.system(size: 20))
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, TVSettingsMetrics.rowHPadding)
+                    .tvSettingsFooter()
                     .padding(.top, 4)
             }
         }

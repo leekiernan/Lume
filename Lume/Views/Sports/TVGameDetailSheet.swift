@@ -47,7 +47,7 @@
 
         /// Hide Scores, unless this one game has been revealed.
         private var hidesScores: Bool {
-            hideScoresSetting && !reveal.isRevealed(fixture.id)
+            !fixture.showsScore(hidingScores: hideScoresSetting, reveal: reveal)
         }
 
         /// The resolver's channels, ordered within each tier for this viewer's

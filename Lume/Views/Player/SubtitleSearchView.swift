@@ -93,12 +93,9 @@ struct SubtitleSearchView: View {
             let results = try await service.search(resolved)
             guard !Task.isCancelled else { return }
             machine.finish(request, results: results)
-        } catch let error as OpenSubtitlesError {
-            guard !Task.isCancelled else { return }
-            machine.fail(request, message: String(localized: error.message))
         } catch {
             guard !Task.isCancelled else { return }
-            machine.fail(request, message: error.localizedDescription)
+            machine.fail(request, message: OpenSubtitlesError.presentationMessage(for: error))
         }
     }
 
@@ -114,12 +111,9 @@ struct SubtitleSearchView: View {
                     fileURL: fileURL
                 ))
                 dismiss()
-            } catch let error as OpenSubtitlesError {
-                guard !Task.isCancelled else { return }
-                machine.finishDownload(request, error: String(localized: error.message))
             } catch {
                 guard !Task.isCancelled else { return }
-                machine.finishDownload(request, error: error.localizedDescription)
+                machine.finishDownload(request, error: OpenSubtitlesError.presentationMessage(for: error))
             }
         }
     }

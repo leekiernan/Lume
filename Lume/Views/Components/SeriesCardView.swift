@@ -14,50 +14,13 @@ struct SeriesCardView: View {
     var fillsWidth: Bool = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: PosterCardMetrics.titleSpacing) {
-            // Cover
-            PosterArtworkView(
-                provider: series.cover, posterPath: series.posterPath,
-                request: .init(kind: .series, id: series.id, categoryID: series.categoryId), maxPixelSize: PosterCardMetrics.posterHeight
-            ) { phase in
-                switch phase {
-                case .empty:
-                    Rectangle()
-                        .fill(Color.gray.opacity(0.3))
-                        .overlay {
-                            ProgressView()
-                        }
-                case let .success(image):
-                    image
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                case .failure:
-                    Rectangle()
-                        .fill(Color.gray.opacity(0.3))
-                        .overlay {
-                            Image(systemName: "tv")
-                                .foregroundStyle(.secondary)
-                                .font(.largeTitle)
-                        }
-                @unknown default:
-                    EmptyView()
-                }
-            }
-            .posterArtworkFrame(fillsWidth: fillsWidth)
-            .clipShape(RoundedRectangle(cornerRadius: PosterCardMetrics.cornerRadius))
-            // A shadow applied after clipShape forces an offscreen render pass per
-            // card every frame. On tvOS the focus style already supplies depth and
-            // a 2pt shadow is invisible on the 10-foot UI, so we skip it there.
-            #if !os(tvOS)
-                .shadow(radius: 2)
-            #endif
+        posterCard
+    }
 
-            // Title
-            Text(series.name)
-                .font(PosterCardMetrics.titleFont)
-                .lineLimit(2)
-                .posterTitleFrame(fillsWidth: fillsWidth)
-        }
+    var posterCard: PosterCard {
+        PosterCard(title: series.name, provider: series.cover, posterPath: series.posterPath,
+                   request: .init(kind: .series, id: series.id, categoryID: series.categoryId),
+                   fallbackSymbol: "tv", fillsWidth: fillsWidth)
     }
 }
 

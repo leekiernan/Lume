@@ -12,6 +12,72 @@ struct XtreamClientURLTests {
         Playlist(name: name, serverURL: serverURL, username: username, password: password)
     }
 
+    // MARK: - Authenticated request URLs
+
+    @Test(arguments: ["", "/", "/panel", "/panel/"])
+    func `API and guide append endpoints to the server path`(_ path: String) throws {
+        let playlist = makePlaylist(serverURL: "https://example.com:8080\(path)")
+        let prefix = path.hasSuffix("/") ? path : path + "/"
+        let api = try #require(XtreamClient.playerAPIURL(for: playlist))
+        let guide = try #require(XtreamClient.xmltvURL(for: playlist))
+
+        #expect(api.absoluteString == "https://example.com:8080\(prefix)player_api.php?username=testuser&password=testpass")
+        #expect(guide.absoluteString == "https://example.com:8080\(prefix)xmltv.php?username=testuser&password=testpass")
+    }
+
+    @Test(arguments: [
+        "get_live_categories", "get_vod_categories", "get_series_categories",
+        "get_live_streams", "get_vod_streams", "get_series"
+    ])
+    func `category and digest endpoints use the same action assembly`(_ action: String) throws {
+        let url = try #require(XtreamClient.playerAPIURL(for: makePlaylist(), action: action))
+        #expect(url.absoluteString == "http://example.com:8080/player_api.php?username=testuser&password=testpass&action=\(action)")
+    }
+
+    @Test func `authentication omits action and series parameters follow it`() throws {
+        let playlist = makePlaylist()
+        let auth = try #require(XtreamClient.playerAPIURL(for: playlist))
+        #expect(URLComponents(url: auth, resolvingAgainstBaseURL: false)?.queryItems?.map(\.name) == ["username", "password"])
+        let series = try #require(XtreamClient.playerAPIURL(
+            for: playlist, action: "get_series_info", parameters: [URLQueryItem(name: "series_id", value: "42")]
+        ))
+        #expect(series.absoluteString == "http://example.com:8080/player_api.php?username=testuser&password=testpass&action=get_series_info&series_id=42")
+    }
+
+    @Test func `API and guide retain existing query items fragments and credential escaping`() throws {
+        let playlist = makePlaylist(
+            serverURL: "https://example.com/panel?token=one%26two&username=proxy#guide",
+            username: "user&name=é", password: "p?#% word"
+        )
+        let expected = [
+            URLQueryItem(name: "token", value: "one&two"),
+            URLQueryItem(name: "username", value: "proxy"),
+            URLQueryItem(name: "username", value: playlist.username),
+            URLQueryItem(name: "password", value: playlist.password)
+        ]
+        let api = try #require(XtreamClient.playerAPIURL(for: playlist, action: "get_series_info"))
+        let guide = try #require(XtreamClient.xmltvURL(for: playlist))
+        let apiComponents = try #require(URLComponents(url: api, resolvingAgainstBaseURL: false))
+        let guideComponents = try #require(URLComponents(url: guide, resolvingAgainstBaseURL: false))
+
+        #expect(apiComponents.queryItems == expected + [URLQueryItem(name: "action", value: "get_series_info")])
+        #expect(guideComponents.queryItems == expected)
+        #expect(apiComponents.fragment == "guide")
+        #expect(guideComponents.fragment == "guide")
+        #expect(apiComponents.path == "/panel/player_api.php")
+        #expect(guideComponents.path == "/panel/xmltv.php")
+    }
+
+    @Test func `invalid server URLs remain invalid and guide requires a nonempty server`() {
+        let invalid = makePlaylist(serverURL: "https://[invalid")
+        #expect(XtreamClient.playerAPIURL(for: invalid) == nil)
+        #expect(XtreamClient.xmltvURL(for: invalid) == nil)
+        #expect(XtreamClient.xmltvURL(for: makePlaylist(serverURL: "")) == nil)
+        // Preserve the API builder's historical relative-URL behavior. Validation
+        // belongs to source entry/request handling, not this mechanical extraction.
+        #expect(XtreamClient.playerAPIURL(for: makePlaylist(serverURL: ""))?.relativeString == "/player_api.php?username=testuser&password=testpass")
+    }
+
     // MARK: - Movie URL
 
     @Test func `build movie URL standard`() {

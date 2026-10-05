@@ -37,7 +37,7 @@ enum SportsAlertSettingsModel {
     static var followedSports: [String] {
         let sports = Set(SportsFollowService.shared.follows
             .filter { $0.kind == .team }
-            .compactMap { SportsSyncService.leagueId(fromTeamID: $0.key) }
+            .compactMap { SportsTeam.leagueID(fromTeamID: $0.key) }
             .compactMap { leagueId in SportsCatalog.league(id: leagueId)?.sport })
         return SportsAlertSettings.sports.filter(sports.contains)
     }
@@ -86,9 +86,7 @@ enum SportsAlertSettingsModel {
                         }
                     }
                     Text("For the teams you follow. Never for the game you're watching — the stream can be behind.")
-                        .font(.system(size: 20))
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, TVSettingsMetrics.rowHPadding)
+                        .tvSettingsFooter()
                 }
                 if settings.mode != .off {
                     ForEach(SportsAlertSettingsModel.followedSports, id: \.self) { sport in

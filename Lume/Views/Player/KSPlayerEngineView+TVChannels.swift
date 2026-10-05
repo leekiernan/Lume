@@ -18,26 +18,19 @@
         /// edge. Picking a channel switches the stream and surfaces the controls
         /// briefly so the new channel's name and EPG act as a banner.
         var channelBrowser: some View {
-            TVChannelBrowserOverlay(
-                media: media,
-                onSelect: { target in
-                    selectMedia(target)
-                    withAnimation(.easeInOut(duration: 0.25)) { isChannelBrowserOpen = false }
-                    showControls()
-                },
+            TVPlayerChannelBrowser(
+                media: media, isPresented: $isChannelBrowserOpen, chrome: chrome,
+                mayHide: { canAutoHideControls }, onSelect: selectMedia,
                 onClose: { closeChannelBrowser() }
             )
-            .transition(.move(edge: .leading).combined(with: .opacity))
         }
 
         func openChannelBrowser() {
-            guard media.isLive, !isChannelBrowserOpen else { return }
-            hideTask?.cancel()
-            withAnimation(.easeInOut(duration: 0.25)) { isChannelBrowserOpen = true }
+            chrome.openBrowser(isLive: media.isLive, isPresented: $isChannelBrowserOpen)
         }
 
         func closeChannelBrowser() {
-            withAnimation(.easeInOut(duration: 0.25)) { isChannelBrowserOpen = false }
+            chrome.closeBrowser(isPresented: $isChannelBrowserOpen, mayHide: { canAutoHideControls })
             // Hand focus back to the tap-catcher so the remote keeps working.
             Task { @MainActor in catcherFocused = true }
         }

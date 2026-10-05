@@ -57,17 +57,12 @@ struct HeroCarousel<Item: Identifiable, Backdrop: View, Info: View>: View where 
     /// Read only by `HeroClockIndicator`: held as plain `@State` it was read by
     /// this body, which re-rendered the whole carousel — artwork, gradient and
     /// copy — at the clock's 20 Hz tick. The same split as tvOS's `TVHeroCarouselModel`.
-    @State private var clock = HeroClock()
+    @State private var clock = HeroAutoAdvanceClock()
 
     /// Which hero the overlay is showing. Deliberately LAGS the scroll position:
     /// on a page change the overlay fades out, swaps while invisible, then fades
-    /// back in (see `crossfadeInfo()`) — a clean fade rather than a cross-dissolve.
-    @State private var displayedID: String?
-    @State private var infoOpacity: Double = 1
-
-    private let autoAdvanceInterval: Duration = .seconds(6)
-    /// Width below which the hero switches to the stacked, full-width layout.
-    private let compactWidthThreshold: CGFloat = 600
+    /// back in through `HeroInfoTransition` — a fade rather than a cross-dissolve.
+    @State private var infoTransition = HeroInfoTransition<String>()
 
     /// Sentinel scroll ids for the boundary clones, so `currentID` can tell a
     /// clone apart from the real page it mirrors (see `normaliseClonePosition()`).
@@ -112,14 +107,14 @@ struct HeroCarousel<Item: Identifiable, Backdrop: View, Info: View>: View where 
     /// The hero whose copy is in the overlay. Lags `currentHero` so the outgoing
     /// title fades out before the next fades in; falls back before the first swap.
     private var displayedHero: Item? {
-        items.first { $0.id == displayedID } ?? currentHero
+        items.first { $0.id == infoTransition.displayedID } ?? currentHero
     }
 
     var body: some View {
         HeroCarouselFrame(portraitComposition: portraitURL != nil) {
             GeometryReader { proxy in
                 let width = proxy.size.width
-                let isCompact = width < compactWidthThreshold
+                let isCompact = HeroArtworkPolicy.isCompact(width: width)
 
                 ZStack(alignment: .bottomLeading) {
                     artwork
@@ -133,9 +128,9 @@ struct HeroCarousel<Item: Identifiable, Backdrop: View, Info: View>: View where 
 
                     if let hero = displayedHero {
                         // Fixed overlay — no `.id`/`.transition` so a stable view can
-                        // fade out/in via `infoOpacity` rather than cross-dissolving.
+                        // fade out/in via the transition owner rather than cross-dissolving.
                         info(hero, isCompact)
-                            .opacity(infoOpacity)
+                            .opacity(infoTransition.opacity)
                     }
 
                     pageIndicator
@@ -161,16 +156,16 @@ struct HeroCarousel<Item: Identifiable, Backdrop: View, Info: View>: View where 
         }
         .onChange(of: displayScale) { prefetchNeighbours() }
         .onAppear {
-            // Seed `displayedID` first so the initial assignment skips the crossfade.
-            if displayedID == nil { displayedID = items.first?.id }
+            // Seed the displayed hero so the initial assignment skips the fade.
+            infoTransition.reset(to: currentHero?.id)
             if currentID == nil { currentID = items.first?.id }
             prefetchNeighbours()
         }
-        .onChange(of: currentItemID) { _, _ in
+        .onChange(of: currentHero?.id) { _, _ in
             // Restart the loading bar on every page change — auto or manual.
-            clock.progress = 0
+            clock.reset()
             prefetchNeighbours()
-            crossfadeInfo()
+            infoTransition.reconcile(ids: items.map(\.id), selectedID: currentHero?.id)
         }
         .task(id: items.count) {
             await autoAdvance()
@@ -178,6 +173,7 @@ struct HeroCarousel<Item: Identifiable, Backdrop: View, Info: View>: View where 
         .onScrollVisibilityChange { visible in
             isVisible = visible
         }
+        .onDisappear { infoTransition.reset(to: currentHero?.id) }
     }
 
     /// Warms the cache for the slides on either side so they appear instantly.
@@ -194,10 +190,13 @@ struct HeroCarousel<Item: Identifiable, Backdrop: View, Info: View>: View where 
             let ratio = poster == nil ? HeroArtworkPolicy.landscapeRatio : HeroArtworkPolicy.portraitRatio
             let height = poster == nil ? HeroArtworkPolicy.artworkHeight(width: artworkSize.width, heroHeight: artworkSize.height) : artworkSize.height
             let zoom = poster == nil ? 1 : HeroArtworkPolicy.portraitZoom
-            let pixels = HeroArtworkPolicy.decodePoints(width: artworkSize.width, height: height, sourceRatio: ratio) * zoom * displayScale
-            let url = poster.map { HeroArtworkPolicy.posterURL($0, pixelWidth: pixels * ratio) }
-                ?? HeroArtworkPolicy.backdropURL(imageURL(items[neighbour]), pixelWidth: pixels)
-            if let url { Task { await ImagePipeline.shared.prefetch([url], maxPixelSize: pixels) } }
+            let rendition = HeroArtworkPolicy.rendition(
+                url: poster ?? imageURL(items[neighbour]), width: artworkSize.width, height: height,
+                sourceRatio: ratio, zoom: zoom, displayScale: displayScale
+            )
+            if let url = rendition.url {
+                Task { await ImagePipeline.shared.prefetch([url], maxPixelSize: rendition.decodeSizeInPixels) }
+            }
         }
     }
 
@@ -279,13 +278,12 @@ struct HeroCarousel<Item: Identifiable, Backdrop: View, Info: View>: View where 
     /// jump off the same `progress` the indicator renders keeps the bar and the
     /// slide change perfectly in step (like UIKit's `UIPageControlTimerProgress`).
     private func autoAdvance() async {
-        guard items.count > 1 else { return }
-        let tick: Duration = .milliseconds(50)
-        let total = Double(autoAdvanceInterval.components.seconds)
-        // Fraction of the bar to add per tick: 50ms / 6s.
-        let step = 0.05 / total
+        guard items.count > 1 else {
+            clock.reset()
+            return
+        }
         while !Task.isCancelled {
-            try? await Task.sleep(for: tick)
+            try? await Task.sleep(for: HeroAutoAdvanceClock.tickInterval)
             if Task.isCancelled { return }
             // While the user is driving the carousel, hold the bar EMPTY rather
             // than frozen. Freezing it near full meant the first tick after they
@@ -297,19 +295,12 @@ struct HeroCarousel<Item: Identifiable, Backdrop: View, Info: View>: View where 
             // and a full dwell once the hero scrolls back into view.
             if isInteracting || !isVisible {
                 // Writing an equal value still notifies the dots, so only reset once.
-                if clock.progress != 0 { clock.progress = 0 }
+                _ = clock.tick(isPaused: true)
                 // Nothing moves while paused, so check back less often.
                 try? await Task.sleep(for: .milliseconds(200))
                 continue
             }
-            if clock.progress >= 1 {
-                // Reset BEFORE paging so the next tick can't re-trigger an advance
-                // in the window before `onChange(currentItemID)` resets it.
-                clock.progress = 0
-                advance()
-            } else {
-                clock.progress = min(clock.progress + step, 1)
-            }
+            if clock.tick(isPaused: false) { advance() }
         }
     }
 
@@ -336,22 +327,6 @@ struct HeroCarousel<Item: Identifiable, Backdrop: View, Info: View>: View where 
             self.currentID = items.last?.id
         } else if currentID == Self.tailCloneID {
             self.currentID = items.first?.id
-        }
-    }
-
-    /// Fades the overlay out, swaps it while invisible, then fades back in. The
-    /// fade-in is slightly longer so the new copy lands once the 0.6s artwork
-    /// page settles. Reading `currentItemID` in the completion (not a captured
-    /// value) self-heals rapid paging to whatever slide is current on reappear.
-    private func crossfadeInfo() {
-        guard displayedID != currentItemID else { return }
-        withAnimation(.easeInOut(duration: 0.25)) {
-            infoOpacity = 0
-        } completion: {
-            displayedID = currentItemID
-            withAnimation(.easeOut(duration: 0.45)) {
-                infoOpacity = 1
-            }
         }
     }
 }
@@ -385,7 +360,7 @@ struct HomeHeroWarmStart: View {
 private struct HeroCarouselFrame: Layout {
     var portraitComposition = false
     func sizeThatFits(proposal: ProposedViewSize, subviews _: Subviews, cache _: inout ()) -> CGSize {
-        let width = proposal.width ?? 600
+        let width = proposal.width ?? HeroArtworkPolicy.compactWidthThreshold
         return CGSize(width: width, height: HeroArtworkPolicy.heroHeight(width: width, portraitComposition: portraitComposition))
     }
 
@@ -396,17 +371,9 @@ private struct HeroCarouselFrame: Layout {
     }
 }
 
-/// The carousel's auto-advance clock, observed only by `HeroClockIndicator`.
-@Observable
-private final class HeroClock {
-    /// Fill of the active page dot (0…1). It doubles as the auto-advance clock
-    /// so the loading-bar dot and the slide jump can never drift apart.
-    var progress: Double = 0
-}
-
 /// The page dots, as the one view that reads the clock.
 private struct HeroClockIndicator: View {
-    let clock: HeroClock
+    let clock: HeroAutoAdvanceClock
     let count: Int
     let activeIndex: Int
 
@@ -486,11 +453,7 @@ private struct HeroBackdrop: View {
                     onFailure: { if let poster { failedPosterURL = poster } }
                 )
                 .frame(height: height)
-                .mask {
-                    if proxy.size.width < 600 {
-                        LinearGradient(stops: [.init(color: .black, location: 0), .init(color: .black, location: 0.65), .init(color: .clear, location: 1)], startPoint: .top, endPoint: .bottom)
-                    } else { Color.black }
-                }
+                .mask { CompactHeroArtworkMask(width: proxy.size.width) }
             }
         }
     }
@@ -509,17 +472,26 @@ private struct HeroArtworkRegion<Artwork: View>: View {
                 artwork()
                     .frame(width: proxy.size.width, height: height)
                     .clipped()
-                    .mask {
-                        if proxy.size.width < 600, !managesComposition {
-                            LinearGradient(
-                                stops: [.init(color: .black, location: 0), .init(color: .black, location: 0.7), .init(color: .clear, location: 1)],
-                                startPoint: .top, endPoint: .bottom
-                            )
-                        } else {
-                            Color.black
-                        }
-                    }
+                    .mask { CompactHeroArtworkMask(width: proxy.size.width, enabled: !managesComposition) }
             }
+        }
+    }
+}
+
+/// Movie/series, Sports and warm-start artwork share the same compact fade.
+/// Self-composed artwork is masked once; wide-screen geometry is untouched.
+private struct CompactHeroArtworkMask: View {
+    let width: CGFloat
+    var enabled = true
+
+    var body: some View {
+        if enabled, HeroArtworkPolicy.isCompact(width: width) {
+            LinearGradient(
+                stops: [.init(color: .black, location: 0), .init(color: .black, location: HeroArtworkPolicy.compactFadeStart), .init(color: .clear, location: 1)],
+                startPoint: .top, endPoint: .bottom
+            )
+        } else {
+            Color.black
         }
     }
 }

@@ -62,12 +62,6 @@ extension SportsSyncService {
         return Array(Set(overdue)).sorted()
     }
 
-    /// The league id embedded in a team id ("espn:soccer/ger.1:132" → "espn:soccer/ger.1").
-    nonisolated static func leagueId(fromTeamID teamID: String) -> String? {
-        guard let range = teamID.range(of: ":", options: .backwards) else { return nil }
-        return String(teamID[..<range.lowerBound])
-    }
-
     /// The calendar months a refresh should fetch: the current month, plus the
     /// next month when the date is within 7 days of the current month's end (so a
     /// fixture list never runs dry at a month boundary), plus the previous month

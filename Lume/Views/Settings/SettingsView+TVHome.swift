@@ -38,9 +38,7 @@ import SwiftUI
                         }
                     } else {
                         Text("This area is switched off. It has no tab, and its content is skipped when playlists sync.")
-                            .font(.system(size: 20))
-                            .foregroundStyle(.secondary)
-                            .padding(.horizontal, TVSettingsMetrics.rowHPadding)
+                            .tvSettingsFooter()
                     }
                 }
             }
@@ -63,8 +61,8 @@ import SwiftUI
                         } label: {
                             Text(area.title)
                         }
-                        .buttonStyle(TVSettingsActionButtonStyle(prominent: layoutArea == area))
-                        .accessibilityAddTraits(layoutArea == area ? [.isSelected] : [])
+                        .buttonStyle(TVSettingsActionButtonStyle(prominent: !showingSportsSettings && layoutArea == area))
+                        .accessibilityAddTraits(!showingSportsSettings && layoutArea == area ? [.isSelected] : [])
                     }
 
                     Button {
@@ -90,12 +88,8 @@ import SwiftUI
                 restoringLibraryAreaToggleFocus = true
                 AppAreaSettings.setEnabled(!enabled, for: layoutArea)
             } label: {
-                HStack(spacing: 16) {
-                    Image(systemName: enabled ? "checkmark.circle.fill" : "circle")
+                TVSettingsToggleLabel(isOn: enabled, showsIndicator: true) {
                     Text("Show \(layoutArea.displayName)")
-                    Spacer(minLength: 0)
-                    Text(enabled ? "On" : "Off")
-                        .foregroundStyle(.secondary)
                 }
             }
             .buttonStyle(TVSettingsRowButtonStyle())
@@ -125,9 +119,7 @@ import SwiftUI
         private var tvAreaEnableNote: some View {
             if layoutArea == .home {
                 Text("Home draws on the other areas, so switching it off removes its tab without changing what syncs.")
-                    .font(.system(size: 20))
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, TVSettingsMetrics.rowHPadding)
+                    .tvSettingsFooter()
             }
         }
 
@@ -143,10 +135,8 @@ import SwiftUI
                     showingAreaCategories.toggle()
                 } label: {
                     HStack(spacing: 16) {
-                        Image(systemName: "square.grid.2x2")
-                            .font(.system(size: 22, weight: .medium))
-                        Text(showingAreaCategories ? "Hide Categories" : "Manage Categories")
-                        Spacer(minLength: 0)
+                        Label(showingAreaCategories ? "Hide Categories" : "Manage Categories", systemImage: "square.grid.2x2")
+                            .labelStyle(TVSettingsIconLabelStyle())
                         Image(systemName: showingAreaCategories ? "chevron.down" : "chevron.right")
                     }
                 }
@@ -161,9 +151,7 @@ import SwiftUI
                     .focusSection()
                 } else {
                     Text("Hide and reorder the categories your provider supplies, and choose what appears in the browse sidebar.")
-                        .font(.system(size: 20))
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, TVSettingsMetrics.rowHPadding)
+                        .tvSettingsFooter()
                         .padding(.top, 6)
                 }
             }

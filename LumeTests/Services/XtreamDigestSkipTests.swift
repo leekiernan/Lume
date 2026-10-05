@@ -77,6 +77,30 @@ struct XtreamDigestSkipTests {
         #expect(try movieNames(world) == ["Edited", "Bravo"])
     }
 
+    @Test func `a zero sweep marker blocks recording and trusting a digest until repaired`() async throws {
+        let world = try makeWorld()
+        defer {
+            XtreamDigestStore.removeAll(playlistId: world.playlistId)
+            SweepSkipDefaults.removeAll(playlistId: world.playlistId)
+        }
+        serveMovies(["Alpha", "Bravo"], in: world)
+        try await world.manager.syncMovies(for: world.playlist, playlistId: world.playlistId, reuseUnchanged: true)
+        let original = try #require(XtreamDigestStore.entry(playlistId: world.playlistId, endpoint: .movies))
+        UserDefaults.standard.set(0, forKey: SweepSkipDefaults.key(playlistId: world.playlistId, kind: "movie"))
+        #expect(SweepSkipDefaults.hasAny(playlistId: world.playlistId))
+        #expect(SweepSkipDefaults.isHoldingBack(playlistId: world.playlistId, kind: "movie"))
+        await world.manager.recordXtreamDigest("must-not-record", .movies, playlistId: world.playlistId, fetchedCount: 2)
+        #expect(XtreamDigestStore.entry(playlistId: world.playlistId, endpoint: .movies) == original)
+        let trusted = await world.manager.trustedXtreamDigest(.movies, playlistId: world.playlistId, reuseUnchanged: true)
+        #expect(trusted == nil)
+        try renameFirstMovie(world)
+        try await world.manager.syncMovies(for: world.playlist, playlistId: world.playlistId, reuseUnchanged: true)
+        #expect(try movieNames(world) == ["Alpha", "Bravo"])
+        #expect(!SweepSkipDefaults.isHoldingBack(playlistId: world.playlistId, kind: "movie"))
+        let repaired = await world.manager.trustedXtreamDigest(.movies, playlistId: world.playlistId, reuseUnchanged: true)
+        #expect(repaired == original.digest)
+    }
+
     @Test func `a changed payload imports`() async throws {
         let world = try makeWorld()
         defer { XtreamDigestStore.removeAll(playlistId: world.playlistId) }

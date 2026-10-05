@@ -463,7 +463,7 @@ nonisolated enum ImageDecoder {
     /// uses ImageIO to decode a thumbnail no larger than that on its longest
     /// edge — this both saves memory and is far faster than decoding full-size
     /// artwork only to draw it into a small card. `nil` decodes at full
-    /// resolution (used for tvOS 4K heroes).
+    /// resolution. Heroes should pass their geometry/display-scale budget.
     ///
     /// Both sizes go through the same ImageIO path because of
     /// `kCGImageSourceShouldCacheImmediately`: it forces the pixels to be produced
@@ -474,6 +474,7 @@ nonisolated enum ImageDecoder {
     /// `kCGImageSourceThumbnailMaxPixelSize` unset yields the original dimensions,
     /// so full resolution still means full resolution.
     static func decode(_ data: Data, maxPixelSize: CGFloat?) -> PlatformImage? {
+        if let maxPixelSize, !maxPixelSize.isFinite || maxPixelSize < 1 { return nil }
         let sourceOptions = [kCGImageSourceShouldCache: false] as CFDictionary
         guard let source = CGImageSourceCreateWithData(data as CFData, sourceOptions) else {
             return nil
@@ -488,21 +489,18 @@ nonisolated enum ImageDecoder {
             thumbnailOptions[kCGImageSourceThumbnailMaxPixelSize] = maxPixelSize
         }
 
-        if let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, thumbnailOptions as CFDictionary) {
-            #if canImport(UIKit)
-                return UIImage(cgImage: cgImage)
-            #else
-                return NSImage(cgImage: cgImage, size: .zero)
-            #endif
-        }
-
         // Some valid sources cannot produce an ImageIO thumbnail (the device
         // log reports this as `CGImageSourceCreateThumbnailAtIndex … failed`).
         // A full decode is still a useful fallback, but never return a lazy
         // `PlatformImage(data:)`: that postpones the same failure to SwiftUI's
-        // render pass and makes every later appearance emit it again.
+        // render pass and makes every later appearance emit it again. The rare
+        // fallback temporarily decodes the source, but must not cache/return it
+        // at full resolution when the caller requested a bounded rendition.
         let fullImageOptions = [kCGImageSourceShouldCacheImmediately: true] as CFDictionary
-        guard let cgImage = CGImageSourceCreateImageAtIndex(source, 0, fullImageOptions) else {
+        guard let decoded = CGImageSourceCreateThumbnailAtIndex(source, 0, thumbnailOptions as CFDictionary)
+            ?? CGImageSourceCreateImageAtIndex(source, 0, fullImageOptions),
+            let cgImage = boundedImage(decoded, maxPixelSize: maxPixelSize)
+        else {
             return nil
         }
 
@@ -511,6 +509,31 @@ nonisolated enum ImageDecoder {
         #else
             return NSImage(cgImage: cgImage, size: .zero)
         #endif
+    }
+
+    /// Also used after a full-decode fallback: a thumbnail failure cannot
+    /// silently bypass the caller's returned-image/memory-cache budget.
+    static func boundedImage(_ image: CGImage, maxPixelSize: CGFloat?) -> CGImage? {
+        guard let maxPixelSize else { return image }
+        guard maxPixelSize.isFinite, maxPixelSize >= 1 else { return nil }
+        let longestEdge = CGFloat(max(image.width, image.height))
+        guard longestEdge > maxPixelSize else { return image }
+        let ratio = maxPixelSize / longestEdge
+        let width = max(1, Int(floor(CGFloat(image.width) * ratio)))
+        let height = max(1, Int(floor(CGFloat(image.height) * ratio)))
+        // Extended-range RGB requires floating-point storage. This returned
+        // rendition is deliberately 8-bpc: retain the source gamut/transfer
+        // function but convert to its standard-range equivalent first.
+        let colorSpace = image.colorSpace.flatMap {
+            $0.model == .rgb ? CGColorSpaceCreateCopyWithStandardRange($0) : nil
+        } ?? CGColorSpace(name: CGColorSpace.sRGB)
+        guard let colorSpace,
+              let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
+                                      space: colorSpace, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
+        else { return nil }
+        context.interpolationQuality = .high
+        context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+        return context.makeImage()
     }
 }
 

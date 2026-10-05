@@ -28,19 +28,10 @@ import SwiftUI
                     .textContentType(.name)
 
                 TextField("e.g. http://192.168.1.10:8096", text: $serverURL)
-                #if os(iOS)
-                    .textInputAutocapitalization(.never)
-                    .keyboardType(.URL)
-                #endif
-                    .autocorrectionDisabled()
-                    .textContentType(.URL)
+                    .urlEntry()
 
                 TextField("Username (optional)", text: $username)
-                #if os(iOS)
-                    .textInputAutocapitalization(.never)
-                #endif
-                    .autocorrectionDisabled()
-                    .textContentType(.username)
+                    .usernameEntry()
 
                 SecureField("Password (optional)", text: $password)
                     .textContentType(.password)

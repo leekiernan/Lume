@@ -100,7 +100,7 @@ extension HeroItem {
                 backdropURL: TMDBClient.backdropURL(backdropPath ?? movie.backdropPath),
                 logoURL: TMDBClient.logoURL(logoPath ?? movie.logoPath),
                 overview: overview ?? movie.plot ?? "",
-                posterURL: TMDBClient.backdropURL(posterPath ?? movie.posterPath, size: "original")
+                posterURL: TMDBClient.posterURL(posterPath ?? movie.posterPath, size: "original")
             )
         case let .series(series):
             self = .series(
@@ -108,7 +108,7 @@ extension HeroItem {
                 backdropURL: TMDBClient.backdropURL(backdropPath ?? series.backdropPath),
                 logoURL: TMDBClient.logoURL(logoPath ?? series.logoPath),
                 overview: overview ?? series.plot ?? "",
-                posterURL: TMDBClient.backdropURL(posterPath ?? series.posterPath, size: "original")
+                posterURL: TMDBClient.posterURL(posterPath ?? series.posterPath, size: "original")
             )
         case .live:
             return nil

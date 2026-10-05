@@ -157,10 +157,10 @@
                 }
             }
             .tvHeroBackdropTreatment(belowFold: belowFold)
-            .onGeometryChange(for: CGFloat.self) { proxy in
-                HeroArtworkPolicy.decodePoints(width: proxy.size.width, height: proxy.size.height) * displayScale
-            } action: { pixels in
-                model.setArtworkPixels(pixels)
+            .onGeometryChange(for: CGSize.self) { proxy in
+                proxy.size
+            } action: { size in
+                model.setArtworkGeometry(.init(width: size.width, height: size.height, displayScale: displayScale))
             }
         }
     }
@@ -373,7 +373,7 @@
                 heroItems: items,
                 onSelectHero: { _ in },
                 rows: {
-                    Text("Rows go here")
+                    Text(verbatim: "Rows go here")
                         .padding(.horizontal)
                 }
             )

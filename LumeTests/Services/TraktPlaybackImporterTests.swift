@@ -13,7 +13,7 @@ import SwiftData
 import Testing
 
 @MainActor
-@Suite(.serialized, .globalState)
+@Suite(.serialized, .globalState, .trackerIdentity(.trakt))
 struct TraktPlaybackImporterTests {
     init() {
         // Unfetched episodes park their pause in this store; start each test

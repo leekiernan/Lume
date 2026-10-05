@@ -21,10 +21,10 @@ struct EPGGuideView: View {
     let onPlayCatchup: (LiveStream, EPGProgramCell) -> Void
     /// Seeds Multi-View from a channel's long-press menu in the column.
     let onStartMultiView: (LiveStream) -> Void
-    /// tvOS: non-zero asks the guide to take real focus (a category was just
-    /// picked in the browse panel); `onDidClaimFocus` resets it once claimed.
-    let focusToken: Int
-    let onDidClaimFocus: () -> Void
+    /// tvOS: an owned request to take native focus after a browse handoff.
+    /// The matching completion acknowledges it; stale completions do nothing.
+    let focusRequest: TVContentFocusRequest?
+    let onDidClaimFocus: (TVContentFocusRequest) -> Void
     /// tvOS: opens the category sidebar from the guide's channel hub.
     let onLeadingLeft: () -> Void
 
@@ -59,8 +59,8 @@ struct EPGGuideView: View {
         onPlay: @escaping (LiveStream) -> Void,
         onPlayCatchup: @escaping (LiveStream, EPGProgramCell) -> Void = { _, _ in },
         onStartMultiView: @escaping (LiveStream) -> Void = { _ in },
-        focusToken: Int = 0,
-        onDidClaimFocus: @escaping () -> Void = {},
+        focusRequest: TVContentFocusRequest? = nil,
+        onDidClaimFocus: @escaping (TVContentFocusRequest) -> Void = { _ in },
         onLeadingLeft: @escaping () -> Void = {}
     ) {
         self.scope = scope
@@ -68,7 +68,7 @@ struct EPGGuideView: View {
         self.onPlay = onPlay
         self.onPlayCatchup = onPlayCatchup
         self.onStartMultiView = onStartMultiView
-        self.focusToken = focusToken
+        self.focusRequest = focusRequest
         self.onDidClaimFocus = onDidClaimFocus
         self.onLeadingLeft = onLeadingLeft
 
@@ -89,6 +89,7 @@ struct EPGGuideView: View {
 
     var body: some View {
         let channels = scopedStreams
+        let focusScope = TVContentFocusRequest.Scope(playlistPrefix: playlistPrefix, channelScope: scope, visibilityToken: restriction.visibilityToken)
         Group {
             if channels.isEmpty {
                 ContentUnavailableView(
@@ -104,12 +105,13 @@ struct EPGGuideView: View {
                     onPlay: onPlay,
                     onPlayCatchup: onPlayCatchup,
                     onStartMultiView: onStartMultiView,
-                    focusToken: focusToken,
+                    focusRequest: focusRequest?.scope == focusScope ? focusRequest : nil,
                     onDidClaimFocus: onDidClaimFocus,
                     onLeadingLeft: onLeadingLeft
                 )
             }
         }
+        .completingEmptyTVFocus(focusRequest, scope: focusScope, hasChannels: !channels.isEmpty, onComplete: onDidClaimFocus)
         // Reload when the channel set changes or a guide import settles. Keyed on
         // `isSyncing` (which flips twice per sync) rather than observing the store,
         // so the grid rebuilds a handful of times — not on every batch write.

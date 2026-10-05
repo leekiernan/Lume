@@ -45,24 +45,14 @@ extension ContentSyncManager {
     private func upsertJellyfinSeries(_ items: [JellyfinItem], scope: JellyfinViewScope) throws -> Set<String> {
         let context = ModelContext(modelContainer)
         context.autosaveEnabled = false
-        let ids = items.map { scope.idPrefix + $0.id }
-        let lookup = existingSeries(ids: ids, context: context)
-
-        for item in items {
-            let id = scope.idPrefix + item.id
-            let series: Series
-            if let found = lookup[id] {
-                series = found
-            } else {
-                series = Series(id: id, seriesId: M3UIdentity.numericId(for: item.id), name: item.name ?? "")
-                context.insert(series)
-            }
-            applyJellyfinSeriesFields(item, to: series, scope: scope)
-        }
+        let seen = try CatalogUpsert.batch(items, context: context,
+                                           identity: { scope.idPrefix + $0.id },
+                                           create: { item, id in Series(id: id, seriesId: M3UIdentity.numericId(for: item.id), name: item.name ?? "") },
+                                           apply: { applyJellyfinSeriesFields($0, to: $1, scope: scope) })
         if context.hasChanges {
             try context.save()
         }
-        return Set(ids)
+        return Set(seen)
     }
 
     private func applyJellyfinSeriesFields(_ item: JellyfinItem, to series: Series, scope: JellyfinViewScope) {
@@ -146,16 +136,16 @@ extension ContentSyncManager {
         // The series rows these episodes link against — shells already stored
         // plus fallback shells for episodes whose `SeriesId` has no shell.
         let seriesIds = Set(items.map { scope.idPrefix + seriesShells.shellKey(for: $0) })
-        var seriesLookup = existingSeries(ids: Array(seriesIds), context: context)
+        var seriesLookup = try CatalogUpsert.lookup(Series.self, ids: Array(seriesIds), context: context)
 
-        let episodeIds = items.map { scope.idPrefix + "episode-" + $0.id }
-        let episodeLookup = existingEpisodes(ids: episodeIds, context: context)
+        let episodeIds = items.map { CatalogID.episode(prefix: scope.idPrefix, key: $0.id) }
+        var episodeLookup = try CatalogUpsert.lookup(Episode.self, ids: episodeIds, context: context)
 
         var seenSeries = Set<String>()
         for item in items {
             let series = seriesRow(for: item, seriesShells: seriesShells, scope: scope, lookup: &seriesLookup, context: context)
             seenSeries.insert(series.id)
-            let episode = episodeRow(for: item, series: series, lookup: episodeLookup, scope: scope, context: context)
+            let episode = episodeRow(for: item, series: series, lookup: &episodeLookup, scope: scope, context: context)
             applyJellyfinEpisodeFields(item, to: episode, series: series, scope: scope)
         }
         if context.hasChanges {
@@ -194,29 +184,19 @@ extension ContentSyncManager {
     private func episodeRow(
         for item: JellyfinItem,
         series: Series,
-        lookup: [String: Episode],
+        lookup: inout [String: Episode],
         scope: JellyfinViewScope,
         context: ModelContext
     ) -> Episode {
-        let id = scope.idPrefix + "episode-" + item.id
-        if let found = lookup[id] {
-            // A server can re-file an episode under a different series — a
-            // corrected scan, a merged show. Re-parent it, or the prune below
-            // deletes the shell it is still attached to and cascades this row
-            // away with it, losing the viewer's progress on an episode the
-            // server still lists.
-            if found.series?.id != series.id {
-                found.series = series
-            }
-            return found
+        let id = CatalogID.episode(prefix: scope.idPrefix, key: item.id)
+        let episode = CatalogUpsert.row(id: id, lookup: &lookup, context: context) {
+            Episode(
+                id: id, episodeId: item.id, title: item.name ?? "",
+                containerExtension: item.container?.lowercased() ?? "mkv",
+                seasonNum: item.parentIndexNumber ?? 1, episodeNum: item.indexNumber ?? 0
+            )
         }
-        let episode = Episode(
-            id: id, episodeId: item.id, title: item.name ?? "",
-            containerExtension: item.container?.lowercased() ?? "mkv",
-            seasonNum: item.parentIndexNumber ?? 1, episodeNum: item.indexNumber ?? 0
-        )
-        context.insert(episode)
-        episode.series = series
+        CatalogUpsert.attach(episode, to: series)
         return episode
     }
 

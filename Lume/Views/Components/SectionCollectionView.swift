@@ -20,35 +20,25 @@ struct SectionCollectionView: View {
     let feed: SectionFeed
     var animationNamespace: Namespace.ID?
 
-    @Environment(\.modelContext) private var modelContext
     @State private var entries: [HomeListEntry] = []
     @State private var items: [HomeMediaItem] = []
     @State private var pagination = PaginationMachine()
 
     private let pageSize = 100
-    private let columns = [
-        GridItem(.adaptive(minimum: PosterCardMetrics.gridMinimum), spacing: PosterCardMetrics.gridSpacing)
-    ]
 
     var body: some View {
-        ScrollView {
-            #if os(tvOS)
-                Text(selection.title)
-                    .font(.largeTitle)
-                    .fontWeight(.bold)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal)
-                    .padding(.top, 40)
-            #endif
-
-            if items.isEmpty, pagination.isPrepared, !pagination.isLoading {
+        CategoryPage(title: selection.title) {
+            switch CollectionGridPresentation.resolve(hasItems: !items.isEmpty, isLoading: !pagination.isPrepared || pagination.isLoading) {
+            case .empty:
                 ContentUnavailableView(
                     "Nothing Here Yet",
                     systemImage: "rectangle.stack"
                 )
                 .padding(.top, 40)
-            } else {
-                LazyVGrid(columns: columns, spacing: PosterCardMetrics.gridSpacing) {
+            case .loading:
+                ProgressView("Loading…").frame(maxWidth: .infinity).padding(.top, 40)
+            case .content:
+                PosterGrid {
                     ForEach(items) { item in
                         itemLink(item)
                             .onAppear {
@@ -64,39 +54,22 @@ struct SectionCollectionView: View {
                 .padding()
             }
         }
-        .browseActivity()
-        #if !os(tvOS)
-            .navigationTitle(selection.title)
-            .macNavigationBack()
-        #endif
-            .task(id: selection.section.token) {
-                prepare()
-            }
+        .task(id: selection.section.token) {
+            prepare()
+        }
     }
 
     @ViewBuilder
     private func itemLink(_ item: HomeMediaItem) -> some View {
         switch item {
         case let .movie(movie):
-            NavigationLink(value: movie) {
+            CatalogPosterLink(item: movie, animationNamespace: animationNamespace) { movie in
                 MovieCardView(movie: movie, fillsWidth: true)
-                    .matchedTransitionSourceIfAvailable(id: movie.id, in: animationNamespace)
             }
-            .posterCardButtonStyle()
-            .mediaFavoriteMenu(
-                isFavorite: { movie.isFavorite },
-                onToggleFavorite: { MediaFavorites.toggle(movie, in: modelContext) }
-            )
         case let .series(series):
-            NavigationLink(value: series) {
+            CatalogPosterLink(item: series, animationNamespace: animationNamespace) { series in
                 SeriesCardView(series: series, fillsWidth: true)
-                    .matchedTransitionSourceIfAvailable(id: series.id, in: animationNamespace)
             }
-            .posterCardButtonStyle()
-            .mediaFavoriteMenu(
-                isFavorite: { series.isFavorite },
-                onToggleFavorite: { MediaFavorites.toggle(series, in: modelContext) }
-            )
         case .live:
             EmptyView()
         }
@@ -104,7 +77,12 @@ struct SectionCollectionView: View {
 
     private func prepare() {
         guard pagination.prepare(for: selection.section.token) else { return }
-        guard let snapshot = feed.collection(for: selection.section) else { return }
+        entries = []
+        items = []
+        guard let snapshot = feed.collection(for: selection.section) else {
+            pagination.seed(nextOffset: 0, canLoadMore: false)
+            return
+        }
         entries = snapshot.entries
         items = snapshot.preview
         pagination.seed(nextOffset: snapshot.nextOffset, canLoadMore: snapshot.hasMoreCandidates)

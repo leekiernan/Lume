@@ -157,26 +157,10 @@ extension SettingsView {
                 VStack(alignment: .leading, spacing: 8) {
                     TVSettingsSectionLabel("Premium")
 
-                    HStack(spacing: 18) {
-                        Image(systemName: "crown")
-                            .font(.system(size: 28))
-                            .foregroundStyle(.tint)
-                            .frame(width: 60, height: 60)
-                            .background(.tint.opacity(0.12), in: .rect(cornerRadius: 14, style: .continuous))
-
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(premium.isPremium ? "Lume Pro" : "Free Plan")
-                                .font(.system(size: 26, weight: .semibold))
-                            Text(premium.isPremium
-                                ? premiumStatusDetail
-                                : String(localized: "Upgrade to unlock the features below"))
-                                .font(.system(size: 20))
-                                .foregroundStyle(.secondary)
-                        }
-                        Spacer(minLength: 0)
-                    }
-                    .padding(.horizontal, TVSettingsMetrics.rowHPadding)
-                    .padding(.vertical, 8)
+                    TVSettingsSummary(
+                        systemImage: "crown", title: Text(premium.isPremium ? "Lume Pro" : "Free Plan"),
+                        detail: Text(premium.isPremium ? premiumStatusDetail : String(localized: "Upgrade to unlock the features below"))
+                    )
                 }
 
                 VStack(alignment: .leading, spacing: 16) {
@@ -208,24 +192,16 @@ extension SettingsView {
                     Button {
                         presentPaywall(nil)
                     } label: {
-                        HStack(spacing: 16) {
-                            Image(systemName: "crown")
-                                .font(.system(size: 22, weight: .medium))
-                            Text("Upgrade to Premium")
-                            Spacer(minLength: 0)
-                        }
+                        Label("Upgrade to Premium", systemImage: "crown")
+                            .labelStyle(TVSettingsIconLabelStyle())
                     }
                     .buttonStyle(TVSettingsRowButtonStyle())
 
                     Button {
                         Task { await premium.restore() }
                     } label: {
-                        HStack(spacing: 16) {
-                            Image(systemName: "arrow.clockwise")
-                                .font(.system(size: 22, weight: .medium))
-                            Text("Restore Purchases")
-                            Spacer(minLength: 0)
-                        }
+                        Label("Restore Purchases", systemImage: "arrow.clockwise")
+                            .labelStyle(TVSettingsIconLabelStyle())
                     }
                     .buttonStyle(TVSettingsRowButtonStyle())
                 }

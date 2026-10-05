@@ -66,6 +66,19 @@ nonisolated struct TraktPendingPause: Codable, Equatable {
 /// whole thing is a plain JSON object).
 nonisolated struct TraktPendingWatched: Codable, Equatable {
     var shows: [String: TraktPendingShow] = [:]
+    /// The profile whose import parked this. The file is device-wide but the
+    /// watched state is per profile/account: another scope neither applies it
+    /// nor merges into it (`TraktPendingWatchedStore`). Legacy files without an
+    /// account stamp are rebuilt by the next import, not replayed.
+    var profileID: UUID?
+
+    /// Stable provider account partition; absent legacy files are not replayed.
+    var accountID: String?
+
+    var scope: TrackerScope {
+        get { TrackerScope(profileID: profileID, accountID: accountID) }
+        set { profileID = newValue.profileID; accountID = newValue.accountID }
+    }
 
     static let empty = TraktPendingWatched()
 
@@ -98,7 +111,15 @@ nonisolated enum TraktPendingWatchedStore {
         directory?.appendingPathComponent("TraktPendingWatched.json")
     }
 
-    static func load() -> TraktPendingWatched {
+    /// A captured import scope, or the active profile/account on episode open.
+    /// Unstamped legacy files and unknown accounts cannot authorize replay.
+    static func load(scope: TrackerScope = .trakt) -> TraktPendingWatched {
+        let stored = loadStored()
+        if stored.scope.matches(scope) { return stored }
+        return TraktPendingWatched(profileID: scope.profileID, accountID: scope.accountID)
+    }
+
+    private static func loadStored() -> TraktPendingWatched {
         lock.withLock {
             if let cached {
                 return cached
@@ -114,7 +135,9 @@ nonisolated enum TraktPendingWatchedStore {
         }
     }
 
+    /// Keep the captured scope; never relabel old history as a new account/profile.
     static func save(_ state: TraktPendingWatched) {
+        guard state.scope.matches(.trakt) else { return }
         lock.withLock {
             cached = state
             guard let url = fileURL else { return }
@@ -148,7 +171,10 @@ nonisolated enum TraktPendingWatchedStore {
     /// Drops everything — used when disconnecting the Trakt account, so a
     /// stale import can't keep marking episodes for a signed-out user.
     static func clearAll() {
-        save(.empty)
+        lock.withLock {
+            cached = nil
+            if let url = fileURL { try? FileManager.default.removeItem(at: url) }
+        }
     }
 
     /// Test seam: forgets the in-memory copy so the next `load()` re-reads disk.

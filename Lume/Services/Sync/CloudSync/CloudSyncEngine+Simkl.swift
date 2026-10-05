@@ -37,31 +37,16 @@ extension CloudSyncEngine {
         mirror: SyncedSimklAccount?,
         into result: inout CloudSyncReconcileResult
     ) {
-        switch verdict {
-        case .noChange:
-            break
-        case let .pushToCloud(value):
-            applySimklToCloud(value, mirror: mirror)
-            result.simklPushed += 1
-            if value == nil { result.credentialDeletionsPushed.insert(.simkl) }
-            shadow.setSimklCredentialShadow(value)
-        case let .pullToLocal(value):
-            guard applySimklToLocal(value) else {
-                result.simklPending += 1
-                return
-            }
-            result.simklPulled += 1
-            shadow.setSimklCredentialShadow(value)
-        case let .writeBoth(value):
-            guard applySimklToLocal(value) else {
-                result.simklPending += 1
-                return
-            }
-            applySimklToCloud(value, mirror: mirror)
-            result.simklPushed += 1
-            result.simklPulled += 1
-            shadow.setSimklCredentialShadow(value)
-        }
+        let effects = CredentialMergeApplication.apply(
+            verdict,
+            writeLocal: applySimklToLocal,
+            writeCloud: { applySimklToCloud($0, mirror: mirror) },
+            recordShadow: shadow.setSimklCredentialShadow
+        )
+        result.simklPushed += effects.pushed
+        result.simklPulled += effects.pulled
+        result.simklPending += effects.pending
+        if effects.deletionPushed { result.credentialDeletionsPushed.insert(.simkl) }
     }
 
     private func applySimklToLocal(_ value: SimklCredentialValues?) -> Bool {
@@ -92,15 +77,11 @@ extension CloudSyncEngine {
     }
 
     private func fetchSimklAccountMirror() throws -> SyncedSimklAccount? {
-        var winner: SyncedSimklAccount?
-        for record in try cloudContext.fetch(FetchDescriptor<SyncedSimklAccount>()) {
-            guard !record.accessToken.isEmpty, !record.refreshToken.isEmpty else {
-                cloudContext.delete(record)
-                continue
-            }
-            winner = dedupe(record, against: winner, updatedAt: \.updatedAt)
-        }
-        return winner
+        try fetchCredentialMirror(
+            FetchDescriptor<SyncedSimklAccount>(),
+            isValid: { !$0.accessToken.isEmpty && !$0.refreshToken.isEmpty },
+            updatedAt: \.updatedAt
+        )
     }
 
     private static func simklValues(from mirror: SyncedSimklAccount) -> SimklCredentialValues {

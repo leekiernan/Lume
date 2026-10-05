@@ -48,7 +48,7 @@ struct MultiViewChannelPicker: View {
     /// Live categories of the selected playlist, in the user's category order.
     private var scopedCategories: [Category] {
         guard let playlist = selectedPlaylist else { return [] }
-        let prefix = "\(playlist.id.uuidString)-"
+        let prefix = playlist.contentIDPrefix
         let sort = CategorySortOption.playlist
         return sort.sort(LiveChannelQuery.visibleCategories(categories, playlistPrefix: prefix, restriction: restriction))
     }
@@ -187,7 +187,7 @@ struct MultiViewChannelPicker: View {
         guard !Task.isCancelled else { return }
 
         let term = searchTerm
-        let prefix = "\(playlist.id.uuidString)-"
+        let prefix = playlist.contentIDPrefix
         let container = modelContext.container
         let ids = await Task.detached(priority: .userInitiated) {
             MultiViewChannelSearch.hits(container: container, term: term, playlistPrefix: prefix)

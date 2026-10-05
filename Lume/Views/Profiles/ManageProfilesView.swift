@@ -75,15 +75,7 @@ struct ManageProfilesView: View {
         }
         // Attached to the List (not a Section): a sheet attached to a Section
         // inside a List presents then immediately dismisses.
-        .sheet(item: $pinFlow) { flow in
-            NavigationStack {
-                ParentalPINFlowView(flow: flow) { pinFlow = nil }
-                    .platformNavigationTitle("Parental Controls")
-            }
-            #if os(macOS)
-            .frame(minWidth: 380, idealWidth: 420, minHeight: 460, idealHeight: 520)
-            #endif
-        }
+        .parentalPINManagement(flow: $pinFlow)
         .sheet(isPresented: $creatingProfile) {
             ProfileEditorView()
         }
@@ -92,10 +84,7 @@ struct ManageProfilesView: View {
         }
         .alert(
             "Delete Profile?",
-            isPresented: Binding(
-                get: { profilePendingDeletion != nil },
-                set: { if !$0 { profilePendingDeletion = nil } }
-            ),
+            isPresented: $profilePendingDeletion.presentationPresence(),
             presenting: profilePendingDeletion
         ) { profile in
             Button("Delete", role: .destructive) {
@@ -110,24 +99,7 @@ struct ManageProfilesView: View {
 
     private var parentalControlsSection: some View {
         Section {
-            if parental?.isPINSet == true {
-                Button {
-                    pinFlow = .change
-                } label: {
-                    Label("Change PIN", systemImage: "lock.rotation")
-                }
-                Button(role: .destructive) {
-                    pinFlow = .remove
-                } label: {
-                    Label("Turn Off PIN", systemImage: "lock.open")
-                }
-            } else {
-                Button {
-                    pinFlow = .set
-                } label: {
-                    Label("Set a PIN", systemImage: "lock")
-                }
-            }
+            ParentalPINButtons(isPINSet: parental?.isPINSet == true, flow: $pinFlow)
         } header: {
             Text("Parental Controls")
         } footer: {

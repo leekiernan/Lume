@@ -11,7 +11,7 @@
 /// lifecycles; this machine represents only timeline, statistics and lineups.
 nonisolated struct SportsEventDetailLoadMachine: Equatable {
     struct Request: Equatable {
-        fileprivate let generation: UInt
+        fileprivate let token = RequestToken()
     }
 
     private enum State: Equatable {
@@ -22,7 +22,6 @@ nonisolated struct SportsEventDetailLoadMachine: Equatable {
         case failed
     }
 
-    private var generation: UInt = 0
     private var state: State = .idle
 
     var detail: SportsEventDetail? {
@@ -45,11 +44,10 @@ nonisolated struct SportsEventDetailLoadMachine: Equatable {
     }
 
     /// Clears a previous fixture's terminal state and grants ownership to its
-    /// new request. The generation makes a provider result from the old sheet
+    /// new request. Its identity makes a provider result from the old sheet
     /// inert if it survives task cancellation.
     mutating func begin() -> Request {
-        generation &+= 1
-        let request = Request(generation: generation)
+        let request = Request()
         state = .loading(request)
         return request
     }

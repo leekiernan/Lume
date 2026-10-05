@@ -149,7 +149,7 @@ struct SportsHomeRail: View {
                     promoCard(
                         icon: "sportscourt.fill",
                         title: Text("Follow Your Teams"),
-                        message: Text("Add leagues and teams to see fixtures, live scores and standings, with one tap to the channel carrying the game."),
+                        message: Text(SportsPresentationCopy.followTeams),
                         accessory: Image(systemName: "chevron.right")
                     )
                 }
@@ -178,10 +178,7 @@ struct SportsHomeRail: View {
 
         private func header(showSeeAll: Bool) -> some View {
             HStack {
-                Text("Sports")
-                    .font(.subheadline)
-                    .fontWeight(.bold)
-                    .foregroundStyle(.secondary)
+                SportsSectionHeading(title: Text("Sports"), style: .rail)
                 if showSeeAll {
                     Spacer(minLength: 8)
                     Button(action: seeAll) {

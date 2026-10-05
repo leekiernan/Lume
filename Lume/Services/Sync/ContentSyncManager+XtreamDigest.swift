@@ -68,7 +68,10 @@ extension ContentSyncManager {
     /// left: anything else (a recreated store, a partly deleted playlist) means
     /// the bytes may match while the catalog does not.
     func trustedXtreamDigest(_ endpoint: XtreamDigestStore.Endpoint, playlistId: UUID, reuseUnchanged: Bool) -> String? {
-        guard reuseUnchanged, let entry = XtreamDigestStore.entry(playlistId: playlistId, endpoint: endpoint) else {
+        guard reuseUnchanged,
+              !SweepSkipDefaults.isHoldingBack(playlistId: playlistId, kind: endpoint.sweepKind),
+              let entry = XtreamDigestStore.entry(playlistId: playlistId, endpoint: endpoint)
+        else {
             return nil
         }
         guard storedRowCount(endpoint, playlistId: playlistId) == entry.rowCount else {
@@ -112,7 +115,7 @@ extension ContentSyncManager {
     /// `id` index, since every id starts with the playlist UUID.
     private func storedRowCount(_ endpoint: XtreamDigestStore.Endpoint, playlistId: UUID) -> Int {
         let context = ModelContext(modelContainer)
-        let prefix = "\(playlistId.uuidString)-\(endpoint.idInfix)-"
+        let prefix = CatalogID.prefix(playlistId, infix: endpoint.idInfix)
         let count: Int? = switch endpoint {
         case .movies:
             try? context.fetchCount(FetchDescriptor<Movie>(predicate: #Predicate { $0.id.starts(with: prefix) }))

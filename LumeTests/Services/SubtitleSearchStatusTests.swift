@@ -139,6 +139,65 @@ struct SubtitleSearchStatusTests {
 
     // MARK: - Badges
 
+    @Test func `starting a download does not invalidate the active search`() throws {
+        var machine = SubtitleSearchMachine()
+        let search = machine.begin(mediaID: "movie", supported: true)
+        let begun53 = machine.beginDownload(sample)
+        let download = try #require(begun53)
+        let accepted40 = machine.finish(search, results: [sample])
+        #expect(accepted40)
+        #expect(machine.downloadingID == sample.id)
+        let accepted41 = machine.finishDownload(download)
+        #expect(accepted41)
+        #expect(machine.results == [sample])
+    }
+
+    @Test func `requests cannot cross search and download lanes`() throws {
+        var machine = SubtitleSearchMachine()
+        let search = machine.begin(mediaID: "movie", supported: true)
+        let begun54 = machine.beginDownload(sample)
+        let download = try #require(begun54)
+        let accepted42 = machine.finishDownload(search, error: "wrong lane")
+        #expect(!accepted42)
+        let accepted43 = machine.finish(download, results: [])
+        #expect(!accepted43)
+        let accepted44 = machine.fail(download, message: "wrong lane")
+        #expect(!accepted44)
+        #expect(machine.isSearching)
+        #expect(machine.downloadingID == sample.id)
+        let accepted45 = machine.finish(search, results: [sample])
+        #expect(accepted45)
+        let accepted46 = machine.finishDownload(download)
+        #expect(accepted46)
+        let accepted47 = machine.finishDownload(download)
+        #expect(!accepted47)
+    }
+
+    @Test func `recreated subtitle owner rejects previous search and download callbacks`() throws {
+        var machine = SubtitleSearchMachine()
+        let staleSearch = machine.begin(mediaID: "movie", supported: true)
+        let begun55 = machine.beginDownload(sample)
+        let staleDownload = try #require(begun55)
+        machine = SubtitleSearchMachine()
+        let search = machine.begin(mediaID: "movie", supported: true)
+        let begun56 = machine.beginDownload(sample)
+        let download = try #require(begun56)
+        #expect(staleSearch != search)
+        #expect(staleDownload != download)
+        let accepted48 = machine.finish(staleSearch, results: [])
+        #expect(!accepted48)
+        let accepted49 = machine.fail(staleSearch, message: "stale")
+        #expect(!accepted49)
+        let accepted50 = machine.finishDownload(staleDownload)
+        #expect(!accepted50)
+        #expect(machine.isSearching)
+        #expect(machine.downloadingID == sample.id)
+        let accepted51 = machine.finish(search, results: [sample])
+        #expect(accepted51)
+        let accepted52 = machine.finishDownload(download)
+        #expect(accepted52)
+    }
+
     @Test func `badges surface only the flags that are set`() {
         var subtitle = sample
         #expect(subtitle.badges.isEmpty)

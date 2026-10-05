@@ -69,15 +69,18 @@ struct AVPlayerEngineView: View {
     var session: PlaybackSession?
 
     @StateObject var coordinator = AVPlayerCoordinator()
-    @State private var isControlsVisible = true
+    @State private var chrome = PlayerChromeController()
+    private var isControlsVisible: Bool {
+        chrome.isVisible
+    }
+
     @Environment(PlayerControlsBridge.self) private var remoteBridge: PlayerControlsBridge?
     /// Set once the stream is given up on (initial-load failure with no fallback
     /// left). Swaps the player for the `PlayerErrorIndicator` (Try Again / Back).
     @State var loadFailed = false
+    @State private var isCatchupSegmentLoading = false
     @State private var isSeeking = false
     @State private var seekPosition: TimeInterval = 0
-    @State private var hideTask: Task<Void, Never>?
-    @State private var hoverHideTask: Task<Void, Never>?
     /// While an overlay panel (episodes / info) is open the controls must not
     /// auto-hide out from under the viewer.
     @State private var isPanelOpen = false
@@ -100,7 +103,9 @@ struct AVPlayerEngineView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
 
-    private let autoHideInterval: TimeInterval = 4
+    private var drawsControls: Bool {
+        PlayerChrome.drawsControls(requested: isControlsVisible, started: coordinator.hasStartedPlayback, catchupSegmentLoading: isCatchupSegmentLoading, failed: loadFailed)
+    }
 
     var engineBody: some View {
         ZStack {
@@ -117,7 +122,7 @@ struct AVPlayerEngineView: View {
             tapCatcher
                 .ignoresSafeArea()
 
-            if PlayerChrome.drawsControls(requested: isControlsVisible, started: coordinator.hasStartedPlayback, failed: loadFailed) {
+            if drawsControls {
                 controlsOverlay
                     .transition(.opacity.animation(.easeInOut(duration: 0.2)))
             }
@@ -145,7 +150,7 @@ struct AVPlayerEngineView: View {
             #endif
 
             if coordinator.isBuffering, !loadFailed {
-                PlayerLoadingIndicator(opening: coordinator.hasStartedPlayback ? nil : media)
+                PlayerLoadingIndicator(opening: coordinator.hasStartedPlayback || isCatchupSegmentLoading ? nil : media)
                     .transition(.opacity)
             }
 
@@ -160,6 +165,7 @@ struct AVPlayerEngineView: View {
         }
         .preferredColorScheme(.dark)
         .onAppear {
+            chrome.activate()
             let catchup = coordinator.catchup
             coordinator.onTime = { current in
                 if !isSeeking { catchup.report(position: current, to: clock) }
@@ -176,29 +182,35 @@ struct AVPlayerEngineView: View {
             scheduleHide()
         }
         .onDisappear {
-            hideTask?.cancel()
-            hoverHideTask?.cancel()
+            chrome.deactivate()
             NowPlayingService.shared.detachTransport(owner: coordinator)
             coordinator.tearDown()
         }
         .onChange(of: coordinator.isPlaying) { _, playing in
             clock.isPlaying = playing
-            resetHideTimer()
+            scheduleHide()
+        }
+        .onChange(of: coordinator.hasStartedPlayback) { _, started in
+            if started { isCatchupSegmentLoading = false }
         }
         .onChange(of: scenePhase) { _, phase in
             // The Home button backgrounds the app without calling onDisappear,
             // so pause here to stop audio when the player loses focus.
             if phase != .active { coordinator.pauseForBackground() }
         }
-        .onChange(of: media) { _, newMedia in
+        .onChange(of: media) { oldMedia, newMedia in
             // The host swapped the stream (e.g. a new episode). Reset local
             // scrubbing state and hand the new media to the live player.
             isSeeking = false
             seekPosition = 0
             isPanelOpen = false
             loadFailed = false
+            isCatchupSegmentLoading = PlayerChrome.keepsCatchupControls(
+                previous: oldMedia.catchup, next: newMedia.catchup,
+                started: coordinator.hasStartedPlayback, alreadyLoading: isCatchupSegmentLoading
+            )
             coordinator.reload(media: newMedia)
-            resetHideTimer()
+            scheduleHide()
         }
         #if os(tvOS)
         // Focus returns to the tap-catcher as the controls vanish, unless an
@@ -207,39 +219,17 @@ struct AVPlayerEngineView: View {
             controlsVisible: isControlsVisible, catcherFocused: $catcherFocused, showControls: showControls
         )
         #endif
-        .onMenuPress { handleMenuPress() }
-        .onPlayPausePress {
-            if remoteBridge?.claimsPlayPause() != true { togglePlay() }
-        }
-        .onChange(of: isControlsVisible, initial: true) { _, visible in
-            remoteBridge?.controlsVisible = visible
-        }
+        .playerRemoteControls(controlsVisible: isControlsVisible, onBack: handleMenuPress, onPlayPause: togglePlay)
         #if os(macOS)
-        .onContinuousHover(coordinateSpace: .local) { phase in
-            switch phase {
-            case .active:
-                if !isControlsVisible {
-                    withAnimation(.easeInOut(duration: 0.2)) { isControlsVisible = true }
-                }
-                resetHideTimer()
-                hoverHideTask?.cancel()
-            case .ended:
-                hoverHideTask?.cancel()
-                hoverHideTask = Task { @MainActor in
-                    try? await Task.sleep(nanoseconds: 600_000_000)
-                    guard !Task.isCancelled else { return }
-                    withAnimation(.easeInOut(duration: 0.2)) { isControlsVisible = false }
-                }
-            }
-        }
-        .onKeyPress(.leftArrow) { coordinator.skip(by: -media.skipInterval(default: 15)); resetHideTimer(); return .handled }
-        .onKeyPress(.rightArrow) { coordinator.skip(by: media.skipInterval(default: 15)); resetHideTimer(); return .handled }
-        .liveChannelKeyNavigation(
-            neighbours: itemNeighbours, swapper: mediaSwapper,
-            onSelect: { onSelectMedia?($0) }, onResetHideTimer: resetHideTimer
-        )
-        .onKeyPress(.space) { togglePlay(); return .handled }
-        .onKeyPress(.escape) { closePlayer(); return .handled }
+            .playerPointerChrome(chrome, mayHide: { canAutoHideControls })
+            .onKeyPress(.leftArrow) { coordinator.skip(by: -media.skipInterval(default: 15)); scheduleHide(); return .handled }
+            .onKeyPress(.rightArrow) { coordinator.skip(by: media.skipInterval(default: 15)); scheduleHide(); return .handled }
+            .liveChannelKeyNavigation(
+                neighbours: itemNeighbours, swapper: mediaSwapper,
+                onSelect: { onSelectMedia?($0) }, onResetHideTimer: scheduleHide
+            )
+            .onKeyPress(.space) { togglePlay(); return .handled }
+            .onKeyPress(.escape) { closePlayer(); return .handled }
         #endif
     }
 
@@ -248,29 +238,14 @@ struct AVPlayerEngineView: View {
     @ViewBuilder
     private var tapCatcher: some View {
         #if os(tvOS)
-            Button(action: showControls) {
-                Color.clear.contentShape(Rectangle())
-            }
-            .buttonStyle(AVInvisibleButtonStyle())
-            // Yield focus to the failure overlay's buttons when a stream dies.
-            // Only while the controls are actually drawn — see `PlayerChrome`.
-            .disabled(PlayerChrome.drawsControls(requested: isControlsVisible, started: coordinator.hasStartedPlayback, failed: loadFailed) || isChannelBrowserOpen || loadFailed)
-            .focused($catcherFocused)
-            .tvRemoteMoveCommand { direction in
-                // Left opens the channel browser; up/down surf adjacent
-                // channels; right recalls the last channel watched.
-                if media.isLive, direction == .left {
-                    openChannelBrowser()
-                } else if media.isLive, direction == .up || direction == .down || direction == .right {
-                    switchLiveChannel(direction)
-                } else {
-                    showControls()
-                }
-            }
+            PlayerTapCatcher(
+                isLive: media.isLive, controlsDrawn: drawsControls,
+                browserOpen: isChannelBrowserOpen, failed: loadFailed,
+                focused: $catcherFocused, showControls: showControls,
+                openBrowser: openChannelBrowser, surf: switchLiveChannel
+            )
         #else
-            Color.clear
-                .contentShape(Rectangle())
-                .onTapGesture { toggleControls() }
+            PlayerTapCatcher(toggleControls: toggleControls)
         #endif
     }
 
@@ -285,7 +260,7 @@ struct AVPlayerEngineView: View {
                 clock: clock,
                 panelCloseToken: panelCloseToken,
                 onTogglePlay: { togglePlay() },
-                onResetHideTimer: { resetHideTimer() },
+                onResetHideTimer: { scheduleHide() },
                 onSelectMedia: { onSelectMedia?($0) },
                 onPanelOpenChange: { setPanelOpen($0) },
                 onSwitchChannel: { switchLiveChannel($0) },
@@ -297,12 +272,11 @@ struct AVPlayerEngineView: View {
                 media: media,
                 isSeeking: $isSeeking,
                 seekPosition: $seekPosition,
-                currentTime: $clock.current,
-                duration: $clock.duration,
-                hideTask: $hideTask,
+                clock: clock,
+                onSuspendHide: { chrome.suspend() },
                 onClose: { closePlayer() },
                 onTogglePlay: { togglePlay() },
-                onResetHideTimer: { resetHideTimer() },
+                onResetHideTimer: { scheduleHide() },
                 onScheduleHide: { scheduleHide() },
                 itemNeighbours: itemNeighbours,
                 onStepItem: { stepItem($0) }
@@ -314,7 +288,7 @@ struct AVPlayerEngineView: View {
 
     private func togglePlay() {
         coordinator.togglePlay()
-        resetHideTimer()
+        scheduleHide()
     }
 
     #if os(tvOS)
@@ -338,95 +312,71 @@ struct AVPlayerEngineView: View {
         /// edge. Picking a channel switches the stream and surfaces the controls
         /// briefly so the new channel's name and EPG act as a banner.
         private var channelBrowser: some View {
-            TVChannelBrowserOverlay(
-                media: media,
-                onSelect: { target in
-                    onSelectMedia?(target)
-                    withAnimation(.easeInOut(duration: 0.25)) { isChannelBrowserOpen = false }
-                    showControls()
-                },
+            TVPlayerChannelBrowser(
+                media: media, isPresented: $isChannelBrowserOpen, chrome: chrome,
+                mayHide: { canAutoHideControls }, onSelect: { onSelectMedia?($0) },
                 onClose: { closeChannelBrowser() }
             )
-            .transition(.move(edge: .leading).combined(with: .opacity))
         }
 
         private func openChannelBrowser() {
-            guard media.isLive, !isChannelBrowserOpen else { return }
-            hideTask?.cancel()
-            withAnimation(.easeInOut(duration: 0.25)) { isChannelBrowserOpen = true }
+            chrome.openBrowser(isLive: media.isLive, isPresented: $isChannelBrowserOpen)
         }
 
         private func closeChannelBrowser() {
-            withAnimation(.easeInOut(duration: 0.25)) { isChannelBrowserOpen = false }
+            chrome.closeBrowser(isPresented: $isChannelBrowserOpen, mayHide: { canAutoHideControls })
             // Hand focus back to the tap-catcher so the remote keeps working.
             Task { @MainActor in catcherFocused = true }
         }
     #endif
 
     private func toggleControls() {
-        withAnimation(.easeInOut(duration: 0.2)) { isControlsVisible.toggle() }
-        if isControlsVisible { scheduleHide() }
+        chrome.toggle(mayHide: { canAutoHideControls })
     }
 
     private func showControls() {
-        guard !isControlsVisible else { resetHideTimer(); return }
-        withAnimation(.easeInOut(duration: 0.2)) { isControlsVisible = true }
-        scheduleHide()
-    }
-
-    /// Dismiss the controls overlay (Menu button when no panel is open). A
-    /// second Menu press, with the controls hidden, dismisses the player.
-    private func hideControls() {
-        hideTask?.cancel()
-        withAnimation(.easeInOut(duration: 0.2)) { isControlsVisible = false }
+        chrome.show(mayHide: { canAutoHideControls })
     }
 
     /// Menu/back routing: close the channel browser or an open panel first,
     /// then hide the controls, and only dismiss the player once the controls
     /// are already hidden.
     private func handleMenuPress() {
-        if loadFailed {
-            closePlayer()
-            return
-        }
         #if os(tvOS)
-            if isChannelBrowserOpen {
-                closeChannelBrowser()
-                return
-            }
+            let browserOpen = isChannelBrowserOpen
+            let closeBrowser = closeChannelBrowser
+        #else
+            let browserOpen = false
+            let closeBrowser = {}
         #endif
-        if isPanelOpen {
-            panelCloseToken += 1
-        } else if isControlsVisible {
-            hideControls()
-        } else if remoteBridge?.claimsBack() != true {
-            closePlayer()
-        }
-    }
-
-    private func resetHideTimer() {
-        hideTask?.cancel()
-        if isControlsVisible { scheduleHide() }
+        chrome.menu(
+            .init(failed: loadFailed, browserOpen: browserOpen, panelOpen: isPanelOpen),
+            claimsBack: { remoteBridge?.claimsBack() == true }, closeBrowser: closeBrowser,
+            closePanel: { panelCloseToken += 1 }, closePlayer: closePlayer
+        )
     }
 
     /// Keep the controls pinned open while an overlay panel is showing.
     private func setPanelOpen(_ open: Bool) {
         isPanelOpen = open
-        if open {
-            hideTask?.cancel()
-        } else {
-            resetHideTimer()
-        }
+        chrome.panelChanged(isOpen: open, mayHide: { canAutoHideControls })
+    }
+
+    private var canAutoHideControls: Bool {
+        #if os(tvOS)
+            let browserOpen = isChannelBrowserOpen
+        #else
+            let browserOpen = false
+        #endif
+        return PlayerControlsAutoHide.mayHide(
+            isPlaying: coordinator.isPlaying,
+            isPanelOpen: isPanelOpen || browserOpen || isSeeking,
+            isSuppressed: PlayerControlsAutoHide.isSuppressed
+        )
     }
 
     private func scheduleHide() {
-        hideTask?.cancel()
-        guard coordinator.isPlaying, !isPanelOpen, !PlayerControlsAutoHide.isSuppressed else { return }
-        hideTask = Task { @MainActor in
-            try? await Task.sleep(nanoseconds: UInt64(autoHideInterval * 1_000_000_000))
-            guard !Task.isCancelled, coordinator.isPlaying else { return }
-            withAnimation(.easeInOut(duration: 0.2)) { isControlsVisible = false }
-        }
+        chrome.schedule(mayHide: { canAutoHideControls })
     }
 
     private func closePlayer() {
@@ -442,6 +392,7 @@ struct AVPlayerEngineView: View {
     /// switches engines); otherwise raise the failure overlay.
     private func reportFailure() {
         guard !loadFailed else { return }
+        isCatchupSegmentLoading = false
         if reportsStartupFailure, !coordinator.hasStartedPlayback {
             onPlaybackFailed?()
             return
@@ -451,114 +402,11 @@ struct AVPlayerEngineView: View {
 
     /// Re-prepare the current stream after a failure (the Try Again button).
     private func retryPlayback() {
+        isCatchupSegmentLoading = false
         withAnimation(.easeInOut(duration: 0.25)) { loadFailed = false }
         coordinator.retryAfterFailure()
     }
 }
-
-#if os(tvOS)
-    /// Draws only its (clear) label so the full-screen tap-catcher stays
-    /// invisible even while it holds focus with the controls hidden.
-    private struct AVInvisibleButtonStyle: ButtonStyle {
-        func makeBody(configuration: Configuration) -> some View {
-            configuration.label
-        }
-    }
-#endif
-
-private extension View {
-    /// Runs `action` on the Siri remote's Menu/back press (tvOS only); a no-op
-    /// elsewhere so the cross-platform body still compiles.
-    @ViewBuilder
-    func onMenuPress(perform action: @escaping () -> Void) -> some View {
-        #if os(tvOS)
-            onExitCommand(perform: action)
-        #else
-            self
-        #endif
-    }
-
-    /// Runs `action` on the Siri remote's dedicated Play/Pause button (tvOS
-    /// only); a no-op elsewhere so the cross-platform body still compiles.
-    @ViewBuilder
-    func onPlayPausePress(perform action: @escaping () -> Void) -> some View {
-        #if os(tvOS)
-            onPlayPauseCommand(perform: action)
-        #else
-            self
-        #endif
-    }
-}
-
-// MARK: - Video Container (AVPlayerLayer bridge)
-
-// Hosts a view whose backing layer is an `AVPlayerLayer`. The coordinator owns
-// the `AVPlayer` and is handed the layer once it mounts so it can drive content
-// gravity and Picture in Picture.
-#if os(macOS)
-    private struct AVPlayerVideoContainer: NSViewRepresentable {
-        let coordinator: AVPlayerCoordinator
-
-        func makeNSView(context _: Context) -> AVPlayerHostNSView {
-            let view = AVPlayerHostNSView()
-            coordinator.attach(layer: view.playerLayer)
-            return view
-        }
-
-        func updateNSView(_: AVPlayerHostNSView, context _: Context) {}
-    }
-
-    /// AppKit has no `layerClass` hook, so the `AVPlayerLayer` is created and
-    /// kept in sync with the view's bounds manually.
-    private final class AVPlayerHostNSView: NSView {
-        let playerLayer = AVPlayerLayer()
-
-        override init(frame frameRect: NSRect) {
-            super.init(frame: frameRect)
-            wantsLayer = true
-            playerLayer.frame = bounds
-            layer?.addSublayer(playerLayer)
-            layer?.backgroundColor = NSColor.black.cgColor
-        }
-
-        @available(*, unavailable)
-        required init?(coder _: NSCoder) {
-            fatalError("init(coder:) has not been implemented")
-        }
-
-        override func layout() {
-            super.layout()
-            playerLayer.frame = bounds
-        }
-    }
-#else
-    private struct AVPlayerVideoContainer: UIViewRepresentable {
-        let coordinator: AVPlayerCoordinator
-
-        func makeUIView(context _: Context) -> AVPlayerHostUIView {
-            let view = AVPlayerHostUIView()
-            view.backgroundColor = .black
-            coordinator.attach(layer: view.playerLayer)
-            return view
-        }
-
-        func updateUIView(_: AVPlayerHostUIView, context _: Context) {}
-    }
-
-    /// `layerClass` makes the view's backing layer an `AVPlayerLayer`, so it
-    /// resizes with the view automatically.
-    private final class AVPlayerHostUIView: UIView {
-        // swiftlint:disable:next static_over_final_class
-        override class var layerClass: AnyClass {
-            AVPlayerLayer.self
-        }
-
-        var playerLayer: AVPlayerLayer {
-            // swiftlint:disable:next force_cast
-            layer as! AVPlayerLayer
-        }
-    }
-#endif
 
 #Preview {
     AVPlayerEngineView(

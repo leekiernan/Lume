@@ -52,7 +52,7 @@
                         showPaywall = true
                     }
                 } label: {
-                    Label("Connect Simkl Account", systemImage: premium.isPremium ? "link" : "crown")
+                    SettingsActionLabel(title: "Connect Simkl Account", systemImage: premium.isPremium ? "link" : "crown")
                 }
                 .disabled(simkl.isConnecting)
             } header: {
@@ -87,21 +87,25 @@
                 Button {
                     Task { await simkl.importWatched(into: modelContext) }
                 } label: {
-                    HStack {
-                        Label("Import Watched from Simkl", systemImage: "arrow.down.circle")
-                        if simkl.isImporting {
-                            Spacer()
-                            ProgressView()
-                                .controlSize(.small)
-                        }
-                    }
+                    SettingsActionLabel(title: "Import Watched from Simkl", systemImage: "arrow.down.circle", isBusy: simkl.isImporting)
                 }
                 .disabled(simkl.isImporting)
+
+                // An import waits for these to upload first, so without them
+                // on screen a tapped import looked like it did nothing.
+                if simkl.pendingMutationCount > 0 {
+                    Button {
+                        simkl.retryPendingMutations()
+                    } label: {
+                        SettingsActionLabel(title: "Retry Pending Simkl Changes", systemImage: "arrow.clockwise", isBusy: simkl.isSyncingMutations)
+                    }
+                    .disabled(simkl.isSyncingMutations)
+                }
 
                 Button(role: .destructive) {
                     Task { await simkl.disconnect() }
                 } label: {
-                    Label("Disconnect", systemImage: "link.badge.plus")
+                    SettingsActionLabel(title: "Disconnect", systemImage: "xmark.circle")
                 }
             } header: {
                 Text("Simkl")
@@ -110,6 +114,15 @@
                     Text("Watched movies and episodes sync to your Simkl history. Import marks titles you've already watched on Simkl as watched here.")
                     if let summary = simkl.lastImport {
                         importStatus(summary)
+                    }
+                    if simkl.pendingMutationCount > 0 {
+                        if let error = simkl.mutationSyncError {
+                            Text(error)
+                                .foregroundStyle(.red)
+                        } else {
+                            Text("\(simkl.pendingMutationCount) Simkl changes waiting to sync.")
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 }
             }

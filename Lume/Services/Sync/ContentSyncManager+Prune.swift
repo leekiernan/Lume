@@ -22,7 +22,7 @@
 //  count alone cannot: `XtreamList` drops the elements that fail to decode and
 //  only rethrows when *every* element fails, and a truncated m3u download
 //  parses cleanly into a short but valid playlist. Either arrives as a small
-//  non-empty payload that would wave the sweep through (see `sweepIsSafe`).
+//  non-empty payload that would wave the sweep through (see `allowSweep`).
 //  Every pipeline — Xtream, m3u/WebDAV, Stalker, Jellyfin/Emby and Plex —
 //  prunes through those entry points; `pruneStale*` stay visible only for the
 //  tests and benchmarks that drive a sweep directly.
@@ -141,8 +141,8 @@ extension ContentSyncManager {
     // survives in iCloud: the reconcile never reads a missing row as the user
     // clearing its state, see `ContentIntentMerge`). So the m3u sweeps take
     // the same gate as the Xtream ones: a payload must cover at least a tenth
-    // of the rows already stored, tolerated `maximumConsecutiveSweepSkips`
-    // times before a shrink is believed.
+    // of the rows already stored; CatalogSweepPolicy holds twice before a
+    // repeated shrink is believed. Unreadable storage never grants a sweep.
     //
     // Deliberate behaviour change: a provider that genuinely drops a whole
     // section now keeps those dead rows for up to two extra syncs.
@@ -203,7 +203,7 @@ extension ContentSyncManager {
     /// signal is — the m3u import's total, or a category list's own length.
     func pruneCategories(playlistId: UUID, type: CategoryType, seenApiIds: Set<String>, importedCount: Int) {
         guard importedCount > 0 else { return }
-        let prefix = "\(playlistId.uuidString)-\(type.rawValue)-"
+        let prefix = CatalogID.prefix(playlistId, infix: type.rawValue)
         let scope = FetchDescriptor<Category>(predicate: #Predicate { $0.id.starts(with: prefix) })
         guard sweepIsAllowed(
             playlistId: playlistId,
@@ -329,9 +329,9 @@ extension ContentSyncManager {
         let context = ModelContext(modelContainer)
         context.autosaveEnabled = false
 
-        // Match buildExistingCategoryLookup: the "<playlist>-<type>-" prefix
+        // Match fetchCategoryLookup: the "<playlist>-<type>-" prefix
         // scopes to this playlist and type in one index seek.
-        let prefix = "\(playlistId.uuidString)-\(type.rawValue)-"
+        let prefix = CatalogID.prefix(playlistId, infix: type.rawValue)
         let typeRaw = type.rawValue
         let descriptor = FetchDescriptor<Category>(
             predicate: #Predicate { $0.id.starts(with: prefix) }
@@ -414,85 +414,51 @@ extension ContentSyncManager {
         return totalRemoved
     }
 
-    /// Whether a provider payload accounts for enough of the rows already stored
-    /// to be trusted to drive a sweep.
+    /// Whether a provider payload may drive a sweep of `kind`, applying
+    /// `CatalogSweepPolicy` against the rows already stored and the skips
+    /// persisted for this playlist and kind.
     ///
     /// `XtreamList` drops elements that fail to decode and rethrows only when
     /// *every* element fails, so a payload whose rows are mostly malformed
     /// arrives as a small non-empty array that the callers' `isEmpty` guards let
     /// through — and sweeping against it would delete nearly the whole catalog
-    /// along with the enrichment and ordering on those rows.
-    ///
-    /// This test alone is not enough to decide, because it compares the payload
-    /// against the rows already stored and those rows only ever fall when a
-    /// sweep runs: a library that legitimately shrinks past the floor would fail
-    /// the check on every future sync too, and keep its dead rows forever. See
-    /// `sweepIsAllowed` for the bounded tolerance that resolves it. Counting is
-    /// an aggregate query, so it costs no materialised rows.
-    private func sweepIsSafe(
-        seenCount: Int,
-        storedMatching descriptor: FetchDescriptor<some PersistentModel>,
-        minimumCoverage: Double = 0.1
-    ) -> Bool {
-        let context = ModelContext(modelContainer)
-        guard let stored = try? context.fetchCount(descriptor) else { return false }
-        return Double(seenCount) >= Double(stored) * minimumCoverage
-    }
-
-    /// Consecutive low-coverage payloads tolerated before a sweep runs anyway.
-    ///
-    /// Two syncs of protection: a malformed payload is transient and will not
-    /// repeat this many times, while a real shrink repeats every sync and so
-    /// converges on the third.
-    private static let maximumConsecutiveSweepSkips = 2
-
-    /// Whether to sweep, given the coverage test and how often it has already
-    /// refused for this playlist and kind.
-    ///
-    /// `sweepIsSafe` protects the catalog from a payload whose rows mostly
-    /// failed to decode. On its own it is a trap: coverage is measured against
-    /// the stored rows, which a skipped sweep never reduces, so a subscription
-    /// that legitimately shrinks below the floor — a downgraded plan, a provider
-    /// that replaced its lineup — would be refused on every subsequent sync and
-    /// strand the dead rows permanently. Counting the consecutive refusals and
-    /// letting the sweep through after a bounded number keeps the protection
-    /// against a bad payload while still converging on a real shrink.
-    ///
-    /// The count is kept in `UserDefaults` rather than in memory because a sync
-    /// commonly follows a fresh launch, and an in-memory counter would reset
-    /// before it ever reached the limit.
+    /// along with the enrichment and ordering on those rows. A failed count is
+    /// distinct from low coverage: it holds the digest open for retry, but can
+    /// never authorize pruning by exhausting skips. Counting is an aggregate
+    /// query, so it costs no materialised rows.
     private func sweepIsAllowed(
         playlistId: UUID,
         kind: String,
         seenCount: Int,
         storedMatching descriptor: FetchDescriptor<some PersistentModel>
     ) -> Bool {
-        let prefix = playlistId.uuidString
-        if sweepIsSafe(seenCount: seenCount, storedMatching: descriptor) {
+        let context = ModelContext(modelContainer)
+        let stored = try? context.fetchCount(descriptor)
+        let key = SweepSkipDefaults.key(playlistId: playlistId, kind: kind)
+        let defaults = UserDefaults.standard
+        let previous = defaults.integer(forKey: key)
+        switch CatalogSweepPolicy.decide(seenCount: seenCount, storedCount: stored, previousSkips: previous) {
+        case .sweep:
+            clearSweepSkips(playlistId: playlistId, kind: kind)
+            return true
+        case .unreadable:
+            // Keep a marker so an unchanged digest cannot skip unfinished work.
+            defaults.set(previous, forKey: key)
+            Logger.database.warning("Skipped \(kind, privacy: .public) prune for playlist \(playlistId.uuidString, privacy: .public): stored count unreadable")
+            return false
+        case let .hold(skips):
+            defaults.set(skips, forKey: key)
+            Logger.database.warning(
+                "Skipped \(kind, privacy: .public) prune for playlist \(playlistId.uuidString, privacy: .public): payload covers too few stored rows (\(skips, privacy: .public) in a row)"
+            )
+            return false
+        case let .acceptShrink(skips):
+            Logger.database.warning(
+                "Sweeping \(kind, privacy: .public) for playlist \(playlistId.uuidString, privacy: .public) after \(skips, privacy: .public) low-coverage payloads: treating the shrink as real"
+            )
             clearSweepSkips(playlistId: playlistId, kind: kind)
             return true
         }
-
-        let skips = recordSweepSkip(playlistId: playlistId, kind: kind)
-        guard skips > Self.maximumConsecutiveSweepSkips else {
-            Logger.database.warning(
-                "Skipped \(kind, privacy: .public) prune for playlist \(prefix, privacy: .public): payload covers too few stored rows (\(skips, privacy: .public) in a row)"
-            )
-            return false
-        }
-
-        Logger.database.warning(
-            "Sweeping \(kind, privacy: .public) for playlist \(prefix, privacy: .public) after \(skips, privacy: .public) low-coverage payloads: treating the shrink as real"
-        )
-        clearSweepSkips(playlistId: playlistId, kind: kind)
-        return true
-    }
-
-    private func recordSweepSkip(playlistId: UUID, kind: String) -> Int {
-        let key = SweepSkipDefaults.key(playlistId: playlistId, kind: kind)
-        let next = UserDefaults.standard.integer(forKey: key) + 1
-        UserDefaults.standard.set(next, forKey: key)
-        return next
     }
 
     private func clearSweepSkips(playlistId: UUID, kind: String) {

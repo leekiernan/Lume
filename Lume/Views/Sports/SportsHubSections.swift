@@ -31,6 +31,7 @@ struct SportsFixtureGroup: Identifiable {
 struct SportsSectionsView: View {
     let groups: [SportsFixtureGroup]
     let resolved: [String: [ResolvedChannel]]
+    var showsEmptyState = true
     let isFollowed: (SportsTeam) -> Bool
     var onOpenDetail: (SportsFixture) -> Void
     var onWatch: (ResolvedChannel) -> Void
@@ -41,7 +42,7 @@ struct SportsSectionsView: View {
 
     var body: some View {
         if groups.isEmpty {
-            SportsNoGamesView()
+            if showsEmptyState { SportsNoGamesView() }
         } else {
             ForEach(groups) { group in
                 section(for: group)
@@ -85,45 +86,7 @@ struct SportsSectionsView: View {
     }
 
     private func headerLabel(for group: SportsFixtureGroup, chevron: Bool) -> some View {
-        HStack(spacing: 8) {
-            if let logoURL = group.logoURL {
-                CachedAsyncImage(url: logoURL, maxPixelSize: 24) { phase in
-                    if case let .success(image) = phase {
-                        image.resizable().scaledToFit()
-                    } else {
-                        Color.clear
-                    }
-                }
-                .frame(width: 20, height: 20)
-                .accessibilityHidden(true)
-            }
-            Text(group.title)
-                .font(.headline)
-            if chevron {
-                Image(systemName: "chevron.right")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.tertiary)
-                    .accessibilityHidden(true)
-            }
-            Spacer()
-        }
-        .overlay(alignment: .bottom) {
-            Rectangle().fill(.separator).frame(height: 1).offset(y: 6)
-        }
-        .padding(.bottom, 6)
-        .contentShape(Rectangle())
-    }
-}
-
-// MARK: - No games
-
-struct SportsNoGamesView: View {
-    var body: some View {
-        Text("No games")
-            .font(.headline)
-            .foregroundStyle(.secondary)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 40)
+        SportsSectionHeading(title: Text(verbatim: group.title), logoURL: group.logoURL, chevron: chevron)
     }
 }
 
@@ -133,11 +96,7 @@ struct SportsOnboardingCard: View {
     var onManageTeams: () -> Void
 
     var body: some View {
-        ContentUnavailableView {
-            Label("Follow Your Teams", systemImage: "sportscourt")
-        } description: {
-            Text("Add leagues and teams to see fixtures, live scores and standings, with one tap to the channel carrying the game.")
-        } actions: {
+        SportsUnavailableState(title: "Follow Your Teams", message: SportsPresentationCopy.followTeams) {
             Button {
                 onManageTeams()
             } label: {

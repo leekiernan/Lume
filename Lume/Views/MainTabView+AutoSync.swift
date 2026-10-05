@@ -47,9 +47,7 @@ extension MainTabView {
         for playlist in candidates where !isQueued(playlist) {
             guard let request = syncRequest(for: playlist) else { continue }
             autoSyncAttempted.insert(playlist.id)
-            if let areas = request.repairingAreas {
-                repairsAttempted[playlist.id, default: []].formUnion(areas)
-            }
+            repairLedger.record(request.repairedAreas, for: playlist.id)
             if request.runsInBackground {
                 startBackgroundSync(request)
             } else {
@@ -62,7 +60,7 @@ extension MainTabView {
     /// Refreshes areas the viewer can already browse without covering them:
     /// the rows on screen stay usable and update in place as the sync lands.
     /// Failure is the sync's own to report (`Playlist.syncStatus`); the area
-    /// is retried next session (`repairsAttempted`).
+    /// is retried next session (`AutoSync.RepairLedger`).
     func startBackgroundSync(_ request: PlaylistSyncRequest) {
         let playlist = request.playlist
         let plan = PlaylistSyncPlan(sourceType: playlist.sourceType, repairingAreas: request.repairingAreas)
@@ -82,12 +80,12 @@ extension MainTabView {
     /// attempt; one still on screen in the failed cover retries itself (see
     /// `SyncProgressView`), so it's already queued and skipped here.
     func retryFailedSyncs(_ ids: Set<UUID>) {
-        let failed = playlists.filter { ids.contains($0.id) && $0.syncStatus == .error }
-        autoSyncAttempted.subtract(failed.map(\.id))
-        for playlist in failed {
-            repairsAttempted[playlist.id] = nil
-        }
-        enqueueDueSyncs(failed)
+        let plan = AutoSync.ReconnectionPlan(
+            playlists: playlists, reconnectedIDs: ids,
+            queuedIDs: Set(syncQueue.map(\.id)).union(backgroundSyncIDs).union(activeSyncRequest.map { [$0.id] } ?? [])
+        )
+        plan.resetAttempts(&autoSyncAttempted, ledger: &repairLedger)
+        enqueueDueSyncs(playlists.filter { plan.enqueueIDs.contains($0.id) })
     }
 
     func isQueued(_ playlist: Playlist) -> Bool {
@@ -102,33 +100,32 @@ extension MainTabView {
             lastSyncDate: playlist.lastSyncDate,
             context: modelContext
         )
-        let missingAreas = PlaylistSyncCoverage.missingAreasForAutomaticRepair(
+        let staleAreas = PlaylistSyncCoverage.missingAreasForAutomaticRepair(
             playlistID: playlist.id,
             disabledAreasRaw: disabledAreasRaw,
             frequency: syncFrequency
         )
-        let candidate = playlist.autoSyncCandidate(activeID: activePlaylistID)
-        let alreadyStarted = autoSyncAttempted.contains(playlist.id)
-        let isRegularlyDue = AutoSync.shouldSync(candidate, frequency: syncFrequency, alreadyStarted: alreadyStarted)
-        // A repair follows the same rule as a regular sync: only the playlist
-        // on screen (or one just added) earns it; any other syncs when the
-        // viewer switches to it. It isn't held back by this session's regular
-        // refresh — switching profile can need one after it — but each area is
-        // tried once a session, so a failing one doesn't retry on every trigger.
-        let untriedAreas = missingAreas.subtracting(repairsAttempted[playlist.id] ?? [])
-        let needsCoverage = !untriedAreas.isEmpty && AutoSync.isEligible(candidate, alreadyStarted: false)
-        guard isRegularlyDue || needsCoverage else { return nil }
-
-        // A due playlist gets its ordinary refresh. Only the otherwise-current
-        // Xtream playlist uses the narrow repair path; m3u and Stalker do not
-        // expose independent per-area bulk imports.
-        let repairingAreas = !isRegularlyDue && playlist.sourceType == .xtream ? untriedAreas : nil
-        // Only an area with nothing to browse yet is worth blocking the
-        // screen for; one already in the catalog refreshes behind it.
-        let runsInBackground = repairingAreas.map {
-            $0.isSubset(of: PlaylistSyncCoverage.areasWithRows(playlistID: playlist.id, context: modelContext))
-        } ?? false
-        return PlaylistSyncRequest(playlist: playlist, repairingAreas: repairingAreas, runsInBackground: runsInBackground)
+        // Only the playlist on screen (or one just added) earns automatic
+        // work; any other syncs when the viewer switches to it.
+        let input = AutoSync.PlanInput(
+            candidate: playlist.autoSyncCandidate(activeID: activePlaylistID),
+            playlistID: playlist.id,
+            frequency: syncFrequency,
+            alreadyStarted: autoSyncAttempted.contains(playlist.id),
+            staleAreas: staleAreas,
+            supportsAreaRepair: playlist.sourceType == .xtream
+        )
+        guard let plan = AutoSync.plan(
+            input,
+            ledger: repairLedger,
+            areasWithRows: { PlaylistSyncCoverage.areasWithRows(playlistID: playlist.id, context: modelContext) }
+        ) else { return nil }
+        return PlaylistSyncRequest(
+            playlist: playlist,
+            repairingAreas: plan.repairingAreas,
+            repairedAreas: plan.repairedAreas,
+            runsInBackground: plan.runsInBackground
+        )
     }
 
     /// Whether the auto-sync queue holds anything, including the playlist in
@@ -150,6 +147,8 @@ extension MainTabView {
 struct PlaylistSyncRequest: Identifiable {
     let playlist: Playlist
     let repairingAreas: Set<AppArea>?
+    /// The areas this run repairs, for `AutoSync.RepairLedger`.
+    var repairedAreas: Set<AppArea> = []
     /// A repair of areas the catalog already has rows for, run without the
     /// blocking cover.
     var runsInBackground = false

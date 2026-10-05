@@ -190,9 +190,7 @@ import SwiftUI
                 }
 
                 Text(footerText)
-                    .font(.system(size: 20))
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, TVSettingsMetrics.rowHPadding)
+                    .tvSettingsFooter()
                     .padding(.top, 6)
             }
         }
@@ -270,27 +268,19 @@ import SwiftUI
                     Button {
                         beginAdding()
                     } label: {
-                        HStack(spacing: 16) {
-                            Image(systemName: "plus")
-                                .font(.system(size: 22, weight: .medium))
-                            Text("Add Section")
-                            Spacer(minLength: 0)
-                        }
+                        Label("Add Section", systemImage: "plus")
+                            .labelStyle(TVSettingsIconLabelStyle())
                     }
                     .buttonStyle(TVSettingsRowButtonStyle())
                     .focused($focusedControl, equals: .addSection)
                     .disabled(customSections.count >= CustomHomeSections.maximumCount)
 
                     Text("Build your own row from a public list, like a site's most-popular chart. Lume matches the list against your playlist and shows the titles you have.")
-                        .font(.system(size: 20))
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, TVSettingsMetrics.rowHPadding)
+                        .tvSettingsFooter()
                         .padding(.top, 6)
 
                     Text("Supported: \(supportedProviders).")
-                        .font(.system(size: 20))
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, TVSettingsMetrics.rowHPadding)
+                        .tvSettingsFooter()
                 } else {
                     editorForm
                 }
@@ -326,9 +316,7 @@ import SwiftUI
                 }
 
                 Text("Paste the address of a public list, for example \(exampleListURL).")
-                    .font(.system(size: 20))
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, TVSettingsMetrics.rowHPadding)
+                    .tvSettingsFooter()
             }
         }
 

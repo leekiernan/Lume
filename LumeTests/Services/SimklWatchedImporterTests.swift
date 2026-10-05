@@ -4,7 +4,7 @@ import SwiftData
 import Testing
 
 @MainActor
-@Suite(.serialized, .globalState)
+@Suite(.serialized, .globalState, .trackerIdentity(.simkl))
 struct SimklWatchedImporterTests {
     init() {
         // The parked-progress store is a file plus an in-memory cache; every test
@@ -54,6 +54,35 @@ struct SimklWatchedImporterTests {
             lastWatchedAt: lastWatchedAt,
             movie: SimklWatchedMedia(ids: SimklWatchedIDs(tmdb: tmdb))
         )
+    }
+
+    @Test func `old remote completion cannot erase newer local movie intent`() throws {
+        let context = try makeContext()
+        let movie = makeMovie(id: "rewatch", tmdbId: 100)
+        movie.lastWatchedDate = ISO8601DateFormatter().date(from: "2026-10-03T12:00:00Z")
+        movie.watchProgress = 120
+        context.insert(movie)
+        let summary = SimklWatchedImporter.apply(
+            movies: [watchedMovie(tmdb: 100, lastWatchedAt: "2014-10-11T17:00:54Z")], shows: [], in: context
+        )
+        #expect(summary.moviesMarked == 0)
+        #expect(!movie.isWatched)
+        #expect(movie.watchProgress == 120)
+    }
+
+    @Test func `old remote completion cannot erase newer local episode intent`() throws {
+        let context = try makeContext()
+        let series = Series(id: "rewatch-show", seriesId: 1, name: "Show")
+        series.tmdbId = 300
+        let episode = Episode(id: "rewatch-episode", episodeId: "2", title: "Episode", containerExtension: "mkv", seasonNum: 1, episodeNum: 2)
+        episode.lastWatchedDate = ISO8601DateFormatter().date(from: "2026-10-03T12:00:00Z")
+        episode.watchProgress = 90
+        episode.series = series
+        series.episodes = [episode]
+        context.insert(series)
+        let summary = SimklWatchedImporter.apply(movies: [], shows: [showProgress()], in: context)
+        #expect(summary.episodesMarked == 0)
+        #expect(!episode.isWatched)
     }
 
     @Test func `marks matching movies watched and leaves the rest untouched`() throws {
@@ -155,6 +184,28 @@ struct SimklWatchedImporterTests {
         // Home's Recently Watched row works straight away, without the episodes.
         #expect(series.lastWatchedDate == watchedDate)
         #expect(SimklPendingWatchedStore.load()[300]?.episodes["1x2"] != nil)
+    }
+
+    @Test func `parked progress belongs to the profile whose import parked it`() throws {
+        let saved = ActiveProfileStore.current
+        defer { ActiveProfileStore.current = saved }
+        let first = UUID()
+        ActiveProfileStore.current = first
+        let context = try makeContext()
+        let series = Series(id: "s1", seriesId: 1, name: "Show")
+        series.tmdbId = 300
+        context.insert(series)
+        _ = SimklWatchedImporter.apply(movies: [], shows: [showProgress()], in: context)
+
+        // Another profile opens the show: none of the first profile's ticks.
+        ActiveProfileStore.current = UUID()
+        #expect(SimklPendingWatchedStore.load()[300] == nil)
+        series.insertEpisodes([parsedEpisode(1), parsedEpisode(2)], into: context)
+        #expect(series.episodes.allSatisfy { !$0.isWatched })
+
+        // Back on the profile that imported it, the parked state is still there.
+        ActiveProfileStore.current = first
+        #expect(SimklPendingWatchedStore.load()[300] != nil)
     }
 
     @Test func `parked progress is applied when the episodes arrive`() throws {

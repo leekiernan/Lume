@@ -26,15 +26,7 @@ struct ChannelsList: View {
     @Query private var streams: [LiveStream]
     /// Now/next EPG for the visible channels, resolved in one off-main fetch
     /// (see `ChannelEPGSnapshot`) instead of a per-card `@Query`.
-    @State private var epgByChannel: [String: ChannelEPG] = [:]
-    /// The channels `epgByChannel` was resolved for, when it was last resolved
-    /// from scratch, and the channel-set identity it belongs to — so a
-    /// pagination step looks up only the page it added. Re-resolving the whole
-    /// visible prefix each step made scrolling a large category cost more with
-    /// every page: page *n* re-fetched the `n × 50` channels above it.
-    @State private var resolvedChannelIds: Set<String> = []
-    @State private var resolvedAt = Date.distantPast
-    @State private var resolvedGeneration = ""
+    @State private var epgLoad = ChannelEPGLoadMachine()
     /// Observed so the EPG lookup refreshes when a guide import finishes.
     @State private var epgSync = EPGSyncService.shared
     /// How many channels are currently rendered. Grows by a page as the list
@@ -100,9 +92,15 @@ struct ChannelsList: View {
     var body: some View {
         let channels = scopedStreams
         let visible = Array(channels.prefix(visibleCount))
-        // What makes the resolved EPG stale wholesale rather than merely
-        // incomplete: the channel set changing, or a guide import settling.
-        let generation = "\(channels.count)-\(epgSync.isSyncing)"
+        let epgScope = ChannelEPGLoadMachine.Scope(
+            playlistPrefix: playlistPrefix, visibilityToken: restriction.visibilityToken, channelScope: scope
+        )
+        let epgKey = ChannelEPGLoadMachine.Key(
+            scope: epgScope,
+            refresh: .init(channelIDs: Set(channels.compactMap(\.epgChannelId)), guideIsSyncing: epgSync.isSyncing),
+            visibleChannelIDs: Set(visible.compactMap(\.epgChannelId))
+        )
+        let epgByChannel = epgLoad.snapshot(for: epgScope)
         VStack(spacing: 0) {
             if scope == .recentlyWatched, !channels.isEmpty {
                 clearHeader
@@ -153,8 +151,8 @@ struct ChannelsList: View {
             .browseActivity()
             // Reload when the visible window or channel set changes, or a guide
             // import settles — EPG is resolved only for the channels on screen.
-            .task(id: "\(generation)-\(visible.count)") {
-                await loadEPG(for: visible, generation: generation)
+            .task(id: epgKey) {
+                await ChannelEPGLoading.run(key: epgKey, machine: $epgLoad, container: modelContext.container)
             }
             .task(id: Set(channels.compactMap(\.categoryId))) {
                 guard scope.showsCategoryLabels else { return }
@@ -167,40 +165,5 @@ struct ChannelsList: View {
         } message: {
             Text("This clears the list of channels you've recently watched. Your favorites and the channels themselves aren't affected.")
         }
-    }
-
-    private func loadEPG(for channels: [LiveStream], generation: String) async {
-        let channelIds = Array(Set(channels.compactMap(\.epgChannelId).filter { !$0.isEmpty }))
-        guard !channelIds.isEmpty else {
-            epgByChannel = [:]
-            resolvedChannelIds = []
-            resolvedGeneration = generation
-            return
-        }
-        let now = Date()
-        // Extend the snapshot with the channels that just scrolled into view.
-        // Resolving from scratch is kept for a stale generation and for pairs
-        // old enough that a programme could have ended under them, so no card
-        // is ever more than `snapshotLifetime` behind the guide.
-        let extending = generation == resolvedGeneration
-            && now.timeIntervalSince(resolvedAt) < ChannelEPGLoader.snapshotLifetime
-        let pending = extending ? channelIds.filter { !resolvedChannelIds.contains($0) } : channelIds
-        guard !pending.isEmpty else { return }
-
-        let container = modelContext.container
-        let resolved = await Task.detached(priority: .userInitiated) {
-            ChannelEPGLoader.load(container: container, channelIds: pending, now: now)
-        }.value
-        if extending {
-            // `pending`, not `resolved`: a channel the guide has nothing for
-            // must still count as looked up, or every page would ask again.
-            epgByChannel.merge(resolved) { _, new in new }
-            resolvedChannelIds.formUnion(pending)
-        } else {
-            epgByChannel = resolved
-            resolvedChannelIds = Set(pending)
-            resolvedAt = now
-        }
-        resolvedGeneration = generation
     }
 }

@@ -469,7 +469,7 @@ struct SettingsView: View {
         private var tvSidebar: some View {
             VStack(alignment: .leading, spacing: 0) {
                 Text("Settings")
-                    .font(.system(size: 38, weight: .bold))
+                    .font(.system(size: TVSettingsMetrics.screenTitleFontSize, weight: .bold))
                     .padding(.horizontal, TVSettingsMetrics.rowHPadding)
                     .padding(.bottom, 28)
 
@@ -489,9 +489,9 @@ struct SettingsView: View {
                 Spacer(minLength: 0)
             }
             .frame(width: 320, alignment: .leading)
-            .padding(.leading, 60)
+            .padding(.leading, TVLayoutMetrics.contentInset)
             .padding(.trailing, 24)
-            .padding(.vertical, 72)
+            .padding(.vertical, TVSettingsMetrics.pageVerticalInset)
             .focusSection()
             // Where focus goes when it enters the sidebar. Stating it means the
             // engine picks the selected row *instead of* the geometrically
@@ -546,8 +546,8 @@ struct SettingsView: View {
                     }
                     .frame(maxWidth: TVSettingsMetrics.detailMaxWidth, alignment: .leading)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 48)
-                    .padding(.vertical, 72)
+                    .padding(.horizontal, TVSettingsMetrics.pageHorizontalInset)
+                    .padding(.vertical, TVSettingsMetrics.pageVerticalInset)
                 }
             }
             .focusSection()
@@ -587,9 +587,7 @@ struct SettingsView: View {
                 TVSettingsSectionLabel("Search")
                 TVOptionToggleRow(title: "Search All Playlists", isOn: $searchAllPlaylists)
                 Text("When off, search only finds content in the active playlist. Turn this on to search across all your playlists.")
-                    .font(.system(size: 20))
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, TVSettingsMetrics.rowHPadding)
+                    .tvSettingsFooter()
                     .padding(.top, 6)
             }
         }

@@ -163,12 +163,7 @@ struct StorageManagementView: View {
                 onClear: { Task { await perform(.watchHistory) } }
             )
             #if DEBUG
-            .alert("Clear Index", isPresented: $confirmIndexClear) {
-                    Button("Clear", role: .destructive) { Task { await perform(.index) } }
-                    Button("Cancel", role: .cancel) {}
-                } message: {
-                    Text("The TMDB metadata and on-device embeddings for every title will be wiped, then re-indexed from scratch in the background.")
-                }
+            .indexClearConfirmation(isPresented: $confirmIndexClear) { Task { await perform(.index) } }
             #endif
         }
     #endif
@@ -206,9 +201,7 @@ struct StorageManagementView: View {
                     .padding(.vertical, 4)
 
                     Text("Matches your library against TMDB and builds an on-device index for smarter search. Runs slowly in the background.")
-                        .font(.system(size: 20))
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, TVSettingsMetrics.rowHPadding)
+                        .tvSettingsFooter()
                         .padding(.top, 6)
 
                     #if DEBUG
@@ -229,9 +222,7 @@ struct StorageManagementView: View {
                     }
 
                     Text("Cached artwork and metadata are re-downloaded automatically when needed. Your playlists, downloads, watch history and favorites are not affected.")
-                        .font(.system(size: 20))
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, TVSettingsMetrics.rowHPadding)
+                        .tvSettingsFooter()
                         .padding(.top, 6)
                 }
                 .disabled(isClearing)
@@ -243,9 +234,7 @@ struct StorageManagementView: View {
                     }
 
                     Text("Removes watch progress and the watched status of every title, and empties your Continue Watching and Recently Watched lists. Favorites and your watchlist aren't affected.")
-                        .font(.system(size: 20))
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, TVSettingsMetrics.rowHPadding)
+                        .tvSettingsFooter()
                         .padding(.top, 6)
                 }
                 .disabled(isClearing)
@@ -262,12 +251,7 @@ struct StorageManagementView: View {
                 onClear: { Task { await perform(.watchHistory) } }
             )
             #if DEBUG
-            .alert("Clear Index", isPresented: $confirmIndexClear) {
-                    Button("Clear", role: .destructive) { Task { await perform(.index) } }
-                    Button("Cancel", role: .cancel) {}
-                } message: {
-                    Text("The TMDB metadata and on-device embeddings for every title will be wiped, then re-indexed from scratch in the background.")
-                }
+            .indexClearConfirmation(isPresented: $confirmIndexClear) { Task { await perform(.index) } }
             #endif
         }
 
@@ -290,6 +274,17 @@ struct StorageManagementView: View {
 // MARK: - Confirmation alerts
 
 private extension View {
+    #if DEBUG
+        func indexClearConfirmation(isPresented: Binding<Bool>, onClear: @escaping () -> Void) -> some View {
+            alert("Clear Index", isPresented: isPresented) {
+                Button("Clear", role: .destructive, action: onClear)
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("The TMDB metadata and on-device embeddings for every title will be wiped, then re-indexed from scratch in the background.")
+            }
+        }
+    #endif
+
     /// The two clear-confirmation alerts, shared by both platform layouts.
     func clearConfirmations(
         confirmImageClear: Binding<Bool>,

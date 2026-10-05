@@ -43,7 +43,7 @@
         private var connect: some View {
             VStack(alignment: .leading, spacing: 16) {
                 Text("Sync the movies and episodes you watch to Trakt, and surface your Trakt watchlist on Home.")
-                    .font(.system(size: 24))
+                    .font(.system(size: TVSettingsMetrics.statusFontSize))
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, TVSettingsMetrics.rowHPadding)
 
@@ -54,19 +54,14 @@
                         showPaywall = true
                     }
                 } label: {
-                    HStack(spacing: 16) {
-                        Image(systemName: premium.isPremium ? "link" : "crown")
-                            .font(.system(size: 22, weight: .medium))
-                        Text("Connect Trakt Account")
-                        Spacer(minLength: 0)
-                    }
+                    SettingsActionLabel(title: "Connect Trakt Account", systemImage: premium.isPremium ? "link" : "crown")
                 }
                 .buttonStyle(TVSettingsRowButtonStyle())
                 .disabled(trakt.isConnecting)
 
                 if let error = trakt.connectionError {
                     Text(error)
-                        .font(.system(size: 22))
+                        .font(.system(size: TVSettingsMetrics.explanatoryFontSize))
                         .foregroundStyle(.red)
                         .padding(.horizontal, TVSettingsMetrics.rowHPadding)
                 }
@@ -84,22 +79,14 @@
                 TrackerConnectedAccount(username: trakt.username)
 
                 Text("Watched movies and episodes sync to your Trakt history. Import marks titles you've already watched on Trakt as watched here.")
-                    .font(.system(size: 22))
+                    .font(.system(size: TVSettingsMetrics.explanatoryFontSize))
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, TVSettingsMetrics.rowHPadding)
 
                 Button {
                     Task { await trakt.importWatched(into: modelContext) }
                 } label: {
-                    HStack(spacing: 16) {
-                        Image(systemName: "arrow.down.circle")
-                            .font(.system(size: 22, weight: .medium))
-                        Text("Import Watched from Trakt")
-                        Spacer(minLength: 0)
-                        if trakt.isImporting {
-                            ProgressView()
-                        }
-                    }
+                    SettingsActionLabel(title: "Import Watched from Trakt", systemImage: "arrow.down.circle", isBusy: trakt.isImporting)
                 }
                 .buttonStyle(TVSettingsRowButtonStyle())
                 .disabled(trakt.isImporting)
@@ -112,22 +99,14 @@
                     Button {
                         trakt.retryPendingMutations()
                     } label: {
-                        HStack(spacing: 16) {
-                            Image(systemName: "arrow.clockwise")
-                                .font(.system(size: 22, weight: .medium))
-                            Text("Retry Pending Trakt Changes")
-                            Spacer(minLength: 0)
-                            if trakt.isSyncingMutations {
-                                ProgressView()
-                            }
-                        }
+                        SettingsActionLabel(title: "Retry Pending Trakt Changes", systemImage: "arrow.clockwise", isBusy: trakt.isSyncingMutations)
                     }
                     .buttonStyle(TVSettingsRowButtonStyle())
                     .disabled(trakt.isSyncingMutations)
 
                     (trakt.mutationSyncError.map { Text($0) }
                         ?? Text("\(trakt.pendingMutationCount) Trakt changes waiting to sync."))
-                        .font(.system(size: 22))
+                        .font(.system(size: TVSettingsMetrics.explanatoryFontSize))
                         .foregroundStyle(trakt.mutationSyncError != nil ? .red : .secondary)
                         .padding(.horizontal, TVSettingsMetrics.rowHPadding)
                 }
@@ -135,12 +114,7 @@
                 Button {
                     Task { await trakt.disconnect() }
                 } label: {
-                    HStack(spacing: 16) {
-                        Image(systemName: "link.badge.plus")
-                            .font(.system(size: 22, weight: .medium))
-                        Text("Disconnect")
-                        Spacer(minLength: 0)
-                    }
+                    SettingsActionLabel(title: "Disconnect", systemImage: "xmark.circle")
                 }
                 .buttonStyle(TVSettingsRowButtonStyle(isDestructive: true))
             }

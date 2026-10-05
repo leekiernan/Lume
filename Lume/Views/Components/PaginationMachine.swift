@@ -3,12 +3,12 @@
 /// type only decides whether a page may start and whether a returned page still
 /// belongs to the active result set.
 ///
-/// A request carries the generation and source offset it started from. Resetting
-/// for new query inputs advances that generation, so a detached fetch from the
-/// old query cannot append into the replacement grid.
+/// A request carries a fresh identity and the source offset it started from.
+/// Resetting a query or abandoning a page releases its active identity, so a
+/// late completion cannot append into a replacement query or same-offset retry.
 struct PaginationMachine: Equatable {
     struct Request: Equatable, Hashable {
-        fileprivate let generation: UInt
+        fileprivate let token = RequestToken()
         let offset: Int
     }
 
@@ -21,7 +21,6 @@ struct PaginationMachine: Equatable {
 
     private(set) var key: String?
     private(set) var nextOffset = 0
-    private var generation: UInt = 0
     private var state: State = .idle
 
     var isPrepared: Bool {
@@ -58,15 +57,14 @@ struct PaginationMachine: Equatable {
     @discardableResult
     mutating func restart() -> Bool {
         guard key != nil else { return false }
-        generation &+= 1
         nextOffset = 0
         state = .ready
         return true
     }
 
     /// Seeds the machine from an already hydrated window, such as a section
-    /// feed's cached preview. This never changes request generation because no
-    /// request can be active immediately after `prepare(for:)`.
+    /// feed's cached preview. Callers seed immediately after `prepare(for:)`,
+    /// before any page request is active.
     mutating func seed(nextOffset: Int, canLoadMore: Bool) {
         guard key != nil else { return }
         self.nextOffset = max(0, nextOffset)
@@ -76,7 +74,7 @@ struct PaginationMachine: Equatable {
     /// Starts the sole page allowed for the current result set.
     mutating func beginLoading() -> Request? {
         guard case .ready = state else { return nil }
-        let request = Request(generation: generation, offset: nextOffset)
+        let request = Request(offset: nextOffset)
         state = .loading(request)
         return request
     }
@@ -105,7 +103,6 @@ struct PaginationMachine: Equatable {
     /// Any older in-flight page becomes stale before the new cursor is exposed.
     mutating func replaceWindow(scanned: Int, hasMore: Bool) {
         guard key != nil else { return }
-        generation &+= 1
         nextOffset = max(0, scanned)
         state = hasMore ? .ready : .exhausted
     }

@@ -4,6 +4,11 @@ import SwiftData
 @Model
 final class Playlist {
     var id: UUID = UUID()
+    /// Query namespace only; catalog identifiers retain their existing spelling.
+    var contentIDPrefix: String {
+        PlaylistContentScope.prefix(for: id)
+    }
+
     var name: String
     /// Xtream: the portal base URL. M3U: the playlist URL (http(s) or a local
     /// `file://` URL produced by the file importer).

@@ -128,13 +128,13 @@ final class SportsAlertCoordinator {
         let followedTeams = Set(SportsFollowService.shared.follows.filter { $0.kind == .team }.map(\.key))
         guard !followedTeams.isEmpty else { return }
         let store = SportsStore.shared
-        let leagueIds = Array(Set(followedTeams.compactMap(SportsSyncService.leagueId(fromTeamID:))))
+        let leagueIds = Array(Set(followedTeams.compactMap(SportsTeam.leagueID(fromTeamID:))))
         store.loadCached(leagueIds: leagueIds)
         let candidates = Self.candidates(store.fixtures(inLeagues: leagueIds), followedTeams: followedTeams, now: now)
         guard !candidates.isEmpty else { return }
 
         let fetched = await Self.fetch(candidates, provider: provider)
-        let followedFetched = fetched.filter { Self.involves($0, followedTeams) }
+        let followedFetched = fetched.filter { $0.involves(anyOf: followedTeams) }
         let raised = machine.observe(followedFetched, settings: settings, watchingFixtureId: nil)
         for alert in raised {
             await enqueue(alert)
@@ -171,16 +171,10 @@ final class SportsAlertCoordinator {
         now: Date
     ) -> [SportsFixture] {
         fixtures.filter { fixture in
-            involves(fixture, followedTeams)
+            fixture.involves(anyOf: followedTeams)
                 && fixture.startDate <= now.addingTimeInterval(600)
                 && fixture.expectedEnd > now.addingTimeInterval(-600)
         }
-    }
-
-    nonisolated static func involves(_ fixture: SportsFixture, _ teams: Set<String>) -> Bool {
-        if let home = fixture.home?.team.id, teams.contains(home) { return true }
-        if let away = fixture.away?.team.id, teams.contains(away) { return true }
-        return false
     }
 
     /// The candidates' leagues, each for the days their games start on.

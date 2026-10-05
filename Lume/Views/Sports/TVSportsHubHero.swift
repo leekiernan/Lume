@@ -26,7 +26,6 @@
         /// Left from the leading action, right from Match Centre: the
         /// carousel pages back or on.
         var onPage: ((Int) -> Void)?
-        @State private var reminders = SportsReminders.shared
 
         private var isAvailable: Bool {
             if case .available = availability { return true }
@@ -191,9 +190,8 @@
                 if fixture.status.state == .scheduled {
                     // Watch is for a game that's on; before kickoff the
                     // useful action is being told when it is.
-                    let reminded = reminders.isReminded(fixture.id)
-                    Button { reminders.toggle(fixture) } label: {
-                        Label(reminded ? "Reminder Set" : "Remind Me", systemImage: reminded ? "bell.fill" : "bell")
+                    SportsReminderButton(fixture: fixture) { label in
+                        label
                             .font(.system(size: 28, weight: .bold))
                             .padding(.horizontal, 36)
                     }

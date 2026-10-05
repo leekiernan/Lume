@@ -15,6 +15,12 @@ import Foundation
 #endif
 
 enum PlayerControlsAutoHide {
+    /// Evaluate again when a delayed hide fires: playback, panels or
+    /// accessibility settings may have changed since it was scheduled.
+    nonisolated static func mayHide(isPlaying: Bool, isPanelOpen: Bool, isSuppressed: Bool) -> Bool {
+        isPlaying && !isPanelOpen && !isSuppressed
+    }
+
     /// Whether the host must leave its controls up rather than auto-hiding them.
     ///
     /// The ~4 s auto-hide is below WCAG 2.2.1 for a panel of text, and the

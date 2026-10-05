@@ -41,6 +41,10 @@ private final nonisolated class PlexServerStubProtocol: URLProtocol {
         lock.withLock { replies[host] = nil }
     }
 
+    static func setReply(host: String, key: String, reply: Reply) {
+        lock.withLock { Self.replies[host]?[key] = reply }
+    }
+
     // swiftlint:disable:next static_over_final_class
     override class func canInit(with _: URLRequest) -> Bool {
         true
@@ -56,7 +60,9 @@ private final nonisolated class PlexServerStubProtocol: URLProtocol {
             client?.urlProtocol(self, didFailWithError: URLError(.badURL))
             return
         }
-        let reply = Self.lock.withLock { Self.replies[host]?[Self.route(url)] } ?? Reply(status: 404, body: "")
+        let key = Self.route(url)
+        let offset = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "X-Plex-Container-Start" }?.value ?? "0"
+        let reply = Self.lock.withLock { Self.replies[host]?["\(key)|\(offset)"] ?? Self.replies[host]?[key] } ?? Reply(status: 404, body: "")
         let sent = request.value(forHTTPHeaderField: "X-Plex-Token")
         let accepted: Bool = if let expected = reply.acceptedToken {
             sent == expected
@@ -178,6 +184,45 @@ struct PlexSyncTests {
     }
 
     // MARK: Full sync
+
+    @Test func `duplicate page identities preserve a single stored title and episode`() async throws {
+        let host = uniqueHost()
+        defer { PlexServerStubProtocol.remove(host: host) }
+        let episode = plexEpisode(ratingKey: "5", title: "Pilot", showKey: "3", season: 1, number: 1)
+        installFullServer(host: host,
+                          movies: [plexMovie(ratingKey: "1", title: "First"), plexMovie(ratingKey: "1", title: "Last")],
+                          shows: [plexShow(ratingKey: "3", title: "Show"), plexShow(ratingKey: "3", title: "Show")],
+                          episodes: [episode, episode])
+        let container = try makeTestContainer()
+        let playlist = try makePlaylist(container: container, host: host, token: "tok")
+        let manager = makeManager(container: container)
+        try await manager.syncPlaylist(playlist)
+        let context = ModelContext(container)
+        #expect(try context.fetchCount(FetchDescriptor<Movie>()) == 1)
+        #expect(try context.fetchCount(FetchDescriptor<Series>()) == 1)
+        #expect(try context.fetchCount(FetchDescriptor<Episode>()) == 1)
+        let movie = try #require(try context.fetch(FetchDescriptor<Movie>()).first)
+        let show = try #require(try context.fetch(FetchDescriptor<Series>()).first)
+        let storedEpisode = try #require(try context.fetch(FetchDescriptor<Episode>()).first)
+        #expect(movie.name == "Last")
+        movie.isFavorite = true
+        movie.watchProgress = 123
+        movie.posterPath = "/enriched.jpg"
+        show.isFavorite = true
+        storedEpisode.watchProgress = 456
+        try context.save()
+        let identity = storedEpisode.persistentModelID
+        try await manager.syncPlaylist(playlist)
+        let check = ModelContext(container)
+        let checkedMovie = try #require(try check.fetch(FetchDescriptor<Movie>()).first)
+        let checkedShow = try #require(try check.fetch(FetchDescriptor<Series>()).first)
+        let checkedEpisode = try #require(try check.fetch(FetchDescriptor<Episode>()).first)
+        #expect(checkedMovie.isFavorite && checkedMovie.watchProgress == 123)
+        #expect(checkedMovie.posterPath == "/enriched.jpg")
+        #expect(checkedShow.isFavorite && checkedEpisode.watchProgress == 456)
+        #expect(checkedEpisode.persistentModelID == identity)
+        #expect(checkedEpisode.series?.id == checkedShow.id)
+    }
 
     @Test func `a full sync imports movies, shows, episodes and categories`() async throws {
         let host = uniqueHost()
@@ -321,6 +366,65 @@ struct PlexSyncTests {
 
         let names = try Set(ModelContext(container).fetch(FetchDescriptor<Movie>()).map(\.name))
         #expect(names == ["Arrival", "Foreign"])
+    }
+
+    @Test func `a truncated movie walk cannot prune or publish successful coverage`() async throws {
+        let host = uniqueHost()
+        defer { PlexServerStubProtocol.remove(host: host) }
+        installFullServer(host: host, movies: [plexMovie(ratingKey: "1", title: "First"), plexMovie(ratingKey: "2", title: "Keep")], shows: [], episodes: [])
+        let container = try makeTestContainer()
+        let playlist = try makePlaylist(container: container, host: host)
+        let manager = makeManager(container: container)
+        try await manager.syncPlaylist(playlist)
+        let seed = ModelContext(container)
+        let survivor = try #require(try seed.fetch(FetchDescriptor<Movie>()).first { $0.name == "Keep" })
+        survivor.isFavorite = true
+        survivor.watchProgress = 0.4
+        try seed.save()
+        let previousSync = try #require(try seed.fetch(FetchDescriptor<Playlist>()).first?.lastSyncDate)
+        PlexServerStubProtocol.setReply(host: host, key: "/library/sections/1/all|1|0", reply: plexPage([plexMovie(ratingKey: "1", title: "Updated")], total: 3))
+        PlexServerStubProtocol.setReply(host: host, key: "/library/sections/1/all|1|1", reply: plexPage([], total: 3))
+        await #expect(throws: ProviderImportError.incompletePage(fetched: 1, expected: 3)) {
+            try await manager.syncPlaylist(playlist)
+        }
+        let context = ModelContext(container)
+        let movies = try context.fetch(FetchDescriptor<Movie>())
+        #expect(movies.count == 2)
+        #expect(movies.first { $0.name == "Keep" }?.isFavorite == true)
+        #expect(movies.first { $0.name == "Keep" }?.watchProgress == 0.4)
+        #expect(movies.contains { $0.name == "Updated" })
+        let stored = try #require(try context.fetch(FetchDescriptor<Playlist>()).first)
+        #expect(stored.syncStatus == .error)
+        #expect(stored.lastSyncDate == previousSync)
+    }
+
+    @Test func `a truncated movie section still lets the TV section import and prune`() async throws {
+        let host = uniqueHost()
+        defer { PlexServerStubProtocol.remove(host: host) }
+        installFullServer(
+            host: host,
+            movies: [plexMovie(ratingKey: "1", title: "First"), plexMovie(ratingKey: "2", title: "Keep")],
+            shows: [plexShow(ratingKey: "3", title: "Old Show")],
+            episodes: []
+        )
+        let container = try makeTestContainer()
+        let playlist = try makePlaylist(container: container, host: host)
+        let manager = makeManager(container: container)
+        try await manager.syncPlaylist(playlist)
+
+        // Movies come back short; the TV section has a new show and lost one.
+        PlexServerStubProtocol.setReply(host: host, key: "/library/sections/1/all|1|0", reply: plexPage([plexMovie(ratingKey: "1", title: "Updated")], total: 3))
+        PlexServerStubProtocol.setReply(host: host, key: "/library/sections/1/all|1|1", reply: plexPage([], total: 3))
+        PlexServerStubProtocol.setReply(host: host, key: "/library/sections/2/all|2", reply: plexPage([plexShow(ratingKey: "4", title: "New Show")], total: 1))
+        await #expect(throws: ProviderImportError.incompletePage(fetched: 1, expected: 3)) {
+            try await manager.syncPlaylist(playlist)
+        }
+
+        let context = ModelContext(container)
+        let movies = try context.fetch(FetchDescriptor<Movie>()).map(\.name)
+        #expect(Set(movies) == ["Updated", "Keep"])
+        let shows = try context.fetch(FetchDescriptor<Series>()).map(\.name)
+        #expect(shows == ["New Show"])
     }
 
     // MARK: Authentication

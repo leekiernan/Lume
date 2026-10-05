@@ -223,12 +223,7 @@ struct EPGSettingsView: View {
                     Section("Source") {
                         TextField("Name", text: $name)
                         TextField("XMLTV URL", text: $url)
-                        #if os(iOS)
-                            .textInputAutocapitalization(.never)
-                            .keyboardType(.URL)
-                        #endif
-                            .autocorrectionDisabled()
-                            .textContentType(.URL)
+                            .urlEntry()
                     }
                 }
                 #if os(macOS)
@@ -298,7 +293,7 @@ struct EPGSettingsView: View {
                     source.isEnabled.toggle()
                     try? modelContext.save()
                 } label: {
-                    HStack(spacing: 16) {
+                    TVSettingsToggleLabel(isOn: source.isEnabled) {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(source.name)
                             Text(tvSubtitle(source))
@@ -307,12 +302,10 @@ struct EPGSettingsView: View {
                                 .lineLimit(1)
                                 .truncationMode(.middle)
                         }
-                        Spacer(minLength: 0)
-                        Text(source.isEnabled ? "On" : "Off")
-                            .foregroundStyle(.secondary)
                     }
                 }
                 .buttonStyle(TVSettingsRowButtonStyle())
+                .accessibilityValue(source.isEnabled ? Text("On") : Text("Off"))
 
                 if source.isManual {
                     Button {
@@ -362,12 +355,7 @@ struct EPGSettingsView: View {
                     Button {
                         showingAdd = true
                     } label: {
-                        HStack(spacing: 16) {
-                            Image(systemName: "plus")
-                                .font(.system(size: 22, weight: .medium))
-                            Text("Add EPG Source")
-                            Spacer(minLength: 0)
-                        }
+                        SettingsActionLabel(title: "Add EPG Source", systemImage: "plus")
                     }
                     .buttonStyle(TVSettingsRowButtonStyle())
                 }
@@ -411,9 +399,7 @@ struct EPGSettingsView: View {
                 }
 
                 Text("The TV guide refreshes automatically in the background at this interval.")
-                    .font(.system(size: 20))
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, TVSettingsMetrics.rowHPadding)
+                    .tvSettingsFooter()
                     .padding(.top, 6)
             }
         }

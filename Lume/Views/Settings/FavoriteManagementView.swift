@@ -92,7 +92,7 @@ struct FavoriteManagementView: View {
     /// through to a stable type/provider grouping.
     private var favorites: [FavoriteEntry] {
         guard let playlistId = activePlaylist?.id else { return [] }
-        let prefix = "\(playlistId.uuidString)-"
+        let prefix = PlaylistContentScope.prefix(for: playlistId)
 
         var entries: [FavoriteEntry] = []
         for stream in favoriteChannels where stream.id.hasPrefix(prefix) {
@@ -147,7 +147,7 @@ struct FavoriteManagementView: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 28) {
                         Text("Favorites")
-                            .font(.system(size: 34, weight: .bold))
+                            .font(.system(size: TVSettingsMetrics.paneTitleFontSize, weight: .bold))
                             .padding(.horizontal, TVSettingsMetrics.rowHPadding)
 
                         HStack {
@@ -159,10 +159,7 @@ struct FavoriteManagementView: View {
                         }
 
                         if isReordering {
-                            Text("Move up or down to position, then select to place. Press Menu to cancel.")
-                                .font(.system(size: 20))
-                                .foregroundStyle(.secondary)
-                                .padding(.horizontal, TVSettingsMetrics.rowHPadding)
+                            TVReorderHint()
                         }
 
                         if favorites.isEmpty {
@@ -186,8 +183,8 @@ struct FavoriteManagementView: View {
                     }
                     .frame(maxWidth: TVSettingsMetrics.contentMaxWidth, alignment: .leading)
                     .frame(maxWidth: .infinity)
-                    .padding(.horizontal, 48)
-                    .padding(.vertical, 72)
+                    .padding(.horizontal, TVSettingsMetrics.pageHorizontalInset)
+                    .padding(.vertical, TVSettingsMetrics.pageVerticalInset)
                 }
             }
             .tvSettingsBackground()

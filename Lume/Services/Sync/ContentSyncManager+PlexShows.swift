@@ -46,24 +46,14 @@ extension ContentSyncManager {
     private func upsertPlexSeries(_ items: [PlexMetadata], scope: PlexSectionScope) throws -> Set<String> {
         let context = ModelContext(modelContainer)
         context.autosaveEnabled = false
-        let ids = items.map { scope.idPrefix + $0.ratingKey }
-        let lookup = existingSeries(ids: ids, context: context)
-
-        for item in items {
-            let id = scope.idPrefix + item.ratingKey
-            let series: Series
-            if let found = lookup[id] {
-                series = found
-            } else {
-                series = Series(id: id, seriesId: Self.plexStreamId(item.ratingKey), name: item.title ?? "")
-                context.insert(series)
-            }
-            applyPlexSeriesFields(item, to: series, scope: scope)
-        }
+        let seen = try CatalogUpsert.batch(items, context: context,
+                                           identity: { scope.idPrefix + $0.ratingKey },
+                                           create: { item, id in Series(id: id, seriesId: Self.plexStreamId(item.ratingKey), name: item.title ?? "") },
+                                           apply: { applyPlexSeriesFields($0, to: $1, scope: scope) })
         if context.hasChanges {
             try context.save()
         }
-        return Set(ids)
+        return Set(seen)
     }
 
     private func applyPlexSeriesFields(_ item: PlexMetadata, to series: Series, scope: PlexSectionScope) {
@@ -110,16 +100,16 @@ extension ContentSyncManager {
         for item in items {
             seriesIds.insert(scope.idPrefix + (item.grandparentRatingKey ?? item.ratingKey))
         }
-        var seriesLookup = existingSeries(ids: Array(seriesIds), context: context)
+        var seriesLookup = try CatalogUpsert.lookup(Series.self, ids: Array(seriesIds), context: context)
 
-        let episodeIds = items.map { scope.idPrefix + "episode-" + $0.ratingKey }
-        let episodeLookup = existingEpisodes(ids: episodeIds, context: context)
+        let episodeIds = items.map { CatalogID.episode(prefix: scope.idPrefix, key: $0.ratingKey) }
+        var episodeLookup = try CatalogUpsert.lookup(Episode.self, ids: episodeIds, context: context)
 
         var seenSeries = Set<String>()
         for item in items {
             let series = plexSeriesRow(for: item, showShells: showShells, scope: scope, lookup: &seriesLookup, context: context)
             seenSeries.insert(series.id)
-            let episode = plexEpisodeRow(for: item, series: series, lookup: episodeLookup, scope: scope, context: context)
+            let episode = plexEpisodeRow(for: item, series: series, lookup: &episodeLookup, scope: scope, context: context)
             applyPlexEpisodeFields(item, to: episode, series: series, scope: scope)
         }
         if context.hasChanges {
@@ -158,29 +148,19 @@ extension ContentSyncManager {
     private func plexEpisodeRow(
         for item: PlexMetadata,
         series: Series,
-        lookup: [String: Episode],
+        lookup: inout [String: Episode],
         scope: PlexSectionScope,
         context: ModelContext
     ) -> Episode {
-        let id = scope.idPrefix + "episode-" + item.ratingKey
-        if let found = lookup[id] {
-            // A server can re-file an episode under a different series — a
-            // corrected scan, a merged show. Re-parent it, or the prune below
-            // deletes the shell it is still attached to and cascades this row
-            // away with it, losing the viewer's progress on an episode the
-            // server still lists.
-            if found.series?.id != series.id {
-                found.series = series
-            }
-            return found
+        let id = CatalogID.episode(prefix: scope.idPrefix, key: item.ratingKey)
+        let episode = CatalogUpsert.row(id: id, lookup: &lookup, context: context) {
+            Episode(
+                id: id, episodeId: item.ratingKey, title: item.title ?? "",
+                containerExtension: item.container?.lowercased() ?? "mkv",
+                seasonNum: item.parentIndex ?? 1, episodeNum: item.index ?? 0
+            )
         }
-        let episode = Episode(
-            id: id, episodeId: item.ratingKey, title: item.title ?? "",
-            containerExtension: item.container?.lowercased() ?? "mkv",
-            seasonNum: item.parentIndex ?? 1, episodeNum: item.index ?? 0
-        )
-        context.insert(episode)
-        episode.series = series
+        CatalogUpsert.attach(episode, to: series)
         return episode
     }
 

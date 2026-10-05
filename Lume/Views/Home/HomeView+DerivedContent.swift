@@ -146,11 +146,8 @@ extension HomeView {
     /// than each card faulting its series' whole `episodes` relationship from
     /// `body` — the same hoist the Live TV list does for now/next EPG.
     func loadSeriesResume() async {
-        let container = modelContext.container
-        seriesResume = await Task.detached(priority: .userInitiated) {
-            SeriesResumeLoader.load(container: container)
-        }.value
-        // Same trigger: a series' watch stamp moving is what both depend on.
-        seriesProgress = await ContinueWatchingLoader.load(watchedSeries, in: modelContext)
+        await resumeLoader.load(for: seriesResumeKey, in: modelContext.container) {
+            await ContinueWatchingLoader.load(watchedSeries, in: modelContext)
+        }
     }
 }

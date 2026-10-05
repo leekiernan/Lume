@@ -37,27 +37,14 @@ struct OpenSubtitlesSignInSection: View {
     private var signInSection: some View {
         Section {
             TextField("Username", text: $username)
-                .textContentType(.username)
-            #if os(iOS)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-            #endif
+                .usernameEntry()
             SecureField("Password", text: $password)
                 .textContentType(.password)
 
             Button {
                 Task { await service.signIn(username: username, password: password) }
             } label: {
-                HStack {
-                    Label("Sign In", systemImage: "person.crop.circle.badge.checkmark")
-                    if service.isSigningIn {
-                        Spacer()
-                        ProgressView()
-                        #if !os(tvOS)
-                            .controlSize(.small)
-                        #endif
-                    }
-                }
+                SettingsActionLabel(title: "Sign In", systemImage: "person.crop.circle.badge.checkmark", isBusy: service.isSigningIn)
             }
             .disabled(service.isSigningIn || username.isEmpty || password.isEmpty)
 
@@ -108,18 +95,8 @@ struct OpenSubtitlesSignInSection: View {
         } header: {
             if showsHeader { Text("OpenSubtitles") }
         } footer: {
-            Text(allowanceSummary)
+            Text(OpenSubtitlesAllowance.summary(remaining: service.remainingDownloads, allowed: service.allowedDownloads))
         }
-    }
-
-    private var allowanceSummary: String {
-        if let remaining = service.remainingDownloads {
-            return String(localized: "\(remaining) subtitle downloads left today.")
-        }
-        if let allowed = service.allowedDownloads, allowed > 0 {
-            return String(localized: "Your account allows \(allowed) subtitle downloads a day.")
-        }
-        return String(localized: "Search for subtitles from the player's subtitle menu while a movie or episode is playing.")
     }
 }
 
@@ -138,13 +115,13 @@ struct OpenSubtitlesSignInSection: View {
                     NavigationLink {
                         SubtitleLanguagePicker()
                     } label: {
-                        HStack {
-                            Label("Subtitle Languages", systemImage: "globe")
-                            Spacer()
+                        LabeledContent {
                             Text(languageSummary)
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                                 .lineLimit(1)
+                        } label: {
+                            Label("Subtitle Languages", systemImage: "globe")
                         }
                     }
                 } footer: {

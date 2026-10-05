@@ -35,45 +35,10 @@
         // Card sizes
         static let episodeCardWidth: CGFloat = 392
         static let episodeStillHeight: CGFloat = 220
-        static let posterCardWidth: CGFloat = 240
-        static let posterCardHeight: CGFloat = 360
+        static let posterCardWidth = PosterCardMetrics.posterWidth
+        static let posterCardHeight = PosterCardMetrics.posterHeight
         static let castCardWidth: CGFloat = 200
         static let castAvatar: CGFloat = 160
-    }
-
-    // MARK: - Backdrop
-
-    /// A full-bleed artwork fill that prefers the TMDB backdrop and gracefully
-    /// degrades to the provider poster, then to a symbol.
-    struct TVDetailBackdrop: View {
-        let url: URL?
-        var fallbackSymbol: String = "film"
-
-        var body: some View {
-            GeometryReader { geo in
-                CachedAsyncImage(url: url) { phase in
-                    switch phase {
-                    case .empty:
-                        Rectangle().fill(Color.black.opacity(0.6))
-                            .overlay { ProgressView() }
-                    case let .success(image):
-                        image.resizable().aspectRatio(contentMode: .fill)
-                            .frame(width: geo.size.width, height: geo.size.height)
-                            .clipped()
-                    case .failure:
-                        Rectangle().fill(Color.black.opacity(0.6))
-                            .overlay {
-                                Image(systemName: fallbackSymbol)
-                                    .font(.system(size: 80))
-                                    .foregroundStyle(.white.opacity(0.4))
-                            }
-                    @unknown default:
-                        EmptyView()
-                    }
-                }
-                .frame(width: geo.size.width, height: geo.size.height)
-            }
-        }
     }
 
     // MARK: - Star rating
@@ -224,7 +189,7 @@
 
         var body: some View {
             ZStack(alignment: .bottomLeading) {
-                TVDetailBackdrop(url: backdropURL ?? posterFallbackURL, fallbackSymbol: fallbackSymbol)
+                DetailBackdropArtwork(backdropURL: backdropURL, posterFallbackURL: posterFallbackURL, fallbackSymbol: fallbackSymbol, appearance: .television)
 
                 // Bottom scrim for legibility over bright artwork.
                 LinearGradient(
@@ -400,10 +365,9 @@
         }
 
         private var resumeFraction: Double? {
-            guard episode.watchProgress > 0,
-                  let duration = episode.durationSecs, duration > 0,
-                  !episode.isWatched else { return nil }
-            return min(episode.watchProgress / Double(duration), 1)
+            ContinueWatching.resumeFraction(
+                progress: episode.watchProgress, duration: episode.durationSecs, isWatched: episode.isWatched
+            )
         }
     }
 
@@ -455,46 +419,6 @@
             .focused($isFocused)
             .scaleEffect(isFocused ? 1.08 : 1.0)
             .animation(.easeOut(duration: 0.18), value: isFocused)
-        }
-    }
-
-    // MARK: - Poster card
-
-    /// A poster-style card for the "You May Also Like" / collection rails.
-    struct TVPosterCard: View {
-        let title: String
-        let imageURL: URL?
-        var badge: String?
-
-        var body: some View {
-            VStack(alignment: .leading, spacing: 10) {
-                CachedAsyncImage(url: imageURL, maxPixelSize: PosterCardMetrics.posterHeight) { phase in
-                    switch phase {
-                    case .empty:
-                        Rectangle().fill(Color.white.opacity(0.08)).overlay { ProgressView() }
-                    case let .success(image):
-                        image.resizable().aspectRatio(contentMode: .fill)
-                    case .failure:
-                        Rectangle().fill(Color.white.opacity(0.08))
-                            .overlay {
-                                Image(systemName: "film")
-                                    .font(.system(size: 56))
-                                    .foregroundStyle(.white.opacity(0.5))
-                            }
-                    @unknown default:
-                        EmptyView()
-                    }
-                }
-                .frame(width: TVDetailMetrics.posterCardWidth, height: TVDetailMetrics.posterCardHeight)
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                .posterBadge(badge)
-
-                Text(title)
-                    .font(.system(size: 24, weight: .medium))
-                    .foregroundStyle(.white)
-                    .lineLimit(2)
-                    .frame(width: TVDetailMetrics.posterCardWidth, alignment: .leading)
-            }
         }
     }
 

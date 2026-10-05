@@ -21,33 +21,33 @@
 
         @State private var loader: SeriesDetailLoadMachine
         private var isLoadingTMDB: Bool {
-            loader.contentID == series.id ? loader.isLoadingTMDB : detailNeedsTMDBFetch(tmdbId: series.tmdbId, enrichedAt: series.tmdbEnrichedAt)
+            loader.snapshot(for: series).isLoadingTMDB
         }
 
         private var similar: [HomeMediaItem] {
-            loader.contentID == series.id ? loader.similar : []
+            loader.snapshot(for: series).similar
         }
 
         private var otherSources: [OtherSources.Source] {
-            loader.contentID == series.id ? loader.otherSources : []
+            loader.snapshot(for: series).otherSources
         }
 
         @State private var playingMedia: PlayableMedia?
         private var selectedSeason: Int {
-            get { loader.selectedSeason }
+            get { loader.snapshot(for: series).selectedSeason }
             nonmutating set { loader.selectedSeason = newValue }
         }
 
         private var availableSeasons: [Int] {
-            loader.contentID == series.id ? loader.availableSeasons : []
+            loader.snapshot(for: series).availableSeasons
         }
 
         private var episodesBySeason: [Int: [Episode]] {
-            loader.contentID == series.id ? loader.episodesBySeason : [:]
+            loader.snapshot(for: series).episodesBySeason
         }
 
         private var isLoadingEpisodes: Bool {
-            loader.isLoadingEpisodes
+            loader.snapshot(for: series).isLoadingEpisodes
         }
 
         @State private var showYouTubeUnavailable = false
@@ -302,12 +302,12 @@
             switch item {
             case let .movie(movie):
                 NavigationLink(value: movie) {
-                    TVPosterCard(title: item.title, imageURL: item.imageURL, badge: badge)
+                    TVPosterCard(item: item, badge: badge)
                 }
                 .buttonStyle(TVCardButtonStyle())
             case let .series(series):
                 NavigationLink(value: series) {
-                    TVPosterCard(title: item.title, imageURL: item.imageURL, badge: badge)
+                    TVPosterCard(item: item, badge: badge)
                 }
                 .buttonStyle(TVCardButtonStyle())
             case .live:
@@ -387,7 +387,7 @@
         }
 
         private var seriesPlaylist: Playlist? {
-            playlists.first { series.id.hasPrefix($0.id.uuidString) } ?? playlists.first
+            PlaylistOwner.playlist(forContentID: series.id, in: playlists, fallback: .firstAvailable)
         }
     }
 

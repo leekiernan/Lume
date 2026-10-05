@@ -38,44 +38,19 @@ struct HomeRow: View {
     var animationNamespace: Namespace.ID?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                title
-                    .font(PosterCardMetrics.railTitleFont)
-                    .fontWeight(.bold)
-                    .foregroundStyle(.secondary)
-
-                Spacer()
-
-                if let showAll {
-                    NavigationLink(value: showAll) {
-                        Text("Show All")
-                            .font(.subheadline)
-                    }
-                }
+        PosterRail(title: title, showAll: showAll) {
+            ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                HomeItemCell(
+                    item: item,
+                    seriesResume: seriesResume,
+                    onPlayLive: onPlayLive,
+                    onRemove: onRemove,
+                    onVote: onVote,
+                    onStartMultiView: onStartMultiView,
+                    animationNamespace: animationNamespace
+                )
+                .onLeadingEdgeLeft(index == 0 ? onLeadingLeft : nil)
             }
-            .padding(.horizontal)
-
-            ScrollView(.horizontal, showsIndicators: false) {
-                LazyHStack(spacing: PosterCardMetrics.railSpacing) {
-                    ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
-                        HomeItemCell(
-                            item: item,
-                            seriesResume: seriesResume,
-                            onPlayLive: onPlayLive,
-                            onRemove: onRemove,
-                            onVote: onVote,
-                            onStartMultiView: onStartMultiView,
-                            animationNamespace: animationNamespace
-                        )
-                        .onLeadingEdgeLeft(index == 0 ? onLeadingLeft : nil)
-                    }
-                }
-                .padding(.horizontal)
-                .padding(.vertical, PosterCardMetrics.railVerticalPadding)
-            }
-            .scrollClipDisabled()
-            .frame(height: PosterCardMetrics.rowHeight)
         }
     }
 }
@@ -94,15 +69,16 @@ private struct HomeItemCell: View {
             switch item {
             case let .movie(movie):
                 NavigationLink(value: movie) {
-                    HomePosterCard(title: item.title, imageURL: item.imageURL, posterPath: movie.posterPath, request: .init(kind: .movie, id: movie.id, categoryID: movie.categoryId), progress: progress)
+                    PosterCard(title: item.title, provider: item.imageURL?.absoluteString, posterPath: movie.posterPath,
+                               request: .init(kind: .movie, id: movie.id, categoryID: movie.categoryId), progress: progress)
                         .matchedTransitionSourceIfAvailable(id: movie.id, in: animationNamespace)
                 }
                 .posterCardButtonStyle()
             case let .series(series):
                 NavigationLink(value: series) {
-                    HomePosterCard(
-                        title: item.title, imageURL: item.imageURL, posterPath: series.posterPath,
-                        request: .init(kind: .series, id: series.id, categoryID: series.categoryId), progress: progress, isSeries: true
+                    PosterCard(
+                        title: item.title, provider: item.imageURL?.absoluteString, posterPath: series.posterPath,
+                        request: .init(kind: .series, id: series.id, categoryID: series.categoryId), fallbackSymbol: "tv", progress: progress
                     )
                     .matchedTransitionSourceIfAvailable(id: series.id, in: animationNamespace)
                 }
@@ -111,7 +87,7 @@ private struct HomeItemCell: View {
                 Button {
                     onPlayLive(stream)
                 } label: {
-                    HomePosterCard(title: item.title, imageURL: item.imageURL, isLive: true)
+                    HomeLiveLogoCard(title: item.title, imageURL: item.imageURL)
                 }
                 .posterCardButtonStyle()
             }
@@ -222,48 +198,24 @@ struct ForYouRow: View {
 
 // MARK: - Poster card
 
-/// A poster-style card used across all home rows. Shows artwork with an
-/// optional resume progress bar and a "Live" badge.
+/// The channel-logo card used by Home rails. VOD posters and resume treatment
+/// are provided separately by `PosterCard`.
 ///
 /// Live channel logos are mostly transparent PNGs, so unlike movie/series
 /// posters they can't fill the card themselves. They get a full card treatment
 /// instead: a neutral dark gradient plate (consistent next to poster artwork in
 /// any color scheme) and an inset so the logo never touches the edges.
-private struct HomePosterCard: View {
+private struct HomeLiveLogoCard: View {
     let title: String
     let imageURL: URL?
-    var posterPath: String?
-    var request: PosterArtworkRequest?
-    var progress: Double?
-    var isLive: Bool = false
-    /// Picks the series fallback symbol, matching `SeriesCardView`.
-    var isSeries: Bool = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: PosterCardMetrics.titleSpacing) {
-            ZStack(alignment: .bottomLeading) {
-                Group {
-                    if isLive {
-                        CachedAsyncImage(url: imageURL, maxPixelSize: PosterCardMetrics.posterHeight, content: artworkContent)
-                    } else {
-                        PosterArtworkView(provider: imageURL?.absoluteString, posterPath: posterPath, request: request, maxPixelSize: PosterCardMetrics.posterHeight, content: artworkContent)
-                    }
-                }
+            CachedAsyncImage(url: imageURL, maxPixelSize: PosterCardMetrics.posterHeight, content: artworkContent)
                 .frame(width: PosterCardMetrics.posterWidth, height: PosterCardMetrics.posterHeight)
-                .background {
-                    if isLive { liveCardBackground }
-                }
-
-                if let progress {
-                    ProgressView(value: progress)
-                        .progressViewStyle(.linear)
-                        .tint(.lumeAccent)
-                        .padding(.horizontal, 6)
-                        .padding(.bottom, 6)
-                }
-            }
-            .posterArtworkFrame(fillsWidth: false)
-            .clipShape(RoundedRectangle(cornerRadius: PosterCardMetrics.cornerRadius))
+                .background { liveCardBackground }
+                .posterArtworkFrame(fillsWidth: false)
+                .clipShape(RoundedRectangle(cornerRadius: PosterCardMetrics.cornerRadius))
             // Skipped on tvOS for the same reason as `MovieCardView`: a shadow
             // after clipShape costs an offscreen pass per card and is invisible
             // at 10 feet.
@@ -278,42 +230,22 @@ private struct HomePosterCard: View {
         }
     }
 
-    private var fallbackSymbol: String {
-        if isLive { return "antenna.radiowaves.left.and.right" }
-        return isSeries ? "tv" : "film"
-    }
-
     @ViewBuilder
     private func artworkContent(_ phase: AsyncImagePhase) -> some View {
         switch phase {
         case .empty:
-            placeholder.overlay { ProgressView() }
+            Color.clear.overlay { ProgressView() }
         case let .success(image):
-            if isLive {
-                image.resizable().aspectRatio(contentMode: .fit)
-                    .padding(PosterCardMetrics.liveLogoInset)
-            } else {
-                image.resizable().aspectRatio(contentMode: .fill)
-            }
+            image.resizable().aspectRatio(contentMode: .fit)
+                .padding(PosterCardMetrics.liveLogoInset)
         case .failure:
-            placeholder.overlay {
-                Image(systemName: fallbackSymbol)
-                    .foregroundStyle(isLive ? Color.white.opacity(0.6) : Color.secondary)
+            Color.clear.overlay {
+                Image(systemName: "antenna.radiowaves.left.and.right")
+                    .foregroundStyle(Color.white.opacity(0.6))
                     .font(.largeTitle)
             }
         @unknown default:
             EmptyView()
-        }
-    }
-
-    /// Loading/failure backdrop. Live cards keep their gradient plate so the
-    /// card looks the same before, during and after the logo loads.
-    @ViewBuilder
-    private var placeholder: some View {
-        if isLive {
-            Color.clear
-        } else {
-            Rectangle().fill(Color.gray.opacity(0.3))
         }
     }
 

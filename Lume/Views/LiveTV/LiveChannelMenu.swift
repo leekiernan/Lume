@@ -27,22 +27,30 @@ extension View {
     ) -> some View {
         contextMenu {
             if let onWatchFromStart {
-                Button(action: onWatchFromStart) {
-                    Label("Watch from Start", systemImage: "play.fill")
-                }
+                LiveChannelMenuItems.watchFromStart(onWatchFromStart)
             }
 
             FavoriteMenuItems.favorite(isFavorite: isFavorite, action: onToggleFavorite)
 
             if let onStartMultiView {
-                Button(action: onStartMultiView) {
-                    Label("Start Multi-View", systemImage: "rectangle.split.2x2")
-                }
+                LiveChannelMenuItems.startMultiView(onStartMultiView)
             }
 
             if let onRemoveFromRecents {
                 FavoriteMenuItems.removeFromRecents(onRemoveFromRecents)
             }
+        }
+    }
+}
+
+enum LiveChannelMenuItems {
+    static func watchFromStart(_ action: @escaping () -> Void) -> some View {
+        Button(action: action) { Label("Watch from Start", systemImage: "play.fill") }
+    }
+
+    static func startMultiView(_ action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Label("Start Multi-View", systemImage: "rectangle.split.2x2")
         }
     }
 }

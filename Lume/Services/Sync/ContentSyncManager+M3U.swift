@@ -194,11 +194,11 @@ nonisolated enum M3UIdentity {
     // the shape by hand would silently measure inserts once this changed.
 
     static func seriesId(playlistId: UUID, name: String) -> String {
-        "\(playlistId.uuidString)-series-\(key(for: name))"
+        CatalogID.content(playlistId, kind: .series, key: key(for: name))
     }
 
     static func episodeId(seriesId: String, url: String) -> String {
-        "\(seriesId)-episode-\(key(for: url))"
+        CatalogID.episode(ownerID: seriesId, key: key(for: url))
     }
 }
 
@@ -275,12 +275,12 @@ extension ContentSyncManager {
         context.autosaveEnabled = false
 
         try ensureCategories(for: batch, playlistId: playlistId, state: state, context: context)
-        Perf.measure(.m3uUpsertLive) { importLive(batch.live, playlistId: playlistId, state: state, context: context) }
-        Perf.measure(.m3uUpsertMovies) {
-            importMovies(batch.movies, playlistId: playlistId, state: state, context: context)
+        try Perf.measure(.m3uUpsertLive) { try importLive(batch.live, playlistId: playlistId, state: state, context: context) }
+        try Perf.measure(.m3uUpsertMovies) {
+            try importMovies(batch.movies, playlistId: playlistId, state: state, context: context)
         }
-        Perf.measure(.m3uUpsertEpisodes) {
-            importEpisodes(batch.episodes, playlistId: playlistId, state: state, context: context)
+        try Perf.measure(.m3uUpsertEpisodes) {
+            try importEpisodes(batch.episodes, playlistId: playlistId, state: state, context: context)
         }
 
         // A re-sync where the provider changed nothing leaves the context clean
@@ -335,20 +335,14 @@ extension ContentSyncManager {
 
     private func categoryId(for group: String?, type: CategoryType, playlistId: UUID) -> String {
         let name = (group?.isEmpty == false) ? group! : Self.uncategorizedGroup
-        return "\(playlistId.uuidString)-\(type.rawValue)-\(name)"
+        return CatalogID.category(playlistId, type: type.rawValue, key: name)
     }
 
-    private func importLive(_ entries: [M3UEntry], playlistId: UUID, state: M3UImportState, context: ModelContext) {
+    private func importLive(_ entries: [M3UEntry], playlistId: UUID, state: M3UImportState, context: ModelContext) throws {
         guard !entries.isEmpty else { return }
-        let ids = entries.map { "\(playlistId.uuidString)-live-\(M3UIdentity.key(for: $0.url))" }
+        let ids = entries.map { CatalogID.content(playlistId, kind: .live, key: M3UIdentity.key(for: $0.url)) }
         state.seenLiveIds.formUnion(ids.lazy.map(M3UIdentity.hash64))
-        var existing: [String: LiveStream] = [:]
-        let fetched = (try? context.fetch(
-            FetchDescriptor<LiveStream>(predicate: #Predicate { ids.contains($0.id) })
-        )) ?? []
-        for stream in fetched {
-            existing[stream.id] = stream
-        }
+        var existing = try CatalogUpsert.lookup(LiveStream.self, ids: ids, context: context)
 
         for (entry, id) in zip(entries, ids) {
             let stream: LiveStream
@@ -374,17 +368,11 @@ extension ContentSyncManager {
         state.importedLive += entries.count
     }
 
-    private func importMovies(_ entries: [M3UEntry], playlistId: UUID, state: M3UImportState, context: ModelContext) {
+    private func importMovies(_ entries: [M3UEntry], playlistId: UUID, state: M3UImportState, context: ModelContext) throws {
         guard !entries.isEmpty else { return }
-        let ids = entries.map { "\(playlistId.uuidString)-movie-\(M3UIdentity.key(for: $0.url))" }
+        let ids = entries.map { CatalogID.content(playlistId, kind: .movie, key: M3UIdentity.key(for: $0.url)) }
         state.seenMovieIds.formUnion(ids.lazy.map(M3UIdentity.hash64))
-        var existing: [String: Movie] = [:]
-        let fetched = (try? context.fetch(
-            FetchDescriptor<Movie>(predicate: #Predicate { ids.contains($0.id) })
-        )) ?? []
-        for movie in fetched {
-            existing[movie.id] = movie
-        }
+        var existing = try CatalogUpsert.lookup(Movie.self, ids: ids, context: context)
 
         for (entry, id) in zip(entries, ids) {
             let movie: Movie
@@ -413,7 +401,7 @@ extension ContentSyncManager {
         playlistId: UUID,
         state: M3UImportState,
         context: ModelContext
-    ) {
+    ) throws {
         guard !entries.isEmpty else { return }
 
         let seriesIds = entries.map { M3UIdentity.seriesId(playlistId: playlistId, name: $0.series) }
@@ -422,8 +410,8 @@ extension ContentSyncManager {
         }
         state.seenSeriesIds.formUnion(seriesIds.lazy.map(M3UIdentity.hash64))
         state.seenEpisodeIds.formUnion(episodeIds.lazy.map(M3UIdentity.hash64))
-        var seriesById = existingSeries(ids: seriesIds, context: context)
-        var existingEpisodes = existingEpisodes(ids: episodeIds, context: context)
+        var seriesById = try existingSeries(ids: seriesIds, context: context)
+        var existingEpisodes = try existingEpisodes(ids: episodeIds, context: context)
         // The series fields are per-series, not per-episode: one show can carry
         // ~2,800 episodes in a provider file, all naming the same group title.
         // This cache is deliberately local to the batch — every batch runs on a
