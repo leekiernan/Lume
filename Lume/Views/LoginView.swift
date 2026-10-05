@@ -243,7 +243,7 @@ struct LoginView: View {
                 VStack(alignment: .leading, spacing: 28) {
                     VStack(alignment: .leading, spacing: 6) {
                         Text("Add Playlist")
-                            .font(.system(size: 38, weight: .bold))
+                            .font(.system(size: TVSettingsMetrics.screenTitleFontSize, weight: .bold))
                         Text("Connect to your IPTV provider")
                             .font(.system(size: TVSettingsMetrics.secondaryFontSize))
                             .foregroundStyle(.secondary)
@@ -279,8 +279,7 @@ struct LoginView: View {
                     }
 
                     Text(sourceType.footer)
-                        .font(.system(size: TVSettingsMetrics.secondaryFontSize))
-                        .foregroundStyle(.secondary)
+                        .tvSettingsFooter()
                         .padding(.horizontal, TVSettingsMetrics.rowHPadding)
 
                     if let xtreamHint {
@@ -329,8 +328,8 @@ struct LoginView: View {
                 }
                 .frame(maxWidth: TVSettingsMetrics.contentMaxWidth, alignment: .leading)
                 .frame(maxWidth: .infinity)
-                .padding(.horizontal, 48)
-                .padding(.vertical, 72)
+                .padding(.horizontal, TVSettingsMetrics.pageHorizontalInset)
+                .padding(.vertical, TVSettingsMetrics.pageVerticalInset)
             }
             .tvSettingsBackground()
             .fullScreenCover(isPresented: $showDiagnostics) {

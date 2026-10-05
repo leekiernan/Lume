@@ -522,23 +522,18 @@ struct MainTabView: View {
     /// child profile.
     private func resolveMovie(tmdbId: Int) -> Movie? {
         let descriptor = FetchDescriptor<Movie>(predicate: #Predicate { $0.tmdbId == tmdbId })
-        let restriction = contentRestriction
-        let matches = ((try? modelContext.fetch(descriptor)) ?? [])
-            .filter { !restriction.hides(categoryID: $0.categoryId) }
-        return matches.first { belongsToActivePlaylist($0.id) } ?? matches.first
+        return CatalogMatchSelection.preferred(
+            in: (try? modelContext.fetch(descriptor)) ?? [], restriction: contentRestriction,
+            playlistPrefix: playlists.active(for: selectedPlaylistID)?.contentIDPrefix
+        )
     }
 
     private func resolveSeries(tmdbId: Int) -> Series? {
         let descriptor = FetchDescriptor<Series>(predicate: #Predicate { $0.tmdbId == tmdbId })
-        let restriction = contentRestriction
-        let matches = ((try? modelContext.fetch(descriptor)) ?? [])
-            .filter { !restriction.hides(categoryID: $0.categoryId) }
-        return matches.first { belongsToActivePlaylist($0.id) } ?? matches.first
-    }
-
-    private func belongsToActivePlaylist(_ id: String) -> Bool {
-        guard let activePlaylist = playlists.active(for: selectedPlaylistID) else { return true }
-        return id.hasPrefix(activePlaylist.contentIDPrefix)
+        return CatalogMatchSelection.preferred(
+            in: (try? modelContext.fetch(descriptor)) ?? [], restriction: contentRestriction,
+            playlistPrefix: playlists.active(for: selectedPlaylistID)?.contentIDPrefix
+        )
     }
 }
 

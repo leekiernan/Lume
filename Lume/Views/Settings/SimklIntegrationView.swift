@@ -52,7 +52,7 @@
                         showPaywall = true
                     }
                 } label: {
-                    TrackerButtonLabel(title: "Connect Simkl Account", systemImage: premium.isPremium ? "link" : "crown")
+                    SettingsActionLabel(title: "Connect Simkl Account", systemImage: premium.isPremium ? "link" : "crown")
                 }
                 .disabled(simkl.isConnecting)
             } header: {
@@ -87,7 +87,7 @@
                 Button {
                     Task { await simkl.importWatched(into: modelContext) }
                 } label: {
-                    TrackerButtonLabel(title: "Import Watched from Simkl", systemImage: "arrow.down.circle", isBusy: simkl.isImporting)
+                    SettingsActionLabel(title: "Import Watched from Simkl", systemImage: "arrow.down.circle", isBusy: simkl.isImporting)
                 }
                 .disabled(simkl.isImporting)
 
@@ -97,7 +97,7 @@
                     Button {
                         simkl.retryPendingMutations()
                     } label: {
-                        TrackerButtonLabel(title: "Retry Pending Simkl Changes", systemImage: "arrow.clockwise", isBusy: simkl.isSyncingMutations)
+                        SettingsActionLabel(title: "Retry Pending Simkl Changes", systemImage: "arrow.clockwise", isBusy: simkl.isSyncingMutations)
                     }
                     .disabled(simkl.isSyncingMutations)
                 }
@@ -105,7 +105,7 @@
                 Button(role: .destructive) {
                     Task { await simkl.disconnect() }
                 } label: {
-                    TrackerButtonLabel(title: "Disconnect", systemImage: "xmark.circle")
+                    SettingsActionLabel(title: "Disconnect", systemImage: "xmark.circle")
                 }
             } header: {
                 Text("Simkl")

@@ -18493,6 +18493,7 @@
       }
     },
     "Enter the portal URL and the MAC address your provider authorized." : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {

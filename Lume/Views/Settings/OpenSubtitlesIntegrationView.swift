@@ -37,11 +37,7 @@ struct OpenSubtitlesSignInSection: View {
     private var signInSection: some View {
         Section {
             TextField("Username", text: $username)
-                .textContentType(.username)
-            #if os(iOS)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-            #endif
+                .usernameEntry()
             SecureField("Password", text: $password)
                 .textContentType(.password)
 

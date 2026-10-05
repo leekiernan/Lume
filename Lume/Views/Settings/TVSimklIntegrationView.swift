@@ -43,7 +43,7 @@
         private var connect: some View {
             VStack(alignment: .leading, spacing: 16) {
                 Text("Sync the movies and episodes you watch to Simkl, and surface your Simkl watchlist on Home.")
-                    .font(.system(size: 24))
+                    .font(.system(size: TVSettingsMetrics.statusFontSize))
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, TVSettingsMetrics.rowHPadding)
 
@@ -54,14 +54,14 @@
                         showPaywall = true
                     }
                 } label: {
-                    TrackerButtonLabel(title: "Connect Simkl Account", systemImage: premium.isPremium ? "link" : "crown")
+                    SettingsActionLabel(title: "Connect Simkl Account", systemImage: premium.isPremium ? "link" : "crown")
                 }
                 .buttonStyle(TVSettingsRowButtonStyle())
                 .disabled(simkl.isConnecting)
 
                 if let error = simkl.connectionError {
                     Text(error)
-                        .font(.system(size: 22))
+                        .font(.system(size: TVSettingsMetrics.explanatoryFontSize))
                         .foregroundStyle(.red)
                         .padding(.horizontal, TVSettingsMetrics.rowHPadding)
                 }
@@ -79,14 +79,14 @@
                 TrackerConnectedAccount(username: simkl.username)
 
                 Text("Watched movies and episodes sync to your Simkl history. Import marks titles you've already watched on Simkl as watched here.")
-                    .font(.system(size: 22))
+                    .font(.system(size: TVSettingsMetrics.explanatoryFontSize))
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, TVSettingsMetrics.rowHPadding)
 
                 Button {
                     Task { await simkl.importWatched(into: modelContext) }
                 } label: {
-                    TrackerButtonLabel(title: "Import Watched from Simkl", systemImage: "arrow.down.circle", isBusy: simkl.isImporting)
+                    SettingsActionLabel(title: "Import Watched from Simkl", systemImage: "arrow.down.circle", isBusy: simkl.isImporting)
                 }
                 .buttonStyle(TVSettingsRowButtonStyle())
                 .disabled(simkl.isImporting)
@@ -101,14 +101,14 @@
                     Button {
                         simkl.retryPendingMutations()
                     } label: {
-                        TrackerButtonLabel(title: "Retry Pending Simkl Changes", systemImage: "arrow.clockwise", isBusy: simkl.isSyncingMutations)
+                        SettingsActionLabel(title: "Retry Pending Simkl Changes", systemImage: "arrow.clockwise", isBusy: simkl.isSyncingMutations)
                     }
                     .buttonStyle(TVSettingsRowButtonStyle())
                     .disabled(simkl.isSyncingMutations)
 
                     (simkl.mutationSyncError.map { Text($0) }
                         ?? Text("\(simkl.pendingMutationCount) Simkl changes waiting to sync."))
-                        .font(.system(size: 22))
+                        .font(.system(size: TVSettingsMetrics.explanatoryFontSize))
                         .foregroundStyle(simkl.mutationSyncError != nil ? .red : .secondary)
                         .padding(.horizontal, TVSettingsMetrics.rowHPadding)
                 }
@@ -116,7 +116,7 @@
                 Button {
                     Task { await simkl.disconnect() }
                 } label: {
-                    TrackerButtonLabel(title: "Disconnect", systemImage: "xmark.circle")
+                    SettingsActionLabel(title: "Disconnect", systemImage: "xmark.circle")
                 }
                 .buttonStyle(TVSettingsRowButtonStyle(isDestructive: true))
             }

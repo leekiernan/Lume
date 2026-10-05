@@ -117,7 +117,7 @@ struct SportsSectionHeading: View {
                 .accessibilityHidden(true)
             }
             title
-                .font(style == .list ? .headline : .subheadline.weight(.bold))
+                .font(PosterCardMetrics.railTitleFont)
                 .foregroundStyle(style == .list ? .primary : .secondary)
             if chevron {
                 Image(systemName: "chevron.right")

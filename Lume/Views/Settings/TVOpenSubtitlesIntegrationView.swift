@@ -38,13 +38,13 @@
             VStack(alignment: .leading, spacing: 16) {
                 if !isCompact {
                     Text("Sign in with your free opensubtitles.com account to download subtitles for movies and episodes from the player's subtitle menu.")
-                        .font(.system(size: 24))
+                        .font(.system(size: TVSettingsMetrics.statusFontSize))
                         .foregroundStyle(.secondary)
                         .padding(.horizontal, TVSettingsMetrics.rowHPadding)
                 }
 
                 Text("Enter your username, not the email address you registered with — OpenSubtitles rejects an email here.")
-                    .font(.system(size: 22))
+                    .font(.system(size: TVSettingsMetrics.explanatoryFontSize))
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, TVSettingsMetrics.rowHPadding)
 
@@ -73,7 +73,7 @@
 
                 if let error = service.signInError {
                     Text(error)
-                        .font(.system(size: 22))
+                        .font(.system(size: TVSettingsMetrics.explanatoryFontSize))
                         .foregroundStyle(.red)
                         .padding(.horizontal, TVSettingsMetrics.rowHPadding)
                 }
@@ -85,7 +85,7 @@
                 TVSettingsValueRow("Signed In", value: service.username ?? "—")
 
                 Text(OpenSubtitlesAllowance.summary(remaining: service.remainingDownloads, allowed: service.allowedDownloads))
-                    .font(.system(size: 22))
+                    .font(.system(size: TVSettingsMetrics.explanatoryFontSize))
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, TVSettingsMetrics.rowHPadding)
 

@@ -21,6 +21,7 @@ struct PosterGrid<Content: View>: View {
 struct CatalogPosterLink<Item: Identifiable & Hashable & WatchlistFavoritable, Card: View>: View {
     let item: Item
     var animationNamespace: Namespace.ID?
+    var onRemoveFromRecents: (() -> Void)?
     @ViewBuilder let card: (Item) -> Card
     @Environment(\.modelContext) private var modelContext
 
@@ -32,7 +33,8 @@ struct CatalogPosterLink<Item: Identifiable & Hashable & WatchlistFavoritable, C
         .posterCardButtonStyle()
         .mediaFavoriteMenu(
             isFavorite: { item.isFavorite },
-            onToggleFavorite: { MediaFavorites.toggle(item, in: modelContext) }
+            onToggleFavorite: { MediaFavorites.toggle(item, in: modelContext) },
+            onRemoveFromRecents: onRemoveFromRecents
         )
     }
 }

@@ -87,23 +87,16 @@ struct CollectionPreviewRow<Item: Identifiable & Hashable & WatchlistFavoritable
     var removeAction: ((Item) -> Void)?
     /// tvOS: pressing left on the row's first card — see `onLeadingEdgeLeft`.
     var onLeadingLeft: (() -> Void)?
-    @Environment(\.modelContext) private var modelContext
     @ViewBuilder let card: (Item) -> Card
 
     var body: some View {
         PosterRail(title: Text(title), showAll: hasMore ? showAll : nil, groupsFocus: true) {
             ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
-                NavigationLink(value: item) {
-                    card(item)
-                        .matchedTransitionSourceIfAvailable(id: item.id, in: animationNamespace)
-                }
-                .posterCardButtonStyle()
-                .onLeadingEdgeLeft(index == 0 ? onLeadingLeft : nil)
-                .mediaFavoriteMenu(
-                    isFavorite: { item.isFavorite },
-                    onToggleFavorite: { MediaFavorites.toggle(item, in: modelContext) },
-                    onRemoveFromRecents: removeAction.map { action in { action(item) } }
+                CatalogPosterLink(
+                    item: item, animationNamespace: animationNamespace,
+                    onRemoveFromRecents: removeAction.map { action in { action(item) } }, card: card
                 )
+                .onLeadingEdgeLeft(index == 0 ? onLeadingLeft : nil)
             }
         }
     }

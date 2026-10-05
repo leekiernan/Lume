@@ -61,9 +61,8 @@ struct HeroCarousel<Item: Identifiable, Backdrop: View, Info: View>: View where 
 
     /// Which hero the overlay is showing. Deliberately LAGS the scroll position:
     /// on a page change the overlay fades out, swaps while invisible, then fades
-    /// back in (see `crossfadeInfo()`) — a clean fade rather than a cross-dissolve.
-    @State private var displayedID: String?
-    @State private var infoOpacity: Double = 1
+    /// back in through `HeroInfoTransition` — a fade rather than a cross-dissolve.
+    @State private var infoTransition = HeroInfoTransition<String>()
 
     /// Sentinel scroll ids for the boundary clones, so `currentID` can tell a
     /// clone apart from the real page it mirrors (see `normaliseClonePosition()`).
@@ -108,7 +107,7 @@ struct HeroCarousel<Item: Identifiable, Backdrop: View, Info: View>: View where 
     /// The hero whose copy is in the overlay. Lags `currentHero` so the outgoing
     /// title fades out before the next fades in; falls back before the first swap.
     private var displayedHero: Item? {
-        items.first { $0.id == displayedID } ?? currentHero
+        items.first { $0.id == infoTransition.displayedID } ?? currentHero
     }
 
     var body: some View {
@@ -129,9 +128,9 @@ struct HeroCarousel<Item: Identifiable, Backdrop: View, Info: View>: View where 
 
                     if let hero = displayedHero {
                         // Fixed overlay — no `.id`/`.transition` so a stable view can
-                        // fade out/in via `infoOpacity` rather than cross-dissolving.
+                        // fade out/in via the transition owner rather than cross-dissolving.
                         info(hero, isCompact)
-                            .opacity(infoOpacity)
+                            .opacity(infoTransition.opacity)
                     }
 
                     pageIndicator
@@ -157,16 +156,16 @@ struct HeroCarousel<Item: Identifiable, Backdrop: View, Info: View>: View where 
         }
         .onChange(of: displayScale) { prefetchNeighbours() }
         .onAppear {
-            // Seed `displayedID` first so the initial assignment skips the crossfade.
-            if displayedID == nil { displayedID = items.first?.id }
+            // Seed the displayed hero so the initial assignment skips the fade.
+            infoTransition.reset(to: currentHero?.id)
             if currentID == nil { currentID = items.first?.id }
             prefetchNeighbours()
         }
-        .onChange(of: currentItemID) { _, _ in
+        .onChange(of: currentHero?.id) { _, _ in
             // Restart the loading bar on every page change — auto or manual.
             clock.reset()
             prefetchNeighbours()
-            crossfadeInfo()
+            infoTransition.reconcile(ids: items.map(\.id), selectedID: currentHero?.id)
         }
         .task(id: items.count) {
             await autoAdvance()
@@ -174,6 +173,7 @@ struct HeroCarousel<Item: Identifiable, Backdrop: View, Info: View>: View where 
         .onScrollVisibilityChange { visible in
             isVisible = visible
         }
+        .onDisappear { infoTransition.reset(to: currentHero?.id) }
     }
 
     /// Warms the cache for the slides on either side so they appear instantly.
@@ -327,22 +327,6 @@ struct HeroCarousel<Item: Identifiable, Backdrop: View, Info: View>: View where 
             self.currentID = items.last?.id
         } else if currentID == Self.tailCloneID {
             self.currentID = items.first?.id
-        }
-    }
-
-    /// Fades the overlay out, swaps it while invisible, then fades back in. The
-    /// fade-in is slightly longer so the new copy lands once the 0.6s artwork
-    /// page settles. Reading `currentItemID` in the completion (not a captured
-    /// value) self-heals rapid paging to whatever slide is current on reappear.
-    private func crossfadeInfo() {
-        guard displayedID != currentItemID else { return }
-        withAnimation(.easeInOut(duration: 0.25)) {
-            infoOpacity = 0
-        } completion: {
-            displayedID = currentItemID
-            withAnimation(.easeOut(duration: 0.45)) {
-                infoOpacity = 1
-            }
         }
     }
 }

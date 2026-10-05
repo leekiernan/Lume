@@ -14,11 +14,16 @@ import SwiftUI
 /// Live TV tuner APIs are not synced.
 struct LiveTVEmptyState: View {
     let sourceType: PlaylistSourceType?
+    var emptyDescription: LocalizedStringKey
     @Query private var excludedChannels: [LiveStream]
 
-    init(sourceType: PlaylistSourceType?, playlistPrefix: String = "", restriction: ContentRestriction = ContentRestriction()) {
+    init(
+        sourceType: PlaylistSourceType?, playlistPrefix: String = "", restriction: ContentRestriction = ContentRestriction(),
+        scope: LiveChannelScope? = nil, emptyDescription: LocalizedStringKey = "Sync your playlist to load live TV channels"
+    ) {
         self.sourceType = sourceType
-        _excludedChannels = Query(LiveChannelQuery.excludedChannelsProbe(playlistPrefix: playlistPrefix, restriction: restriction))
+        self.emptyDescription = emptyDescription
+        _excludedChannels = Query(LiveChannelQuery.excludedChannelsProbe(playlistPrefix: playlistPrefix, restriction: restriction, scope: scope))
     }
 
     var body: some View {
@@ -44,7 +49,7 @@ struct LiveTVEmptyState: View {
             ContentUnavailableView(
                 "No Channels",
                 systemImage: "antenna.radiowaves.left.and.right",
-                description: Text("Sync your playlist to load live TV channels")
+                description: Text(emptyDescription)
             )
         }
     }

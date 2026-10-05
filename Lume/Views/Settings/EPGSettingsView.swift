@@ -355,12 +355,7 @@ struct EPGSettingsView: View {
                     Button {
                         showingAdd = true
                     } label: {
-                        HStack(spacing: 16) {
-                            Image(systemName: "plus")
-                                .font(.system(size: 22, weight: .medium))
-                            Text("Add EPG Source")
-                            Spacer(minLength: 0)
-                        }
+                        SettingsActionLabel(title: "Add EPG Source", systemImage: "plus")
                     }
                     .buttonStyle(TVSettingsRowButtonStyle())
                 }

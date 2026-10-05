@@ -135,10 +135,8 @@ import SwiftUI
                     showingAreaCategories.toggle()
                 } label: {
                     HStack(spacing: 16) {
-                        Image(systemName: "square.grid.2x2")
-                            .font(.system(size: 22, weight: .medium))
-                        Text(showingAreaCategories ? "Hide Categories" : "Manage Categories")
-                        Spacer(minLength: 0)
+                        Label(showingAreaCategories ? "Hide Categories" : "Manage Categories", systemImage: "square.grid.2x2")
+                            .labelStyle(TVSettingsIconLabelStyle())
                         Image(systemName: showingAreaCategories ? "chevron.down" : "chevron.right")
                     }
                 }

@@ -22,6 +22,7 @@
         static let labelFontSize: CGFloat = 18
         static let secondaryFontSize: CGFloat = 20
         static let statusFontSize: CGFloat = 24
+        static let explanatoryFontSize: CGFloat = 22
         static let paneTitleFontSize: CGFloat = 34
         static let screenTitleFontSize: CGFloat = 38
         static let titleFontSize: CGFloat = 46

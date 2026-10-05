@@ -10,10 +10,8 @@ struct SettingsActionLabel: View {
     var body: some View {
         #if os(tvOS)
             HStack(spacing: 16) {
-                Image(systemName: systemImage)
-                    .font(.system(size: 22, weight: .medium))
-                Text(title)
-                Spacer(minLength: 0)
+                Label(title, systemImage: systemImage)
+                    .labelStyle(TVSettingsIconLabelStyle())
                 if isBusy { ProgressView() }
             }
         #else

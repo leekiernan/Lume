@@ -66,25 +66,7 @@ import SwiftUI
                 VStack(alignment: .leading, spacing: 8) {
                     TVSettingsSectionLabel("About")
 
-                    HStack(spacing: 18) {
-                        Image(systemName: "play.tv.fill")
-                            .font(.system(size: 28))
-                            .foregroundStyle(.tint)
-                            .frame(width: 60, height: 60)
-                            .background(.tint.opacity(0.12), in: .rect(cornerRadius: 14, style: .continuous))
-
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Lume")
-                                .font(.system(size: 26, weight: .semibold))
-                            Text("Version \(SupportInfo.appVersion)")
-                                .font(.system(size: 20))
-                                .foregroundStyle(.secondary)
-                        }
-
-                        Spacer(minLength: 0)
-                    }
-                    .padding(.horizontal, TVSettingsMetrics.rowHPadding)
-                    .padding(.vertical, 8)
+                    TVSettingsSummary(systemImage: "play.tv.fill", title: Text("Lume"), detail: Text("Version \(SupportInfo.appVersion)"))
                 }
 
                 tvSupportSection
@@ -103,7 +85,7 @@ import SwiftUI
                 TVSettingsSectionLabel("Acknowledgements")
 
                 Text("Lume is free, open-source software, licensed under the GNU Affero General Public License v3.")
-                    .font(.system(size: 22))
+                    .font(.system(size: TVSettingsMetrics.explanatoryFontSize))
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, TVSettingsMetrics.rowHPadding)
 
@@ -115,7 +97,7 @@ import SwiftUI
 
                 // swiftlint:disable:next line_length
                 Text("Artwork, ratings and details are provided by TMDB, MDBList, and Trakt, and intro/recap skip data by IntroDB. This product uses the TMDB API but is not endorsed or certified by TMDB.")
-                    .font(.system(size: 22))
+                    .font(.system(size: TVSettingsMetrics.explanatoryFontSize))
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, TVSettingsMetrics.rowHPadding)
 

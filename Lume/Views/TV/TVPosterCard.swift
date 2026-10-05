@@ -7,7 +7,7 @@ import SwiftUI
         var badge: String?
 
         var body: some View {
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: PosterCardMetrics.titleSpacing) {
                 PosterArtworkView(
                     provider: item.imageURL?.absoluteString, posterPath: item.posterPath,
                     request: item.posterRecoveryRequest, maxPixelSize: PosterCardMetrics.posterHeight
@@ -18,15 +18,15 @@ import SwiftUI
                         fallbackFont: .system(size: 56)
                     )
                 }
-                .frame(width: TVDetailMetrics.posterCardWidth, height: TVDetailMetrics.posterCardHeight)
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .frame(width: PosterCardMetrics.posterWidth, height: PosterCardMetrics.posterHeight)
+                .clipShape(RoundedRectangle(cornerRadius: PosterCardMetrics.cornerRadius, style: .continuous))
                 .posterBadge(badge)
 
                 Text(item.title)
-                    .font(.system(size: 24, weight: .medium))
+                    .font(PosterCardMetrics.titleFont)
                     .foregroundStyle(.white)
                     .lineLimit(2)
-                    .frame(width: TVDetailMetrics.posterCardWidth, alignment: .leading)
+                    .frame(width: PosterCardMetrics.posterWidth, alignment: .leading)
             }
         }
     }

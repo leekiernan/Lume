@@ -35,8 +35,8 @@
         // Card sizes
         static let episodeCardWidth: CGFloat = 392
         static let episodeStillHeight: CGFloat = 220
-        static let posterCardWidth: CGFloat = 240
-        static let posterCardHeight: CGFloat = 360
+        static let posterCardWidth = PosterCardMetrics.posterWidth
+        static let posterCardHeight = PosterCardMetrics.posterHeight
         static let castCardWidth: CGFloat = 200
         static let castAvatar: CGFloat = 160
     }

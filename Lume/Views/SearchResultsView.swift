@@ -20,8 +20,20 @@ import SwiftUI
 /// Which of the layouts above to show.
 enum SearchResultsLayout: Equatable {
     case overview
-    case filtered(ContentFilter)
-    case section(SearchSection)
+    case movies
+    case series
+    case channels
+    case nowPlaying
+    case upcoming
+
+    init(filter: ContentFilter) {
+        switch filter {
+        case .all: self = .overview
+        case .movies: self = .movies
+        case .series: self = .series
+        case .liveTV: self = .channels
+        }
+    }
 }
 
 struct SearchResultsView<Header: View>: View {
@@ -55,16 +67,16 @@ struct SearchResultsView<Header: View>: View {
                     upcoming(limit: Self.channelPreviewCount)
                     movieRail
                     seriesRail
-                case .filtered(.movies), .section(.movies):
+                case .movies:
                     grid(results.movies) { MovieCardView(movie: $0, fillsWidth: true) }
-                case .filtered(.series), .section(.series):
+                case .series:
                     grid(results.series) { SeriesCardView(series: $0, fillsWidth: true) }
-                case .filtered(.liveTV), .filtered(.all):
+                case .channels:
                     nowPlaying(limit: nil)
                     upcoming(limit: nil)
-                case .section(.nowPlaying):
+                case .nowPlaying:
                     nowPlaying(limit: nil)
-                case .section(.upcoming):
+                case .upcoming:
                     upcoming(limit: nil)
                 }
             }

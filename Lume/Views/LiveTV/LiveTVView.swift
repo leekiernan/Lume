@@ -285,6 +285,7 @@ struct LiveTVView: View {
                         description: Text("Choose a category from the sidebar")
                     )
                 }
+                BrowseCategoriesButton(isPresented: $showingBrowse)
             }
         }
     #endif

@@ -52,7 +52,7 @@
                         showPaywall = true
                     }
                 } label: {
-                    TrackerButtonLabel(title: "Connect Trakt Account", systemImage: premium.isPremium ? "link" : "crown")
+                    SettingsActionLabel(title: "Connect Trakt Account", systemImage: premium.isPremium ? "link" : "crown")
                 }
                 .disabled(trakt.isConnecting)
             } header: {
@@ -87,7 +87,7 @@
                 Button {
                     Task { await trakt.importWatched(into: modelContext) }
                 } label: {
-                    TrackerButtonLabel(title: "Import Watched from Trakt", systemImage: "arrow.down.circle", isBusy: trakt.isImporting)
+                    SettingsActionLabel(title: "Import Watched from Trakt", systemImage: "arrow.down.circle", isBusy: trakt.isImporting)
                 }
                 .disabled(trakt.isImporting)
 
@@ -95,7 +95,7 @@
                     Button {
                         trakt.retryPendingMutations()
                     } label: {
-                        TrackerButtonLabel(title: "Retry Pending Trakt Changes", systemImage: "arrow.clockwise", isBusy: trakt.isSyncingMutations)
+                        SettingsActionLabel(title: "Retry Pending Trakt Changes", systemImage: "arrow.clockwise", isBusy: trakt.isSyncingMutations)
                     }
                     .disabled(trakt.isSyncingMutations)
                 }
@@ -103,7 +103,7 @@
                 Button(role: .destructive) {
                     Task { await trakt.disconnect() }
                 } label: {
-                    TrackerButtonLabel(title: "Disconnect", systemImage: "xmark.circle")
+                    SettingsActionLabel(title: "Disconnect", systemImage: "xmark.circle")
                 }
             } header: {
                 Text("Trakt")

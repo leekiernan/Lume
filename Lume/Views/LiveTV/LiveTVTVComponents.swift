@@ -97,17 +97,11 @@
                 ScrollView {
                     LazyVStack(spacing: 14) {
                         if channels.isEmpty {
-                            if sourceType.map({ !$0.canCarryLiveChannels }) == true {
-                                LiveTVEmptyState(sourceType: sourceType)
-                                    .padding(.top, 80)
-                            } else {
-                                ContentUnavailableView(
-                                    "No Channels",
-                                    systemImage: "antenna.radiowaves.left.and.right",
-                                    description: Text("This category has no channels")
-                                )
-                                .padding(.top, 80)
-                            }
+                            LiveTVEmptyState(
+                                sourceType: sourceType, playlistPrefix: playlistPrefix, restriction: restriction,
+                                scope: scope, emptyDescription: "This category has no channels"
+                            )
+                            .padding(.top, 80)
                         } else {
                             if scope == .recentlyWatched {
                                 clearButton
@@ -291,6 +285,7 @@
                     onOpenMultiView: onOpenMultiView
                 )
                 content
+                BrowseCategoriesButton(onOpen: { onOpenBrowse(nil) })
             }
         }
 

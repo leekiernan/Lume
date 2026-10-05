@@ -30,9 +30,11 @@
 
         /// Which hero the info overlay is showing. Deliberately LAGS the current
         /// slide: on a page change the copy fades out, swaps while invisible,
-        /// then fades back in (see `crossfadeInfo`).
-        private var displayedID: Item.ID?
-        private(set) var infoOpacity: Double = 1
+        /// then fades back in through the shared info transition owner.
+        private let infoTransition = HeroInfoTransition<Item.ID>()
+        var infoOpacity: Double {
+            infoTransition.opacity
+        }
 
         /// Set while the hero is below the fold so the carousel doesn't page
         /// (and prefetch artwork) where nobody can see it.
@@ -67,7 +69,7 @@
         }
 
         var displayedHero: Item? {
-            items.first { $0.id == displayedID } ?? currentHero
+            items.first { $0.id == infoTransition.displayedID } ?? currentHero
         }
 
         func configure(items: [Item]) {
@@ -80,9 +82,7 @@
             } else if !items.indices.contains(currentIndex) {
                 currentIndex = 0
             }
-            if displayedID == nil || !items.contains(where: { $0.id == displayedID }) {
-                displayedID = items.first?.id
-            }
+            infoTransition.reconcile(ids: items.map(\.id), selectedID: currentHero?.id)
             prefetchNeighbours()
         }
 
@@ -128,23 +128,8 @@
             withAnimation(.easeInOut(duration: 0.8)) {
                 currentIndex = (currentIndex + delta + items.count) % items.count
             }
-            crossfadeInfo()
+            infoTransition.select(currentHero?.id)
             prefetchNeighbours()
-        }
-
-        /// Fades the info overlay out, swaps it while invisible, then fades back
-        /// in. Reading `currentHero` in the completion (not a captured value)
-        /// self-heals rapid paging to whatever slide is current on reappear.
-        private func crossfadeInfo() {
-            guard displayedID != currentHero?.id else { return }
-            withAnimation(.easeInOut(duration: 0.25)) {
-                infoOpacity = 0
-            } completion: {
-                self.displayedID = self.currentHero?.id
-                withAnimation(.easeOut(duration: 0.45)) {
-                    self.infoOpacity = 1
-                }
-            }
         }
 
         /// Warms the cache for the slides on either side so crossfades land on an

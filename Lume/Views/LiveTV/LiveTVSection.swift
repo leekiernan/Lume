@@ -233,12 +233,19 @@ nonisolated enum LiveChannelQuery {
 
     /// Empty-state copy only: content exists but none is browseable. Do not
     /// reveal rows/counts or bind this unfiltered query to channel rendering.
-    static func excludedChannelsProbe(playlistPrefix: String, restriction: ContentRestriction) -> FetchDescriptor<LiveStream> {
+    static func excludedChannelsProbe(playlistPrefix: String, restriction: ContentRestriction, scope: LiveChannelScope? = nil) -> FetchDescriptor<LiveStream> {
         let prefix = playlistPrefix
         let hasPlaylist = !prefix.isEmpty
         let excluded = excludedCategoryIDs(restriction)
+        let categoryID: String? = if case let .category(id) = scope { id } else { nil }
+        let hasCategory = categoryID != nil
+        let favoritesOnly = scope == .favorites
+        let recentsOnly = scope == .recentlyWatched
         return probe(predicate: #Predicate { stream in
             hasPlaylist && stream.id.starts(with: prefix)
+                && (!hasCategory || stream.categoryId == categoryID)
+                && (!favoritesOnly || stream.isFavorite)
+                && (!recentsOnly || stream.lastWatchedDate != nil)
                 && (stream.isHidden || excluded.contains(stream.categoryId))
         })
     }

@@ -5,6 +5,28 @@ import Testing
 
 @MainActor
 struct LiveChannelRailTests {
+    @Test func `excluded channel copy probes only the displayed playlist and collection`() throws {
+        try OnDiskCatalogStore.withContext { context in
+            let hidden = LiveStream(id: "mine-live-1", streamId: 1, name: "Hidden", categoryId: "locked")
+            hidden.isFavorite = true
+            let foreign = LiveStream(id: "other-live-1", streamId: 1, name: "Foreign", categoryId: "locked")
+            foreign.isHidden = true
+            context.insert(hidden)
+            context.insert(foreign)
+            try context.save()
+            let restriction = ContentRestriction(isActive: true, restrictedCategoryIDs: ["locked"])
+            func probe(_ scope: LiveChannelScope?, prefix: String = "mine-") throws -> [LiveStream] {
+                try context.fetch(LiveChannelQuery.excludedChannelsProbe(playlistPrefix: prefix, restriction: restriction, scope: scope))
+            }
+            #expect(try probe(.favorites).map(\.id) == [hidden.id])
+            #expect(try probe(.recentlyWatched).isEmpty)
+            #expect(try probe(.category("visible")).isEmpty)
+            #expect(try probe(.category("locked")).map(\.id) == [hidden.id])
+            #expect(try probe(nil, prefix: "empty-").isEmpty)
+            #expect(try probe(nil, prefix: "").isEmpty)
+        }
+    }
+
     @Test func `picker rail matches browse composition and user ordering across profile scopes`() throws {
         try OnDiskCatalogStore.withContext { context in
             let mine = Playlist(name: "Mine", serverURL: "https://a.example", username: "u", password: "p")

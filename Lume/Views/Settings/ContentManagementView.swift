@@ -311,8 +311,7 @@ struct ContentManagementView: View {
             }
 
             if isReordering {
-                Text("Move up or down to position, then select to place. Press Menu to cancel.")
-                    .tvSettingsFooter()
+                TVReorderHint()
             }
 
             if categories.isEmpty {

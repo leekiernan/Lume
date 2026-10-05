@@ -28,13 +28,16 @@ struct SectionCollectionView: View {
 
     var body: some View {
         CategoryPage(title: selection.title) {
-            if items.isEmpty, pagination.isPrepared, !pagination.isLoading {
+            switch CollectionGridPresentation.resolve(hasItems: !items.isEmpty, isLoading: !pagination.isPrepared || pagination.isLoading) {
+            case .empty:
                 ContentUnavailableView(
                     "Nothing Here Yet",
                     systemImage: "rectangle.stack"
                 )
                 .padding(.top, 40)
-            } else {
+            case .loading:
+                ProgressView("Loading…").frame(maxWidth: .infinity).padding(.top, 40)
+            case .content:
                 PosterGrid {
                     ForEach(items) { item in
                         itemLink(item)
@@ -74,7 +77,12 @@ struct SectionCollectionView: View {
 
     private func prepare() {
         guard pagination.prepare(for: selection.section.token) else { return }
-        guard let snapshot = feed.collection(for: selection.section) else { return }
+        entries = []
+        items = []
+        guard let snapshot = feed.collection(for: selection.section) else {
+            pagination.seed(nextOffset: 0, canLoadMore: false)
+            return
+        }
         entries = snapshot.entries
         items = snapshot.preview
         pagination.seed(nextOffset: snapshot.nextOffset, canLoadMore: snapshot.hasMoreCandidates)
