@@ -35,32 +35,42 @@ actor EPGSyncManager {
         self.writeCoordinator = writeCoordinator
     }
 
-    /// Refreshes the guide from every enabled source. Returns `true` only when
-    /// every source succeeded, so the global refresh date never hides a failed
-    /// source from the next due check.
+    /// One aggregate outcome, including partial failure, rather than a message
+    /// per source. No configured guide/channels is a skip, not a failure toast.
     @discardableResult
-    func syncAllSources() async -> Bool {
-        let sources = enabledSources()
-        guard !sources.isEmpty else {
-            Logger.database.info("No enabled EPG sources, skipping EPG sync")
-            return false
+    func syncAllSources() async -> SyncRefreshOutcome {
+        guard !Task.isCancelled else { return .cancelled }
+        let sources: [SourceInfo]
+        let referencedChannelIDs: Set<String>?
+        do {
+            sources = try enabledSources()
+            guard !sources.isEmpty else {
+                Logger.database.info("No enabled EPG sources, skipping EPG sync")
+                return .skipped
+            }
+            referencedChannelIDs = try channelIDs()
+        } catch {
+            Logger.database.warning("EPG refresh could not read its sources/channels: \(error.localizedDescription, privacy: .public)")
+            return .failed
         }
 
-        guard let knownChannelIDs = channelIDs() else {
+        guard let knownChannelIDs = referencedChannelIDs else {
             // Nothing references a guide yet (no live streams synced) — leave any
             // existing listings untouched rather than wiping them for nothing.
             Logger.database.info("No live streams with EPG channel IDs, skipping EPG sync")
-            return false
+            return .skipped
         }
 
         var everySourceSynced = true
         var unclaimedChannelIDs = knownChannelIDs
         let fence = Fence.live
         for source in sources {
+            guard !Task.isCancelled else { return .cancelled }
             let result = await sync(source: source, knownChannelIDs: unclaimedChannelIDs, fence: fence)
             unclaimedChannelIDs.subtract(result.claimedChannelIDs)
             everySourceSynced = everySourceSynced && result.didSync
         }
+        guard !Task.isCancelled else { return .cancelled }
         // Listings created before source-scoped publication have no ownership
         // metadata. Keep that aggregate snapshot whenever any source failed,
         // then retire it only after every enabled source has published (or was
@@ -72,13 +82,13 @@ actor EPGSyncManager {
             do {
                 try await retireLegacySnapshot(fence: fence)
             } catch is CancellationError {
-                return false
+                return .cancelled
             } catch {
                 Logger.database.warning("EPG legacy snapshot retirement failed: \(error.localizedDescription, privacy: .public)")
-                return false
+                return .failed
             }
         }
-        return everySourceSynced
+        return everySourceSynced ? .succeeded : .failed
     }
 
     // MARK: - Per-source sync
@@ -171,25 +181,25 @@ actor EPGSyncManager {
         let url: String
     }
 
-    private func enabledSources() -> [SourceInfo] {
+    private func enabledSources() throws -> [SourceInfo] {
         let context = ModelContext(modelContainer)
         context.autosaveEnabled = false
         let descriptor = FetchDescriptor<EPGSource>(
             predicate: #Predicate { $0.isEnabled },
             sortBy: [SortDescriptor(\.addedAt)]
         )
-        let sources = (try? context.fetch(descriptor)) ?? []
+        let sources = try context.fetch(descriptor)
         return sources.map { SourceInfo(id: $0.id, url: $0.url) }
     }
 
     /// The set of EPG channel IDs any live stream references, or nil when there
     /// is nothing to guide (so the sync can be skipped without clearing data).
-    private func channelIDs() -> Set<String>? {
+    private func channelIDs() throws -> Set<String>? {
         let context = ModelContext(modelContainer)
         context.autosaveEnabled = false
         var descriptor = FetchDescriptor<LiveStream>()
         descriptor.propertiesToFetch = [\.epgChannelId]
-        let streams = (try? context.fetch(descriptor)) ?? []
+        let streams = try context.fetch(descriptor)
         let ids = Set(streams.compactMap(\.epgChannelId))
         return ids.isEmpty ? nil : ids
     }

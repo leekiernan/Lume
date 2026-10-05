@@ -259,6 +259,7 @@ struct LumeApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .syncCompletionToasts(priority: 0)
                 .environment(TraktService.shared)
                 .environment(PremiumManager.shared)
                 .environment(cloudSync)

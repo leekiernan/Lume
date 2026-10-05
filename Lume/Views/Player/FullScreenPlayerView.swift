@@ -274,6 +274,7 @@ struct FullScreenPlayerView: View {
         .environment(controlsBridge)
         .persistentSystemOverlays(.hidden)
         .preferredColorScheme(.dark)
+        .syncCompletionToasts()
         .macPlayerWindow(activeMedia: activeMedia, launchMedia: media) { switchMedia(to: $0) }
         // Synchronous on purpose, and ahead of the `.task` below: the engine
         // coordinators report `beginStartup` / `noteEngineFallback` from their

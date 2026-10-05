@@ -154,11 +154,14 @@ struct SettingsView: View {
     }
 
     var body: some View {
-        #if os(tvOS)
-            tvBody
-        #else
-            standardBody
-        #endif
+        Group {
+            #if os(tvOS)
+                tvBody
+            #else
+                standardBody
+            #endif
+        }
+        .syncCompletionToasts()
     }
 
     // MARK: - iOS / macOS (grouped list)

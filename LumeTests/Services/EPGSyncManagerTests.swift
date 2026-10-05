@@ -17,6 +17,29 @@ struct EPGSyncManagerTests {
         EPGSyncManager(modelContainer: container, writeCoordinator: LocalStoreWriteCoordinator())
     }
 
+    @Test func `no configured sources is skipped rather than a failed refresh`() async throws {
+        let container = try makeTestContainer()
+        #expect(await makeManager(container).syncAllSources() == .skipped)
+    }
+
+    @Test func `a guide with no channel IDs is skipped rather than failed`() async throws {
+        let container = try makeTestContainer()
+        let context = ModelContext(container)
+        context.insert(EPGSource(name: "Guide", url: "file:///unused.xml"))
+        try context.save()
+        #expect(await makeManager(container).syncAllSources() == .skipped)
+    }
+
+    @Test func `cancelled guide refresh has no failure outcome`() async throws {
+        let container = try makeTestContainer()
+        let manager = makeManager(container)
+        let task = Task {
+            withUnsafeCurrentTask { $0?.cancel() }
+            return await manager.syncAllSources()
+        }
+        #expect(await task.value == .cancelled)
+    }
+
     private func writeTempXMLTV(_ content: String) throws -> URL {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("EPGSyncManagerTests-\(UUID().uuidString).xml")
@@ -106,7 +129,7 @@ struct EPGSyncManagerTests {
         ))
         try setupContext.save()
 
-        #expect(await makeManager(container).syncAllSources())
+        #expect(await makeManager(container).syncAllSources() == .succeeded)
 
         let context = ModelContext(container)
         #expect(try context.fetch(FetchDescriptor<EPGListing>()).isEmpty)
@@ -133,7 +156,7 @@ struct EPGSyncManagerTests {
         try context.save()
 
         let didSync = await makeManager(container).syncAllSources()
-        #expect(!didSync)
+        #expect(didSync == .failed)
 
         let refreshed = ModelContext(container)
         let listings = try refreshed.fetch(FetchDescriptor<EPGListing>())
@@ -178,7 +201,7 @@ struct EPGSyncManagerTests {
         try context.save()
 
         let didSync = await makeManager(container).syncAllSources()
-        #expect(!didSync)
+        #expect(didSync == .failed)
 
         let refreshed = ModelContext(container)
         let listings = try refreshed.fetch(FetchDescriptor<EPGListing>())
@@ -217,7 +240,7 @@ struct EPGSyncManagerTests {
         )
         try context.save()
 
-        #expect(await makeManager(container).syncAllSources())
+        #expect(await makeManager(container).syncAllSources() == .succeeded)
 
         let refreshed = ModelContext(container)
         let listings = try refreshed.fetch(FetchDescriptor<EPGListing>())
@@ -246,7 +269,7 @@ struct EPGSyncManagerTests {
         _ = insertSource(named: "Guide", url: guideURL.absoluteString, in: context)
         try context.save()
 
-        #expect(await makeManager(container).syncAllSources())
+        #expect(await makeManager(container).syncAllSources() == .succeeded)
 
         let listings = try ModelContext(container).fetch(FetchDescriptor<EPGListing>())
         #expect(listings.count == 1)
@@ -277,7 +300,7 @@ struct EPGSyncManagerTests {
         try setupContext.save()
 
         let manager = makeManager(container)
-        #expect(await manager.syncAllSources())
+        #expect(await manager.syncAllSources() == .succeeded)
         let originalRows = try ModelContext(container).fetch(FetchDescriptor<EPGListing>())
         let retained = try #require(originalRows.first(where: { $0.title == "Original bulletin" }))
         let retainedID = retained.id
@@ -295,8 +318,8 @@ struct EPGSyncManagerTests {
         </tv>
         """.write(to: guideURL, atomically: true, encoding: .utf8)
 
-        #expect(await manager.syncAllSources())
-        #expect(await manager.syncAllSources())
+        #expect(await manager.syncAllSources() == .succeeded)
+        #expect(await manager.syncAllSources() == .succeeded)
 
         let refreshed = ModelContext(container)
         let rows = try refreshed.fetch(FetchDescriptor<EPGListing>())
@@ -334,7 +357,7 @@ struct EPGSyncManagerTests {
         try context.save()
 
         let didSync = await makeManager(container).syncAllSources()
-        #expect(!didSync)
+        #expect(didSync == .failed)
 
         let refreshed = ModelContext(container)
         #expect(try refreshed.fetch(FetchDescriptor<EPGListing>()).map(\.title) == ["Previous news"])
@@ -359,7 +382,7 @@ struct EPGSyncManagerTests {
         try context.save()
 
         let didSync = await makeManager(container).syncAllSources()
-        #expect(!didSync)
+        #expect(didSync == .failed)
 
         let refreshed = ModelContext(container)
         #expect(try refreshed.fetch(FetchDescriptor<EPGListing>()).map(\.title) == ["Previous news"])

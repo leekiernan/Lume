@@ -59,8 +59,8 @@ extension MainTabView {
 
     /// Refreshes areas the viewer can already browse without covering them:
     /// the rows on screen stay usable and update in place as the sync lands.
-    /// Failure is the sync's own to report (`Playlist.syncStatus`); the area
-    /// is retried next session (`AutoSync.RepairLedger`).
+    /// Completion is reported by `PlaylistSyncRun`, like a manual refresh; the
+    /// area is retried next session after failure (`AutoSync.RepairLedger`).
     func startBackgroundSync(_ request: PlaylistSyncRequest) {
         let playlist = request.playlist
         let plan = PlaylistSyncPlan(sourceType: playlist.sourceType, repairingAreas: request.repairingAreas)
