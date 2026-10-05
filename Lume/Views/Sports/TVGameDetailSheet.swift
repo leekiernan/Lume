@@ -10,7 +10,7 @@
 //  the score or kickoff, the channels the fixture resolved to in the viewer's own
 //  playlists (one confident channel becomes a single prominent Watch button), the
 //  Timeline / Stats / Lineup pill tabs fed off-main by the `SportsDataProvider`,
-//  and the league standings with the followed team's row highlighted.
+//  and league standings highlighting both opponents, with followed-team stars.
 //
 //  `TVChannelRow` in LiveTVTVComponents is `private` and modelled on a
 //  `LiveStream` + `ChannelEPG`, so it cannot carry a `ResolvedChannel`'s quality
@@ -401,8 +401,11 @@
                         // it is dealt out in screen-sized focusable chunks.
                         VStack(spacing: 4) {
                             ForEach(Array(group.rows.chunked(into: Self.standingsChunk).enumerated()), id: \.offset) { index, chunk in
-                                StandingsTable(rows: chunk, followedTeamIds: follows.followedKeys, showsHeader: index == 0)
-                                    .tvFocusBlock()
+                                StandingsTable(
+                                    rows: chunk, followedTeamIds: follows.followedKeys,
+                                    playingTeamIds: fixture.standingsTeamIds, showsHeader: index == 0
+                                )
+                                .tvFocusBlock()
                             }
                         }
                         .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(.white.opacity(0.06)))

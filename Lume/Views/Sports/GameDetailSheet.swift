@@ -403,7 +403,7 @@ struct GameDetailSheet: View {
                 Text("Table")
                     .font(.headline)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                GroupedStandingsTable(rows: rows, followedTeamIds: follows.followedKeys)
+                GroupedStandingsTable(rows: rows, followedTeamIds: follows.followedKeys, playingTeamIds: fixture.standingsTeamIds)
             }
             .padding()
             .frame(maxWidth: .infinity)
