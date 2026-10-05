@@ -7,13 +7,12 @@
 //  rank, team, and the GP W D L GD PTS columns — as a `Grid` so the columns
 //  align across rows and every cell scales with Dynamic Type (no fixed heights).
 //  A followed team's row is starred and washed with a subtle highlight band.
+//  Match Centre also emphasizes the fixture's teams, independently of follows.
 //  A championship table of drivers or constructors (F1, IndyCar, NASCAR) has
 //  no games-played figures, so it collapses to rank, name and points.
 //
 //  It stays deliberately dumb: it takes a flat `[SportsStandingRow]` plus the
-//  set of followed team ids and an optional tap callback. The caller decides
-//  what a tap does — the hub wires it to append a league to
-//  `DeepLinkRouter.sportsPath` so the full table pushes on.
+//  followed and playing team IDs. It owns neither following nor navigation.
 //
 
 import SwiftUI
@@ -24,6 +23,8 @@ struct StandingsTable: View {
     /// Matched against each row's raw provider id via a colon-anchored suffix so
     /// the raw `teamId` on a standing row lines up with a full follow key.
     let followedTeamIds: Set<String>
+    /// Raw provider IDs from the fixture whose table is being viewed.
+    let playingTeamIds: Set<String>
     /// tvOS renders a long table as several focusable chunks; only the first
     /// carries the column header.
     var showsHeader = true
@@ -31,10 +32,12 @@ struct StandingsTable: View {
     init(
         rows: [SportsStandingRow],
         followedTeamIds: Set<String>,
+        playingTeamIds: Set<String> = [],
         showsHeader: Bool = true
     ) {
         self.rows = rows
         self.followedTeamIds = followedTeamIds
+        self.playingTeamIds = playingTeamIds
         self.showsHeader = showsHeader
     }
 
@@ -81,18 +84,18 @@ struct StandingsTable: View {
 
     @ViewBuilder
     private func dataRow(_ row: SportsStandingRow) -> some View {
-        let followed = followedTeamIds.containsFollowedTeam(for: row)
+        let emphasis = StandingsRowEmphasis(row: row, followedTeamIds: followedTeamIds, playingTeamIds: playingTeamIds)
         GridRow {
-            numberCell(row.rank, followed: followed)
-            teamCell(row, followed: followed)
+            numberCell(row.rank, emphasis: emphasis)
+            teamCell(row, emphasis: emphasis)
             if !isChampionshipTable {
-                statCell(row.played, followed: followed, accessibility: statLabel(row.played) { Text("Games played \($0)") })
-                statCell(row.wins, followed: followed, accessibility: statLabel(row.wins) { Text("Wins \($0)") })
-                statCell(row.draws, followed: followed, accessibility: statLabel(row.draws) { Text("Draws \($0)") })
-                statCell(row.losses, followed: followed, accessibility: statLabel(row.losses) { Text("Losses \($0)") })
-                statCell(row.goalDifference, followed: followed, accessibility: statLabel(row.goalDifference) { Text("Goal difference \($0)") })
+                statCell(row.played, emphasis: emphasis, accessibility: statLabel(row.played) { Text("Games played \($0)") })
+                statCell(row.wins, emphasis: emphasis, accessibility: statLabel(row.wins) { Text("Wins \($0)") })
+                statCell(row.draws, emphasis: emphasis, accessibility: statLabel(row.draws) { Text("Draws \($0)") })
+                statCell(row.losses, emphasis: emphasis, accessibility: statLabel(row.losses) { Text("Losses \($0)") })
+                statCell(row.goalDifference, emphasis: emphasis, accessibility: statLabel(row.goalDifference) { Text("Goal difference \($0)") })
             }
-            pointsCell(row.points, followed: followed)
+            pointsCell(row.points, emphasis: emphasis)
         }
     }
 
@@ -125,51 +128,51 @@ struct StandingsTable: View {
             .frame(maxWidth: alignment == .leading ? .infinity : nil, alignment: alignment)
     }
 
-    private func teamCell(_ row: SportsStandingRow, followed: Bool) -> some View {
+    private func teamCell(_ row: SportsStandingRow, emphasis: StandingsRowEmphasis) -> some View {
         HStack(spacing: 5) {
-            if followed {
+            if emphasis.isFollowed {
                 Image(systemName: "star.fill")
                     .font(.caption2)
                     .foregroundStyle(.yellow)
             }
             Text(verbatim: row.name)
-                .fontWeight(followed ? .semibold : .regular)
+                .fontWeight(emphasis.isFollowed || emphasis.isPlaying ? .semibold : .regular)
                 .lineLimit(1)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.vertical, 8)
         .padding(.horizontal, cellPadding)
-        .background(standingsRowHighlight(followed))
+        .background(standingsRowHighlight(emphasis))
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(teamRowLabel(row, followed: followed))
+        .accessibilityLabel(teamRowLabel(row, followed: emphasis.isFollowed))
     }
 
-    private func numberCell(_ value: Int, followed: Bool) -> some View {
+    private func numberCell(_ value: Int, emphasis: StandingsRowEmphasis) -> some View {
         Text(verbatim: "\(value)")
             .monospacedDigit()
             .foregroundStyle(.secondary)
             .padding(.vertical, 8)
             .padding(.horizontal, cellPadding)
-            .background(standingsRowHighlight(followed))
+            .background(standingsRowHighlight(emphasis))
             .accessibilityHidden(true)
     }
 
-    private func statCell(_ value: Int?, followed: Bool, accessibility: Text) -> some View {
+    private func statCell(_ value: Int?, emphasis: StandingsRowEmphasis, accessibility: Text) -> some View {
         Text(verbatim: value.map { "\($0)" } ?? "–")
             .monospacedDigit()
             .padding(.vertical, 8)
             .padding(.horizontal, cellPadding)
-            .background(standingsRowHighlight(followed))
+            .background(standingsRowHighlight(emphasis))
             .accessibilityLabel(accessibility)
     }
 
-    private func pointsCell(_ value: Int?, followed: Bool) -> some View {
+    private func pointsCell(_ value: Int?, emphasis: StandingsRowEmphasis) -> some View {
         Text(verbatim: value.map { "\($0)" } ?? "–")
             .monospacedDigit()
             .fontWeight(.semibold)
             .padding(.vertical, 8)
             .padding(.horizontal, cellPadding)
-            .background(standingsRowHighlight(followed))
+            .background(standingsRowHighlight(emphasis))
             .accessibilityHidden(true)
     }
 
@@ -186,6 +189,7 @@ struct StandingsTable: View {
 struct GroupedStandingsTable: View {
     let rows: [SportsStandingRow]
     let followedTeamIds: Set<String>
+    var playingTeamIds: Set<String> = []
 
     var body: some View {
         let groups = SportsStandingRow.grouped(rows)
@@ -198,7 +202,7 @@ struct GroupedStandingsTable: View {
                             .foregroundStyle(.secondary)
                             .padding(.horizontal, 8)
                     }
-                    StandingsTable(rows: group.rows, followedTeamIds: followedTeamIds)
+                    StandingsTable(rows: group.rows, followedTeamIds: followedTeamIds, playingTeamIds: playingTeamIds)
                 }
             }
         }
@@ -230,13 +234,7 @@ nonisolated extension Set<String> {
     }
 }
 
-/// The subtle highlight band behind a followed team's standings cells.
-@ViewBuilder
-func standingsRowHighlight(_ followed: Bool) -> some View {
-    if followed {
-        Color.primary.opacity(0.08)
-    }
+/// A consistent highlight across every cell, stronger for this match's teams.
+private func standingsRowHighlight(_ emphasis: StandingsRowEmphasis) -> some View {
+    Color.primary.opacity(emphasis.backgroundOpacity)
 }
-
-// Adds a tap gesture only when an action is supplied, so a read-only table
-// stays non-interactive rather than swallowing scroll gestures.
