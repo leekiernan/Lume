@@ -53,8 +53,8 @@ final class PlayerMediaSwapper {
     ///
     /// `onCompleteCurrentItem` fires for an explicit step onto the next
     /// *episode* and nothing else. That press is available from the first frame,
-    /// while the automatic advance arms only past `OutroTrigger`'s 90% line —
-    /// where `WatchProgressWriter` has already marked the episode watched. An
+    /// while automatic advance waits until the ending zone, past the 90%
+    /// watched line. An
     /// early press has to say so itself or the episode it left behind sits in
     /// Continue Watching forever and never scrobbles.
     @discardableResult

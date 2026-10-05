@@ -4,8 +4,7 @@
 //
 //  Covers `OutroTrigger.armTime`: the unknown-duration guard, every sanity
 //  check that rejects IntroDB data which doesn't match the provider's encode,
-//  and the `max()` clamp that keeps the button from ever arming before the
-//  legacy 90% line.
+//  the two-minute cap on the fallback, and the 90% floor on trusted credits.
 //
 
 import Foundation
@@ -17,6 +16,28 @@ struct OutroTriggerTests {
 
     @Test func `no outro falls back to fraction`() {
         #expect(OutroTrigger.armTime(outro: nil, duration: duration) == 900)
+    }
+
+    @Test(arguments: [
+        (duration: 600.0, armTime: 540.0), // ten-minute short: final minute
+        (duration: 1200.0, armTime: 1080.0), // cap boundary: final two minutes
+        (duration: 1201.0, armTime: 1081.0),
+        (duration: 1800.0, armTime: 1680.0),
+        (duration: 3000.0, armTime: 2880.0), // fifty minutes: 48:00, not 45:00
+        (duration: 7200.0, armTime: 7080.0)
+    ])
+    func `fallback is the final ten percent capped at two minutes`(example: (duration: TimeInterval, armTime: TimeInterval)) {
+        #expect(OutroTrigger.armTime(outro: nil, duration: example.duration) == example.armTime)
+    }
+
+    @Test func `untrusted credits on a long episode use the capped fallback`() {
+        let mismatched = IntroSegments.Segment(start: 2400, end: 2500)
+        #expect(OutroTrigger.armTime(outro: mismatched, duration: 3000) == 2880)
+    }
+
+    @Test func `trusted credits may start before the capped fallback`() {
+        let credits = IntroSegments.Segment(start: 2820, end: 3000)
+        #expect(OutroTrigger.armTime(outro: credits, duration: 3000) == 2820)
     }
 
     @Test func `unknown duration returns nil`() {
@@ -87,10 +108,13 @@ struct OutroTriggerTests {
         #expect(OutroTrigger.armTime(outro: rounding, duration: duration) == 950)
     }
 
-    @Test func `fallback arm point is where the writer counts the episode watched`() throws {
+    @Test func `delaying the prompt does not move the watched completion line`() throws {
+        let duration: TimeInterval = 3000
         let armed = try #require(OutroTrigger.armTime(outro: nil, duration: duration))
+        #expect(armed == 2880)
+        #expect(!WatchCompletion.isComplete(progress: 2699, duration: duration))
+        #expect(WatchCompletion.isComplete(progress: 2700, duration: duration))
         #expect(WatchCompletion.isComplete(progress: armed, duration: duration))
-        #expect(!WatchCompletion.isComplete(progress: armed - 1, duration: duration))
     }
 
     @Test func `nothing is complete without a known duration`() {

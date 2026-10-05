@@ -16,6 +16,11 @@ import Foundation
 /// match the stream being played must therefore never win, so every window is
 /// sanity-checked against the engine-reported duration before it is trusted.
 nonisolated enum OutroTrigger {
+    /// Without credit timings, offer the next episode during the final 10%,
+    /// but never spend more than two minutes over the remaining plot.
+    private static let fallbackFraction = 0.1
+    private static let maxFallbackLead: TimeInterval = 120
+
     /// How far before the end of the file the credits may end and still be
     /// plausible for this encode.
     private static let maxEndSlack: TimeInterval = 90
@@ -30,20 +35,15 @@ nonisolated enum OutroTrigger {
     /// arm — or `nil` when `duration` is unknown or the stream is live, in
     /// which case callers keep whatever behaviour they had.
     ///
-    /// Without a trusted outro it arms at `WatchCompletion.threshold` of the
-    /// duration; a trusted outro arms at the later of its start and that line.
-    /// The `max()` is deliberate and required, not a clamp that can be dropped:
-    /// `WatchProgressWriter` marks an episode watched only from that same
-    /// threshold (90%), so a button armed below that line lets the
-    /// viewer advance while the episode is still incomplete — it stays in
-    /// Continue Watching forever and never scrobbles to Trakt. Arming *later*
-    /// than 90% is the whole point (credits routinely start at 96%, leaving the
-    /// legacy button sitting on top of minutes of plot); arming earlier is
-    /// never allowed.
+    /// Without a trusted outro, use the final 10% capped at two minutes.
+    /// Trusted credits retain their own start time, even if longer than that
+    /// fallback window, but never arm before the 90% watched-completion line.
+    /// Prompt timing is a presentation policy; it does not change when the
+    /// writer counts a movie or episode as watched.
     static func armTime(outro: IntroSegments.Segment?, duration: TimeInterval) -> TimeInterval? {
         guard duration > 1 else { return nil }
 
-        let fallback = duration * WatchCompletion.threshold
+        let fallback = duration - min(duration * fallbackFraction, maxFallbackLead)
 
         guard let outro,
               outro.duration >= IntroSegments.minimumUsableDuration,
@@ -54,7 +54,7 @@ nonisolated enum OutroTrigger {
             return fallback
         }
 
-        return max(outro.start, fallback)
+        return max(outro.start, duration * WatchCompletion.threshold)
     }
 
     /// Whether credits ending at `end` are plausible for a file of `duration`.

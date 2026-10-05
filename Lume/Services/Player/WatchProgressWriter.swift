@@ -3,8 +3,8 @@ import SwiftData
 
 /// Where a movie or episode counts as watched: the fraction of its duration
 /// `WatchProgressWriter` marks it finished at, and the earliest point
-/// `OutroTrigger` may arm the Next Episode button — one line, so advancing
-/// never leaves an unfinished item behind.
+/// `OutroTrigger` may arm the Next Episode button. Its fallback prompt window
+/// is independently capped at two minutes; completion stays at 90%.
 nonisolated enum WatchCompletion {
     static let threshold = 0.9
 
