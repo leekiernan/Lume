@@ -114,6 +114,7 @@ struct HomeView: View {
     /// Holds Home's navigation path, so it survives the tab being unmounted —
     /// see `homePath`. Optional: previews have no router.
     @Environment(DeepLinkRouter.self) var pathRouter: DeepLinkRouter?
+    @State var fallbackHomePath = NavigationPath()
     #if os(tvOS)
         /// Not `private`: read by the HomeView+Playback extension (separate file).
         @Environment(DeepLinkRouter.self) var router
@@ -121,13 +122,6 @@ struct HomeView: View {
         /// Non-nil while Multi-View is up; carries the channel it opened with.
         /// Not `private`: read by the HomeView+Playback extension (separate file).
         @State var multiViewLaunch: MultiViewLaunch?
-    #endif
-
-    #if os(tvOS)
-        /// Hero selected on the immersive home. Drives navigation
-        /// programmatically: the hero surface is a stable Button (not a
-        /// NavigationLink) so paging the carousel never changes its identity.
-        @State private var selectedHero: HeroItem?
     #endif
 
     init(playlistPrefix: String? = nil, restriction queryRestriction: ContentRestriction = ContentRestriction()) {
@@ -167,7 +161,9 @@ struct HomeView: View {
 
     private func selectHero(_ hero: HeroItem) {
         #if os(tvOS)
-            selectedHero = hero
+            // The hero stays a stable Button for carousel paging, but pushes
+            // the same concrete destination as a card onto the persistent path.
+            homePath.wrappedValue = HomeHeroNavigation.appending(hero, to: homePath.wrappedValue)
         #endif
     }
 
@@ -198,7 +194,7 @@ struct HomeView: View {
                         onSelectHero: selectHero, rows: { homeRows(content) }
                     )
                     #if os(tvOS)
-                    .tvQuickSwitchHint(interacted: selectedHero != nil)
+                    .tvQuickSwitchHint(interacted: !homePath.wrappedValue.isEmpty)
                     #else
                     .browseActivity()
                     #endif
@@ -235,15 +231,6 @@ struct HomeView: View {
                     animationNamespace: animationNamespace
                 )
             }
-            #if os(tvOS)
-            .navigationDestination(item: $selectedHero) { hero in
-                if let movie = hero.movie {
-                    MovieDetailView(movie: movie, animationNamespace: animationNamespace)
-                } else if let series = hero.series {
-                    SeriesDetailView(series: series, animationNamespace: animationNamespace)
-                }
-            }
-            #endif
             .sectionFeedLoads(
                 feed: feed, configuration: .init(context: feedContext, catalogKey: trendingKey,
                                                  heroRef: heroRef, heroSelection: heroSectionRaw, customSections: visibleCustomSections,

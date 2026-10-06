@@ -73,7 +73,6 @@
                 } else {
                     content
                         .transition(.opacity)
-                        .onAppear { focus = .play }
                 }
             }
             .background(Color.black)
@@ -88,7 +87,6 @@
             }
             .task(id: series.id) {
                 await loader.load(series, playlist: seriesPlaylist, in: modelContext)
-                if !Task.isCancelled { focus = .play }
             }
             .task(id: series.id) {
                 await loader.refreshEpisodesIfStale(series, playlist: seriesPlaylist, in: modelContext)
@@ -141,7 +139,7 @@
                 .padding(.bottom, 100)
             }
             .scrollClipDisabled()
-            .defaultFocus($focus, .play)
+            .tvDetailDefaultFocus($focus, .play)
         }
 
         // MARK: - Hero

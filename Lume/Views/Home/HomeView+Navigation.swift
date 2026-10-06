@@ -10,9 +10,22 @@
 import SwiftUI
 
 extension HomeView {
-    /// Previews have no router; pushes there simply don't persist.
+    /// Previews use a local path; the app's path outlives tab unmounting.
     var homePath: Binding<NavigationPath> {
-        guard let pathRouter else { return .constant(NavigationPath()) }
+        guard let pathRouter else { return $fallbackHomePath }
         return Binding(get: { pathRouter.homePath }, set: { pathRouter.homePath = $0 })
+    }
+}
+
+/// Keep hero navigation value-driven, just like Home's poster links. An item
+/// destination held in the tab's @State cannot survive activeOnly unmounting.
+enum HomeHeroNavigation {
+    static func appending(_ hero: HeroItem, to path: NavigationPath) -> NavigationPath {
+        var path = path
+        switch hero {
+        case let .movie(movie, _, _, _, _): path.append(movie)
+        case let .series(series, _, _, _, _): path.append(series)
+        }
+        return path
     }
 }
