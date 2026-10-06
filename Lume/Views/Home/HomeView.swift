@@ -163,7 +163,7 @@ struct HomeView: View {
         #if os(tvOS)
             // The hero stays a stable Button for carousel paging, but pushes
             // the same concrete destination as a card onto the persistent path.
-            homePath.wrappedValue = MediaDetailNavigation.appending(hero, to: homePath.wrappedValue)
+            DetailNavigation.push(hero, on: homePath)
         #endif
     }
 
@@ -212,7 +212,7 @@ struct HomeView: View {
                 showingSettings: $showingSettings,
                 activePlaylist: activePlaylist
             ))
-            .mediaDetailDestinations(namespace: animationNamespace)
+            .detailDestinations(path: homePath, namespace: animationNamespace)
             .navigationDestination(for: SectionCollectionSelection.self) { selection in
                 SectionCollectionView(
                     selection: selection,

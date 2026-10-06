@@ -3,8 +3,8 @@
 //  Lume
 //
 //  The focusable channel row, the Timeline / Stats / Lineup pill selector and the
-//  tvOS-scaled renderers that TVGameDetailSheet drops below its header and Watch
-//  card. They are split out of TVGameDetailSheet to keep each file under the
+//  tvOS-scaled renderers that TVGameDetailView drops below its header and Watch
+//  card. They are split out of TVGameDetailView to keep each file under the
 //  line cap. `TVChannelRow` (LiveTVTVComponents) and the phone Timeline / Stats /
 //  Lineup sections (GameDetailSections) are both `private` and modelled for their
 //  own screens, so these are purpose-built 10-foot variants that render the same

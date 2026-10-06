@@ -437,10 +437,7 @@ private extension SportsHubView {
     // MARK: - Navigation path
 
     private var pathBinding: Binding<NavigationPath> {
-        if let router {
-            return Binding(get: { router.sportsPath }, set: { router.sportsPath = $0 })
-        }
-        return $localPath
+        DetailNavigation.pathBinding(in: router, at: \.sportsPath, fallback: $localPath)
     }
 
     /// A follow's own page — team or league alike, the hub's screen fixed to it.

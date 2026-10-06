@@ -12,10 +12,14 @@
 
     extension TVSportsHubScreen {
         var pathBinding: Binding<NavigationPath> {
-            if let router {
-                return Binding(get: { router.sportsPath }, set: { router.sportsPath = $0 })
-            }
-            return $localPath
+            DetailNavigation.pathBinding(in: router, at: \.sportsPath, fallback: $localPath)
+        }
+
+        func openMatchCentre(_ fixture: SportsFixture) {
+            DetailNavigation.push(
+                SportsMatchRoute(fixture: fixture, resolved: resolved[fixture.id] ?? [], visibilityToken: restriction.visibilityToken),
+                on: pathBinding
+            )
         }
 
         /// Pushes a follow's own page.

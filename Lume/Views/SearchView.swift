@@ -99,7 +99,7 @@ struct SearchView: View {
                     // A filter for an area just switched off falls back to All.
                     if !filters.contains(selectedFilter) { selectedFilter = .all }
                 }
-                .mediaDetailDestinations(namespace: animationNamespace)
+                .detailDestinations(namespace: animationNamespace)
                 .task(id: searchText) {
                     // Debounce raw keystrokes. .task(id:) cancels the in-flight task
                     // (including this sleep) the instant searchText changes, so the

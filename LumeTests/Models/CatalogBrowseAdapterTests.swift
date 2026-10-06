@@ -74,8 +74,8 @@ struct CatalogBrowseAdapterTests {
 
     @Test func `library path bindings read and write only their own deep link stack`() {
         let router = DeepLinkRouter()
-        let movies = MediaDetailNavigation.pathBinding(in: router, at: MovieCatalog.navigationPath, fallback: .constant(NavigationPath()))
-        let series = MediaDetailNavigation.pathBinding(in: router, at: SeriesCatalog.navigationPath, fallback: .constant(NavigationPath()))
+        let movies = DetailNavigation.pathBinding(in: router, at: MovieCatalog.navigationPath, fallback: .constant(NavigationPath()))
+        let series = DetailNavigation.pathBinding(in: router, at: SeriesCatalog.navigationPath, fallback: .constant(NavigationPath()))
         movies.wrappedValue.append("movie")
         #expect(router.moviesPath.count == 1)
         #expect(router.seriesPath.isEmpty)

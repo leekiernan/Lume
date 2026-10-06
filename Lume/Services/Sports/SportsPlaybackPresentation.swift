@@ -9,7 +9,9 @@
 //  and re-presented once it has gone: two players, two stream opens, and the
 //  second trips the provider's connection cap (LumeEngine fails, KSPlayer gets
 //  HTTP 429). So media chosen from a sheet waits here until the sheet's
-//  `onDismiss`. Both hubs, both Home rails and the league screen share it.
+//  `onDismiss`. Standard hub/Home sheets share it; the tvOS hub also uses its
+//  direct-play path. Pushed tvOS Match Centre keeps its own player above the
+//  detail screen, with no sheet dismissal needed.
 //
 
 struct SportsPlaybackPresentation {

@@ -12,6 +12,6 @@ import SwiftUI
 extension HomeView {
     /// Previews use a local path; the app's path outlives tab unmounting.
     var homePath: Binding<NavigationPath> {
-        MediaDetailNavigation.pathBinding(in: pathRouter, at: \.homePath, fallback: $fallbackHomePath)
+        DetailNavigation.pathBinding(in: pathRouter, at: \.homePath, fallback: $fallbackHomePath)
     }
 }

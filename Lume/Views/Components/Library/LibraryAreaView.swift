@@ -104,7 +104,7 @@ struct LibraryAreaView<Kind: LibraryAreaKind>: View {
             .navigationDestination(for: GenreSelection.self) { selection in
                 CatalogGenreView<Kind>(genre: selection.genre, playlistPrefix: playlistPrefix, animationNamespace: animationNamespace)
             }
-            .mediaDetailDestinations(namespace: animationNamespace)
+            .detailDestinations(path: navigationPath, namespace: animationNamespace)
         }
         // Above the stack, so the panel covers the navigation bar too — the
         // bar draws over anything inside the stack.
@@ -195,13 +195,13 @@ struct LibraryAreaView<Kind: LibraryAreaKind>: View {
     /// Drives the stack from the shared `DeepLinkRouter` so an `onOpenURL` push
     /// lands here; falls back to a local path in previews where no router exists.
     private var navigationPath: Binding<NavigationPath> {
-        MediaDetailNavigation.pathBinding(in: router, at: Kind.navigationPath, fallback: $fallbackPath)
+        DetailNavigation.pathBinding(in: router, at: Kind.navigationPath, fallback: $fallbackPath)
     }
 
     /// Selecting the hero opens that title.
     private func open(hero: HeroItem) {
         if Kind.heroItem(hero) != nil {
-            navigationPath.wrappedValue = MediaDetailNavigation.appending(hero, to: navigationPath.wrappedValue)
+            DetailNavigation.push(hero, on: navigationPath)
         }
     }
 

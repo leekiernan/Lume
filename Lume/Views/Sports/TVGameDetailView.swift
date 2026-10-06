@@ -1,10 +1,10 @@
 //
-//  TVGameDetailSheet.swift
+//  TVGameDetailView.swift
 //  Lume
 //
-//  The full tvOS game-detail screen a fixture card opens. It follows the
+//  The pushed tvOS Match Centre a fixture card or hero opens. It follows the
 //  `EPGProgramDetailView.tvBody` conventions — a fixed 10-foot layout sized in
-//  explicit points, dismissed with the Menu/Back button (no Close control), with
+//  explicit points, with native NavigationStack Back handling and
 //  the focusable actions kept above the long non-focusable content so the focus
 //  engine can always reach them. It shows a two-colour team gradient header with
 //  the score or kickoff, the channels the fixture resolved to in the viewer's own
@@ -25,15 +25,10 @@
     import SwiftData
     import SwiftUI
 
-    struct TVGameDetailSheet: View {
-        let fixture: SportsFixture
-        /// The presenter's resolved channels; when empty the sheet resolves this
-        /// one fixture itself (see `GameDetailSheet`).
-        let resolved: [ResolvedChannel]
-        var onWatch: (ResolvedChannel) -> Void
+    struct TVGameDetailView: View {
+        let route: SportsMatchRoute
         var provider: any SportsDataProvider = ESPNClient.shared
 
-        @Environment(\.dismiss) private var dismiss
         @Environment(\.modelContext) private var modelContext
         @Environment(\.contentRestriction) private var restriction
         @State private var follows = SportsFollowService.shared
@@ -41,9 +36,35 @@
         @State private var detailLoad = SportsEventDetailLoadMachine()
         @State private var fetchedStandings: [SportsStandingRow] = []
         @State private var tab: GameDetailTab = .timeline
-        @State private var selfResolved: [ResolvedChannel] = []
+        @State private var resolution = SportsFixtureResolutionMachine()
+        @State private var playingMedia: PlayableMedia?
+        private enum FocusTarget: Hashable {
+            case channel(String)
+            case follow(String)
+            case tab(GameDetailTab)
+        }
+
+        @FocusState private var focus: FocusTarget?
         @AppStorage(SportsSyncService.hideScoresKey) private var hideScoresSetting = false
         @State private var reveal = SportsScoreReveal.shared
+
+        private var fixture: SportsFixture {
+            route.currentFixture(in: store.snapshot(for: route.fixture.leagueId)?.fixtures ?? [])
+        }
+
+        private var resolved: [ResolvedChannel] {
+            route.channels(visibleUnder: restriction.visibilityToken)
+        }
+
+        private var defaultFocus: FocusTarget {
+            if fixture.status.state != .final, let channel = channels.first {
+                return .channel(channel.id)
+            }
+            if let team = fixture.home?.team ?? fixture.away?.team {
+                return .follow(team.id)
+            }
+            return .tab(tab)
+        }
 
         /// Hide Scores, unless this one game has been revealed.
         private var hidesScores: Bool {
@@ -53,7 +74,8 @@
         /// The resolver's channels, ordered within each tier for this viewer's
         /// languages and screen (`SportsChannelPreference`).
         private var channels: [ResolvedChannel] {
-            SportsChannelPreference.ordered(resolved.isEmpty ? selfResolved : resolved, context: .current)
+            let fetched = resolution.resolved(for: restriction.visibilityToken)[fixture.id] ?? []
+            return SportsChannelPreference.ordered(resolved.isEmpty ? fetched : resolved, context: .current)
         }
 
         var body: some View {
@@ -76,15 +98,21 @@
                 .padding(.vertical, 70)
             }
             .scrollClipDisabled()
+            .tvDetailDefaultFocus($focus, defaultFocus)
             .background(background.ignoresSafeArea())
-            .onExitCommand { dismiss() }
-            .task(id: fixture.id) { await loadDetail() }
+            // The detail stays pushed beneath its player, just like movies
+            // and series: no closing cover to race against the stream open.
+            .fullScreenCover(item: $playingMedia) { media in
+                FullScreenPlayerView(media: media)
+            }
+            .task(id: [fixture.id, restriction.visibilityToken]) {
+                await loadDetail()
+            }
             .onAppear { SportsSyncService.shared.beginLivePolling() }
             .onDisappear { SportsSyncService.shared.endLivePolling() }
         }
 
-        /// The team tints are translucent washes; without a solid base a
-        /// fullScreenCover on tvOS lets the hub show through them.
+        /// The team tints are translucent washes over a solid detail backdrop.
         private var background: some View {
             ZStack {
                 Color(white: 0.08)
@@ -246,6 +274,7 @@
                     .background(Capsule().fill(.white.opacity(0.12)))
             }
             .buttonStyle(TVCardButtonStyle(focusScale: 1.05))
+            .focused($focus, equals: .follow(team.id))
             .accessibilityLabel(following ? Text("Unfollow \(team.name)") : Text("Follow \(team.name)"))
             .padding(.top, 6)
         }
@@ -279,7 +308,7 @@
 
         private func singleChannel(_ channel: ResolvedChannel) -> some View {
             Button {
-                onWatch(channel)
+                watch(channel)
             } label: {
                 HStack(spacing: 22) {
                     ChannelLogo(urlString: channel.stream.streamIcon, size: 64)
@@ -295,12 +324,18 @@
                 .padding(.vertical, 24)
             }
             .buttonStyle(TVGlassButtonStyle())
+            .focused($focus, equals: .channel(channel.id))
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(Text("Watch on \(channel.stream.name)"))
         }
 
         private func channelRow(_ channel: ResolvedChannel) -> some View {
-            TVSportsChannelRow(channel: channel, onPlay: { onWatch(channel) })
+            TVSportsChannelRow(channel: channel, onPlay: { watch(channel) })
+                .focused($focus, equals: .channel(channel.id))
+        }
+
+        private func watch(_ channel: ResolvedChannel) {
+            playingMedia = SportsPlayback.media(for: channel, in: modelContext)
         }
 
         private func channelName(_ channel: ResolvedChannel, size: CGFloat) -> some View {
@@ -351,6 +386,7 @@
             return HStack(spacing: 12) {
                 ForEach(tabs) { value in
                     TVTabPill(title: value.title, isActive: tab == value) { tab = value }
+                        .focused($focus, equals: .tab(value))
                 }
             }
             .padding(8)
@@ -421,7 +457,9 @@
             let cached = store.snapshot(for: fixture.leagueId)?.standings ?? []
             return cached.isEmpty ? fetchedStandings : cached
         }
+    }
 
+    private extension TVGameDetailView {
         // MARK: - Loading
 
         private func loadDetail() async {
@@ -429,19 +467,24 @@
             let detailRequest = detailLoad.begin()
 
             if resolved.isEmpty, fixture.status.state != .final {
-                selfResolved = await SportsChannelResolver.resolve(
+                await SportsFixtureResolution.run(
+                    $resolution, fixtures: [fixture],
                     container: modelContext.container,
-                    fixtures: [fixture],
-                    restriction: restriction
-                )[fixture.id] ?? []
+                    restriction: restriction, soonestFirst: false
+                )
+                guard !Task.isCancelled else { return }
             }
             if store.snapshot(for: fixture.leagueId)?.standings.isEmpty ?? true, fetchedStandings.isEmpty {
-                fetchedStandings = await (try? provider.standings(league: league)) ?? []
+                let standings = await (try? provider.standings(league: league)) ?? []
+                guard !Task.isCancelled else { return }
+                fetchedStandings = standings
             }
             do {
                 let detail = try await provider.eventDetail(league: league, eventId: fixture.eventId)
+                guard !Task.isCancelled else { return }
                 detailLoad.finish(detailRequest, detail: detail)
             } catch {
+                guard !Task.isCancelled else { return }
                 detailLoad.fail(detailRequest)
             }
         }
@@ -458,7 +501,7 @@
     }
 
     /// The header's per-team column, kept out of the struct body for length.
-    extension TVGameDetailSheet {
+    extension TVGameDetailView {
         /// A race weekend's timetable: every session with its day and time.
         private var sessionList: some View {
             VStack(spacing: 6) {
