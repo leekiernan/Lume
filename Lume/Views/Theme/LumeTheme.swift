@@ -16,9 +16,11 @@
 //  - `lumeViolet` #7000B4 — depth behind brand moments (the ambient glow);
 //    never text.
 //  - `lumeLiveRed` #D7263D — the LIVE badge fill.
-//  - `lumeTextSecondary` #B9B5C4 / `lumeTextTertiary` #8E8A99 — the boards'
-//    secondary and tertiary text on dark and tvOS (light appearance keeps
-//    4.5:1 on white with darker tones).
+//  - `lumeTextSecondary` / `lumeTextTertiary` — secondary and tertiary text:
+//    #B9B5C4 / #8E8A99 on dark and tvOS, #55506A / #6F6A80 in light.
+//  - `lumeSelection` — selected chips, tabs and rows: Lume pink at 18% on dark,
+//    pink deep at 10% in light.
+//  - `lumeGround` — the plain-screen ground: Night on dark, Day #F7F5FA in light.
 //
 //  Focus stays white, as tvOS draws it. Interface text is the system font;
 //  Unbounded is the wordmark only (`LumeWordmark`).

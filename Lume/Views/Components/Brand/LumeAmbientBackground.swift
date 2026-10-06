@@ -12,6 +12,7 @@ import SwiftUI
 struct LumeAmbientBackground: View {
     /// The brand ground (launch, splash) glows from the centre instead.
     var style: Style = .screen
+    @Environment(\.colorScheme) private var colorScheme
 
     enum Style {
         case screen
@@ -29,9 +30,13 @@ struct LumeAmbientBackground: View {
                 ground
                 switch style {
                 case .screen:
-                    glow(Color.lumeViolet.opacity(0.38), width: 1200, height: 700, unit: unit)
+                    // Light: the foundations' pale violet and pink wash on Day;
+                    // dark (and tvOS): the violet glow on Night.
+                    let isLight = colorScheme == .light
+                    glow(Color.lumeViolet.opacity(isLight ? 0.14 : 0.38), width: 1200, height: 700, unit: unit)
                         .position(x: size.width * 0.85, y: -size.height * 0.1)
-                    glow(Color.lumeAccent.opacity(0.10), width: 900, height: 600, unit: unit)
+                    glow(Color(red: 1, green: 0x88 / 255, blue: 0xD7 / 255).opacity(isLight ? 0.24 : 0.10),
+                         width: 900, height: 600, unit: unit)
                         .position(x: 0, y: size.height)
                 case .brand:
                     glow(Color.lumeViolet.opacity(0.5), width: 760, height: 540, unit: unit)
@@ -51,7 +56,7 @@ struct LumeAmbientBackground: View {
     }
 
     private var ground: Color {
-        style == .screen ? .lumeNight : .lumeInk
+        style == .screen ? .lumeGround : .lumeInk
     }
 
     /// A CSS `radial-gradient(w h at …, colour, transparent 70%)`: an

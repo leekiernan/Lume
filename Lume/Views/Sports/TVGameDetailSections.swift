@@ -180,7 +180,7 @@
 
         private var fill: AnyShapeStyle {
             if isFocused { return AnyShapeStyle(.white) }
-            return isActive ? AnyShapeStyle(Color.lumeAccent.opacity(0.18)) : AnyShapeStyle(.clear)
+            return isActive ? AnyShapeStyle(Color.lumeSelection) : AnyShapeStyle(.clear)
         }
     }
 

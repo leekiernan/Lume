@@ -337,7 +337,7 @@ private struct BrowseSidebarRowButtonStyle: ButtonStyle {
                 .background(
                     RoundedRectangle(cornerRadius: 8, style: .continuous)
                         .fill(configuration.isPressed ? Color.primary.opacity(0.12)
-                            : isSelected ? Color.lumeAccent.opacity(0.18) : .clear)
+                            : isSelected ? Color.lumeSelection : .clear)
                 )
         #endif
     }
@@ -351,7 +351,7 @@ private struct BrowseSidebarRowButtonStyle: ButtonStyle {
 
         private var tvFill: Color {
             if isFocused { return .white.opacity(0.18) }
-            return isSelected ? Color.lumeAccent.opacity(0.18) : .clear
+            return isSelected ? Color.lumeSelection : .clear
         }
     #endif
 }

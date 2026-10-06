@@ -94,9 +94,9 @@ struct FilterChipStyle: ButtonStyle {
         private var background: AnyShapeStyle {
             #if os(tvOS)
                 if isFocused { return AnyShapeStyle(.white) }
-                return isSelected ? AnyShapeStyle(Color.lumeAccent.opacity(0.18)) : AnyShapeStyle(.white.opacity(0.10))
+                return isSelected ? AnyShapeStyle(Color.lumeSelection) : AnyShapeStyle(.white.opacity(0.10))
             #else
-                return isSelected ? AnyShapeStyle(Color.lumeAccent.opacity(0.18)) : AnyShapeStyle(.fill.tertiary)
+                return isSelected ? AnyShapeStyle(Color.lumeSelection) : AnyShapeStyle(.fill.tertiary)
             #endif
         }
     }
