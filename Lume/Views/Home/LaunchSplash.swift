@@ -30,39 +30,29 @@ final class LaunchSplashModel {
 /// (the brand board's launch); if Home is still not ready after that, the mark
 /// pulses as the wait indicator.
 struct LaunchSplashView: View {
-    @State private var start = Date()
     @State private var isWaiting = false
+    @State private var wordmarkArrived = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         ZStack {
             LumeAmbientBackground(style: .brand)
-            TimelineView(.animation(paused: isWaiting || reduceMotion)) { context in
-                let intro = LumeMarkFrame(motion: .launch, elapsed: reduceMotion ? LumeMarkFrame.launchDuration
-                    : context.date.timeIntervalSince(start))
-                VStack(spacing: LaunchSplashMetrics.gap) {
-                    Group {
-                        if isWaiting {
-                            LumeMark(motion: .pulse)
-                                .transition(.opacity)
-                        } else {
-                            LumeMark(motion: .launch)
-                                .transition(.opacity)
-                        }
-                    }
+            VStack(spacing: LaunchSplashMetrics.gap) {
+                LumeMark(motion: isWaiting ? .pulse : .launch)
                     .frame(width: LaunchSplashMetrics.mark, height: LaunchSplashMetrics.mark)
-                    LumeWordmark(size: LaunchSplashMetrics.wordmark, color: Color(white: 0.96))
-                        // The board's line-height: 1, so the mark sits where
-                        // the static launch image puts it.
-                        .frame(height: LaunchSplashMetrics.wordmark)
-                        .opacity(intro.wordmark)
-                        .offset(y: intro.wordmarkRise)
-                }
+                LumeWordmark(size: LaunchSplashMetrics.wordmark, color: Color(white: 0.96))
+                    // The board's line-height: 1, so the mark sits where the
+                    // static launch image puts it.
+                    .frame(height: LaunchSplashMetrics.wordmark)
+                    .opacity(wordmarkArrived ? 1 : 0)
+                    .offset(y: wordmarkArrived ? 0 : 14)
             }
         }
         .task {
+            // The board's launch: the wordmark rises in at 1.92 s, over 0.84 s.
+            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.84).delay(1.92)) { wordmarkArrived = true }
             try? await Task.sleep(for: .seconds(LumeMarkFrame.launchDuration + 0.4))
-            withAnimation(.easeInOut(duration: 0.4)) { isWaiting = true }
+            isWaiting = true
         }
     }
 }

@@ -1,5 +1,6 @@
 import CoreGraphics
 @testable import Lume
+import QuartzCore
 import SwiftUI
 import Testing
 
@@ -83,6 +84,43 @@ struct LumeMarkTests {
         #expect(abs(glowing.inner - 1) < 1e-6)
         let rested = LumeMarkFrame(motion: .launch, elapsed: 30)
         #expect(rested == LumeMarkFrame(motion: .still, elapsed: 0))
+    }
+}
+
+@MainActor
+struct LumeMarkLayerTests {
+    private func layer(_ motion: LumeMark.Motion, reduceMotion: Bool = false) -> LumeMarkLayer {
+        let mark = LumeMarkLayer()
+        mark.frame = CGRect(x: 0, y: 0, width: 240, height: 240)
+        mark.layoutIfNeeded()
+        mark.reduceMotion = reduceMotion
+        mark.motion = motion
+        return mark
+    }
+
+    private func keys(_ mark: LumeMarkLayer) -> [String] {
+        (mark.sublayers ?? []).flatMap { $0.animationKeys() ?? [] }.sorted()
+    }
+
+    @Test func `each motion runs on Core Animation`() {
+        #expect(keys(layer(.still)).isEmpty)
+        #expect(keys(layer(.pulse)) == ["pulse", "pulse"])
+        #expect(keys(layer(.emit)) == ["emit", "emit"])
+        #expect(keys(layer(.trace)) == ["draw", "fade"])
+        #expect(keys(layer(.launch)) == ["launch", "launch"])
+    }
+
+    @Test func `reduce motion rests the mark but keeps progress`() {
+        #expect(keys(layer(.pulse, reduceMotion: true)).isEmpty)
+        let progress = layer(.progress(0.4), reduceMotion: true)
+        #expect(progress.sublayers?.contains { ($0 as? CAShapeLayer)?.strokeEnd == 0.4 } == true)
+    }
+
+    @Test func `progress animates from its previous fill`() {
+        let mark = layer(.progress(0.2))
+        mark.motion = .progress(0.6)
+        let trace = mark.sublayers?.compactMap { $0 as? CAShapeLayer }.first { $0.strokeEnd == 0.6 }
+        #expect(trace?.animation(forKey: "fill") != nil)
     }
 }
 
