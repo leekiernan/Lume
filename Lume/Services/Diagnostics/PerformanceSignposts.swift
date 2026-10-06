@@ -135,6 +135,8 @@ nonisolated extension PerfSignpost {
     static let playerRebuffer = PerfSignpost("PlayerRebuffer")
     static let playerEngineFallback = PerfSignpost("PlayerEngineFallback")
     static let playerStartupFailure = PerfSignpost("PlayerStartupFailure")
+    /// Core Audio's first-use registration, paid off the main thread at launch.
+    static let audioWarmUp = PerfSignpost("AudioWarmUp")
 }
 
 // MARK: - Interval handle

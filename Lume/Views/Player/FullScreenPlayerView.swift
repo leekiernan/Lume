@@ -25,6 +25,9 @@ struct FullScreenPlayerView: View {
     /// Stable for this presented player. The process-wide audio session uses it
     /// to reject a stale `onDisappear` after another player has already opened.
     @State var audioSessionOwner = UUID()
+    /// The engine mounts once the session is active, so KSPlayer's own
+    /// synchronous main-thread activation finds it already done.
+    @State var isAudioSessionReady = false
     /// The in-flight progress write, so the review policy can wait for a
     /// finished title to be counted before it judges the session that
     /// finished it.
@@ -297,6 +300,7 @@ struct FullScreenPlayerView: View {
             // main context and hitch KSPlayer's render loop.
             ContentIndexingService.shared.isPlaybackActive = true
             await configureAudioSessionForPlayback()
+            isAudioSessionReady = true
         }
         .task(id: activeMedia.id) {
             // Resolve a deferred Stalker placeholder into a real (short-lived)
@@ -404,14 +408,15 @@ struct FullScreenPlayerView: View {
 
     @ViewBuilder
     private var playerView: some View {
-        if let media = displayMedia {
+        if let media = displayMedia, isAudioSessionReady {
             engineView(for: media)
         } else if resolveError != nil {
             // Stalker `create_link` failed — surface the failure with a retry
             // rather than spinning forever.
             PlayerErrorIndicator(title: activeMedia.title, onRetry: retryResolve, onClose: closePlayer)
         } else {
-            // Resolving the Stalker stream URL before the engine can load it.
+            // Activating the audio session, or resolving a Stalker stream URL,
+            // before the engine can load it.
             PlayerLoadingIndicator(opening: activeMedia)
         }
     }

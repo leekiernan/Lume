@@ -289,6 +289,10 @@ struct LumeApp: App {
                     // write, and idempotent per process on the callee's side.
                     AppStoreReviewPrompt.shared.noteAppLaunched()
 
+                    // Core Audio's one-off component registration, off the main
+                    // thread, so pressing Play doesn't pay it (see the type).
+                    if !Self.isUnitTestHost { AudioEngineWarmUp.schedule() }
+
                     // Give DownloadManager access to the model container so it
                     // can persist download state from its delegate callbacks.
                     #if !os(tvOS)

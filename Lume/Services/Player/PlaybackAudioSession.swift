@@ -23,7 +23,14 @@ actor PlaybackAudioSession {
 
         #if os(iOS) || os(tvOS)
             let session = AVAudioSession.sharedInstance()
-            try? session.setCategory(.playback, mode: .moviePlayback, options: [])
+            // The same category, mode and routing policy KSPlayer sets as it
+            // opens a stream, so its own synchronous main-thread call finds
+            // nothing to change.
+            #if os(tvOS)
+                try? session.setCategory(.playback, mode: .moviePlayback, policy: .longFormAudio, options: [])
+            #else
+                try? session.setCategory(.playback, mode: .moviePlayback, policy: .longFormVideo, options: [])
+            #endif
             if configuration == .fullScreen {
                 let maxChannels = session.maximumOutputNumberOfChannels
                 if maxChannels > 2 {
