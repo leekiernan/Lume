@@ -56,7 +56,6 @@
                 } else {
                     content
                         .transition(.opacity)
-                        .onAppear { focus = .play }
                 }
             }
             .background(Color.black)
@@ -127,7 +126,7 @@
                 .padding(.bottom, 100)
             }
             .scrollClipDisabled()
-            .defaultFocus($focus, .play)
+            .tvDetailDefaultFocus($focus, .play)
         }
 
         // MARK: - Hero

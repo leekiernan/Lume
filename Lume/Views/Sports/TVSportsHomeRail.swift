@@ -22,6 +22,7 @@ import SwiftUI
 
         @Environment(\.modelContext) private var modelContext
         @Environment(\.contentRestriction) private var restriction
+        @Environment(\.detailNavigationPath) private var navigationPath
 
         @State private var premium = PremiumManager.shared
         @State private var store = SportsStore.shared
@@ -33,25 +34,14 @@ import SwiftUI
             resolution.resolved(for: restriction.visibilityToken)
         }
 
-        @State private var selectedFixture: SportsFixture?
         @State private var showManageTeams = false
         @State private var showPaywall = false
-
-        // The player, and media waiting for a closing sheet (`SportsPlaybackPresentation`).
-
-        @State private var playback = SportsPlaybackPresentation()
 
         var body: some View {
             Group {
                 if shouldShow { content }
             }
             .sheet(isPresented: $showManageTeams) { TVManageTeamsPane() }
-            .fullScreenCover(item: $selectedFixture, onDismiss: presentPendingMedia) { fixture in
-                TVGameDetailSheet(fixture: fixture, resolved: resolved[fixture.id] ?? [], onWatch: watch)
-            }
-            .fullScreenCover(item: $playback.playing) { media in
-                FullScreenPlayerView(media: media)
-            }
             .paywall(isPresented: $showPaywall, highlight: .sportsHub)
             .onAppear(perform: warm)
             .onDisappear { SportsSyncService.shared.endLivePolling() }
@@ -82,7 +72,7 @@ import SwiftUI
                 ScrollView(.horizontal, showsIndicators: false) {
                     LazyHStack(spacing: PosterCardMetrics.railSpacing) {
                         ForEach(railFixtures) { fixture in
-                            TVFixtureLogoCard(fixture: fixture) { selectedFixture = fixture }
+                            TVFixtureLogoCard(fixture: fixture) { openMatchCentre(fixture) }
                         }
                     }
                     .padding(.horizontal)
@@ -203,25 +193,14 @@ import SwiftUI
             )
         }
 
-        // MARK: - Playback
+        // MARK: - Navigation
 
-        private func watch(_ channel: ResolvedChannel) {
-            guard let media = SportsPlayback.media(for: channel, in: modelContext) else { return }
-
-            if selectedFixture != nil {
-                // Presented from the detail cover's `onDismiss`: a cover put up
-                // while another is still animating out is torn down and
-                // re-presented, opening the stream twice and tripping the
-                // provider's connection cap. See `presentPendingMedia`.
-                playback.play(media, afterSheet: true)
-                selectedFixture = nil
-            } else {
-                playback.play(media, afterSheet: false)
-            }
-        }
-
-        private func presentPendingMedia() {
-            playback.sheetDidDismiss()
+        private func openMatchCentre(_ fixture: SportsFixture) {
+            guard let navigationPath else { return }
+            DetailNavigation.push(
+                SportsMatchRoute(fixture: fixture, resolved: resolved[fixture.id] ?? [], visibilityToken: restriction.visibilityToken),
+                on: navigationPath
+            )
         }
 
         // MARK: - Follow

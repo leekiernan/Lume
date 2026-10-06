@@ -56,11 +56,10 @@
         }
 
         @State private var heroSelection = SportsHeroSelectionMachine()
-        @State var selectedFixture: SportsFixture?
         @State var showManageTeams = false
         @State var showPaywall = false
         @State var pendingEvent: SportsPayPerView.Event?
-        /// The player, and media waiting for a closing sheet (`SportsPlaybackPresentation`).
+        /// Direct hero/PPV playback. Pushed Match Centre owns its own player.
         @State private var playback = SportsPlaybackPresentation()
         @AppStorage(SportsSyncService.hideScoresKey) private var hidesScores = false
         /// The headlined game from its first minute, when Hide Scores is on and
@@ -96,6 +95,7 @@
                         .navigationDestination(for: SportsFollowRoute.self) { route in
                             TVSportsHubScreen(pageKey: route.key)
                         }
+                        .detailDestinations(path: pathBinding)
                 }
             } else {
                 screen
@@ -114,9 +114,6 @@
                 $hubChannels, resolution: resolution, highlights: highlightsLoad, visibilityToken: restriction.visibilityToken
             )
             .sheet(isPresented: $showManageTeams) { TVManageTeamsPane() }
-            .fullScreenCover(item: $selectedFixture, onDismiss: presentPendingMedia) { fixture in
-                TVGameDetailSheet(fixture: fixture, resolved: resolved[fixture.id] ?? [], onWatch: watch)
-            }
             .fullScreenCover(item: $playback.playing) { media in
                 FullScreenPlayerView(media: media)
             }
@@ -191,7 +188,7 @@
                                 focus: $focus,
                                 onWatch: watch,
                                 onWatchFromStart: heroFromStart.map { media in { playback.play(media, afterSheet: false) } },
-                                onOpen: { selectedFixture = $0 },
+                                onOpen: openMatchCentre,
                                 header: { header.padding(.top, TVSportsMetrics.contentTop) }
                             )
                         }
@@ -207,7 +204,7 @@
                                 highlights: highlights,
                                 payPerView: highlightsResult.payPerView,
                                 availability: highlightAvailability,
-                                onSelect: { selectedFixture = $0 },
+                                onSelect: openMatchCentre,
                                 onWatchEvent: watchEvent,
                                 onLeadingLeft: browseOpener(leading: true)
                             )
@@ -297,7 +294,7 @@
                                 ),
                                 showsLeagueName: !group.isSingleLeague
                             ) {
-                                selectedFixture = fixture
+                                openMatchCentre(fixture)
                             }
                             .focused($focus, equals: .card(fixture.id))
                             .onLeadingEdgeLeft(browseOpener(leading: fixture.id == group.fixtures.first?.id))
@@ -338,16 +335,7 @@
         func watch(_ channel: ResolvedChannel) {
             guard let media = SportsPlayback.media(for: channel, in: modelContext) else { return }
 
-            if selectedFixture != nil {
-                // Presented from the detail cover's `onDismiss`: a cover put up
-                // while another is still animating out is torn down and
-                // re-presented, opening the stream twice and tripping the
-                // provider's connection cap. See `presentPendingMedia`.
-                playback.play(media, afterSheet: true)
-                selectedFixture = nil
-            } else {
-                playback.play(media, afterSheet: false)
-            }
+            playback.play(media, afterSheet: false)
         }
 
         /// A pay-per-view or event channel, straight from its card.
@@ -369,10 +357,6 @@
         private func fromStartMedia(_ fixture: SportsFixture, availability: SportsChannelAvailability) -> PlayableMedia? {
             guard hidesScores, fixture.isInProgress, case let .available(_, best) = availability else { return nil }
             return SportsPlayback.fromStartMedia(for: best, fixture: fixture, in: modelContext)
-        }
-
-        private func presentPendingMedia() {
-            playback.sheetDidDismiss()
         }
     }
 
@@ -462,7 +446,7 @@
                                     showsLeagueName: grouping.scopedFollow?.kind == .team,
                                     fillsWidth: true
                                 ) {
-                                    selectedFixture = fixture
+                                    openMatchCentre(fixture)
                                 }
                             }
                         }

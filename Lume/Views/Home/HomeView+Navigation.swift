@@ -10,9 +10,8 @@
 import SwiftUI
 
 extension HomeView {
-    /// Previews have no router; pushes there simply don't persist.
+    /// Previews use a local path; the app's path outlives tab unmounting.
     var homePath: Binding<NavigationPath> {
-        guard let pathRouter else { return .constant(NavigationPath()) }
-        return Binding(get: { pathRouter.homePath }, set: { pathRouter.homePath = $0 })
+        DetailNavigation.pathBinding(in: pathRouter, at: \.homePath, fallback: $fallbackHomePath)
     }
 }

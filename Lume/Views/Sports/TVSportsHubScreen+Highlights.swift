@@ -39,7 +39,7 @@
                         highlight: first,
                         availability: highlightAvailability(first.fixture),
                         onWatch: watch,
-                        onOpen: { selectedFixture = first.fixture }
+                        onOpen: { openMatchCentre(first.fixture) }
                     )
                     .padding(.top, TVSportsMetrics.contentTop)
                     if highlightsResult.highlights.count > 1 || !highlightsResult.payPerView.isEmpty {
@@ -47,7 +47,7 @@
                             highlights: Array(highlightsResult.highlights.dropFirst()),
                             payPerView: highlightsResult.payPerView,
                             availability: highlightAvailability,
-                            onSelect: { selectedFixture = $0 },
+                            onSelect: openMatchCentre,
                             onWatchEvent: watchEvent
                         )
                     }
