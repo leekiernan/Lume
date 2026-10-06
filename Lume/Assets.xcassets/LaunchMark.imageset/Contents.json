@@ -1,11 +1,11 @@
 {
   "images": [
     {
-      "filename": "LaunchLogo.svg",
+      "filename": "LaunchMark.svg",
       "idiom": "universal"
     },
     {
-      "filename": "LaunchLogo-tv.svg",
+      "filename": "LaunchMark-tv.svg",
       "idiom": "tv"
     }
   ],

@@ -57,7 +57,7 @@ struct LaunchSplashView: View {
     }
 }
 
-/// Matches `LaunchLogo` (the static launch screen): a 300-point mark over the
+/// Matches `LaunchMark` (the static launch screen): a 300-point mark over the
 /// wordmark's space, centred together.
 enum LaunchSplashMetrics {
     static let mark: CGFloat = 300
