@@ -64,7 +64,6 @@ Planned work is tracked in [GitHub Issues](https://github.com/bilipp/Lume/issues
 
 ```bash
 git clone https://github.com/bilipp/Lume.git
-git clone https://github.com/bilipp/LumeEngine.git   # sibling directory — required
 cd Lume
 ./Scripts/setup.sh        # installs git hooks + lint/format tooling
 open Lume.xcodeproj
@@ -78,23 +77,6 @@ Mint). The first run builds SwiftFormat from source once (~10 s) and caches it.
 
 Remote dependencies (KSPlayer, FFmpegKit, VLCKit) are resolved automatically by SPM on
 first build.
-
-**[LumeEngine](https://github.com/bilipp/LumeEngine) is the exception.** Lume's own
-FFmpeg 9 engine (shipping as an opt-in beta engine) is referenced as a **local** Swift
-package at `../LumeEngine`, so the project will not resolve until you have cloned it as a
-sibling of `Lume/` **and** built its FFmpeg xcframework once:
-
-```bash
-cd ../LumeEngine
-curl -sLo build/ffmpeg-9.0.1.tar.xz https://ffmpeg.org/releases/ffmpeg-9.0.1.tar.xz
-build/scripts/build-ffmpeg.sh macos-arm64     # + ios-arm64 / tvos-arm64 for device builds
-build/scripts/make-xcframework.sh
-```
-
-That build takes 10–20 minutes per platform slice and only has to be redone when
-`build/versions.json` changes. Engine-side playback bugs belong in the
-[LumeEngine tracker](https://github.com/bilipp/LumeEngine/issues); the app-side wiring
-(`Lume/Views/Player/LumeEngine*.swift`) belongs here.
 
 ---
 

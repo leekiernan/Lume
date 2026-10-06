@@ -4,8 +4,7 @@
 //
 //  Works around AVKit's broken sample-buffer Picture in Picture on macOS.
 //
-//  With an `AVSampleBufferDisplayLayer` content source — what KSPlayer and
-//  LumeEngine both use — AVKit gets the PiP panel's geometry wrong three ways:
+//  With an `AVSampleBufferDisplayLayer` content source — what KSPlayer uses — AVKit gets the PiP panel's geometry wrong three ways:
 //
 //  - It sizes its video view to the video's rect in the *player window* and
 //    never scales it down to the panel, so the panel shows only the view's

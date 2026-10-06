@@ -5,7 +5,7 @@
 //  What the engine's controls and the episode buttons (`PlayerEpisodeOverlays`)
 //  need from each other. The host puts one in the environment for the player
 //  it builds; each engine draws its own controls and owns the remote, so both
-//  sides meet here rather than through four engine-specific paths.
+//  sides meet here rather than through engine-specific paths.
 //
 //  - Layout: each engine's controls report their bottom block
 //    (`reportsControlsHeight()`), and the buttons rise above it.

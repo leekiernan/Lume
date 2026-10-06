@@ -4,7 +4,7 @@
 //
 //  Cross-platform favorite resolution + toggle for the active player media.
 //  Shared by every control overlay (the tvOS `TVPlayerControlsOverlay`, and
-//  the iOS / macOS AVPlayer, KSPlayer, VLCKit and LumeEngine overlays) so the
+//  the iOS / macOS AVPlayer, KSPlayer and VLCKit overlays) so the
 //  favorite control
 //  sitting beside the audio / subtitle track menus behaves identically on
 //  every engine. Series are favorited via their parent (episodes have no

@@ -3,7 +3,7 @@
 //  Lume
 //
 //  The single path an in-player transport control takes to change stream. All
-//  four engine hosts (KSPlayer, VLCKit, AVPlayer, LumeEngine) drove their own
+//  three engine hosts (KSPlayer, VLCKit, AVPlayer) drove their own
 //  near-identical copy of the tvOS channel swap; the on-screen previous/next
 //  controls would have added two more. This is that logic, once.
 //

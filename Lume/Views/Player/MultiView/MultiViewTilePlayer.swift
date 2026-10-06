@@ -133,14 +133,6 @@ struct MultiViewTilePlayer: View {
                 onPlaybackStarted: { isPlaying = true },
                 onPlaybackFailed: handleFailure
             )
-        case .lumeEngine:
-            MultiViewLumeTile(
-                media: media,
-                isMuted: isMuted,
-                usesQuickStartupTimeout: hasFallbackEngine,
-                onPlaybackStarted: { isPlaying = true },
-                onPlaybackFailed: handleFailure
-            )
         }
     }
 

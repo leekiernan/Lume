@@ -2,7 +2,7 @@
 //  PictureInPictureGeometryTests.swift
 //  LumeTests
 //
-//  macOS sample-buffer PiP (KSPlayer, LumeEngine) needs Lume to redo AVKit's
+//  macOS sample-buffer PiP (KSPlayer) needs Lume to redo AVKit's
 //  panel geometry: AVKit leaves the picture unscaled and offset by the player
 //  window's letterbox. These pin the transform `MacPictureInPictureScaler`
 //  computes, on layer trees shaped like the ones AVKit actually builds in the

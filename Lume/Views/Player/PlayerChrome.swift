@@ -2,9 +2,8 @@
 //  PlayerChrome.swift
 //  Lume
 //
-//  When the player's controls are drawn, the same for every engine. KSPlayer
-//  and LumeEngine held them back until the first frame while VLC and AVPlayer
-//  drew them over the loading spinner from the start.
+//  When the player's controls are drawn, the same for every engine. Controls
+//  wait for the first frame rather than covering the loading spinner.
 //
 
 enum PlayerChrome {

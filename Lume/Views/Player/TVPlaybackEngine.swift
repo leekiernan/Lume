@@ -3,7 +3,7 @@
 //  Lume
 //
 //  Engine-agnostic surface the tvOS player overlay (`TVPlayerControlsOverlay`)
-//  drives. All four engines conform — the VLCKit, AVPlayer and LumeEngine
+//  drives. All three engines conform — the VLCKit and AVPlayer
 //  coordinators directly, KSPlayer through the `KSTVPlaybackEngine` adapter —
 //  so the rich Apple-TV-style overlay — transport, scrubber, episodes / info
 //  panels, audio / subtitle menus — is shared verbatim between them and can't

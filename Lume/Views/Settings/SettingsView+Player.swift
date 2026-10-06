@@ -34,7 +34,6 @@
 
                 NavigationLink("VLCKit Options") { VLCEngineSettingsScreen() }
                 NavigationLink("KSPlayer Options") { KSEngineSettingsScreen() }
-                NavigationLink("Lume Engine Options") { LumeEngineSettingsScreen() }
             } header: {
                 Text("Player")
             } footer: {
