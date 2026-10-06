@@ -23,14 +23,9 @@ struct DeepLinkTests {
         #expect(DeepLink(url: url) == .series(tmdbId: 77))
     }
 
-    @Test func `parses resume link`() throws {
+    @Test func `rejects retired activity resume link`() throws {
         let url = try #require(URL(string: "lume://resume"))
-        #expect(DeepLink(url: url) == .resume)
-    }
-
-    @Test func `resume is case insensitive and ignores a path`() throws {
-        let url = try #require(URL(string: "lume://RESUME/anything"))
-        #expect(DeepLink(url: url) == .resume)
+        #expect(DeepLink(url: url) == nil)
     }
 
     @Test func `parses downloads link`() throws {

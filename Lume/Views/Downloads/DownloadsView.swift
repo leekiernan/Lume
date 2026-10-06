@@ -359,7 +359,7 @@ import SwiftUI
 
 extension View {
     /// Presents the downloads list as a sheet, in the same navigation + dismiss
-    /// chrome Settings gives it. The download Live Activity's tap target, so it
+    /// chrome Settings gives it. The download notification's tap target, so it
     /// is reachable without disturbing whatever tab the user had open (see
     /// `MainTabView`). Declared on every platform so the root can apply it
     /// unconditionally.

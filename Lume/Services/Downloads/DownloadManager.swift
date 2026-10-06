@@ -37,6 +37,9 @@ final class DownloadManager: NSObject {
     /// delaying unrelated interactions such as opening a context menu. Gates
     /// updates to one per task per 250 ms.
     private nonisolated let progressPublishGate = OSAllocatedUnfairLock<[Int: Date]>(initialState: [:])
+    /// Do not release the background wake budget before completion alerts have
+    /// reached the notification center. Enter before the delegate returns.
+    private nonisolated let completionDeliveryGroup = DispatchGroup()
 
     private var session: URLSession!
     private var taskMap: [Int: String] = [:]
@@ -116,13 +119,6 @@ final class DownloadManager: NSObject {
             activeDownloads[info.id] = active
         }
         Logger.downloads.info("Adopted \(liveIDs.count) in-flight background download(s)")
-        // A leftover Live Activity has to be cleaned up when nothing is in
-        // flight any more — a force-quit cancels the session's tasks and would
-        // otherwise leave the banner up for hours. But if this launch happened
-        // *to deliver* background events, those completions are still on their
-        // way and belong in the closing summary, so leave ending it to
-        // `urlSessionDidFinishEvents` once they have all landed.
-        refreshLiveActivity(force: true, endsWhenIdle: backgroundCompletionHandler == nil)
 
         guard let container = modelContainer else { return }
         let capturedIDs = liveIDs
@@ -210,7 +206,6 @@ final class DownloadManager: NSObject {
         pendingIDs.remove(id)
         pendingQueue.removeAll { $0.id == id }
         scheduleModelUpdate(id: id, status: nil, localURL: nil)
-        refreshLiveActivity(force: true)
     }
 
     func deleteLocalFile(id: String) {
@@ -298,6 +293,7 @@ final class DownloadManager: NSObject {
     }
 
     private func enqueue(_ item: PendingDownload) {
+        DownloadCompletionNotifications.shared.prepareForDownload()
         pendingQueue.append(item)
         pendingIDs.insert(item.id)
         scheduleModelUpdate(id: item.id, status: .pending, localURL: nil)
@@ -311,9 +307,6 @@ final class DownloadManager: NSObject {
             pendingIDs.remove(item.id)
             startTask(item)
         }
-        // The single choke point every start, finish and failure funnels
-        // through, so the Live Activity only needs one hook to see all three.
-        refreshLiveActivity(force: true)
     }
 
     private func startTask(_ item: PendingDownload) {
@@ -414,7 +407,6 @@ extension DownloadManager: URLSessionDownloadDelegate {
                 download.samples.append((date: now, bytes: totalBytesWritten))
                 download.samples = download.samples.filter { $0.date >= now.addingTimeInterval(-5) }
             }
-            self.refreshLiveActivity()
         }
     }
 
@@ -457,8 +449,11 @@ extension DownloadManager: URLSessionDownloadDelegate {
             return
         }
         Logger.downloads.info("Download complete: \(info.id)")
+        completionDeliveryGroup.enter()
         Task { @MainActor in
+            defer { self.completionDeliveryGroup.leave() }
             self.finalizeDownload(taskID: taskID, info: info, destination: destination)
+            await DownloadCompletionNotifications.shared.notifyCompleted(info, taskID: taskID)
         }
     }
 
@@ -508,7 +503,9 @@ extension DownloadManager: URLSessionDownloadDelegate {
             staged = false
         }
         let wasStaged = staged
+        completionDeliveryGroup.enter()
         Task { @MainActor in
+            defer { self.completionDeliveryGroup.leave() }
             guard let id = self.taskMap[taskID] else {
                 try? FileManager.default.removeItem(at: interim)
                 return
@@ -527,11 +524,13 @@ extension DownloadManager: URLSessionDownloadDelegate {
                 return
             }
             Logger.downloads.info("Download complete: \(id)")
+            let info = DownloadTaskInfo(id: id, title: self.activeDownloads[id]?.title ?? id, filename: filename)
             self.finalizeDownload(
                 taskID: taskID,
-                info: DownloadTaskInfo(id: id, title: id, filename: filename),
+                info: info,
                 destination: destination
             )
+            await DownloadCompletionNotifications.shared.notifyCompleted(info, taskID: taskID)
         }
     }
 
@@ -545,7 +544,6 @@ extension DownloadManager: URLSessionDownloadDelegate {
         taskMap.removeValue(forKey: taskID)
         idToTask.removeValue(forKey: info.id)
         scheduleModelUpdate(id: info.id, status: .completed, localURL: destination.path)
-        noteLiveActivityCompleted()
         promoteIfNeeded()
     }
 
@@ -578,9 +576,9 @@ extension DownloadManager: URLSessionDownloadDelegate {
     /// finished; failing to call it gets the app throttled out of future ones.
     nonisolated func urlSessionDidFinishEvents(forBackgroundURLSession _: URLSession) {
         Task { @MainActor in
-            // Every completion this relaunch carried is now counted, so the
-            // Live Activity can close with a summary that includes them.
-            self.refreshLiveActivity(force: true)
+            await withCheckedContinuation { continuation in
+                self.completionDeliveryGroup.notify(queue: .global()) { continuation.resume() }
+            }
             let handler = self.backgroundCompletionHandler
             self.backgroundCompletionHandler = nil
             handler?()
@@ -594,6 +592,5 @@ extension DownloadManager: URLSessionDownloadDelegate {
         taskMap.removeValue(forKey: taskID)
         idToTask.removeValue(forKey: id)
         scheduleModelUpdate(id: id, status: .failed, localURL: nil)
-        noteLiveActivityFailed()
     }
 }

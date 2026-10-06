@@ -4,14 +4,15 @@
 //
 //  Moves the SwiftData stores out of the app-group container, once.
 //
-//  The app group (`group.com.bilipp.lume`, added for the Live Activity artwork)
+//  The legacy app group (originally added for Live Activity artwork)
 //  made `ModelConfiguration.groupContainer` — `.automatic` by default — resolve
 //  both stores into the shared container. iOS terminates a suspended process
 //  that still holds a file lock there (RUNNINGBOARD 0xdead10cc), and a catalog
 //  or guide save running as the app is backgrounded holds exactly that SQLite
-//  lock. Nothing but the app process opens either store (`LumeWidgets` links no
-//  SwiftData), so they belong in the app's own container, where a suspension
+//  lock. Nothing but the app process opens either store, so they belong in the
+//  app's own container, where a suspension
 //  mid-write is harmless.
+//  Keep the app-group entitlement until older installs have migrated their stores.
 //
 
 import Foundation

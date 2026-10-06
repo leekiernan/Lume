@@ -3,8 +3,8 @@
 //  Lume
 //
 //  Publishes the active playback session to the system: `MPNowPlayingInfoCenter`
-//  metadata + `MPRemoteCommandCenter` transport on every platform, and (on iOS)
-//  the lock-screen / Dynamic Island Live Activity. On tvOS this is what makes
+//  metadata + `MPRemoteCommandCenter` transport on every platform.
+//  On tvOS this is what makes
 //  an iPhone's Apple TV remote surface show what Lume is playing.
 //
 //  One instance serves all four engines. `FullScreenPlayerView` runs a session
@@ -39,9 +39,7 @@ final class NowPlayingService {
         var advance: ((PlayerMediaSwapper.Step) -> Bool)?
     }
 
-    /// The stream whose session is currently published, if any. Read by the
-    /// `lume://resume` deep-link handler to avoid re-presenting a player that
-    /// is already up.
+    /// Also lets browse shortcuts yield to an active player's remote commands.
     private(set) var currentMedia: PlayableMedia?
 
     private var transport: Transport?
@@ -55,7 +53,6 @@ final class NowPlayingService {
     private var artworkOwner = RequestToken()
     private var channelName: String?
     private var channelEPG: ChannelEPG?
-    private var playbackState: (() -> PlaybackSessionMachine.State)?
 
     private init() {}
 
@@ -85,27 +82,20 @@ final class NowPlayingService {
     /// Publishes `media` for as long as the calling `.task(id:)` lives — the
     /// host cancels and restarts it on every stream swap (channel surf, next
     /// episode). Registers remote commands, publishes metadata + artwork,
-    /// keeps live-TV EPG now/next fresh across programme boundaries, and
-    /// drives the iOS Live Activity.
+    /// and keeps live-TV EPG now/next fresh across programme boundaries.
     func runSession(
-        media: PlayableMedia, clock: PlaybackClock, container: ModelContainer,
-        playbackState: @escaping () -> PlaybackSessionMachine.State
+        media: PlayableMedia, clock: PlaybackClock, container: ModelContainer
     ) async {
         currentMedia = media
         self.clock = clock
-        self.playbackState = playbackState
         channelName = nil
         channelEPG = nil
         artwork = nil
         artworkOwner = RequestToken()
         let artworkRequest = artworkOwner
         let artworkProfile = ActiveProfileStore.current
-        PlaybackResumeStore.save(media)
         registerCommands(for: media)
         publish()
-        #if os(iOS)
-            PlaybackActivityController.shared.startOrUpdate(state: makeActivityState())
-        #endif
 
         await withTaskGroup(of: Void.self) { group in
             group.addTask {
@@ -119,30 +109,16 @@ final class NowPlayingService {
     }
 
     /// A catch-up seek swapped in another segment of the programme already
-    /// published. The session — metadata, commands, artwork, Live Activity —
-    /// carries on (the host keys it on `playbackSessionID`); only the stream a
-    /// resume snapshot reopens moves to the new segment.
+    /// published. The session — metadata, commands and artwork — carries on
+    /// (the host keys it on `playbackSessionID`).
     func continueSession(with media: PlayableMedia) {
         guard let current = currentMedia, current.playbackSessionID == media.playbackSessionID else { return }
         currentMedia = media
-        PlaybackResumeStore.save(media)
     }
 
-    /// Tear the whole session down: player dismissed. Also snapshots the final
-    /// position so the Live Activity's tap-to-resume can reopen where playback
-    /// left off even after the session is gone.
+    /// Tear the whole session down when the player is dismissed.
     func endSession() {
-        if let media = currentMedia {
-            let position = clock?.current ?? 0
-            // The clock is programme time for catch-up; the snapshot reopens
-            // this segment, so it resumes at the segment's own playhead.
-            let resumeAt = media.enginePosition(position)
-            PlaybackResumeStore.save(
-                !media.isLive && resumeAt > 1 ? media.resuming(at: resumeAt) : media
-            )
-        }
         currentMedia = nil
-        playbackState = nil
         clock = nil
         artwork = nil
         artworkOwner = RequestToken()
@@ -150,9 +126,6 @@ final class NowPlayingService {
         channelName = nil
         removeCommands()
         MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
-        #if os(iOS)
-            PlaybackActivityController.shared.end()
-        #endif
     }
 
     // MARK: - Remote commands
@@ -310,9 +283,6 @@ final class NowPlayingService {
         // empty dict — fall back to a full publish so the metadata comes back.
         guard info[MPMediaItemPropertyTitle] != nil else {
             publish()
-            #if os(iOS)
-                PlaybackActivityController.shared.startOrUpdate(state: makeActivityState())
-            #endif
             return
         }
         let playing = forcePlaying ?? transport?.isPlaying() ?? true
@@ -325,9 +295,6 @@ final class NowPlayingService {
         }
         MPNowPlayingInfoCenter.default().nowPlayingInfo = info
         setPlaybackState(playing: playing)
-        #if os(iOS)
-            PlaybackActivityController.shared.startOrUpdate(state: makeActivityState(isPaused: forcePlaying.map { !$0 }))
-        #endif
     }
 
     /// `playbackState` drives the macOS Now Playing widget; iOS/tvOS infer the
@@ -354,10 +321,6 @@ final class NowPlayingService {
         guard !Task.isCancelled, artworkOwner == owner, profile == ActiveProfileStore.current else { return }
         artwork = Self.makeArtwork(image)
         publish()
-        #if os(iOS)
-            PlaybackActivityController.shared.setArtwork(image, mediaID: media.id)
-            PlaybackActivityController.shared.startOrUpdate(state: makeActivityState())
-        #endif
     }
 
     /// The request handler is invoked by the system from arbitrary threads;
@@ -393,9 +356,6 @@ final class NowPlayingService {
             channelName = resolved?.channelName
             channelEPG = resolved?.epg
             publish()
-            #if os(iOS)
-                PlaybackActivityController.shared.startOrUpdate(state: makeActivityState())
-            #endif
             // Re-resolve at the programme boundary; when the guide has no
             // current entry, retry on a slow cadence in case a sync lands one.
             let boundary = resolved?.epg.current?.end ?? Date.now.addingTimeInterval(15 * 60)
@@ -427,9 +387,6 @@ final class NowPlayingService {
         var lastDuration = clock?.duration ?? 0
         var lastPlaying = transport?.isPlaying() ?? true
         var lastWall = Date.now
-        #if os(iOS)
-            var lastActivityStatus = Self.activityStatus(for: playbackState?() ?? .idle)
-        #endif
         while !Task.isCancelled {
             try? await Task.sleep(for: .seconds(1))
             guard !Task.isCancelled, let clock else { return }
@@ -438,93 +395,20 @@ final class NowPlayingService {
             let expected = lastElapsed + (lastPlaying ? wallDelta : 0)
             let drifted = abs(clock.current - expected) > 3
             let durationChanged = clock.duration != lastDuration
-            let activityChanged: Bool
-            #if os(iOS)
-                let activityStatus = Self.activityStatus(for: playbackState?() ?? .idle)
-                activityChanged = activityStatus != lastActivityStatus
-                lastActivityStatus = activityStatus
-            #else
-                activityChanged = false
-            #endif
             let cleared = MPNowPlayingInfoCenter.default().nowPlayingInfo?[MPMediaItemPropertyTitle] == nil
             if cleared, let media = currentMedia {
                 // An engine teardown wiped the info center (and, for KSPlayer,
                 // the command targets with it) — take the session back.
                 registerCommands(for: media)
             }
-            if playing != lastPlaying || drifted || durationChanged || cleared || activityChanged {
+            if playing != lastPlaying || drifted || durationChanged || cleared {
                 publishDynamic()
             }
-            #if os(iOS)
-                PlaybackActivityController.shared.refreshIfNeeded(state: makeActivityState())
-            #endif
             lastElapsed = clock.current
             lastDuration = clock.duration
             lastPlaying = playing
             lastWall = .now
         }
-    }
-
-    // MARK: - Live Activity state
-
-    /// Do not infer first frames from a transport's play intent. Several engines
-    /// report `isPlaying` while they are still joining or buffering.
-    static func activityStatus(for state: PlaybackSessionMachine.State, isPaused: Bool? = nil) -> PlaybackActivityStatus {
-        let status: PlaybackActivityStatus = switch state {
-        case .idle, .resolving, .starting: .loading
-        case .playing: .playing
-        case .paused: .paused
-        case .rebuffering: .buffering
-        case .failed, .closed: .unavailable
-        }
-        // Remote commands can publish a pause/resume before the engine reports
-        // it, but a play request is not evidence that startup succeeded.
-        guard let isPaused, status != .loading, status != .unavailable else { return status }
-        return isPaused ? .paused : .playing
-    }
-
-    #if os(iOS)
-        private func makeActivityState(isPaused: Bool? = nil) -> PlaybackActivityAttributes.ContentState {
-            let media = currentMedia
-            let status = Self.activityStatus(for: playbackState?() ?? .idle, isPaused: isPaused)
-            var state = PlaybackActivityAttributes.ContentState(
-                title: media?.title ?? "",
-                subtitle: media?.subtitle,
-                isLive: media?.isLive ?? false,
-                isPaused: status == .paused
-            )
-            state.status = status
-            if media?.isLive == true {
-                state.programmeTitle = channelEPG?.current?.title
-                state.windowStart = channelEPG?.current?.start
-                state.windowEnd = channelEPG?.current?.end
-                state.nextTitle = channelEPG?.next?.title
-                state.nextStart = channelEPG?.next?.start
-            } else if let clock, clock.duration > 0 {
-                state.elapsed = clock.current
-                state.duration = clock.duration
-                state.windowStart = Date.now.addingTimeInterval(-clock.current)
-                state.windowEnd = Date.now.addingTimeInterval(clock.duration - clock.current)
-            }
-            return state
-        }
-    #endif
-}
-
-/// Snapshot of the last played stream, for the Live Activity's tap-to-resume
-/// (`lume://resume`) after the player — or the whole app — is gone.
-/// `PlayableMedia` is `Codable`, so the snapshot round-trips as JSON.
-enum PlaybackResumeStore {
-    private static let key = "nowPlaying.lastMediaSnapshot"
-
-    static func save(_ media: PlayableMedia) {
-        guard let data = try? JSONEncoder().encode(media) else { return }
-        UserDefaults.standard.set(data, forKey: key)
-    }
-
-    static func load() -> PlayableMedia? {
-        guard let data = UserDefaults.standard.data(forKey: key) else { return nil }
-        return try? JSONDecoder().decode(PlayableMedia.self, from: data)
     }
 }
 

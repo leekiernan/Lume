@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Keep the fork's project.pbxproj a pure function of upstream's.
 
-The fork's only project-file changes are mechanical: signing identity (team,
-bundle ids, signing style) and Xcode's recommended settings. Carried as a diff,
+The fork's project-file changes are mechanical: signing identity (team,
+bundle ids, signing style), Xcode's recommended settings and explicitly retired
+target objects. Carried as a diff,
 they sit next to the version lines, so every upstream version bump conflicts.
 Carried as data, an upstream project change is taken whole and the overrides
 re-applied — no hand-merging.
@@ -93,7 +94,9 @@ def apply_to_body(body: str, changes: dict) -> str:
 
 
 def apply(text: str, overrides: dict) -> str:
-    unknown = set(overrides["configurations"]) - {m["id"] for m in CONFIG.finditer(text)}
+    removed = overrides.get("removedObjects", [])
+    text = remove_objects(text, removed)
+    unknown = set(overrides["configurations"]) - set(removed) - {m["id"] for m in CONFIG.finditer(text)}
     if unknown:
         sys.exit(f"fork-project: build configurations no longer in the project: {sorted(unknown)}")
 
@@ -112,12 +115,37 @@ def apply(text: str, overrides: dict) -> str:
     return text
 
 
+def remove_objects(text: str, object_ids: list[str]) -> str:
+    """Remove declared target objects, list references and TargetAttributes only.
+
+    Refuse dangling scalar references: callers must explicitly include every
+    dependent object rather than silently corrupt a surviving target.
+    """
+    for object_id in object_ids:
+        if not re.fullmatch(r"[0-9A-F]{24}", object_id):
+            raise ValueError(f"Invalid project object id: {object_id}")
+        text = re.sub(
+            rf"^\t\t{object_id} /\* [^\n]+? \*/ = (?:\{{[^\n]*\}};\n|\{{\n.*?^\t\t\}};\n)",
+            "", text, flags=re.M | re.S,
+        )
+        text = re.sub(rf"^\t+{object_id} /\* [^\n]+ \*/,\n", "", text, flags=re.M)
+        text = re.sub(rf"^\t{{5}}{object_id} = \{{\n.*?^\t{{5}}\}};\n", "", text, flags=re.M | re.S)
+    remaining = [object_id for object_id in object_ids if object_id in text]
+    if remaining:
+        raise ValueError(f"Dangling references to removed project objects: {remaining}")
+    return text
+
+
 def capture(base_rev: str) -> dict:
     base_text, ours_text = git_show(base_rev), PROJECT.read_text()
+    removed = json.loads(OVERRIDES.read_text()).get("removedObjects", [])
+    base_text = remove_objects(base_text, removed)
     base, ours = configs(base_text), configs(ours_text)
     if set(base) != set(ours):
         sys.exit(f"fork-project: configuration ids differ from {base_rev}; capture needs the same set")
     result = {"configurations": {}, "attributes": {}}
+    if removed:
+        result["removedObjects"] = removed
     for config_id in sorted(ours):
         changes = {k: v for k, v in ours[config_id].items() if base[config_id].get(k) != v}
         changes.update({k: None for k in base[config_id] if k not in ours[config_id]})
