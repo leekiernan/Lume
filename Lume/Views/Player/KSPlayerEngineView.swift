@@ -228,7 +228,7 @@ struct KSPlayerEngineView: View {
                 Color.black
                     .ignoresSafeArea()
 
-                KSVideoPlayer(coordinator: coordinator, url: media.url, options: options)
+                KSVideoPlayer(coordinator: coordinator, url: streamURL, options: options)
                     .onStateChanged { _, state in
                         // Defer all state mutations so they never run inside a
                         // SwiftUI view-update pass, which would trigger the
@@ -405,7 +405,7 @@ struct KSPlayerEngineView: View {
         private var standardBody: some View {
             let options = makeOptions()
             return ZStack {
-                KSVideoPlayer(coordinator: coordinator, url: media.url, options: options)
+                KSVideoPlayer(coordinator: coordinator, url: streamURL, options: options)
                     .onStateChanged { _, state in
                         DispatchQueue.main.async {
                             isPlaying = (state == .bufferFinished)

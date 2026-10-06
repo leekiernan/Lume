@@ -26,8 +26,9 @@ struct FullScreenPlayerView: View {
     /// to reject a stale `onDisappear` after another player has already opened.
     @State var audioSessionOwner = UUID()
     /// The engine mounts once the session is active, so KSPlayer's own
-    /// synchronous main-thread activation finds it already done.
-    @State var isAudioSessionReady = false
+    /// synchronous main-thread activation finds it already done, and once a
+    /// KSPlayer stream's provider redirect is resolved (`StreamRedirect`).
+    @State var isReadyToMount = false
     /// The in-flight progress write, so the review policy can wait for a
     /// finished title to be counted before it judges the session that
     /// finished it.
@@ -299,8 +300,13 @@ struct FullScreenPlayerView: View {
             // Pause background indexing — its periodic saves merge into the
             // main context and hitch KSPlayer's render loop.
             ContentIndexingService.shared.isPlaybackActive = true
+            // Resolved alongside the activation: the round trip is one FFmpeg
+            // would otherwise make on every read of the opening file.
+            let opening = engine == .ksPlayer ? activeMedia : nil
+            async let redirect: Void = { if let opening { await StreamRedirectCache.shared.prepare(opening) } }()
             await configureAudioSessionForPlayback()
-            isAudioSessionReady = true
+            await redirect
+            isReadyToMount = true
         }
         .task(id: activeMedia.id) {
             // Resolve a deferred Stalker placeholder into a real (short-lived)
@@ -390,6 +396,7 @@ struct FullScreenPlayerView: View {
             session.send(.leave(.dismiss))
             NowPlayingService.shared.endSession()
             releaseAudioSession()
+            StreamRedirectCache.shared.clear()
             ContentIndexingService.shared.isPlaybackActive = false
             endReviewSession(isChildWatching: profileManager?.activeProfileIsChild ?? false)
         }
@@ -408,7 +415,7 @@ struct FullScreenPlayerView: View {
 
     @ViewBuilder
     private var playerView: some View {
-        if let media = displayMedia, isAudioSessionReady {
+        if let media = displayMedia, isReadyToMount {
             engineView(for: media)
         } else if resolveError != nil {
             // Stalker `create_link` failed — surface the failure with a retry
