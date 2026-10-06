@@ -204,20 +204,10 @@
 
         private var still: some View {
             ZStack(alignment: .bottomLeading) {
-                CachedAsyncImage(url: URL(string: episode.movieImage ?? ""), maxPixelSize: cardWidth) { phase in
-                    switch phase {
-                    case let .success(image):
-                        image.resizable().aspectRatio(contentMode: .fill)
-                    case .empty where episode.movieImage != nil:
-                        Rectangle().fill(Color.white.opacity(0.08)).overlay { ProgressView() }
-                    default:
-                        Rectangle().fill(Color.white.opacity(0.08))
-                            .overlay {
-                                Image(systemName: "play.tv")
-                                    .font(.system(size: 40))
-                                    .foregroundStyle(.white.opacity(0.5))
-                            }
-                    }
+                EpisodeStillArtwork(title: episode.title, url: episode.movieImage.flatMap(URL.init(string:)), maxPixelSize: cardWidth) {
+                    Image(systemName: "play.tv")
+                        .font(.system(size: 40))
+                        .foregroundStyle(.white.opacity(0.5))
                 }
                 .frame(width: cardWidth, height: stillHeight)
                 .clipped()

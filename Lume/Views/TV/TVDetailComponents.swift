@@ -3,7 +3,7 @@
 //  Lume
 //
 //  tvOS-only building blocks for the Apple TV+/App-Store-style movie and series
-//  detail screens. These mirror the Figma "TV App Asset Template" layout: a
+//  detail screens. These follow the redesign's film and series boards: a
 //  full-bleed backdrop with a three-column info band (action button · title +
 //  synopsis + rating · metadata key/values), then horizontal rails for
 //  episodes, cast and related titles, plus an "About" / ratings block.
@@ -341,20 +341,10 @@
 
         private var still: some View {
             ZStack(alignment: .bottom) {
-                CachedAsyncImage(url: URL(string: episode.movieImage ?? ""), maxPixelSize: 640) { phase in
-                    switch phase {
-                    case let .success(image):
-                        image.resizable().aspectRatio(contentMode: .fill)
-                    case .empty where episode.movieImage != nil:
-                        Rectangle().fill(Color.white.opacity(0.08)).overlay { ProgressView() }
-                    default:
-                        Rectangle().fill(Color.white.opacity(0.08))
-                            .overlay {
-                                Image(systemName: "play.tv")
-                                    .font(.system(size: 44))
-                                    .foregroundStyle(.white.opacity(0.5))
-                            }
-                    }
+                EpisodeStillArtwork(title: episode.title, url: episode.movieImage.flatMap(URL.init(string:)), maxPixelSize: 640) {
+                    Image(systemName: "play.tv")
+                        .font(.system(size: 44))
+                        .foregroundStyle(.white.opacity(0.5))
                 }
                 .frame(width: TVDetailMetrics.episodeCardWidth, height: TVDetailMetrics.episodeStillHeight)
                 .clipped()
