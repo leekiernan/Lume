@@ -2,7 +2,7 @@
 //  PlayerLoadingIndicator.swift
 //  Lume
 //
-//  Centered spinner shown over the video host while the engine is preparing or
+//  The mark's load state, centred over the video host while the engine is preparing or
 //  (re)buffering. KSPlayer sits in `.preparing` / `.buffering` for ~10–20s
 //  before the first frame, so the host suppresses its controls and shows this
 //  instead — otherwise the idle Play button reads as "paused, press me".
@@ -11,7 +11,7 @@
 import SwiftData
 import SwiftUI
 
-/// Centered spinner shown while the engine is preparing or (re)buffering. The
+/// The mark's load state while the engine is preparing or (re)buffering. The
 /// optional `title` is supplied only on the first open — where the dimmed
 /// backdrop reads as "Loading <title>…" — and dropped for mid-stream stalls so
 /// the spinner sits unobtrusively over the paused frame. Opening a live
@@ -46,11 +46,9 @@ struct PlayerLoadingIndicator: View {
                 .ignoresSafeArea()
 
             VStack(spacing: spacing) {
-                ProgressView()
-                    .progressViewStyle(.circular)
-                    .controlSize(.large)
-                    .tint(.white)
-                    .scaleEffect(spinnerScale)
+                LumeMark(motion: motion)
+                    .frame(width: markSize, height: markSize)
+                    .accessibilityLabel(Text("Loading…"))
 
                 if let title, !title.isEmpty {
                     Text(title)
@@ -82,6 +80,13 @@ struct PlayerLoadingIndicator: View {
         }
     }
 
+    /// Opening a live channel is "going live" (Emit); anything else — a
+    /// first open of a title, or a mid-stream stall — is buffering (Pulse).
+    private var motion: LumeMark.Motion {
+        if title != nil, let channel, case .live = channel.kind { return .emit }
+        return .pulse
+    }
+
     /// The programme on air on a live channel, from the guide, off the main
     /// thread. Nil for anything but a live channel, or with no guide data.
     private static func programmeOnAir(for media: PlayableMedia?, in context: ModelContext) async -> String? {
@@ -101,8 +106,8 @@ struct PlayerLoadingIndicator: View {
             36
         }
 
-        private var spinnerScale: CGFloat {
-            2.2
+        private var markSize: CGFloat {
+            180
         }
 
         private var titleFont: Font {
@@ -117,8 +122,8 @@ struct PlayerLoadingIndicator: View {
             20
         }
 
-        private var spinnerScale: CGFloat {
-            1.3
+        private var markSize: CGFloat {
+            72
         }
 
         private var titleFont: Font {

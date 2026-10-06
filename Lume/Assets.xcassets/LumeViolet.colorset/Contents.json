@@ -5,9 +5,9 @@
         "color-space": "srgb",
         "components": {
           "alpha": "1.000",
-          "red": "0x14",
-          "green": "0x10",
-          "blue": "0x1F"
+          "red": "0x70",
+          "green": "0x00",
+          "blue": "0xB4"
         }
       },
       "idiom": "universal"
@@ -23,9 +23,9 @@
         "color-space": "srgb",
         "components": {
           "alpha": "1.000",
-          "red": "0x14",
-          "green": "0x10",
-          "blue": "0x1F"
+          "red": "0x70",
+          "green": "0x00",
+          "blue": "0xB4"
         }
       },
       "idiom": "universal"
@@ -35,9 +35,9 @@
         "color-space": "srgb",
         "components": {
           "alpha": "1.000",
-          "red": "0x14",
-          "green": "0x10",
-          "blue": "0x1F"
+          "red": "0x70",
+          "green": "0x00",
+          "blue": "0xB4"
         }
       },
       "idiom": "tv"
@@ -53,9 +53,9 @@
         "color-space": "srgb",
         "components": {
           "alpha": "1.000",
-          "red": "0x14",
-          "green": "0x10",
-          "blue": "0x1F"
+          "red": "0x70",
+          "green": "0x00",
+          "blue": "0xB4"
         }
       },
       "idiom": "tv"

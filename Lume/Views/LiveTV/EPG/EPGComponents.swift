@@ -25,6 +25,13 @@ enum EPGColors {
 /// Platform-tuned sizing for the guide. The 10-foot UI needs far larger touch
 /// targets and type than a phone or a pointer-driven window.
 struct EPGMetrics {
+    // The live programme's progress bar, flush along the block's bottom.
+    #if os(tvOS)
+        static let progressHeight: CGFloat = 6
+    #else
+        static let progressHeight: CGFloat = 3
+    #endif
+
     var pointsPerMinute: CGFloat
     var rowHeight: CGFloat
     var rowSpacing: CGFloat
@@ -174,7 +181,7 @@ struct EPGChannelCell: View {
             .foregroundStyle(isFocused ? .black : .white)
             .frame(width: metrics.channelColumnWidth, height: metrics.rowHeight, alignment: .leading)
             .background(
-                isFocused ? AnyShapeStyle(.white) : AnyShapeStyle(.white.opacity(0.06)),
+                isFocused ? AnyShapeStyle(.white) : AnyShapeStyle(.white.opacity(0.07)),
                 in: RoundedRectangle(cornerRadius: 14, style: .continuous)
             )
         #else
@@ -348,7 +355,7 @@ struct EPGProgramBlockView: View {
                     shape.fill(.white.opacity(0.18))
                         .overlay { shape.strokeBorder(.white.opacity(0.6), lineWidth: 1.5) }
                 } else {
-                    shape.fill(.fill.quaternary)
+                    shape.fill(.white.opacity(0.05))
                 }
             #else
                 shape.fill(.fill.quaternary)
@@ -358,15 +365,17 @@ struct EPGProgramBlockView: View {
                 // tvOS uses the system focus idiom (solid white fill, dark text)
                 // and translucent surfaces that sit lightly on the dark backdrop,
                 // matching the channel list rather than a heavy opaque grid.
+                // The guide board: surfaces at white 7%, the programme on air
+                // raised to 12% inside a pink edge.
                 if isFocused {
                     shape.fill(.white)
                 } else if isLive {
-                    shape.fill(.white.opacity(0.16))
+                    shape.fill(.white.opacity(0.12))
                         .overlay {
-                            shape.strokeBorder(EPGColors.live.opacity(0.55), lineWidth: 1.5)
+                            shape.strokeBorder(EPGColors.live.opacity(0.5), lineWidth: 2)
                         }
                 } else {
-                    shape.fill(.white.opacity(0.08))
+                    shape.fill(.white.opacity(0.07))
                 }
             #else
                 if isFocused {
@@ -383,42 +392,43 @@ struct EPGProgramBlockView: View {
         }
     }
 
+    /// Flush along the block's bottom edge, clipped by its corners — the
+    /// redesign's one progress treatment.
     private var liveProgressBar: some View {
         GeometryReader { geo in
-            Capsule()
+            Rectangle()
                 .fill(progressTint)
-                .frame(width: geo.size.width * cell.progress(at: now), height: 3)
+                .frame(width: geo.size.width * cell.progress(at: now), height: EPGMetrics.progressHeight)
                 .frame(maxHeight: .infinity, alignment: .bottom)
         }
-        .frame(height: 3)
-        .padding(.horizontal, 2)
-        .padding(.bottom, 2)
+        .frame(height: EPGMetrics.progressHeight)
     }
 
     private var progressTint: Color {
         #if os(tvOS)
-            // A coloured bar stays readable on both the translucent and the
-            // focused (white) fill; a white bar would vanish on the latter.
-            return EPGColors.live
+            // Pink on the translucent fill; the deep pink on the focused white
+            // one, where the light pink would wash out.
+            return isFocused ? .lumePinkDeep : EPGColors.live
         #else
-            return isFocused ? .white : .lumeAccent
+            // `lumeOnAccent`: the focused block's fill is the accent itself.
+            return isFocused ? .lumeOnAccent : .lumeAccent
         #endif
     }
 
     private var titleColor: Color {
         if cell.isGap { return .secondary }
         #if os(tvOS)
-            return isFocused ? .black : .white
+            return isFocused ? .lumeNight : .white
         #else
-            return isFocused ? .white : .primary
+            return isFocused ? .lumeOnAccent : .primary
         #endif
     }
 
     private var timeColor: Color {
         #if os(tvOS)
-            return isFocused ? .black.opacity(0.6) : .white.opacity(0.6)
+            return isFocused ? Color(red: 0x4A / 255, green: 0x46 / 255, blue: 0x58 / 255) : .white.opacity(0.6)
         #else
-            return .secondary
+            return isFocused ? .lumeOnAccent.opacity(0.7) : .secondary
         #endif
     }
 
@@ -485,10 +495,10 @@ struct EPGNowIndicator: View {
     var body: some View {
         ZStack(alignment: .top) {
             Rectangle()
-                .fill(Color.red)
+                .fill(Color.lumeAccent)
                 .frame(width: 2)
             Circle()
-                .fill(Color.red)
+                .fill(Color.lumeAccent)
                 .frame(width: 9, height: 9)
                 .offset(y: -4)
         }

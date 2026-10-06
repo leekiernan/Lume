@@ -260,6 +260,7 @@ struct LumeApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .lumeProgressViews()
                 .syncCompletionToasts(priority: 0)
                 .environment(TraktService.shared)
                 .environment(PremiumManager.shared)
@@ -418,6 +419,7 @@ struct LumeApp: App {
                         .onDisappear { AppStoreReviewPrompt.shared.noteBlockingSheetDismissed() }
                 }
                 .appAppearance(AppAppearance.resolve(appearanceRaw))
+                .lumeProgressViews()
             }
             .modelContainer(catalogContainer)
             .environment(TraktService.shared)
@@ -437,6 +439,7 @@ struct LumeApp: App {
                         FullScreenPlayerView(media: media)
                             .frame(minWidth: 800, minHeight: 450)
                     }
+                    .lumeProgressViews()
                 }
             }
             .modelContainer(catalogContainer)
@@ -456,6 +459,7 @@ struct LumeApp: App {
             Window("Multi-View", id: "multiview") {
                 MultiViewScreen()
                     .frame(minWidth: 900, minHeight: 520)
+                    .lumeProgressViews()
             }
             .modelContainer(catalogContainer)
             .environment(TraktService.shared)

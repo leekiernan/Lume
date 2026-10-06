@@ -110,8 +110,24 @@ struct SyncProgressView: View {
     private var headerTint: Color {
         switch phase {
         case .ready, .syncing: .lumeAccent
-        case .finished: .green
+        case .finished: .lumeAccent
         case .failed: .red
+        }
+    }
+
+    /// While syncing, the mark's outer ring fills with the overall progress;
+    /// otherwise the phase's symbol.
+    @ViewBuilder
+    private func headerSymbol(size: CGFloat) -> some View {
+        if phase == .syncing {
+            LumeMark(motion: progress.overallFraction > 0 ? .progress(progress.overallFraction) : .trace)
+                .frame(width: size, height: size)
+                .accessibilityHidden(true)
+        } else {
+            Image(systemName: headerIcon)
+                .font(.system(size: size * 0.82))
+                .foregroundStyle(headerTint)
+                .frame(width: size, height: size)
         }
     }
 
@@ -242,10 +258,7 @@ struct SyncProgressView: View {
         var header: some View {
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
-                    Image(systemName: headerIcon)
-                        .font(.title2)
-                        .foregroundStyle(headerTint)
-                        .symbolEffect(.pulse, options: .repeating, isActive: phase == .syncing)
+                    headerSymbol(size: 28)
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text(headerTitle)
@@ -368,10 +381,7 @@ struct SyncProgressView: View {
         var tvHeader: some View {
             VStack(alignment: .leading, spacing: 28) {
                 HStack(spacing: 28) {
-                    Image(systemName: headerIcon)
-                        .font(.system(size: 56))
-                        .foregroundStyle(headerTint)
-                        .symbolEffect(.pulse, options: .repeating, isActive: phase == .syncing)
+                    headerSymbol(size: 64)
                         .frame(width: 72)
 
                     VStack(alignment: .leading, spacing: 6) {

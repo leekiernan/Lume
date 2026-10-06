@@ -1,15 +1,19 @@
 {
-  "images" : [
+  "images": [
     {
-      "filename" : "LaunchLogo.svg",
-      "idiom" : "universal"
+      "filename": "LaunchLogo.svg",
+      "idiom": "universal"
+    },
+    {
+      "filename": "LaunchLogo-tv.svg",
+      "idiom": "tv"
     }
   ],
-  "info" : {
-    "author" : "xcode",
-    "version" : 1
+  "info": {
+    "author": "xcode",
+    "version": 1
   },
-  "properties" : {
-    "preserves-vector-representation" : true
+  "properties": {
+    "preserves-vector-representation": true
   }
 }

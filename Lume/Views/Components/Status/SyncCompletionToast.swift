@@ -51,7 +51,7 @@ private struct SyncCompletionToast: View {
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: notice.outcome == .succeeded ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
-                .foregroundStyle(notice.outcome == .succeeded ? .green : .orange)
+                .foregroundStyle(notice.outcome == .succeeded ? Color.lumeAccent : .orange)
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
                     .font(.headline)

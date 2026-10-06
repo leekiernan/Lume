@@ -175,6 +175,9 @@ struct MainTabView: View {
             .onChange(of: activeProfileToken) { _, _ in repairSelectionIfNeeded() }
         #if os(tvOS)
             .disabled(blockingOverlayOwnsScreen || router.isQuickSwitchPresented)
+            // The brand's ambient ground behind every tab; screens with their
+            // own art (hero, detail backdrops) paint over it.
+            .background { LumeAmbientBackground() }
             .background(
                 TVPlayPauseGesture(
                     onShortPress: toggleQuickSwitch,

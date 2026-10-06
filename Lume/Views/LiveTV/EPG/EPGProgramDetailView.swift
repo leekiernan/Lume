@@ -46,11 +46,11 @@ struct EPGProgramDetailView: View {
 
                         VStack(alignment: .leading, spacing: 8) {
                             if isLive {
-                                statusBadge("On Now", color: .red)
+                                statusBadge("On Now", color: .lumeAccent)
                             } else if cell.isPast(at: now) {
                                 statusBadge("Earlier", color: .secondary)
                             } else {
-                                statusBadge("Upcoming", color: .lumeAccent)
+                                statusBadge("Upcoming", color: .secondary)
                             }
 
                             Text(cell.title)
@@ -60,7 +60,7 @@ struct EPGProgramDetailView: View {
 
                             if isLive {
                                 ProgressView(value: cell.progress(at: now))
-                                    .tint(.red)
+                                    .tint(.lumeAccent)
                             }
                         }
 
@@ -127,7 +127,7 @@ struct EPGProgramDetailView: View {
 
                         if isLive {
                             ProgressView(value: cell.progress(at: now))
-                                .tint(.red)
+                                .tint(.lumeAccent)
                                 .frame(maxWidth: 520)
                         }
 
@@ -200,11 +200,11 @@ struct EPGProgramDetailView: View {
         private var tvStatusBadge: some View {
             Group {
                 if isLive {
-                    tvBadge("On Now", color: .red)
+                    tvBadge("On Now", color: .lumeAccent)
                 } else if cell.isPast(at: now) {
                     tvBadge("Earlier", color: .secondary)
                 } else {
-                    tvBadge("Upcoming", color: .blue)
+                    tvBadge("Upcoming", color: .secondary)
                 }
             }
         }

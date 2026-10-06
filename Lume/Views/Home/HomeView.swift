@@ -195,6 +195,7 @@ struct HomeView: View {
                     )
                     #if os(tvOS)
                     .tvQuickSwitchHint(interacted: !homePath.wrappedValue.isEmpty)
+                    .launchBrand()
                     #else
                     .browseActivity()
                     #endif
