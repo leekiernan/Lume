@@ -29,10 +29,12 @@
             @Environment(\.isFocused) private var isFocused
 
             var body: some View {
-                let foreground: Color = isFocused ? .black : .white
+                let foreground: Color = isFocused ? .lumeNight : .white
+                // At rest, translucent Night over the backdrop (the detail
+                // boards); focused, the system's white lift.
                 let background: AnyShapeStyle = isFocused
                     ? AnyShapeStyle(.white)
-                    : AnyShapeStyle(.regularMaterial)
+                    : AnyShapeStyle(Color.lumeNight.opacity(0.6))
                 let shadowOpacity: Double = isFocused ? 0.4 : 0
                 return configuration.label
                     .foregroundStyle(foreground)

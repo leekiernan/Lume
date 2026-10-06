@@ -16,6 +16,8 @@ struct LumeAmbientBackground: View {
     enum Style {
         case screen
         case brand
+        /// Behind a detail hero's backdrop while it loads.
+        case backdrop
     }
 
     var body: some View {
@@ -36,6 +38,11 @@ struct LumeAmbientBackground: View {
                         .position(x: size.width * 0.5, y: size.height * 0.44)
                     glow(Color.lumeAccent.opacity(0.12), width: 900, height: 600, unit: unit)
                         .position(x: size.width * 0.12, y: size.height)
+                case .backdrop:
+                    glow(Color.lumeViolet.opacity(0.5), width: 1000, height: 700, unit: unit)
+                        .position(x: size.width * 0.5, y: size.height * 0.3)
+                    glow(Color.lumeAccent.opacity(0.16), width: 700, height: 500, unit: unit)
+                        .position(x: size.width * 0.14, y: size.height * 0.2)
                 }
             }
         }
@@ -44,7 +51,7 @@ struct LumeAmbientBackground: View {
     }
 
     private var ground: Color {
-        style == .brand ? .lumeInk : .lumeNight
+        style == .screen ? .lumeNight : .lumeInk
     }
 
     /// A CSS `radial-gradient(w h at …, colour, transparent 70%)`: an

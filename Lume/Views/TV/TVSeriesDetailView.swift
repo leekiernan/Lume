@@ -75,7 +75,7 @@
                         .transition(.opacity)
                 }
             }
-            .background(Color.black)
+            .background(Color.lumeNight)
             .ignoresSafeArea()
             .fullScreenCover(item: $playingMedia) { media in
                 FullScreenPlayerView(media: media)
