@@ -4,7 +4,6 @@ import SwiftUI
 /// No AnyView, erased models, or universal media predicate is involved.
 @MainActor
 protocol LibraryAreaKind: CatalogBrowseKind {
-    associatedtype Detail: View
     associatedtype CollectionRow: View
     associatedtype CollectionPage: View
     static var navigationPath: ReferenceWritableKeyPath<DeepLinkRouter, NavigationPath> { get }
@@ -12,15 +11,8 @@ protocol LibraryAreaKind: CatalogBrowseKind {
     static var playlistEmptyDescription: LocalizedStringKey { get }
     static var libraryEmptyDescription: LocalizedStringKey { get }
     static func heroItem(_ hero: HeroItem) -> Item?
-    static func detail(_ item: Item, namespace: Namespace.ID) -> Detail
     static func collectionRow(_ kind: LibraryCollection.Kind, prefix: String, excluded: Set<String>, namespace: Namespace.ID, onLeadingLeft: @escaping () -> Void) -> CollectionRow
     static func collectionPage(_ kind: LibraryCollection.Kind, prefix: String, namespace: Namespace.ID) -> CollectionPage
-}
-
-extension LibraryAreaKind {
-    static func pathBinding(in router: DeepLinkRouter) -> Binding<NavigationPath> {
-        Binding(get: { router[keyPath: navigationPath] }, set: { router[keyPath: navigationPath] = $0 })
-    }
 }
 
 extension MovieCatalog: LibraryAreaKind {
@@ -34,10 +26,6 @@ extension MovieCatalog: LibraryAreaKind {
 
     static func heroItem(_ hero: HeroItem) -> Movie? {
         hero.movie
-    }
-
-    static func detail(_ item: Movie, namespace: Namespace.ID) -> MovieDetailView {
-        MovieDetailView(movie: item, animationNamespace: namespace)
     }
 
     static func collectionRow(_ kind: LibraryCollection.Kind, prefix: String, excluded: Set<String>, namespace: Namespace.ID, onLeadingLeft: @escaping () -> Void) -> MovieCollectionRow {
@@ -60,10 +48,6 @@ extension SeriesCatalog: LibraryAreaKind {
 
     static func heroItem(_ hero: HeroItem) -> Series? {
         hero.series
-    }
-
-    static func detail(_ item: Series, namespace: Namespace.ID) -> SeriesDetailView {
-        SeriesDetailView(series: item, animationNamespace: namespace)
     }
 
     static func collectionRow(_ kind: LibraryCollection.Kind, prefix: String, excluded: Set<String>, namespace: Namespace.ID, onLeadingLeft: @escaping () -> Void) -> SeriesCollectionRow {

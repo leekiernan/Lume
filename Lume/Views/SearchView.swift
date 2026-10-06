@@ -99,18 +99,7 @@ struct SearchView: View {
                     // A filter for an area just switched off falls back to All.
                     if !filters.contains(selectedFilter) { selectedFilter = .all }
                 }
-                .navigationDestination(for: Movie.self) { movie in
-                    MovieDetailView(movie: movie, animationNamespace: animationNamespace)
-                    #if os(iOS)
-                        .navigationTransition(.zoom(sourceID: movie.id, in: animationNamespace))
-                    #endif
-                }
-                .navigationDestination(for: Series.self) { series in
-                    SeriesDetailView(series: series, animationNamespace: animationNamespace)
-                    #if os(iOS)
-                        .navigationTransition(.zoom(sourceID: series.id, in: animationNamespace))
-                    #endif
-                }
+                .mediaDetailDestinations(namespace: animationNamespace)
                 .task(id: searchText) {
                     // Debounce raw keystrokes. .task(id:) cancels the in-flight task
                     // (including this sleep) the instant searchText changes, so the
