@@ -126,7 +126,7 @@
             // live for every category at once, which is what made scrolling judder
             // with many categories loaded. Lazy keeps that cost bounded to the
             // visible window.
-            LazyVStack(spacing: 6) {
+            LazyVStack(spacing: TVSettingsMetrics.rowSpacing) {
                 // Invisible focus sinks bracketing the rows, present only during a
                 // move. An up/down press off the lifted row lands on one of these
                 // — far nearer than the tab bar above the screen — so the escape
@@ -290,8 +290,6 @@
 
                 Button(action: onGrabOrDrop) {
                     HStack(spacing: 14) {
-                        Image(systemName: isLifted ? "arrow.up.and.down" : "line.3.horizontal")
-                            .font(.system(size: 22, weight: .semibold))
                         if let icon {
                             Image(systemName: icon)
                                 .font(.system(size: 24, weight: .medium))
@@ -302,6 +300,19 @@
                             .lineLimit(1)
                         accessory
                         Spacer(minLength: 0)
+                        // The board's trailing grip; a lifted row says so.
+                        if isLifted {
+                            HStack(spacing: 14) {
+                                Text("Moving")
+                                Image(systemName: "chevron.up.chevron.down")
+                            }
+                            .font(.system(size: 24, weight: .semibold))
+                            .foregroundStyle(Color.lumePinkDeep)
+                        } else {
+                            Image(systemName: "line.3.horizontal")
+                                .font(.system(size: 24, weight: .semibold))
+                                .foregroundStyle(Color.lumeTextTertiary)
+                        }
                     }
                 }
                 .buttonStyle(TVReorderRowButtonStyle(isLifted: isLifted, dimmed: isHidden))
@@ -343,9 +354,9 @@
 
     // MARK: - Button styles
 
-    /// The full-width grab/drop control. At rest it matches the other tvOS
-    /// settings rows (faint fill, light highlight on focus); when lifted it reads
-    /// as "picked up" — solid fill, white border, a touch of scale and shadow.
+    /// The full-width grab/drop control. It matches the other tvOS settings
+    /// rows: a faint fill at rest, white and lifted when focused, and it stays
+    /// lifted while it is being moved.
     struct TVReorderRowButtonStyle: ButtonStyle {
         let isLifted: Bool
         let dimmed: Bool
@@ -362,27 +373,19 @@
 
             var body: some View {
                 let highlighted = isLifted || isFocused
-                let fill: AnyShapeStyle = highlighted
-                    ? AnyShapeStyle(Color.white.opacity(0.95))
-                    : AnyShapeStyle(Color.white.opacity(0.05))
                 // A hidden row steps back: tertiary text, faded.
-                let foreground: Color = highlighted ? .black : (dimmed ? Color.lumeTextTertiary.opacity(0.6) : .white)
+                let foreground: Color = highlighted ? .lumeNight : (dimmed ? Color.lumeTextTertiary.opacity(0.6) : .white)
 
                 return configuration.label
                     .foregroundStyle(foreground)
                     .padding(.horizontal, TVSettingsMetrics.rowHPadding)
-                    .padding(.vertical, TVSettingsMetrics.rowVPadding + 2)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.vertical, TVSettingsMetrics.rowVPadding)
+                    .frame(maxWidth: .infinity, minHeight: TVSettingsMetrics.rowMinHeight, alignment: .leading)
                     .background(
                         RoundedRectangle(cornerRadius: TVSettingsMetrics.rowCornerRadius, style: .continuous)
-                            .fill(fill)
+                            .fill(highlighted ? .white : TVSettingsMetrics.rowFill)
                     )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: TVSettingsMetrics.rowCornerRadius, style: .continuous)
-                            .strokeBorder(Color.white.opacity(isLifted ? 0.9 : 0), lineWidth: 3)
-                    )
-                    .scaleEffect(isLifted ? 1.02 : 1)
-                    .shadow(color: .black.opacity(isLifted ? 0.5 : 0), radius: isLifted ? 16 : 0, y: isLifted ? 10 : 0)
+                    .tvSettingsLift(highlighted)
                     .animation(.easeOut(duration: 0.15), value: isFocused)
                     .animation(.easeOut(duration: 0.18), value: isLifted)
             }
@@ -403,12 +406,12 @@
             var body: some View {
                 configuration.label
                     .font(.system(size: 24, weight: .semibold))
-                    .foregroundStyle(isFocused ? .black : .white)
+                    .foregroundStyle(isFocused ? .lumeNight : .white)
                     .opacity(isEnabled ? 1 : 0.25)
-                    .frame(width: 56, height: 56)
+                    .frame(width: TVSettingsMetrics.rowMinHeight, height: TVSettingsMetrics.rowMinHeight)
                     .background(
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .fill(isFocused ? AnyShapeStyle(Color.white.opacity(0.95)) : AnyShapeStyle(Color.white.opacity(0.08)))
+                        RoundedRectangle(cornerRadius: TVSettingsMetrics.rowCornerRadius, style: .continuous)
+                            .fill(isFocused ? .white : TVSettingsMetrics.rowFill)
                     )
                     .animation(.easeOut(duration: 0.15), value: isFocused)
             }
@@ -428,12 +431,12 @@
             var body: some View {
                 configuration.label
                     .font(.system(size: 22, weight: .medium))
-                    .foregroundStyle(isFocused ? .black : .white)
+                    .foregroundStyle(isFocused ? .lumeNight : .white)
                     .padding(.horizontal, 24)
-                    .padding(.vertical, 12)
+                    .frame(minHeight: TVSettingsMetrics.rowMinHeight)
                     .background(
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .fill(isFocused ? AnyShapeStyle(Color.white.opacity(0.95)) : AnyShapeStyle(Color.white.opacity(0.08)))
+                        RoundedRectangle(cornerRadius: TVSettingsMetrics.rowCornerRadius, style: .continuous)
+                            .fill(isFocused ? .white : TVSettingsMetrics.rowFill)
                     )
                     .animation(.easeOut(duration: 0.15), value: isFocused)
             }

@@ -79,6 +79,19 @@ enum HeroItem: Identifiable, Hashable {
         if case let .series(series, _, _, _, _) = self { return series }
         return nil
     }
+
+    /// The facts line under the tvOS hero's title: "2010 · Animation,
+    /// Fantasy · 15m". Nil when the catalog knows none of them.
+    var facts: String? {
+        let parts = switch self {
+        case let .movie(movie, _, _, _, _):
+            [DetailFormat.year(from: movie.releaseDate), DetailFormat.genres(movie.genre), DetailFormat.duration(movie.durationSecs)]
+        case let .series(series, _, _, _, _):
+            [DetailFormat.year(from: series.releaseDate), DetailFormat.genres(series.genre)]
+        }
+        let known = parts.compactMap(\.self)
+        return known.isEmpty ? nil : known.joined(separator: " · ")
+    }
 }
 
 extension HeroItem {

@@ -90,7 +90,7 @@ extension SettingsView {
                 .padding(.horizontal, TVSettingsMetrics.rowHPadding)
                 .padding(.top, 4)
 
-                VStack(spacing: 2) {
+                VStack(spacing: TVSettingsMetrics.rowSpacing) {
                     TVSettingsValueRow("Website", value: SupportInfo.websiteDisplay)
                     TVSettingsValueRow("Email", value: SupportInfo.email)
                 }

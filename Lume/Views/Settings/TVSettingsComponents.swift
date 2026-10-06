@@ -15,23 +15,30 @@
     // MARK: - Metrics
 
     enum TVSettingsMetrics {
-        static let rowFontSize: CGFloat = 26
-        static let rowHPadding: CGFloat = 20
+        // The Settings boards: 76-point rows of 28-point text, 18-point
+        // corners, 8 points apart, on a faint white fill.
+        static let rowFontSize: CGFloat = 28
+        static let rowHPadding: CGFloat = 28
         static let rowVPadding: CGFloat = 14
-        static let rowCornerRadius: CGFloat = 10
-        static let labelFontSize: CGFloat = 18
-        static let secondaryFontSize: CGFloat = 20
+        static let rowMinHeight: CGFloat = 76
+        static let rowCornerRadius: CGFloat = 18
+        static let rowSpacing: CGFloat = 8
+        static let rowFill = Color.white.opacity(0.07)
+        /// A focused row lifts: white, a little larger, with a shadow.
+        static let focusedScale: CGFloat = 1.02
+        static let labelFontSize: CGFloat = 22
+        static let secondaryFontSize: CGFloat = 22
         static let statusFontSize: CGFloat = 24
         static let explanatoryFontSize: CGFloat = 22
-        static let paneTitleFontSize: CGFloat = 34
+        static let paneTitleFontSize: CGFloat = 48
         static let screenTitleFontSize: CGFloat = 38
         static let titleFontSize: CGFloat = 46
         static let pageHorizontalInset: CGFloat = 48
         static let pageVerticalInset: CGFloat = 72
         static let contentMaxWidth: CGFloat = 760
-        /// Width of the Settings detail pane content (sits next to the sidebar, so
-        /// it gets a touch more room than the full-screen `contentMaxWidth`).
-        static let detailMaxWidth: CGFloat = 860
+        /// Width of the Settings detail pane content: the boards run it from
+        /// the sidebar to the screen's trailing inset.
+        static let detailMaxWidth: CGFloat = 1280
         /// Width of a secondary column sitting beside a `contentMaxWidth` one.
         static let sideColumnWidth: CGFloat = 560
     }
@@ -40,8 +47,15 @@
         /// Help copy beneath a group of rows, distinct from larger status text.
         func tvSettingsFooter() -> some View {
             font(.system(size: TVSettingsMetrics.secondaryFontSize))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Color.lumeTextTertiary)
                 .padding(.horizontal, TVSettingsMetrics.rowHPadding)
+        }
+
+        /// The focused-row lift the Settings boards draw: a soft drop shadow
+        /// under a slightly enlarged row.
+        func tvSettingsLift(_ isLifted: Bool) -> some View {
+            scaleEffect(isLifted ? TVSettingsMetrics.focusedScale : 1)
+                .shadow(color: .black.opacity(isLifted ? 0.55 : 0), radius: isLifted ? 23 : 0, y: isLifted ? 20 : 0)
         }
 
         /// The brand's ambient ground, shared by every tvOS settings surface.
@@ -81,8 +95,8 @@
             Text(title)
                 .textCase(.uppercase)
                 .font(.system(size: TVSettingsMetrics.labelFontSize, weight: .semibold))
-                .tracking(1.4)
-                .foregroundStyle(.secondary)
+                .tracking(1)
+                .foregroundStyle(Color.lumeTextTertiary)
                 .padding(.horizontal, TVSettingsMetrics.rowHPadding)
                 .padding(.bottom, 4)
         }
@@ -107,15 +121,15 @@
                 Text(label)
                 Spacer(minLength: 16)
                 value
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Color.lumeTextSecondary)
             }
-            .font(.system(size: TVSettingsMetrics.rowFontSize))
+            .font(.system(size: TVSettingsMetrics.rowFontSize, weight: .medium))
             .padding(.horizontal, TVSettingsMetrics.rowHPadding)
-            .padding(.vertical, TVSettingsMetrics.rowVPadding + 2)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.vertical, TVSettingsMetrics.rowVPadding)
+            .frame(maxWidth: .infinity, minHeight: TVSettingsMetrics.rowMinHeight, alignment: .leading)
             .background(
                 RoundedRectangle(cornerRadius: TVSettingsMetrics.rowCornerRadius, style: .continuous)
-                    .fill(Color.white.opacity(0.05))
+                    .fill(TVSettingsMetrics.rowFill)
             )
         }
     }
@@ -149,8 +163,8 @@
                 Text(title)
                     .textCase(.uppercase)
                     .font(.system(size: TVSettingsMetrics.labelFontSize, weight: .semibold))
-                    .tracking(1.4)
-                    .foregroundStyle(.secondary)
+                    .tracking(1)
+                    .foregroundStyle(Color.lumeTextTertiary)
                     .padding(.horizontal, TVSettingsMetrics.rowHPadding)
 
                 Group {
@@ -177,9 +191,9 @@
 
     // MARK: - Button styles
 
-    /// A minimal sidebar category row: transparent by default, a faint fill when
-    /// selected (focus elsewhere), and a quiet light highlight with dark text
-    /// when focused.
+    /// A sidebar category row, from the Settings boards: secondary text at
+    /// rest, Lume pink on the selection tint when selected (focus elsewhere),
+    /// and white with Night text when focused.
     struct TVSettingsSidebarButtonStyle: ButtonStyle {
         let isSelected: Bool
 
@@ -193,14 +207,13 @@
             @Environment(\.isFocused) private var isFocused
 
             var body: some View {
-                let background: AnyShapeStyle = isFocused
-                    ? AnyShapeStyle(Color.white.opacity(0.95))
-                    : (isSelected ? AnyShapeStyle(Color.white.opacity(0.10)) : AnyShapeStyle(Color.clear))
+                let background: Color = isFocused ? .white : (isSelected ? .lumeSelection : .clear)
+                let foreground: Color = isFocused ? .lumeNight : (isSelected ? .lumeAccent : .lumeTextSecondary)
                 return configuration.label
-                    .font(.system(size: TVSettingsMetrics.rowFontSize, weight: isFocused || isSelected ? .medium : .regular))
-                    .foregroundStyle(isFocused ? .black : .white)
-                    .padding(.horizontal, TVSettingsMetrics.rowHPadding)
-                    .padding(.vertical, TVSettingsMetrics.rowVPadding)
+                    .font(.system(size: 26, weight: isFocused || isSelected ? .semibold : .medium))
+                    .foregroundStyle(foreground)
+                    .padding(.horizontal, 22)
+                    .frame(minHeight: 64)
                     .background(
                         RoundedRectangle(cornerRadius: TVSettingsMetrics.rowCornerRadius, style: .continuous)
                             .fill(background)
@@ -210,9 +223,9 @@
         }
     }
 
-    /// A minimal full-width content row: a faint resting fill that turns to a
-    /// quiet light highlight with dark text when focused. Flat — no scale or
-    /// shadow. Pass `isDestructive` for a red treatment.
+    /// A full-width content row: a faint resting fill that lifts to white
+    /// with Night text when focused, as the Settings boards draw it. Pass
+    /// `isDestructive` for Live red text.
     struct TVSettingsRowButtonStyle: ButtonStyle {
         var isDestructive: Bool = false
 
@@ -227,23 +240,19 @@
             @Environment(\.isEnabled) private var isEnabled
 
             var body: some View {
-                let foreground: Color = isDestructive
-                    ? (isFocused ? .white : .red)
-                    : (isFocused ? .black : .white)
-                let fill: AnyShapeStyle = isFocused
-                    ? (isDestructive ? AnyShapeStyle(Color.red) : AnyShapeStyle(Color.white.opacity(0.95)))
-                    : AnyShapeStyle(Color.white.opacity(0.05))
+                let foreground: Color = isDestructive ? .lumeLiveRed : (isFocused ? .lumeNight : .white)
                 return configuration.label
-                    .font(.system(size: TVSettingsMetrics.rowFontSize))
+                    .font(.system(size: TVSettingsMetrics.rowFontSize, weight: isFocused ? .semibold : .medium))
                     .foregroundStyle(foreground)
                     .opacity(isEnabled ? 1 : 0.4)
                     .padding(.horizontal, TVSettingsMetrics.rowHPadding)
-                    .padding(.vertical, TVSettingsMetrics.rowVPadding + 2)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.vertical, TVSettingsMetrics.rowVPadding)
+                    .frame(maxWidth: .infinity, minHeight: TVSettingsMetrics.rowMinHeight, alignment: .leading)
                     .background(
                         RoundedRectangle(cornerRadius: TVSettingsMetrics.rowCornerRadius, style: .continuous)
-                            .fill(fill)
+                            .fill(isFocused ? .white : TVSettingsMetrics.rowFill)
                     )
+                    .tvSettingsLift(isFocused)
                     .animation(.easeOut(duration: 0.15), value: isFocused)
             }
         }
@@ -266,17 +275,18 @@
             @Environment(\.isEnabled) private var isEnabled
 
             var body: some View {
-                let restFill = prominent ? Color.white.opacity(0.16) : Color.white.opacity(0.06)
+                let restFill = prominent ? Color.white.opacity(0.16) : TVSettingsMetrics.rowFill
                 return configuration.label
                     .font(.system(size: 24, weight: .medium))
-                    .foregroundStyle(isFocused ? .black : .white)
+                    .foregroundStyle(isFocused ? .lumeNight : .white)
                     .opacity(isEnabled ? 1 : 0.4)
                     .padding(.horizontal, 40)
                     .padding(.vertical, 16)
                     .background(
                         RoundedRectangle(cornerRadius: TVSettingsMetrics.rowCornerRadius, style: .continuous)
-                            .fill(isFocused ? AnyShapeStyle(Color.white.opacity(0.95)) : AnyShapeStyle(restFill))
+                            .fill(isFocused ? .white : restFill)
                     )
+                    .tvSettingsLift(isFocused)
                     .animation(.easeOut(duration: 0.15), value: isFocused)
             }
         }

@@ -374,6 +374,15 @@ enum DetailFormat {
         count == 1 ? String(localized: "1 Season") : String(localized: "\(count) Seasons")
     }
 
+    /// The first two genres of a comma-separated list ("Animation, Fantasy").
+    static func genres(_ genre: String?) -> String? {
+        guard let genre else { return nil }
+        let names = genre.split(separator: ",").prefix(2)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+        return names.isEmpty ? nil : names.joined(separator: ", ")
+    }
+
     /// A four-digit year pulled from a release date string in any common shape.
     static func year(from dateString: String?) -> String? {
         guard let dateString else { return nil }

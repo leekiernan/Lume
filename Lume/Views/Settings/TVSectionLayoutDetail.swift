@@ -324,7 +324,7 @@ import SwiftUI
                         .padding(.horizontal, TVSettingsMetrics.rowHPadding)
                 }
 
-                VStack(spacing: 2) {
+                VStack(spacing: TVSettingsMetrics.rowSpacing) {
                     Button(editorChecking ? "Checking…" : "Save Section") {
                         saveCustomSection()
                     }

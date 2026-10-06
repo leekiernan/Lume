@@ -328,8 +328,8 @@
             {
                 items.append(TVMetaItem(label: "Released", value: date))
             }
-            if let genre = series.genre, !genre.isEmpty {
-                items.append(TVMetaItem(label: "Genre", value: shortGenre(genre)))
+            if let genre = DetailFormat.genres(series.genre) {
+                items.append(TVMetaItem(label: "Genre", value: genre))
             }
             if !availableSeasons.isEmpty {
                 items.append(TVMetaItem(label: "Seasons", value: DetailFormat.seasonCount(availableSeasons.count)))
@@ -353,12 +353,6 @@
                 items.append(TVMetaItem(label: "Rated", value: cert))
             }
             return items
-        }
-
-        private func shortGenre(_ genre: String) -> String {
-            genre.split(separator: ",").prefix(2)
-                .map { $0.trimmingCharacters(in: .whitespaces) }
-                .joined(separator: ", ")
         }
 
         private var seasonCountLabel: String {

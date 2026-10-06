@@ -19,6 +19,8 @@ struct LumeAmbientBackground: View {
         case brand
         /// Behind a detail hero's backdrop while it loads.
         case backdrop
+        /// Behind the tvOS Home hero's backdrop while it loads.
+        case hero
     }
 
     var body: some View {
@@ -48,6 +50,11 @@ struct LumeAmbientBackground: View {
                         .position(x: size.width * 0.5, y: size.height * 0.3)
                     glow(Color.lumeAccent.opacity(0.16), width: 700, height: 500, unit: unit)
                         .position(x: size.width * 0.14, y: size.height * 0.2)
+                case .hero:
+                    glow(Color.lumeViolet.opacity(0.55), width: 1100, height: 640, unit: unit)
+                        .position(x: size.width * 0.72, y: size.height * 0.34)
+                    glow(Color.lumeAccent.opacity(0.22), width: 800, height: 520, unit: unit)
+                        .position(x: size.width * 0.94, y: size.height * 0.72)
                 }
             }
         }

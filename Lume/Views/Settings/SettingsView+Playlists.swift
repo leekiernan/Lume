@@ -25,8 +25,6 @@ import SwiftUI
 
         private var tvPlaylistsList: some View {
             VStack(alignment: .leading, spacing: 8) {
-                TVSettingsSectionLabel("Playlists")
-
                 if playlists.isEmpty {
                     Text("No playlists yet. Add your IPTV provider to start streaming.")
                         .font(.system(size: 24))

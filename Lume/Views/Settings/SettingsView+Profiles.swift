@@ -86,8 +86,6 @@ import SwiftUI
 
         private var profilesPane: some View {
             VStack(alignment: .leading, spacing: 8) {
-                TVSettingsSectionLabel("Profiles")
-
                 ForEach(profileRows) { profileRow in
                     row(profileRow)
                 }

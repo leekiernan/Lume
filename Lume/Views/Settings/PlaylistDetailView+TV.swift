@@ -70,7 +70,7 @@ import SwiftUI
                         }
                     }
                 } else {
-                    VStack(spacing: 2) {
+                    VStack(spacing: TVSettingsMetrics.rowSpacing) {
                         TVSettingsValueRow("Name", value: playlist.name)
                         TVSettingsValueRow(serverURLFieldTitle) {
                             Text(playlist.displayURL)
@@ -123,7 +123,7 @@ import SwiftUI
                 VStack(alignment: .leading, spacing: 8) {
                     TVSettingsSectionLabel("Account")
 
-                    VStack(spacing: 2) {
+                    VStack(spacing: TVSettingsMetrics.rowSpacing) {
                         TVSettingsValueRow("Status", value: status)
                         if let expDate = playlist.expDate {
                             TVSettingsValueRow("Expires") {
@@ -168,7 +168,7 @@ import SwiftUI
             VStack(alignment: .leading, spacing: 8) {
                 TVSettingsSectionLabel("Sync")
 
-                VStack(spacing: 2) {
+                VStack(spacing: TVSettingsMetrics.rowSpacing) {
                     Button {
                         playlist.syncEnabled.toggle()
                     } label: {
@@ -223,7 +223,7 @@ import SwiftUI
         }
 
         var tvActionsSection: some View {
-            VStack(spacing: 2) {
+            VStack(spacing: TVSettingsMetrics.rowSpacing) {
                 if isEditing {
                     Button("Done") { saveChanges() }
                         .buttonStyle(TVSettingsRowButtonStyle())

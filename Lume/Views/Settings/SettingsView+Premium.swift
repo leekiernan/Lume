@@ -155,8 +155,6 @@ extension SettingsView {
         var tvPremiumDetail: some View {
             VStack(alignment: .leading, spacing: 28) {
                 VStack(alignment: .leading, spacing: 8) {
-                    TVSettingsSectionLabel("Premium")
-
                     TVSettingsSummary(
                         systemImage: "crown", title: Text(premium.isPremium ? "lume Pro" : "Free Plan"),
                         detail: Text(premium.isPremium ? premiumStatusDetail : String(localized: "Upgrade to unlock the features below"))

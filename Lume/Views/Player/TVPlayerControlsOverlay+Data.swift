@@ -309,7 +309,7 @@
                 return parts.isEmpty ? nil : parts.joined(separator: "  ·  ")
             }
             let parts = [
-                shortGenre(movie?.genre),
+                DetailFormat.genres(movie?.genre),
                 DetailFormat.year(from: movie?.releaseDate),
                 DetailFormat.duration(movie?.durationSecs)
             ].compactMap(\.self)
@@ -358,13 +358,6 @@
         }
 
         // MARK: Formatting
-
-        private func shortGenre(_ genre: String?) -> String? {
-            guard let genre, !genre.isEmpty else { return nil }
-            return genre.split(separator: ",").prefix(2)
-                .map { $0.trimmingCharacters(in: .whitespaces) }
-                .joined(separator: ", ")
-        }
 
         private func clock(_ date: Date) -> String {
             date.formatted(date: .omitted, time: .shortened)

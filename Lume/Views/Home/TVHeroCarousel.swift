@@ -194,9 +194,9 @@
                 // bright artwork.
                 LinearGradient(
                     stops: [
-                        .init(color: .clear, location: 0.3),
-                        .init(color: .black.opacity(0.45), location: 0.62),
-                        .init(color: .black.opacity(0.85), location: 1)
+                        .init(color: .lumeNight.opacity(0), location: 0.3),
+                        .init(color: .lumeNight.opacity(0.45), location: 0.62),
+                        .init(color: .lumeNight.opacity(0.85), location: 1)
                     ],
                     startPoint: .top,
                     endPoint: .bottom
@@ -205,7 +205,7 @@
             .overlay {
                 // Extra dim below the fold so the rows read against a calm,
                 // near-black background that still carries the artwork's tint.
-                Color.black.opacity(belowFold ? 0.45 : 0)
+                Color.lumeNight.opacity(belowFold ? 0.45 : 0)
             }
             .compositingGroup()
             .ignoresSafeArea()

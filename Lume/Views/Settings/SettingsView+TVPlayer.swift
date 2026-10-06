@@ -39,7 +39,7 @@ import SwiftUI
                 VStack(alignment: .leading, spacing: 8) {
                     TVSettingsSectionLabel("Languages")
 
-                    VStack(spacing: 2) {
+                    VStack(spacing: TVSettingsMetrics.rowSpacing) {
                         tvPreferredLanguageRow()
                     }
                 }
@@ -105,7 +105,7 @@ import SwiftUI
                 // configurable options, so it isn't listed.
                 VStack(alignment: .leading, spacing: 8) {
                     TVSettingsSectionLabel("Engine Options")
-                    VStack(spacing: 2) {
+                    VStack(spacing: TVSettingsMetrics.rowSpacing) {
                         tvEngineOptionsRow(.vlcKit)
                         tvEngineOptionsRow(.ksPlayer)
                     }
@@ -344,7 +344,7 @@ import SwiftUI
                 if !addable.suggested.isEmpty {
                     VStack(alignment: .leading, spacing: 8) {
                         TVSettingsSectionLabel("Suggested")
-                        VStack(spacing: 2) {
+                        VStack(spacing: TVSettingsMetrics.rowSpacing) {
                             ForEach(addable.suggested) { tvAddPreferredLanguageRow($0) }
                         }
                     }
@@ -356,7 +356,7 @@ import SwiftUI
                         Text("No Languages Found")
                             .tvSettingsSecondaryText()
                     } else {
-                        VStack(spacing: 2) {
+                        VStack(spacing: TVSettingsMetrics.rowSpacing) {
                             ForEach(addable.common) { tvAddPreferredLanguageRow($0) }
                         }
                     }

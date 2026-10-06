@@ -470,43 +470,9 @@ struct SettingsView: View {
             }
         }
 
-        private var tvSidebar: some View {
-            VStack(alignment: .leading, spacing: 0) {
-                Text("Settings")
-                    .font(.system(size: TVSettingsMetrics.screenTitleFontSize, weight: .bold))
-                    .padding(.horizontal, TVSettingsMetrics.rowHPadding)
-                    .padding(.bottom, 28)
-
-                VStack(spacing: 2) {
-                    ForEach(availableCategories) { category in
-                        Button {
-                            selectedCategory = category
-                        } label: {
-                            Text(category.title)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                        }
-                        .buttonStyle(TVSettingsSidebarButtonStyle(isSelected: selectedCategory == category))
-                        .focused($focusedCategory, equals: category)
-                    }
-                }
-
-                Spacer(minLength: 0)
-            }
-            .frame(width: 320, alignment: .leading)
-            .padding(.leading, TVLayoutMetrics.contentInset)
-            .padding(.trailing, 24)
-            .padding(.vertical, TVSettingsMetrics.pageVerticalInset)
-            .focusSection()
-            // Where focus goes when it enters the sidebar. Stating it means the
-            // engine picks the selected row *instead of* the geometrically
-            // nearest one, rather than landing on that one and being corrected
-            // afterwards — which is visible as the highlight jumping.
-            .defaultFocus($focusedCategory, selectedCategory, priority: .userInitiated)
-        }
-
         /// The sidebar categories. Integrations is hidden unless the build has
         /// credentials for at least one of them.
-        private var availableCategories: [SettingsCategory] {
+        var availableCategories: [SettingsCategory] {
             SettingsCategory.allCases.filter {
                 $0 != .integrations || hasAnyIntegration
             }
@@ -519,6 +485,7 @@ struct SettingsView: View {
             ScrollView {
                 ScrollViewReader { proxy in
                     VStack(alignment: .leading, spacing: 36) {
+                        tvCategoryTitle
                         switch selectedCategory {
                         case .premium:
                             tvPremiumDetail
@@ -588,7 +555,6 @@ struct SettingsView: View {
 
         private var tvSearchDetail: some View {
             VStack(alignment: .leading, spacing: 8) {
-                TVSettingsSectionLabel("Search")
                 TVOptionToggleRow(title: "Search All Playlists", isOn: $searchAllPlaylists)
                 Text("When off, search only finds content in the active playlist. Turn this on to search across all your playlists.")
                     .tvSettingsFooter()
