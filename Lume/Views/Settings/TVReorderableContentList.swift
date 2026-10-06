@@ -38,7 +38,8 @@
         /// When non-nil, each row shows a trailing drill-in link to the returned
         /// category's channels. nil for the channel list itself.
         var drillValue: ((Item) -> Category)?
-        let onToggleHidden: (Item) -> Void
+        /// nil for lists with nothing to hide (engine priority): no toggle.
+        let onToggleHidden: ((Item) -> Void)?
         /// The per-row toggle's SF Symbol, given the row's `isHidden` value.
         /// Defaults to the eye / eye-slash hide control; the favorites reorder
         /// screen overrides it with a heart to mean "remove from favorites".
@@ -55,6 +56,15 @@
         /// Lets the host disable its type picker / Reset while a row is lifted,
         /// so they can't steal focus mid-move.
         @Binding var isReordering: Bool
+        /// An SF Symbol before the title (a section's icon).
+        var icon: ((Item) -> String?)?
+        /// Drawn after the title inside the grab control: a tag ("Primary"),
+        /// a premium badge.
+        var accessory: ((Item) -> AnyView)?
+        /// The row's own actions (promote, edit, remove), shown at rest before
+        /// the restrict and hide toggles — so hide is always the rightmost
+        /// control, in every list.
+        var actions: ((Item) -> AnyView)?
         /// Proxy for the host's enclosing `ScrollView`. tvOS only auto-scrolls
         /// when focus *moves* between views; while a row is lifted it keeps focus
         /// and merely changes position, so we scroll it back into view ourselves
@@ -72,14 +82,17 @@
             title: @escaping (Item) -> String,
             isHidden: @escaping (Item) -> Bool,
             drillValue: ((Item) -> Category)? = nil,
-            onToggleHidden: @escaping (Item) -> Void,
+            onToggleHidden: ((Item) -> Void)?,
             onCommitOrder: @escaping ([Item]) -> Void,
             isReordering: Binding<Bool>,
             scrollProxy: ScrollViewProxy,
             isRestricted: ((Item) -> Bool)? = nil,
             onToggleRestricted: ((Item) -> Void)? = nil,
             toggleImage: @escaping (Bool) -> String = { $0 ? "eye.slash" : "eye" },
-            toggleAccessibility: @escaping (Bool, String) -> String = { $0 ? "Show \($1)" : "Hide \($1)" }
+            toggleAccessibility: @escaping (Bool, String) -> String = { $0 ? "Show \($1)" : "Hide \($1)" },
+            icon: ((Item) -> String?)? = nil,
+            accessory: ((Item) -> AnyView)? = nil,
+            actions: ((Item) -> AnyView)? = nil
         ) {
             self.items = items
             self.title = title
@@ -93,6 +106,9 @@
             self.onToggleRestricted = onToggleRestricted
             self.toggleImage = toggleImage
             self.toggleAccessibility = toggleAccessibility
+            self.icon = icon
+            self.accessory = accessory
+            self.actions = actions
         }
 
         private var displayed: [Item] {
@@ -128,6 +144,9 @@
                         isLifted: lifted,
                         isMoving: liftedID != nil,
                         drillValue: drillValue?(item),
+                        icon: icon?(item),
+                        accessory: accessory?(item),
+                        actions: actions?(item),
                         toggleImageName: toggleImage(isHidden(item)),
                         toggleAccessibilityLabel: toggleAccessibility(isHidden(item), title(item)),
                         isRestricted: isRestricted?(item),
@@ -135,7 +154,7 @@
                         onToggleRestricted: onToggleRestricted.map { toggle in { toggle(item) } },
                         focus: $focusedID,
                         onGrabOrDrop: { lifted ? drop() : lift(item) },
-                        onToggleHidden: { onToggleHidden(item) },
+                        onToggleHidden: onToggleHidden.map { toggle in { toggle(item) } },
                         onMove: handleMove,
                         onCancel: cancel
                     )
@@ -240,6 +259,9 @@
         let isLifted: Bool
         let isMoving: Bool
         let drillValue: Category?
+        let icon: String?
+        let accessory: AnyView?
+        let actions: AnyView?
         let toggleImageName: String
         let toggleAccessibilityLabel: String
         /// nil when the row has no restriction toggle (e.g. the channel list).
@@ -248,7 +270,7 @@
         let onToggleRestricted: (() -> Void)?
         var focus: FocusState<String?>.Binding
         let onGrabOrDrop: () -> Void
-        let onToggleHidden: () -> Void
+        let onToggleHidden: (() -> Void)?
         let onMove: (MoveCommandDirection) -> Void
         let onCancel: () -> Void
 
@@ -258,10 +280,16 @@
                     HStack(spacing: 14) {
                         Image(systemName: isLifted ? "arrow.up.and.down" : "line.3.horizontal")
                             .font(.system(size: 22, weight: .semibold))
+                        if let icon {
+                            Image(systemName: icon)
+                                .font(.system(size: 24, weight: .medium))
+                                .frame(width: 32)
+                        }
                         Text(title)
                             .font(.system(size: TVSettingsMetrics.rowFontSize))
                             .lineLimit(1)
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                        accessory
+                        Spacer(minLength: 0)
                     }
                 }
                 .buttonStyle(TVReorderRowButtonStyle(isLifted: isLifted, dimmed: isHidden))
@@ -273,11 +301,7 @@
                 .accessibilityLabel(isLifted ? "Placing \(title). Move up or down, then select to place." : "Move \(title)")
 
                 if !isMoving {
-                    Button(action: onToggleHidden) {
-                        Image(systemName: toggleImageName)
-                    }
-                    .buttonStyle(TVContentIconButtonStyle())
-                    .accessibilityLabel(toggleAccessibilityLabel)
+                    actions
 
                     if let isRestricted, let onToggleRestricted {
                         Button(action: onToggleRestricted) {
@@ -285,6 +309,14 @@
                         }
                         .buttonStyle(TVContentIconButtonStyle())
                         .accessibilityLabel(restrictionAccessibilityLabel)
+                    }
+
+                    if let onToggleHidden {
+                        Button(action: onToggleHidden) {
+                            Image(systemName: toggleImageName)
+                        }
+                        .buttonStyle(TVContentIconButtonStyle())
+                        .accessibilityLabel(toggleAccessibilityLabel)
                     }
 
                     if let drillValue {

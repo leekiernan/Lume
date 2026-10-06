@@ -19,37 +19,17 @@ import SwiftUI
             enginePriority.first ?? .defaultValue
         }
 
-        /// Move the engine at `index` one slot up or down the priority list,
-        /// persisting the new order and keeping the legacy single-engine key in
+        /// Persists a new priority order, keeping the legacy single-engine key in
         /// sync with the primary so other readers (and a downgrade) still resolve it.
-        private func moveEngine(at index: Int, by offset: Int) {
-            var list = enginePriority
-            guard list.move(at: index, by: offset) else { return }
+        private func setEnginePriority(_ list: [PlayerEngineKind]) {
             let normalized = PlayerEnginePriority.normalized(list)
             enginePriorityRaw = PlayerEnginePriority.encode(normalized)
             engineRaw = normalized.first?.rawValue ?? PlayerEngineKind.defaultValue.rawValue
         }
 
-        var tvPlayerDetail: some View {
+        func tvPlayerDetail(proxy: ScrollViewProxy) -> some View {
             VStack(alignment: .leading, spacing: 28) {
-                VStack(alignment: .leading, spacing: 8) {
-                    TVSettingsSectionLabel("Playback")
-                    TVOptionToggleRow(title: "Autoplay Next Episode", isOn: $autoPlayNext)
-                        .disabled(!premium.isPremium)
-                    TVOptionToggleRow(title: "Show Next Episode Button", isOn: $showNextEpisodeButton)
-                        .disabled(!premium.isPremium)
-                    TVOptionToggleRow(title: "Show Skip Intro Button", isOn: $showSkipIntroButton)
-                        .disabled(!premium.isPremium)
-                    if !premium.isPremium {
-                        Button {
-                            presentPaywall(.playbackControls)
-                        } label: {
-                            Label("Unlock with Premium", systemImage: "crown")
-                                .labelStyle(TVSettingsIconLabelStyle())
-                        }
-                        .buttonStyle(TVSettingsRowButtonStyle())
-                    }
-                }
+                tvPlaybackSection
 
                 // Second in the pane, right under Playback: this is a
                 // viewer-facing playback preference (and the one that otherwise
@@ -68,22 +48,7 @@ import SwiftUI
                 // rather than among the engine sections — and it is
                 // engine-independent: all three hosts route their up/down
                 // presses through LiveChannelNavigator.
-                VStack(alignment: .leading, spacing: 8) {
-                    TVSettingsSectionLabel("Live TV")
-
-                    TVOptionCycleRow(
-                        title: "Up & Down",
-                        valueLabel: LiveSurfMode.resolve(liveSurfModeRaw).displayName
-                    ) {
-                        liveSurfModeRaw = PlayerOptionCycle.next(
-                            liveSurfModeRaw, in: LiveSurfMode.self, fallback: .default
-                        )
-                    }
-
-                    Text("Up and down move to the next and previous channel, like a TV remote. List Order moves the way the channel list reads on screen instead — up goes to the row above.")
-                        .tvSettingsFooter()
-                        .padding(.top, 6)
-                }
+                tvLiveTVSection
 
                 // Its own section rather than a row under Live TV: it governs
                 // every direction the player reads, VOD scrubbing included,
@@ -101,19 +66,7 @@ import SwiftUI
 
                 tvStreamInfoSection
 
-                VStack(alignment: .leading, spacing: 8) {
-                    TVSettingsSectionLabel("Engine Priority")
-
-                    VStack(spacing: 2) {
-                        ForEach(Array(enginePriority.enumerated()), id: \.element) { index, kind in
-                            tvEnginePriorityRow(kind: kind, index: index)
-                        }
-                    }
-
-                    Text(primaryEngine.subtitle)
-                        .tvSettingsFooter()
-                        .padding(.top, 6)
-                }
+                tvEnginePrioritySection(proxy: proxy)
 
                 VStack(alignment: .leading, spacing: 8) {
                     TVSettingsSectionLabel("External Player")
@@ -177,25 +130,74 @@ import SwiftUI
             .buttonStyle(TVSettingsRowButtonStyle())
         }
 
-        /// One row of the tvOS engine-priority list: the engine name, a "Primary"
-        /// tag on the top entry, and up / down controls that reorder the list.
-        private func tvEnginePriorityRow(kind: PlayerEngineKind, index: Int) -> some View {
-            TVSettingsReorderRow(
-                name: kind.displayName,
-                index: index,
-                count: enginePriority.count,
-                onMove: { moveEngine(at: index, by: $0) },
-                leading: {
-                    Text(kind.displayName)
-                        .font(.system(size: TVSettingsMetrics.rowFontSize))
-
-                    if index == 0 {
-                        Text("Primary")
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundStyle(.secondary)
+        private var tvPlaybackSection: some View {
+            VStack(alignment: .leading, spacing: 8) {
+                TVSettingsSectionLabel("Playback")
+                TVOptionToggleRow(title: "Autoplay Next Episode", isOn: $autoPlayNext)
+                    .disabled(!premium.isPremium)
+                TVOptionToggleRow(title: "Show Next Episode Button", isOn: $showNextEpisodeButton)
+                    .disabled(!premium.isPremium)
+                TVOptionToggleRow(title: "Show Skip Intro Button", isOn: $showSkipIntroButton)
+                    .disabled(!premium.isPremium)
+                if !premium.isPremium {
+                    Button {
+                        presentPaywall(.playbackControls)
+                    } label: {
+                        Label("Unlock with Premium", systemImage: "crown")
+                            .labelStyle(TVSettingsIconLabelStyle())
                     }
+                    .buttonStyle(TVSettingsRowButtonStyle())
                 }
-            )
+            }
+        }
+
+        private var tvLiveTVSection: some View {
+            VStack(alignment: .leading, spacing: 8) {
+                TVSettingsSectionLabel("Live TV")
+
+                TVOptionCycleRow(
+                    title: "Up & Down",
+                    valueLabel: LiveSurfMode.resolve(liveSurfModeRaw).displayName
+                ) {
+                    liveSurfModeRaw = PlayerOptionCycle.next(
+                        liveSurfModeRaw, in: LiveSurfMode.self, fallback: .default
+                    )
+                }
+
+                Text("Up and down move to the next and previous channel, like a TV remote. List Order moves the way the channel list reads on screen instead — up goes to the row above.")
+                    .tvSettingsFooter()
+                    .padding(.top, 6)
+            }
+        }
+
+        /// Select an engine to lift it, move, select again to place.
+        private func tvEnginePrioritySection(proxy: ScrollViewProxy) -> some View {
+            VStack(alignment: .leading, spacing: 8) {
+                TVSettingsSectionLabel("Engine Priority")
+
+                TVReorderableContentList(
+                    items: enginePriority.map(TVEngineRow.init),
+                    title: { $0.kind.displayName },
+                    isHidden: { _ in false },
+                    onToggleHidden: nil,
+                    onCommitOrder: { setEnginePriority($0.map(\.kind)) },
+                    isReordering: $isReorderingPlayerList,
+                    scrollProxy: proxy,
+                    accessory: { row in
+                        AnyView(Group {
+                            if row.kind == enginePriority.first {
+                                Text("Primary")
+                                    .font(.system(size: 18, weight: .semibold))
+                                    .foregroundStyle(.secondary)
+                            }
+                        })
+                    }
+                )
+
+                Text(primaryEngine.subtitle)
+                    .tvSettingsFooter()
+                    .padding(.top, 6)
+            }
         }
 
         // MARK: - Preferred languages
@@ -215,17 +217,8 @@ import SwiftUI
             Task { preferredAudioLanguagesRaw = encoded }
         }
 
-        private func movePreferredLanguage(at index: Int, by offset: Int) {
-            var list = preferredLanguageCodes
-            guard list.move(at: index, by: offset) else { return }
-            setPreferredLanguageCodes(list)
-        }
-
-        private func removePreferredLanguage(at index: Int) {
-            var list = preferredLanguageCodes
-            guard list.indices.contains(index) else { return }
-            list.remove(at: index)
-            setPreferredLanguageCodes(list)
+        private func removePreferredLanguage(_ code: String) {
+            setPreferredLanguageCodes(preferredLanguageCodes.filter { $0 != code })
         }
 
         /// A drill-in row that replaces the player detail with the language
@@ -267,14 +260,14 @@ import SwiftUI
         /// The drilled-in pane for the language list: the ordered list itself,
         /// or the add picker one level deeper.
         @ViewBuilder
-        func tvPreferredLanguageDetail(_ pane: PreferredLanguagePane) -> some View {
+        func tvPreferredLanguageDetail(_ pane: PreferredLanguagePane, proxy: ScrollViewProxy) -> some View {
             switch pane {
-            case .list: tvPreferredLanguageOrderDetail()
+            case .list: tvPreferredLanguageOrderDetail(proxy: proxy)
             case .add: tvAddPreferredLanguageDetail()
             }
         }
 
-        private func tvPreferredLanguageOrderDetail() -> some View {
+        private func tvPreferredLanguageOrderDetail(proxy: ScrollViewProxy) -> some View {
             let codes = preferredLanguageCodes
             return VStack(alignment: .leading, spacing: 28) {
                 Text("Audio Languages")
@@ -288,11 +281,24 @@ import SwiftUI
                         Text("No Preferred Languages")
                             .tvSettingsSecondaryText()
                     } else {
-                        VStack(spacing: 2) {
-                            ForEach(Array(codes.enumerated()), id: \.element) { index, code in
-                                tvPreferredLanguageOrderRow(code: code, index: index, count: codes.count)
+                        TVReorderableContentList(
+                            items: codes.map(TVLanguageRow.init),
+                            title: { TrackLanguageMatcher.displayName(for: $0.code) },
+                            isHidden: { _ in false },
+                            onToggleHidden: nil,
+                            onCommitOrder: { setPreferredLanguageCodes($0.map(\.code)) },
+                            isReordering: $isReorderingPlayerList,
+                            scrollProxy: proxy,
+                            actions: { row in
+                                AnyView(Button {
+                                    removePreferredLanguage(row.code)
+                                } label: {
+                                    Image(systemName: "minus")
+                                }
+                                .buttonStyle(TVContentIconButtonStyle())
+                                .accessibilityLabel("Remove \(TrackLanguageMatcher.displayName(for: row.code))"))
                             }
-                        }
+                        )
                     }
                 }
 
@@ -321,27 +327,6 @@ import SwiftUI
         private var tvPreferredLanguageFooter: LocalizedStringKey {
             // swiftlint:disable:next line_length
             "lume selects the first of these languages the stream offers as an audio track, most preferred at the top. When the audio that plays is in none of them and the stream carries a forced subtitle track, that track is turned on. Applied the next time playback starts."
-        }
-
-        /// One row of the ordered list: the language's name, reorder controls
-        /// and a remove button.
-        private func tvPreferredLanguageOrderRow(
-            code: String,
-            index: Int,
-            count: Int
-        ) -> some View {
-            let name = TrackLanguageMatcher.displayName(for: code)
-            return TVSettingsReorderRow(
-                name: name,
-                index: index,
-                count: count,
-                onMove: { movePreferredLanguage(at: index, by: $0) },
-                onRemove: { removePreferredLanguage(at: index) },
-                leading: {
-                    Text(verbatim: name)
-                        .font(.system(size: TVSettingsMetrics.rowFontSize))
-                }
-            )
         }
 
         /// The add picker: the device's own languages first, then the curated
@@ -397,4 +382,19 @@ import SwiftUI
         }
     }
 
+    /// An engine as a row of the shared reorderable list.
+    private struct TVEngineRow: ReorderableRowItem {
+        let kind: PlayerEngineKind
+        var id: String {
+            kind.rawValue
+        }
+    }
+
+    /// A preferred audio language as a row of the shared reorderable list.
+    private struct TVLanguageRow: ReorderableRowItem {
+        let code: String
+        var id: String {
+            code
+        }
+    }
 #endif

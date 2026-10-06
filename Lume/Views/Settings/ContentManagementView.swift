@@ -464,24 +464,11 @@ struct ContentManagementView: View {
         /// Drawn before the name — a crest, for a sports follow.
         @ViewBuilder var icon: () -> Icon
 
+        /// The shared reorderable-row structure (as `TVReorderableContentList`'s
+        /// rows): icon and name, then restrict and hide on the trailing edge —
+        /// hide always rightmost — then any drill-in.
         var body: some View {
             HStack(spacing: 12) {
-                Button(action: onToggleHidden) {
-                    Image(systemName: isHidden ? "eye.slash" : "eye")
-                        .foregroundStyle(isHidden ? Color.secondary : Color.accentColor)
-                }
-                .buttonStyle(.borderless)
-                .accessibilityLabel(isHidden ? "Show \(title)" : "Hide \(title)")
-
-                if let onToggleRestricted {
-                    Button(action: onToggleRestricted) {
-                        Image(systemName: isRestricted ? "lock.fill" : "lock.open")
-                            .foregroundStyle(isRestricted ? Color.orange : Color.secondary)
-                    }
-                    .buttonStyle(.borderless)
-                    .accessibilityLabel(isRestricted ? "Unrestrict \(title)" : "Restrict \(title)")
-                }
-
                 icon()
                 Group {
                     if let titleLineLimit {
@@ -493,6 +480,22 @@ struct ContentManagementView: View {
                 .foregroundStyle(isHidden ? .secondary : .primary)
 
                 Spacer()
+
+                if let onToggleRestricted {
+                    Button(action: onToggleRestricted) {
+                        Image(systemName: isRestricted ? "lock.fill" : "lock.open")
+                            .foregroundStyle(isRestricted ? Color.orange : Color.secondary)
+                    }
+                    .buttonStyle(.borderless)
+                    .accessibilityLabel(isRestricted ? "Unrestrict \(title)" : "Restrict \(title)")
+                }
+
+                Button(action: onToggleHidden) {
+                    Image(systemName: isHidden ? "eye.slash" : "eye")
+                        .foregroundStyle(isHidden ? Color.secondary : Color.lumeAccent)
+                }
+                .buttonStyle(.borderless)
+                .accessibilityLabel(isHidden ? "Show \(title)" : "Hide \(title)")
 
                 if let drillInValue {
                     Button {

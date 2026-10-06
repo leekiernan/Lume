@@ -117,6 +117,7 @@ struct SettingsView: View {
         /// `selectedEngineOptions`). Not `private`: read by the
         /// SettingsView+TVPlayer extension (separate file).
         @State var preferredLanguagePane: PreferredLanguagePane?
+        @State var isReorderingPlayerList = false
 
         enum PreferredLanguagePane {
             case list, add
@@ -540,9 +541,9 @@ struct SettingsView: View {
                             if let selectedEngineOptions {
                                 tvEngineOptionsDetail(for: selectedEngineOptions)
                             } else if let preferredLanguagePane {
-                                tvPreferredLanguageDetail(preferredLanguagePane)
+                                tvPreferredLanguageDetail(preferredLanguagePane, proxy: proxy)
                             } else {
-                                tvPlayerDetail
+                                tvPlayerDetail(proxy: proxy)
                             }
                         case .about: tvAboutDetail
                         }
