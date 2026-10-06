@@ -159,9 +159,7 @@ struct ForYouRow: View {
         if items.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
                 Text("For You")
-                    .font(PosterCardMetrics.railTitleFont)
-                    .fontWeight(.bold)
-                    .foregroundStyle(.primary)
+                    .railHeadingStyle()
                     .padding(.horizontal)
                 placeholder
                     .padding(.horizontal)

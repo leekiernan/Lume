@@ -16,6 +16,8 @@
 //  - `lumeViolet` #7000B4 — depth behind brand moments (the ambient glow);
 //    never text.
 //  - `lumeLiveRed` #D7263D — the LIVE badge fill.
+//  - `lumeDestructive` — destructive text: #FF453A on dark and tvOS,
+//    #D7263D in light. On a white tvOS focus surface use `lumeLiveRed` instead.
 //  - `lumeTextSecondary` / `lumeTextTertiary` — secondary and tertiary text:
 //    #B9B5C4 / #8E8A99 on dark and tvOS, #55506A / #6F6A80 in light.
 //  - `lumeSelection` — selected chips, tabs and rows: Lume pink at 18% on dark,
@@ -32,3 +34,12 @@
 //  bar's selection and the focus treatment, which stay as tvOS draws them.
 //  The sets' `tv` entries hold the dark value under both appearances: Lume's
 //  tvOS screens are always dark, even on a TV set to a light appearance.
+
+import SwiftUI
+
+extension Color {
+    /// Red text on the resting Settings surface or its white tvOS focus lift.
+    static func lumeDestructiveText(isFocused: Bool) -> Color {
+        isFocused ? .lumeLiveRed : .lumeDestructive
+    }
+}

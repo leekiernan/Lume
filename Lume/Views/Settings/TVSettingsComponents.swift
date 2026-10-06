@@ -3,9 +3,9 @@
 //  Lume
 //
 //  Shared building blocks for the tvOS settings surfaces (Settings, Add
-//  Playlist, Playlist detail). They give all three a single minimal, flat look
+//  Playlist, Playlist detail). They give all three a single consistent look
 //  that mirrors the Apple TV Settings app: compact rows, small uppercase
-//  section labels, and a quiet light focus highlight with no scale or shadow.
+//  section labels, and the same white focus lift.
 //
 
 #if os(tvOS)
@@ -224,8 +224,8 @@
     }
 
     /// A full-width content row: a faint resting fill that lifts to white
-    /// with Night text when focused, as the Settings boards draw it. Pass
-    /// `isDestructive` for Live red text.
+    /// with Night text when focused, as the Settings boards draw it.
+    /// Destructive actions use system red at rest and Live red on white focus.
     struct TVSettingsRowButtonStyle: ButtonStyle {
         var isDestructive: Bool = false
 
@@ -240,7 +240,8 @@
             @Environment(\.isEnabled) private var isEnabled
 
             var body: some View {
-                let foreground: Color = isDestructive ? .lumeLiveRed : (isFocused ? .lumeNight : .white)
+                let destructive = isDestructive || configuration.role == .destructive
+                let foreground: Color = destructive ? .lumeDestructiveText(isFocused: isFocused) : (isFocused ? .lumeNight : .white)
                 return configuration.label
                     .font(.system(size: TVSettingsMetrics.rowFontSize, weight: isFocused ? .semibold : .medium))
                     .foregroundStyle(foreground)

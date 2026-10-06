@@ -209,9 +209,7 @@ struct SearchResultsView<Header: View>: View {
     private func header(_ title: LocalizedStringKey, showAll: SearchSection?) -> some View {
         HStack {
             Text(title)
-                .font(PosterCardMetrics.railTitleFont)
-                .fontWeight(.bold)
-                .foregroundStyle(.primary)
+                .railHeadingStyle()
             Spacer()
             if let showAll {
                 NavigationLink(value: showAll) {

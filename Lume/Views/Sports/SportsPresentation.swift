@@ -81,7 +81,7 @@ struct SportsPayPerViewChannelLabel: View {
 }
 
 /// A heading label, never the navigation button or focus target. Group lists
-/// keep their rule/chevron; rails keep their quieter Home-aligned typography.
+/// keep their rule/chevron; rails share Home's complete heading treatment.
 struct SportsSectionHeading: View {
     enum Style { case list, rail }
 
@@ -116,9 +116,7 @@ struct SportsSectionHeading: View {
                 .frame(width: style == .list ? 20 : 22, height: style == .list ? 20 : 22)
                 .accessibilityHidden(true)
             }
-            title
-                .font(PosterCardMetrics.railTitleFont)
-                .foregroundStyle(style == .list ? .primary : .secondary)
+            heading
             if chevron {
                 Image(systemName: "chevron.right")
                     .font(.caption.weight(.semibold))
@@ -126,6 +124,15 @@ struct SportsSectionHeading: View {
                     .accessibilityHidden(true)
             }
             if style == .list { Spacer() }
+        }
+    }
+
+    @ViewBuilder
+    private var heading: some View {
+        if style == .rail {
+            title.railHeadingStyle()
+        } else {
+            title.font(PosterCardMetrics.railTitleFont).foregroundStyle(.primary)
         }
     }
 }

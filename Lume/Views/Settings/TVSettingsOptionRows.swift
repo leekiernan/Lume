@@ -1,5 +1,5 @@
 // Shared option rows for Settings, engine options, Sports and playlist detail.
-// These preserve the existing flat, full-width tvOS focus geometry.
+// These preserve the existing full-width tvOS focus targets and shared lift.
 
 #if os(tvOS)
     import SwiftUI
@@ -56,7 +56,7 @@
         }
     }
 
-    /// A flat toggle row matching the Apple-TV settings rows: shows On/Off and
+    /// A toggle row matching the Apple-TV settings rows: shows On/Off and
     /// flips on Select.
     struct TVOptionToggleRow: View {
         let title: LocalizedStringKey
@@ -74,7 +74,7 @@
         }
     }
 
-    /// A flat row that cycles through a fixed set of choices on each Select,
+    /// A row that cycles through a fixed set of choices on each Select,
     /// showing the current choice's label on the right. tvOS has no good inline
     /// picker, and a full sub-list per option would bury the settings, so the
     /// row advances to the next value in place.
@@ -96,16 +96,15 @@
         }
     }
 
-    /// A flat destructive-styled row used to trigger a reset on tvOS.
+    /// A native destructive action with the shared Settings focus treatment.
     struct TVOptionResetRow: View {
         let title: LocalizedStringKey
         let action: () -> Void
 
         var body: some View {
-            Button(action: action) {
+            Button(role: .destructive, action: action) {
                 HStack(spacing: 16) {
                     Text(title)
-                        .foregroundStyle(Color.lumeLiveRed)
                     Spacer(minLength: 0)
                 }
             }

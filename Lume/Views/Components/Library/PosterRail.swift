@@ -19,7 +19,7 @@ struct PosterRail<Destination: Hashable, Content: View>: View {
     private var rail: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                title.font(PosterCardMetrics.railTitleFont).fontWeight(.bold).foregroundStyle(.primary)
+                title.railHeadingStyle()
                 Spacer()
                 if let showAll {
                     NavigationLink(value: showAll) { Text("Show All").font(.subheadline) }
