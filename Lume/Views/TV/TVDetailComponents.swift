@@ -333,11 +333,7 @@
                 .clipped()
 
                 if let progress = resumeFraction {
-                    ProgressView(value: progress)
-                        .progressViewStyle(.linear)
-                        .tint(.white)
-                        .padding(.horizontal, 10)
-                        .padding(.bottom, 8)
+                    ArtworkProgressBar(fraction: progress)
                 }
 
                 if episode.isWatched {

@@ -192,9 +192,11 @@ import SwiftUI
                     if item.fractionCompleted > 0 {
                         ProgressView(value: item.fractionCompleted)
                             .progressViewStyle(.linear)
+                            .tint(.lumeAccent)
                     } else {
                         ProgressView()
                             .progressViewStyle(.linear)
+                            .tint(.lumeAccent)
                     }
                     caption
                 }

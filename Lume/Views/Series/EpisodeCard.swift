@@ -36,13 +36,6 @@ import SwiftUI
                                 .foregroundStyle(.secondary)
                                 .lineLimit(2)
                         }
-
-                        if let progress = resumeFraction {
-                            ProgressView(value: progress)
-                                .progressViewStyle(.linear)
-                                .tint(.lumeAccent)
-                                .padding(.top, 2)
-                        }
                     }
 
                     Spacer(minLength: 0)
@@ -99,6 +92,11 @@ import SwiftUI
                     }
                 }
                 .frame(width: 142, height: 80)
+                .overlay {
+                    if let progress = resumeFraction {
+                        ArtworkProgressBar(fraction: progress)
+                    }
+                }
                 .clipShape(RoundedRectangle(cornerRadius: 8))
 
                 if let progress = downloadProgress {

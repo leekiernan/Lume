@@ -76,11 +76,7 @@ struct StepRowView: View {
         if state == .active, fraction > 0 {
             ProgressView(value: fraction)
                 .progressViewStyle(.linear)
-            #if os(tvOS)
-                .tint(.white)
-            #else
                 .tint(.lumeAccent)
-            #endif
         }
     }
 }

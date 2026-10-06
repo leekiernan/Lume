@@ -7,27 +7,17 @@ import SwiftUI
         var badge: String?
 
         var body: some View {
-            VStack(alignment: .leading, spacing: PosterCardMetrics.titleSpacing) {
-                PosterArtworkView(
-                    provider: item.imageURL?.absoluteString, posterPath: item.posterPath,
-                    request: item.posterRecoveryRequest, maxPixelSize: PosterCardMetrics.posterHeight
-                ) { phase in
-                    PosterArtworkContent(
-                        phase: phase, fallbackSymbol: item.posterRecoveryRequest?.kind == .series ? "tv" : "film",
-                        placeholderFill: .white.opacity(0.08), fallbackForeground: .white.opacity(0.5),
-                        fallbackFont: .system(size: 56)
-                    )
-                }
-                .frame(width: PosterCardMetrics.posterWidth, height: PosterCardMetrics.posterHeight)
-                .clipShape(RoundedRectangle(cornerRadius: PosterCardMetrics.cornerRadius, style: .continuous))
-                .posterBadge(badge)
-
-                Text(item.title)
-                    .font(PosterCardMetrics.titleFont)
-                    .foregroundStyle(.white)
-                    .lineLimit(2)
-                    .frame(width: PosterCardMetrics.posterWidth, alignment: .leading)
+            PosterArtworkView(
+                provider: item.imageURL?.absoluteString, posterPath: item.posterPath,
+                request: item.posterRecoveryRequest, maxPixelSize: PosterCardMetrics.posterHeight
+            ) { phase in
+                PosterArtworkContent(phase: phase, title: item.title)
             }
+            .frame(width: PosterCardMetrics.posterWidth, height: PosterCardMetrics.posterHeight)
+            .clipShape(RoundedRectangle(cornerRadius: PosterCardMetrics.cornerRadius, style: .continuous))
+            .posterBadge(badge)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(Text(item.title))
         }
     }
 #endif

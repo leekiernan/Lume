@@ -78,7 +78,7 @@ private struct HomeItemCell: View {
                 NavigationLink(value: series) {
                     PosterCard(
                         title: item.title, provider: item.imageURL?.absoluteString, posterPath: series.posterPath,
-                        request: .init(kind: .series, id: series.id, categoryID: series.categoryId), fallbackSymbol: "tv", progress: progress
+                        request: .init(kind: .series, id: series.id, categoryID: series.categoryId), progress: progress
                     )
                     .matchedTransitionSourceIfAvailable(id: series.id, in: animationNamespace)
                 }
@@ -210,40 +210,37 @@ private struct HomeLiveLogoCard: View {
     let imageURL: URL?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: PosterCardMetrics.titleSpacing) {
-            CachedAsyncImage(url: imageURL, maxPixelSize: PosterCardMetrics.posterHeight, content: artworkContent)
-                .frame(width: PosterCardMetrics.posterWidth, height: PosterCardMetrics.posterHeight)
-                .background { liveCardBackground }
-                .posterArtworkFrame(fillsWidth: false)
-                .clipShape(RoundedRectangle(cornerRadius: PosterCardMetrics.cornerRadius))
-            // Skipped on tvOS for the same reason as `MovieCardView`: a shadow
-            // after clipShape costs an offscreen pass per card and is invisible
-            // at 10 feet.
-            #if !os(tvOS)
-                .shadow(radius: 2)
-            #endif
-
-            Text(title)
-                .font(PosterCardMetrics.titleFont)
-                .lineLimit(2)
-                .frame(width: PosterCardMetrics.posterWidth, alignment: .leading)
-        }
+        CachedAsyncImage(url: imageURL, maxPixelSize: PosterCardMetrics.posterHeight, content: artworkContent)
+            .frame(width: PosterCardMetrics.posterWidth, height: PosterCardMetrics.posterHeight)
+            .background { liveCardBackground }
+            .posterArtworkFrame(fillsWidth: false)
+            .clipShape(RoundedRectangle(cornerRadius: PosterCardMetrics.cornerRadius, style: .continuous))
+        // Skipped on tvOS for the same reason as `MovieCardView`: a shadow
+        // after clipShape costs an offscreen pass per card and is invisible
+        // at 10 feet.
+        #if !os(tvOS)
+            .shadow(radius: 2)
+        #endif
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(Text(title))
     }
 
+    /// Like a poster, the logo stands alone once it loads; until then — or
+    /// without one — the channel's name sits on the plate.
     @ViewBuilder
     private func artworkContent(_ phase: AsyncImagePhase) -> some View {
         switch phase {
-        case .empty:
-            Color.clear.overlay { ProgressView() }
         case let .success(image):
             image.resizable().aspectRatio(contentMode: .fit)
                 .padding(PosterCardMetrics.liveLogoInset)
-        case .failure:
-            Color.clear.overlay {
-                Image(systemName: "antenna.radiowaves.left.and.right")
-                    .foregroundStyle(Color.white.opacity(0.6))
-                    .font(.largeTitle)
-            }
+        case .empty, .failure:
+            Text(title)
+                .font(PosterCardMetrics.tileTitleFont)
+                .foregroundStyle(.white)
+                .lineLimit(4)
+                .multilineTextAlignment(.leading)
+                .padding(PosterCardMetrics.tileInset)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
         @unknown default:
             EmptyView()
         }

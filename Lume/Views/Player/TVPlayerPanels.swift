@@ -114,10 +114,10 @@
                     let knobX = min(max(filled - knobSize / 2, 0), max(width - knobSize, 0))
                     ZStack(alignment: .leading) {
                         Capsule()
-                            .fill(.white.opacity(0.3))
+                            .fill(.white.opacity(0.22))
                             .frame(height: trackHeight)
                         Capsule()
-                            .fill(.white)
+                            .fill(Color.lumeAccent)
                             .frame(width: filled, height: trackHeight)
                         if knobSize > 0 {
                             Circle()
@@ -223,11 +223,7 @@
                 .clipped()
 
                 if let progress = resumeFraction {
-                    ProgressView(value: progress)
-                        .progressViewStyle(.linear)
-                        .tint(.white)
-                        .padding(.horizontal, 8)
-                        .padding(.bottom, 8)
+                    ArtworkProgressBar(fraction: progress)
                 }
 
                 if isCurrent {

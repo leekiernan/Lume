@@ -3,9 +3,10 @@
 //  Lume
 //
 //  The Continue Watching rail on Home, Movies and Series: landscape cards with
-//  the title's TMDB backdrop, its logo bottom-left, and under it a progress
-//  bar between a play glyph and what's left — time for a movie, the episode
-//  for a series. Finished titles leave the rail (`ContinueWatching`).
+//  the title's TMDB backdrop, its logo bottom-left, and under it what's left —
+//  time for a movie, the episode and its time for a series — always as text.
+//  Progress runs flush along the card's bottom edge (`ArtworkProgressBar`).
+//  Finished titles leave the rail (`ContinueWatching`).
 //
 //  Cards are 1.4× a poster's width (16:9), so the rail shows fewer, larger
 //  titles than the poster rails around it, at the same spacing.
@@ -30,15 +31,11 @@ enum ContinueWatchingMetrics {
         static let inset: CGFloat = 16
         static let labelFont: Font = .system(size: 20, weight: .semibold)
         static let glyphFont: Font = .system(size: 16, weight: .bold)
-        static let glyphSize: CGFloat = 14
-        static let barHeight: CGFloat = 6
         static let fallbackTitleFont: Font = .system(size: 26, weight: .bold)
     #else
         static let inset: CGFloat = 8
         static let labelFont: Font = .system(size: 10, weight: .semibold)
         static let glyphFont: Font = .system(size: 8, weight: .bold)
-        static let glyphSize: CGFloat = 7
-        static let barHeight: CGFloat = 3
         static let fallbackTitleFont: Font = .system(size: 13, weight: .bold)
     #endif
 }
@@ -201,7 +198,7 @@ private struct ContinueWatchingCell: View {
                         posterURL: item.imageURL,
                         logoURL: logoURL(show.logoPath),
                         fraction: continuation?.fraction ?? 0,
-                        label: continuation.map(ContinueWatching.episodeLabel)
+                        label: continuation.map(ContinueWatching.seriesLabel)
                     )
                     .matchedTransitionSourceIfAvailable(id: show.id, in: animationNamespace)
                 }
@@ -255,12 +252,12 @@ private struct ContinueWatchingCard: View {
                         .resizable()
                         .aspectRatio(contentMode: .fill)
                 default:
-                    Rectangle().fill(Color.gray.opacity(0.3))
+                    Rectangle().fill(PosterTitleTile.color(for: title))
                 }
             }
             .frame(width: Metrics.cardWidth, height: Metrics.cardHeight)
 
-            // Keeps the logo and the progress row legible on any backdrop.
+            // Keeps the logo and the label legible on any backdrop.
             LinearGradient(
                 colors: [.clear, .black.opacity(0.75)],
                 startPoint: UnitPoint(x: 0.5, y: 0.35),
@@ -282,9 +279,19 @@ private struct ContinueWatchingCard: View {
                         .multilineTextAlignment(.leading)
                         .frame(maxWidth: Metrics.infoWidth, alignment: .leading)
                 }
-                progressRow
+                if let label {
+                    Text(label)
+                        .font(Metrics.labelFont)
+                        .foregroundStyle(.white.opacity(0.9))
+                        .lineLimit(1)
+                }
             }
             .padding(Metrics.inset)
+            .padding(.bottom, fraction > 0 ? ArtworkProgressBar.height : 0)
+
+            if fraction > 0 {
+                ArtworkProgressBar(fraction: fraction)
+            }
         }
         .frame(width: Metrics.cardWidth, height: Metrics.cardHeight)
         .clipShape(RoundedRectangle(cornerRadius: PosterCardMetrics.cornerRadius))
@@ -294,52 +301,6 @@ private struct ContinueWatchingCard: View {
         #endif
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(Text(label.map { "\(title), \($0)" } ?? title))
-    }
-
-    /// Across the card: the label keeps its full width, the bar takes the
-    /// rest. The glyph is drawn, not an SF Symbol: a symbol keeps room below
-    /// it for sitting on a text baseline, even resized, which left it half a
-    /// bar high of the bar's centre.
-    private var progressRow: some View {
-        HStack(alignment: .center, spacing: Metrics.inset / 2) {
-            PlayTriangle()
-                .frame(width: Metrics.glyphSize * 0.86, height: Metrics.glyphSize)
-            ContinueWatchingBar(fraction: fraction)
-            if let label {
-                Text(label)
-                    .font(Metrics.labelFont)
-                    .lineLimit(1)
-                    .fixedSize()
-            }
-        }
-        .foregroundStyle(.white)
-    }
-}
-
-/// A play glyph whose box is the triangle, so centring the box centres it.
-private struct PlayTriangle: Shape {
-    func path(in rect: CGRect) -> Path {
-        Path { path in
-            path.move(to: CGPoint(x: rect.minX, y: rect.minY))
-            path.addLine(to: CGPoint(x: rect.maxX, y: rect.midY))
-            path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
-            path.closeSubpath()
-        }
-    }
-}
-
-private struct ContinueWatchingBar: View {
-    let fraction: Double
-
-    var body: some View {
-        GeometryReader { proxy in
-            ZStack(alignment: .leading) {
-                Capsule().fill(.white.opacity(0.3))
-                Capsule().fill(.white)
-                    .frame(width: proxy.size.width * min(max(fraction, 0), 1))
-            }
-        }
-        .frame(height: ContinueWatchingMetrics.barHeight)
     }
 }
 
@@ -377,7 +338,7 @@ private struct ContinueWatchingChannelCard: View {
                     .font(Metrics.glyphFont)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
-                    .background(.red, in: Capsule())
+                    .background(Color.lumeLiveRed, in: Capsule())
             }
             .foregroundStyle(.white)
             .frame(maxWidth: Metrics.cardWidth - 2 * Metrics.inset, alignment: .leading)

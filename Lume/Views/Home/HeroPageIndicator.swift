@@ -35,7 +35,7 @@ struct HeroPageIndicator: View {
                     .overlay(alignment: .leading) {
                         if isActive {
                             Capsule()
-                                .fill(Color.white)
+                                .fill(Color.lumeAccent)
                                 // Tracks `progress` directly (no animation) so the
                                 // fill steps with the tick rather than lagging it.
                                 .frame(width: activeWidth * progress, height: dotSize)

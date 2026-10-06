@@ -20,7 +20,6 @@ struct DetailPosterArtworkTests {
         movie.categoryId = "restricted-category"
         let card = DetailPosterCard(item: .movie(movie), badge: "Other playlist")
         #expect(card.badge == "Other playlist")
-        #expect(!card.isSeries)
         #expect(card.request == PosterArtworkRequest(kind: .movie, id: movie.id, categoryID: movie.categoryId))
         let source = PosterArtworkSource(provider: card.imageURL?.absoluteString, posterPath: card.posterPath)
         #expect(source.primaryURL == card.imageURL)
@@ -31,7 +30,6 @@ struct DetailPosterArtworkTests {
         let series = Series(id: "playlist-series-1", seriesId: 1, name: "Series")
         series.posterPath = "/series.jpg"
         let card = DetailPosterCard(item: .series(series))
-        #expect(card.isSeries)
         #expect(card.request?.kind == .series)
         #expect(card.request?.id == series.id)
         #expect(PosterArtworkSource(provider: card.imageURL?.absoluteString, posterPath: card.posterPath).primaryURL?.path == "/t/p/w500/series.jpg")

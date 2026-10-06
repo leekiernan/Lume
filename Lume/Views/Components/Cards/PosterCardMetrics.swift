@@ -14,16 +14,18 @@ enum PosterCardMetrics {
     #if os(tvOS)
         static let posterWidth: CGFloat = 240
         static let posterHeight: CGFloat = 360
-        static let cornerRadius: CGFloat = 12
-        static let titleSpacing: CGFloat = 12
-        static let titleFont: Font = .system(size: 24, weight: .medium)
+        static let cornerRadius: CGFloat = 16
+        /// The title inside an unloaded card's tile.
+        static let tileTitleFont: Font = .system(size: 24, weight: .bold)
+        static let tileInset: CGFloat = 20
 
         /// Gap between cards inside a horizontal browse rail.
         static let railSpacing: CGFloat = 48
         /// Vertical breathing room so the focus lift isn't clipped by the rail.
         static let railVerticalPadding: CGFloat = 28
-        /// Height reserved for a rail: poster + two-line title + the focus lift.
-        static let rowHeight: CGFloat = 470
+        /// Height reserved for a rail: the poster and room for its focus lift.
+        /// Cards carry no caption: the title is on the poster or its tile.
+        static let rowHeight: CGFloat = posterHeight + 2 * railVerticalPadding
         /// Minimum item width for the "Show All" adaptive grid.
         static let gridMinimum: CGFloat = 240
         static let gridSpacing: CGFloat = 48
@@ -33,12 +35,13 @@ enum PosterCardMetrics {
         static let posterWidth: CGFloat = 120
         static let posterHeight: CGFloat = 180
         static let cornerRadius: CGFloat = 8
-        static let titleSpacing: CGFloat = 8
-        static let titleFont: Font = .caption
+        static let tileTitleFont: Font = .caption.weight(.bold)
+        static let tileInset: CGFloat = 10
 
         static let railSpacing: CGFloat = 16
         static let railVerticalPadding: CGFloat = 0
-        static let rowHeight: CGFloat = 220
+        /// The poster plus its shadow; cards carry no caption.
+        static let rowHeight: CGFloat = posterHeight + 8
         static let gridMinimum: CGFloat = 100
         static let gridSpacing: CGFloat = 16
         static let liveLogoInset: CGFloat = 16

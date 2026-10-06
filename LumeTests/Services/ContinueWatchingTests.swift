@@ -19,7 +19,7 @@ struct ContinueWatchingTests {
         let continuation = ContinueWatching.continuation(from: [
             mark(1, 1, watched: true), mark(1, 2, progress: 600), mark(1, 3)
         ])
-        #expect(continuation == SeriesContinuation(season: 1, episode: 2, fraction: 0.25))
+        #expect(continuation == SeriesContinuation(season: 1, episode: 2, fraction: 0.25, remaining: 1800))
     }
 
     /// Across a season boundary, and unstarted: an empty bar.
@@ -27,7 +27,8 @@ struct ContinueWatchingTests {
         let continuation = ContinueWatching.continuation(from: [
             mark(1, 1, watched: true), mark(1, 2, watched: true), mark(2, 1)
         ])
-        #expect(continuation == SeriesContinuation(season: 2, episode: 1, fraction: 0))
+        // Unstarted: all of it is left.
+        #expect(continuation == SeriesContinuation(season: 2, episode: 1, fraction: 0, remaining: 2400))
     }
 
     /// The series page's Resume button wraps to the premiere here; the rail
@@ -48,7 +49,7 @@ struct ContinueWatchingTests {
 
     @Test func `nothing watched yet starts at the first episode`() {
         #expect(ContinueWatching.continuation(from: [mark(2, 1), mark(1, 3), mark(1, 1)])
-            == SeriesContinuation(season: 1, episode: 1, fraction: 0))
+            == SeriesContinuation(season: 1, episode: 1, fraction: 0, remaining: 2400))
         #expect(ContinueWatching.continuation(from: []) == nil)
     }
 
@@ -64,6 +65,24 @@ struct ContinueWatchingTests {
         // Never "0m left": under a minute still reads a minute.
         #expect(ContinueWatching.remainingLabel(20).contains("1"))
         #expect(ContinueWatching.remainingLabel(3900).contains("5"))
+    }
+
+    /// A series card always reads the episode and, when known, its time left.
+    @Test func `the series label pairs the episode with its time left`() {
+        let known = SeriesContinuation(season: 7, episode: 12, fraction: 0.5, remaining: 1800)
+        #expect(ContinueWatching.seriesLabel(known)
+            == ContinueWatching.episodeLabel(known) + " · " + ContinueWatching.remainingLabel(1800))
+        let unknown = SeriesContinuation(season: 7, episode: 12, fraction: nil)
+        #expect(ContinueWatching.seriesLabel(unknown) == ContinueWatching.episodeLabel(unknown))
+    }
+
+    @MainActor
+    @Test func `title tiles keep a stable colour per title`() {
+        #expect(PosterTitleTile.paletteIndex(for: "Sintel") == PosterTitleTile.paletteIndex(for: "Sintel"))
+        let indices = Set(["Sintel", "Big Buck Bunny", "Tears of Steel", "Spring", "Charge", "Wing It!"]
+            .map(PosterTitleTile.paletteIndex(for:)))
+        #expect(indices.count > 1)
+        #expect(indices.allSatisfy { (0 ..< PosterTitleTile.palette.count).contains($0) })
     }
 
     @Test func `resume bars exclude watched and unstarted content without changing the continuation threshold`() {

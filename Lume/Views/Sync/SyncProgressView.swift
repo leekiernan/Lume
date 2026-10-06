@@ -398,7 +398,7 @@ struct SyncProgressView: View {
                 if phase == .syncing || phase == .finished {
                     ProgressView(value: progress.overallFraction)
                         .progressViewStyle(.linear)
-                        .tint(.white)
+                        .tint(.lumeAccent)
                 }
             }
         }

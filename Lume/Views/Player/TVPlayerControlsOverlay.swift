@@ -546,7 +546,7 @@
             if isLive {
                 ProgressView(value: progressFraction)
                     .progressViewStyle(.linear)
-                    .tint(.white)
+                    .tint(.lumeAccent)
             } else {
                 Button { onToggleScrub() } label: { Color.clear }
                     .buttonStyle(TVScrubBarStyle(fraction: scrubberFraction, isScrubbing: isScrubbing))
