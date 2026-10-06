@@ -39,7 +39,7 @@ import SwiftUI
                 Text("Media Server")
             } footer: {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Enter your server address — Lume recognizes Jellyfin, Emby and Plex servers and WebDAV shares automatically.")
+                    Text("Enter your server address — lume recognizes Jellyfin, Emby and Plex servers and WebDAV shares automatically.")
                     Text("For a WebDAV share, enter the full path of the folder that holds your media — a server's root address usually isn't browsable.")
                     Text("Leave the username and password empty for an anonymous share. For Plex, enter your Plex account — or paste an X-Plex-Token in the password field.")
                     Text("The first connection asks permission to find devices on your local network. If you decline it, only the system Settings app can allow it again.")
@@ -271,7 +271,7 @@ enum MediaServerAddCheck {
         }
         switch serverError {
         case .unsupported:
-            return String(localized: "Lume couldn't recognize a media server at that address. Enter your Jellyfin, Emby or Plex server's base address, or the full path of a WebDAV folder.")
+            return String(localized: "lume couldn't recognize a media server at that address. Enter your Jellyfin, Emby or Plex server's base address, or the full path of a WebDAV folder.")
         case .missingCredentials:
             return String(localized: "This server needs a username and password. Enter them and try again.")
         }
@@ -294,7 +294,7 @@ enum ServerAddressHelp {
     /// host: iOS and tvOS just fail the connection. Only the system Settings app
     /// can reverse it, and on tvOS there is no other affordance at all.
     static var localNetworkMessage: String {
-        String(localized: "Lume couldn't reach that address on your local network. If you declined the local network prompt, only the system Settings app can allow it again.")
+        String(localized: "lume couldn't reach that address on your local network. If you declined the local network prompt, only the system Settings app can allow it again.")
     }
 
     static func isLocalHost(_ host: String?) -> Bool {

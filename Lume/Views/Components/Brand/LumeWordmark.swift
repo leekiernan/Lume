@@ -22,7 +22,7 @@ struct LumeWordmark: View {
             // The board's letter-spacing: -0.03em.
             .kerning(-0.03 * size)
             .foregroundStyle(color)
-            .accessibilityLabel(Text(verbatim: "Lume"))
+            .accessibilityLabel(Text(verbatim: "lume"))
     }
 }
 

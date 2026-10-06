@@ -35,13 +35,13 @@ struct WebDAVLocalizationTests {
         "The server rejected this username and password. Leave both empty if the share allows anonymous access.",
         "That URL doesn't answer as a WebDAV share. Enter the full path of the shared folder, not just the server address.",
         "That folder is empty. Enter the full path of the folder that holds your media — a server's root address usually lists nothing.",
-        "Lume couldn't reach that address on your local network. If you declined the local network prompt, only the system Settings app can allow it again.",
+        "lume couldn't reach that address on your local network. If you declined the local network prompt, only the system Settings app can allow it again.",
         "The share URL is invalid.",
         "Network error: %@",
         "The server rejected these credentials.",
         "This URL does not point to a WebDAV share. Enter the full path of the shared folder.",
         "Server error (HTTP %lld).",
-        "The server returned a response Lume could not read."
+        "The server returned a response lume could not read."
     ]
 
     /// The sync-progress step and its detail line, and the source-aware Live TV

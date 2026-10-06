@@ -64,7 +64,7 @@ import SwiftUI
                 VStack(alignment: .leading, spacing: 8) {
                     TVSettingsSectionLabel("About")
 
-                    TVSettingsSummary(systemImage: "play.tv.fill", title: Text("Lume"), detail: Text("Version \(SupportInfo.appVersion)"))
+                    TVSettingsSummary(systemImage: "play.tv.fill", title: Text("lume"), detail: Text("Version \(SupportInfo.appVersion)"))
                 }
 
                 tvSupportSection
@@ -82,7 +82,7 @@ import SwiftUI
             VStack(alignment: .leading, spacing: 16) {
                 TVSettingsSectionLabel("Acknowledgements")
 
-                Text("Lume is free, open-source software, licensed under the GNU Affero General Public License v3.")
+                Text("lume is free, open-source software, licensed under the GNU Affero General Public License v3.")
                     .font(.system(size: TVSettingsMetrics.explanatoryFontSize))
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, TVSettingsMetrics.rowHPadding)

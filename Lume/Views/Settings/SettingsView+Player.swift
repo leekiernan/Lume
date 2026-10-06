@@ -37,7 +37,7 @@
             } header: {
                 Text("Player")
             } footer: {
-                Text("Lume plays each stream with your preferred engine and falls back to the next if it can't be played.")
+                Text("lume plays each stream with your preferred engine and falls back to the next if it can't be played.")
             }
         }
 
@@ -66,7 +66,7 @@
                 }
             } footer: {
                 // swiftlint:disable:next line_length
-                Text("Streams open in the selected external app instead of Lume's player, when it is installed. Some apps — Infuse among them — play movies and series but no live channels, so you can limit the hand-off to one or the other.")
+                Text("Streams open in the selected external app instead of lume's player, when it is installed. Some apps — Infuse among them — play movies and series but no live channels, so you can limit the hand-off to one or the other.")
             }
         }
     }

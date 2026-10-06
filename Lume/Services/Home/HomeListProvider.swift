@@ -48,7 +48,7 @@ nonisolated enum HomeListError: LocalizedError, Equatable {
     var errorDescription: String? {
         switch self {
         case .unsupportedSource:
-            String(localized: "Lume doesn't recognise that site. Paste a list URL from \(HomeListCatalog.providerNames).")
+            String(localized: "lume doesn't recognise that site. Paste a list URL from \(HomeListCatalog.providerNames).")
         case .invalidURL:
             String(localized: "That doesn't look like a valid link.")
         case .listNotFound:

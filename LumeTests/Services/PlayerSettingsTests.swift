@@ -235,10 +235,10 @@ struct PreferredLanguageStringsTests {
         "Search to find any other language.",
         "Remove %@",
         "Audio Track",
-        "Lume selects the first of these languages the stream offers as an audio track. Drag to reorder. "
+        "lume selects the first of these languages the stream offers as an audio track. Drag to reorder. "
             + "When the audio that plays is in none of them and the stream carries a forced subtitle track, "
             + "that track is turned on. Applied the next time playback starts.",
-        "Lume selects the first of these languages the stream offers as an audio track, most preferred at the top. "
+        "lume selects the first of these languages the stream offers as an audio track, most preferred at the top. "
             + "When the audio that plays is in none of them and the stream carries a forced subtitle track, "
             + "that track is turned on. Applied the next time playback starts."
     ]

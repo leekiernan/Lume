@@ -62,7 +62,7 @@ import SwiftUI
                 .buttonStyle(TVSettingsRowButtonStyle())
 
                 if !premium.isPremium {
-                    Text("Free includes one playlist. Upgrade to Lume Pro to add more.")
+                    Text("Free includes one playlist. Upgrade to lume Pro to add more.")
                         .tvSettingsFooter()
                         .padding(.top, 6)
                 } else if playlists.count > 1 {

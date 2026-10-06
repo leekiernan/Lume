@@ -291,7 +291,7 @@ struct SettingsView: View {
                 } else if premium.isPremium {
                     Text("\(playlists.count) playlists")
                 } else {
-                    Text("Free includes one playlist. Upgrade to Lume Pro to add more.")
+                    Text("Free includes one playlist. Upgrade to lume Pro to add more.")
                 }
             }
         }
@@ -322,7 +322,7 @@ struct SettingsView: View {
             } header: {
                 Text("Appearance")
             } footer: {
-                Text("Follow the device appearance, or keep Lume always in Dark or Light Mode.")
+                Text("Follow the device appearance, or keep lume always in Dark or Light Mode.")
             }
         }
 

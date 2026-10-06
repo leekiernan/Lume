@@ -36,7 +36,7 @@ nonisolated enum PlexError: LocalizedError {
         case let .serverError(code):
             String(localized: "Server error (HTTP \(code)).")
         case .invalidResponse:
-            String(localized: "The server returned a response Lume could not read.")
+            String(localized: "The server returned a response lume could not read.")
         }
     }
 

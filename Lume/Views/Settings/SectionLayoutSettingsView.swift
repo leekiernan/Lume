@@ -79,7 +79,7 @@
                 } header: {
                     Text("Custom Sections")
                 } footer: {
-                    Text("Build your own row from a public list, like a site's most-popular chart. Lume matches the list against your playlist and shows the titles you have.")
+                    Text("Build your own row from a public list, like a site's most-popular chart. lume matches the list against your playlist and shows the titles you have.")
                 }
 
                 if let categoryType {

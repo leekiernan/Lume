@@ -56,14 +56,14 @@ struct ManageProfilesView: View {
                 }
             } footer: {
                 if !premium.isPremium {
-                    Text("Free includes one profile. Upgrade to Lume Pro for the whole household.")
+                    Text("Free includes one profile. Upgrade to lume Pro for the whole household.")
                 }
             }
 
             Section {
                 Toggle("Ask on Startup", isOn: $askOnStartup)
             } footer: {
-                Text("Choose a profile each time Lume launches. When off, Lume resumes the last profile you used.")
+                Text("Choose a profile each time lume launches. When off, lume resumes the last profile you used.")
             }
 
             parentalControlsSection

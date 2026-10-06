@@ -142,7 +142,7 @@ import SwiftUI
                     }
 
                     // swiftlint:disable:next line_length
-                    Text("Streams open in the selected app instead of Lume's player. Downloads always play in Lume, and the built-in player is used when the app is not installed or the stream is outside the selected content.")
+                    Text("Streams open in the selected app instead of lume's player. Downloads always play in lume, and the built-in player is used when the app is not installed or the stream is outside the selected content.")
                         .tvSettingsFooter()
                         .padding(.top, 6)
                 }
@@ -320,7 +320,7 @@ import SwiftUI
 
         private var tvPreferredLanguageFooter: LocalizedStringKey {
             // swiftlint:disable:next line_length
-            "Lume selects the first of these languages the stream offers as an audio track, most preferred at the top. When the audio that plays is in none of them and the stream carries a forced subtitle track, that track is turned on. Applied the next time playback starts."
+            "lume selects the first of these languages the stream offers as an audio track, most preferred at the top. When the audio that plays is in none of them and the stream carries a forced subtitle track, that track is turned on. Applied the next time playback starts."
         }
 
         /// One row of the ordered list: the language's name, reorder controls

@@ -111,7 +111,7 @@ nonisolated struct DebugLogExporter {
     /// inbox can tell submissions apart.
     func writeReport(now: Date = Date()) async throws -> URL {
         let report = await makeReport(now: now)
-        let name = "Lume-Diagnostics-\(DiagnosticDateFormat.file.string(from: now)).txt"
+        let name = "lume-Diagnostics-\(DiagnosticDateFormat.file.string(from: now)).txt"
         let url = FileManager.default.temporaryDirectory.appendingPathComponent(name)
         try report.write(to: url, atomically: true, encoding: .utf8)
         return url
@@ -122,7 +122,7 @@ nonisolated struct DebugLogExporter {
     func compactSummary(now: Date = Date(), maxLength: Int = 900) -> String {
         let journalText = journal.contents()
         var lines = [
-            "Lume \(metadata.appVersion) (\(metadata.buildNumber)) \(metadata.installSource)",
+            "lume \(metadata.appVersion) (\(metadata.buildNumber)) \(metadata.installSource)",
             "\(metadata.platform) \(metadata.osVersion) · \(metadata.deviceModel)"
         ]
         if let origin = metadata.origin { lines.append("From: \(origin)") }
@@ -147,7 +147,7 @@ nonisolated struct DebugLogExporter {
 
     func header(now: Date) -> [String] {
         var lines = [
-            "Lume Diagnostic Report",
+            "lume Diagnostic Report",
             "======================"
         ]
         if let origin = metadata.origin {
@@ -160,13 +160,13 @@ nonisolated struct DebugLogExporter {
             lines.append("User's description: \(LogRedaction.scrubURLs(in: note))")
         }
         lines += [
-            "App: Lume \(metadata.appVersion) (build \(metadata.buildNumber))\(metadata.installSource.isEmpty ? "" : " · \(metadata.installSource)")",
+            "App: lume \(metadata.appVersion) (build \(metadata.buildNumber))\(metadata.installSource.isEmpty ? "" : " · \(metadata.installSource)")",
             "Platform: \(metadata.platform) \(metadata.osVersion)",
             "Device: \(metadata.deviceModel)",
             "Player engines: \(metadata.engineSummary)"
         ]
         if let isPremium = metadata.isPremium {
-            lines.append("Lume Pro: \(isPremium ? "yes" : "no")")
+            lines.append("lume Pro: \(isPremium ? "yes" : "no")")
         }
         if !metadata.locale.isEmpty {
             lines.append("Locale: \(metadata.locale)")
