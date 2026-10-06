@@ -52,6 +52,7 @@ final class NowPlayingService {
 
     private var clock: PlaybackClock?
     private var artwork: MPMediaItemArtwork?
+    private var artworkOwner = RequestToken()
     private var channelName: String?
     private var channelEPG: ChannelEPG?
     private var playbackState: (() -> PlaybackSessionMachine.State)?
@@ -96,6 +97,9 @@ final class NowPlayingService {
         channelName = nil
         channelEPG = nil
         artwork = nil
+        artworkOwner = RequestToken()
+        let artworkRequest = artworkOwner
+        let artworkProfile = ActiveProfileStore.current
         PlaybackResumeStore.save(media)
         registerCommands(for: media)
         publish()
@@ -104,7 +108,9 @@ final class NowPlayingService {
         #endif
 
         await withTaskGroup(of: Void.self) { group in
-            group.addTask { await self.loadArtwork(for: media) }
+            group.addTask {
+                await self.loadArtwork(for: media, container: container, profile: artworkProfile, owner: artworkRequest)
+            }
             if media.isLive {
                 group.addTask { await self.refreshEPGLoop(media: media, container: container) }
             }
@@ -139,6 +145,7 @@ final class NowPlayingService {
         playbackState = nil
         clock = nil
         artwork = nil
+        artworkOwner = RequestToken()
         channelEPG = nil
         channelName = nil
         removeCommands()
@@ -333,10 +340,18 @@ final class NowPlayingService {
 
     // MARK: - Artwork
 
-    private func loadArtwork(for media: PlayableMedia) async {
-        guard let posterURL = media.posterURL else { return }
+    private func loadArtwork(for media: PlayableMedia, container: ModelContainer, profile: UUID?, owner: RequestToken) async {
+        var posterURL = media.nowPlayingArtworkURL
+        if !media.isLive, media.seriesPosterURL == nil {
+            let recovery = PosterArtworkRecovery(container: container)
+            if let portrait = await recovery.playbackPoster(for: media.contentRef, profile: profile) {
+                posterURL = portrait
+            }
+        }
+        guard !Task.isCancelled, artworkOwner == owner, profile == ActiveProfileStore.current else { return }
+        guard let posterURL else { return }
         guard let image = try? await ImagePipeline.shared.image(for: posterURL, maxPixelSize: 600) else { return }
-        guard currentMedia?.playbackSessionID == media.playbackSessionID else { return }
+        guard !Task.isCancelled, artworkOwner == owner, profile == ActiveProfileStore.current else { return }
         artwork = Self.makeArtwork(image)
         publish()
         #if os(iOS)
@@ -348,7 +363,20 @@ final class NowPlayingService {
     /// The request handler is invoked by the system from arbitrary threads;
     /// capturing the immutable image by value keeps it isolation-safe.
     private nonisolated static func makeArtwork(_ image: PlatformImage) -> MPMediaItemArtwork {
-        MPMediaItemArtwork(boundsSize: image.size) { [image] _ in image }
+        // Precompute once, not on every system artwork request.
+        #if os(macOS)
+            let source = image.cgImage(forProposedRect: nil, context: nil, hints: nil)
+            let square = source.flatMap(NowPlayingArtwork.centeredSquare).map {
+                NSImage(cgImage: $0, size: CGSize(width: $0.width, height: $0.height))
+            }
+        #else
+            let square = image.cgImage.flatMap(NowPlayingArtwork.centeredSquare).map {
+                UIImage(cgImage: $0, scale: image.scale, orientation: .up)
+            }
+        #endif
+        return MPMediaItemArtwork(boundsSize: image.size) { [image, square] size in
+            NowPlayingArtwork.usesCompactCrop(for: size) ? (square ?? image) : image
+        }
     }
 
     // MARK: - Live TV EPG

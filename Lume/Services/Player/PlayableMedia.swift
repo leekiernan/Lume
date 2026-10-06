@@ -20,6 +20,9 @@ nonisolated struct PlayableMedia: Identifiable, Hashable, Codable {
     let title: String
     let subtitle: String?
     let posterURL: URL?
+    /// Portrait artwork for system Now Playing. Episode/player surfaces keep
+    /// `posterURL` as their episode still. Optional for older resume snapshots.
+    let seriesPosterURL: URL?
     let kind: Kind
     let startTime: TimeInterval
     let contentRef: ContentRef
@@ -53,13 +56,15 @@ nonisolated struct PlayableMedia: Identifiable, Hashable, Codable {
         contentRef: ContentRef,
         channelScope: LiveChannelScope? = nil,
         httpHeaders: [String: String]? = nil,
-        catchup: CatchupTimeline? = nil
+        catchup: CatchupTimeline? = nil,
+        seriesPosterURL: URL? = nil
     ) {
         self.id = id
         self.url = url
         self.title = title
         self.subtitle = subtitle
         self.posterURL = posterURL
+        self.seriesPosterURL = seriesPosterURL
         self.kind = kind
         self.startTime = startTime
         self.contentRef = contentRef
@@ -70,6 +75,10 @@ nonisolated struct PlayableMedia: Identifiable, Hashable, Codable {
 
     var isLive: Bool {
         kind == .live
+    }
+
+    var nowPlayingArtworkURL: URL? {
+        seriesPosterURL ?? posterURL
     }
 
     /// A copy of this stream that resumes at `position` seconds. Same identity,
@@ -90,7 +99,8 @@ nonisolated struct PlayableMedia: Identifiable, Hashable, Codable {
             contentRef: contentRef,
             channelScope: channelScope,
             httpHeaders: httpHeaders,
-            catchup: catchup
+            catchup: catchup,
+            seriesPosterURL: seriesPosterURL
         )
     }
 
@@ -112,7 +122,8 @@ nonisolated struct PlayableMedia: Identifiable, Hashable, Codable {
             contentRef: contentRef,
             channelScope: channelScope,
             httpHeaders: httpHeaders,
-            catchup: catchup
+            catchup: catchup,
+            seriesPosterURL: seriesPosterURL
         )
     }
 }
@@ -212,6 +223,7 @@ nonisolated extension PlayableMedia {
     }
 
     static func from(episode: Episode, playlist: Playlist) -> PlayableMedia? {
+        let seriesPosterURL = TMDBArtworkURL.poster(episode.series?.posterPath)
         // Prefer local file for offline/downloaded playback
         if let path = episode.localFileURL,
            episode.downloadStatus == .completed,
@@ -229,7 +241,8 @@ nonisolated extension PlayableMedia {
                     for: .episode(episode.id), stored: episode.watchProgress, storedAt: episode.lastWatchedDate,
                     isWatched: episode.isWatched, duration: episode.durationSecs
                 ),
-                contentRef: .episode(episode.id)
+                contentRef: .episode(episode.id),
+                seriesPosterURL: seriesPosterURL
             )
         }
         let url: URL
@@ -258,7 +271,8 @@ nonisolated extension PlayableMedia {
                 isWatched: episode.isWatched, duration: episode.durationSecs
             ),
             contentRef: .episode(episode.id),
-            httpHeaders: authHeaders(for: playlist)
+            httpHeaders: authHeaders(for: playlist),
+            seriesPosterURL: seriesPosterURL
         )
     }
 

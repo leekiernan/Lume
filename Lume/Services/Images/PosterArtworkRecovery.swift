@@ -10,6 +10,56 @@ actor PosterArtworkRecovery {
         self.container = container
     }
 
+    /// Playback is already authorized by the player host. Resolve its portrait
+    /// independently of card/rail lifetimes, through the same bounded recovery
+    /// queue and scalar persistence path used by library cards.
+    func playbackPoster(for reference: PlayableMedia.ContentRef, profile: UUID?) async -> URL? {
+        guard !Task.isCancelled, profile == ActiveProfileStore.current else { return nil }
+        guard let source = playbackSource(for: reference) else {
+            Logger.network.notice("Playback portrait unavailable: catalog owner missing")
+            return nil
+        }
+        if let url = source.url { return url }
+        let key = PosterEnrichmentQueue.Key(catalog: ObjectIdentifier(container), request: source.request,
+                                            profile: profile, visibility: "authorizedPlayback")
+        let result = await PosterEnrichmentQueue.shared.lookup(key) {
+            try await self.lookup(source.request, profile: profile, restriction: ContentRestriction())
+        }
+        guard !Task.isCancelled, profile == ActiveProfileStore.current else { return nil }
+        return TMDBArtworkURL.poster(result?.path)
+    }
+
+    nonisolated struct PlaybackSource {
+        let request: PosterArtworkRequest
+        let url: URL?
+    }
+
+    /// Fresh actor-owned reads also see posters enriched after the immutable
+    /// PlayableMedia snapshot was created (e.g. synced Continue Watching).
+    func playbackSource(for reference: PlayableMedia.ContentRef) -> PlaybackSource? {
+        let context = ModelContext(container)
+        switch reference {
+        case let .movie(id):
+            var descriptor = FetchDescriptor<Movie>(predicate: #Predicate { $0.id == id })
+            descriptor.fetchLimit = 1
+            guard let movie = try? context.fetch(descriptor).first else { return nil }
+            return PlaybackSource(request: .init(kind: .movie, id: movie.id, categoryID: movie.categoryId),
+                                  url: Self.portrait(path: movie.posterPath, provider: movie.streamIcon))
+        case let .episode(id):
+            var descriptor = FetchDescriptor<Episode>(predicate: #Predicate { $0.id == id })
+            descriptor.fetchLimit = 1
+            guard let episode = try? context.fetch(descriptor).first, let series = episode.series else { return nil }
+            return PlaybackSource(request: .init(kind: .series, id: series.id, categoryID: series.categoryId),
+                                  url: Self.portrait(path: series.posterPath, provider: series.cover))
+        case .live: return nil
+        }
+    }
+
+    private nonisolated static func portrait(path: String?, provider: String?) -> URL? {
+        if let stored = TMDBArtworkURL.poster(path) { return stored }
+        return PosterArtworkSource(provider: provider, posterPath: nil).providerURL
+    }
+
     private struct Snapshot {
         let tmdbID: Int?
         let path: String?
@@ -27,7 +77,14 @@ actor PosterArtworkRecovery {
         if TMDBFreshness.isFresh(stored.checkedAt), let checkedAt = stored.checkedAt {
             return PosterLookupResult(path: nil, checkedAt: checkedAt)
         }
-        guard let tmdbID = stored.tmdbID, TMDBClient.shared.isConfigured else { throw TMDBError.missingToken }
+        guard let tmdbID = stored.tmdbID else {
+            Logger.network.notice("Poster metadata unavailable: no TMDB ID")
+            throw TMDBError.missingToken
+        }
+        guard TMDBClient.shared.isConfigured else {
+            Logger.network.notice("Poster metadata unavailable: TMDB not configured")
+            throw TMDBError.missingToken
+        }
         let path: String?
         do {
             path = try await TMDBClient.shared.posterPath(tmdbID, isMovie: request.kind == .movie)
