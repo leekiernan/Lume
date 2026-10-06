@@ -27,7 +27,7 @@
 
         func resolveContent() async {
             // A stream swap invalidates any in-flight scrub.
-            isScrubbing = false
+            scrub.reset()
             episode = nil
             seasonEpisodes = []
             episodeNav = .none
@@ -126,34 +126,40 @@
         /// target at the current position. Treated like an open panel so the
         /// controls stay up and the Menu button routes back here to cancel.
         func beginScrub() {
-            guard !media.isLive else { return }
-            wasPlayingBeforeScrub = coordinator.isPlaying
-            if coordinator.isPlaying { onTogglePlay() }
-            scrubTarget = clock.current.isFinite ? clock.current : 0
+            guard !media.isLive, !isScrubbing else { return }
+            let pause = scrub.begin(current: clock.current, isPlaying: coordinator.isPlaying)
             onPanelOpenChange(true)
-            withAnimation(.easeOut(duration: 0.15)) { isScrubbing = true }
+            if pause { onTogglePlay() }
+            // KSPlayer reflects pause immediately; other engines acknowledge
+            // it in their published callback. Both go through the same gate.
+            scrub.playbackChanged(isPlaying: coordinator.isPlaying)
         }
 
         /// Commit the seek and leave scrub mode, resuming playback if it had
         /// been playing when scrubbing began.
-        func commitScrub() {
-            let target = min(max(scrubTarget, 0), max(clock.duration, 0))
-            // Clock first: a catch-up seek re-places it on the segment.
-            clock.current = target
-            coordinator.seek(to: target)
-            finishScrub(resume: wasPlayingBeforeScrub)
+        func commitScrub(play: Bool = false) {
+            finishScrub(commit: true, play: play)
         }
 
         /// Abort the scrub (Menu press) without seeking, restoring the prior
         /// play state.
         func cancelScrub() {
-            finishScrub(resume: wasPlayingBeforeScrub)
+            finishScrub(commit: false)
         }
 
-        private func finishScrub(resume: Bool) {
-            withAnimation(.easeOut(duration: 0.15)) { isScrubbing = false }
+        private func finishScrub(commit: Bool, play: Bool = false) {
+            guard let completion = scrub.finish(duration: clock.duration, commit: commit, play: play) else { return }
+            if let target = completion.seekTarget {
+                // Clock first: a catch-up seek re-places it on the segment.
+                clock.current = target
+                coordinator.seek(to: target)
+            }
+            if completion.resume, !coordinator.isPlaying { onTogglePlay() }
+            releaseScrubControls()
+        }
+
+        func releaseScrubControls() {
             onPanelOpenChange(false)
-            if resume, !coordinator.isPlaying { onTogglePlay() }
             focus = .scrubber
             onResetHideTimer()
         }
@@ -167,7 +173,7 @@
                 forward: direction == .right, base: skipStep.seconds,
                 from: scrubTarget, duration: clock.duration
             )
-            scrubTarget = press.target
+            scrub.move(to: press.target)
             skipBadge = SkipBadge(press: press)
             onResetHideTimer()
         }
