@@ -465,11 +465,19 @@ struct ContentManagementView: View {
         @ViewBuilder var icon: () -> Icon
 
         /// The shared reorderable-row structure (as `TVReorderableContentList`'s
-        /// rows): icon and name, then restrict and hide on the trailing edge —
-        /// hide always rightmost — then any drill-in.
+        /// rows): hide leads, then icon and name, then restrict, then any
+        /// drill-in. A hidden row's name steps back to tertiary.
         var body: some View {
             HStack(spacing: 12) {
+                Button(action: onToggleHidden) {
+                    Image(systemName: isHidden ? "eye.slash" : "eye")
+                        .foregroundStyle(isHidden ? Color.lumeTextTertiary : Color.lumeAccent)
+                }
+                .buttonStyle(.borderless)
+                .accessibilityLabel(isHidden ? "Show \(title)" : "Hide \(title)")
+
                 icon()
+                    .opacity(isHidden ? 0.5 : 1)
                 Group {
                     if let titleLineLimit {
                         Text(title).lineLimit(titleLineLimit)
@@ -477,7 +485,7 @@ struct ContentManagementView: View {
                         Text(title)
                     }
                 }
-                .foregroundStyle(isHidden ? .secondary : .primary)
+                .foregroundStyle(isHidden ? Color.lumeTextTertiary : Color.primary)
 
                 Spacer()
 
@@ -489,13 +497,6 @@ struct ContentManagementView: View {
                     .buttonStyle(.borderless)
                     .accessibilityLabel(isRestricted ? "Unrestrict \(title)" : "Restrict \(title)")
                 }
-
-                Button(action: onToggleHidden) {
-                    Image(systemName: isHidden ? "eye.slash" : "eye")
-                        .foregroundStyle(isHidden ? Color.secondary : Color.lumeAccent)
-                }
-                .buttonStyle(.borderless)
-                .accessibilityLabel(isHidden ? "Show \(title)" : "Hide \(title)")
 
                 if let drillInValue {
                     Button {

@@ -34,7 +34,6 @@
         static let detailMaxWidth: CGFloat = 860
         /// Width of a secondary column sitting beside a `contentMaxWidth` one.
         static let sideColumnWidth: CGFloat = 560
-        static let background = Color(white: 0.09)
     }
 
     extension View {
@@ -45,9 +44,9 @@
                 .padding(.horizontal, TVSettingsMetrics.rowHPadding)
         }
 
-        /// The flat dark fill shared by every tvOS settings surface.
+        /// The brand's ambient ground, shared by every tvOS settings surface.
         func tvSettingsBackground() -> some View {
-            background(TVSettingsMetrics.background.ignoresSafeArea())
+            background(LumeAmbientBackground())
         }
 
         /// The quiet secondary line shared by the status and empty-state

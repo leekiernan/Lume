@@ -61,9 +61,8 @@
         /// Drawn after the title inside the grab control: a tag ("Primary"),
         /// a premium badge.
         var accessory: ((Item) -> AnyView)?
-        /// The row's own actions (promote, edit, remove), shown at rest before
-        /// the restrict and hide toggles — so hide is always the rightmost
-        /// control, in every list.
+        /// The row's own actions (promote, edit, remove), shown at rest after
+        /// the title; hide always leads the row, in every list.
         var actions: ((Item) -> AnyView)?
         /// Proxy for the host's enclosing `ScrollView`. tvOS only auto-scrolls
         /// when focus *moves* between views; while a row is lifted it keeps focus
@@ -276,6 +275,19 @@
 
         var body: some View {
             HStack(spacing: 14) {
+                // Hide leads the row, in every list. Kept in place (invisible,
+                // disabled) during a move so the row doesn't shift sideways,
+                // and so it can't take focus from the lifted row.
+                if let onToggleHidden {
+                    Button(action: onToggleHidden) {
+                        Image(systemName: toggleImageName)
+                    }
+                    .buttonStyle(TVContentIconButtonStyle())
+                    .accessibilityLabel(toggleAccessibilityLabel)
+                    .disabled(isMoving)
+                    .opacity(isMoving ? 0 : 1)
+                }
+
                 Button(action: onGrabOrDrop) {
                     HStack(spacing: 14) {
                         Image(systemName: isLifted ? "arrow.up.and.down" : "line.3.horizontal")
@@ -309,14 +321,6 @@
                         }
                         .buttonStyle(TVContentIconButtonStyle())
                         .accessibilityLabel(restrictionAccessibilityLabel)
-                    }
-
-                    if let onToggleHidden {
-                        Button(action: onToggleHidden) {
-                            Image(systemName: toggleImageName)
-                        }
-                        .buttonStyle(TVContentIconButtonStyle())
-                        .accessibilityLabel(toggleAccessibilityLabel)
                     }
 
                     if let drillValue {
@@ -361,7 +365,8 @@
                 let fill: AnyShapeStyle = highlighted
                     ? AnyShapeStyle(Color.white.opacity(0.95))
                     : AnyShapeStyle(Color.white.opacity(0.05))
-                let foreground: Color = highlighted ? .black : (dimmed ? .secondary : .white)
+                // A hidden row steps back: tertiary text, faded.
+                let foreground: Color = highlighted ? .black : (dimmed ? Color.lumeTextTertiary.opacity(0.6) : .white)
 
                 return configuration.label
                     .foregroundStyle(foreground)
