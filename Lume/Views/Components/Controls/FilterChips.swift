@@ -3,7 +3,8 @@
 //  Lume
 //
 //  A row of pill choices — the redesign's filter and tab control. Selected is
-//  Lume pink on a pink tint; at rest a quiet surface; on tvOS focus is the
+//  Lume pink on a pink tint; filters rest on a quiet surface, tabs on the
+//  content beneath them; on tvOS focus is the
 //  system's white lift (white fill, dark text), as `TVGlassButtonStyle` draws
 //  it. Native buttons underneath, so focus and accessibility are the system's.
 //
@@ -40,7 +41,7 @@ struct FilterChips<Option: Hashable>: View {
 
 struct FilterChipStyle: ButtonStyle {
     enum ChipShape {
-        /// Filters (Search, match detail tabs).
+        /// Filters (Search).
         case capsule
         /// Tabs over content (seasons, the player's panels).
         case tab
@@ -64,7 +65,8 @@ struct FilterChipStyle: ButtonStyle {
                 .font(FilterChipMetrics.font(selected: isSelected))
                 .lineLimit(1)
                 .padding(.horizontal, FilterChipMetrics.horizontalPadding)
-                .frame(height: FilterChipMetrics.height)
+                .padding(.vertical, FilterChipMetrics.verticalPadding)
+                .frame(minHeight: FilterChipMetrics.height)
                 .foregroundStyle(foreground)
                 .background(outline.fill(background))
                 .contentShape(outline)
@@ -94,9 +96,13 @@ struct FilterChipStyle: ButtonStyle {
         private var background: AnyShapeStyle {
             #if os(tvOS)
                 if isFocused { return AnyShapeStyle(.white) }
-                return isSelected ? AnyShapeStyle(Color.lumeSelection) : AnyShapeStyle(.white.opacity(0.10))
+            #endif
+            if isSelected { return AnyShapeStyle(Color.lumeSelection) }
+            if shape == .tab { return AnyShapeStyle(Color.clear) }
+            #if os(tvOS)
+                return AnyShapeStyle(.white.opacity(0.10))
             #else
-                return isSelected ? AnyShapeStyle(Color.lumeSelection) : AnyShapeStyle(.fill.tertiary)
+                return AnyShapeStyle(.fill.tertiary)
             #endif
         }
     }
@@ -106,14 +112,21 @@ enum FilterChipMetrics {
     #if os(tvOS)
         static let height: CGFloat = 60
         static let horizontalPadding: CGFloat = 28
+        static let verticalPadding: CGFloat = 0
         static let spacing: CGFloat = 12
         static let tabCornerRadius: CGFloat = 14
         static func font(selected: Bool) -> Font {
             .system(size: 26, weight: selected ? .semibold : .medium)
         }
     #else
-        static let height: CGFloat = 32
+        #if os(macOS)
+            static let height: CGFloat = 32
+        #else
+            /// A touch target, not a fixed label height: larger text can grow it.
+            static let height: CGFloat = 44
+        #endif
         static let horizontalPadding: CGFloat = 14
+        static let verticalPadding: CGFloat = 6
         static let spacing: CGFloat = 8
         static let tabCornerRadius: CGFloat = 8
         static func font(selected: Bool) -> Font {

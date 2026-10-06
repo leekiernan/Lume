@@ -192,27 +192,24 @@ struct MetadataLineView: View {
 
 /// The big, full-width primary action (Play / Resume).
 ///
-/// Renders as a high-contrast filled pill: a white button with black text in
-/// dark mode, inverting to a black button with white text in light mode so it
-/// never disappears against the detail view's `.systemBackground`.
+/// Native prominent sizing and interaction, with the light/dark brand accent
+/// and its contrasting foreground. The label can grow with Dynamic Type.
 struct PrimaryPlayButton: View {
     let title: LocalizedStringKey
     var systemImage: String = "play.fill"
     var isEnabled: Bool = true
     let action: () -> Void
 
-    @Environment(\.colorScheme) private var colorScheme
-
     var body: some View {
         Button(action: action) {
             Label(title, systemImage: systemImage)
                 .font(.headline)
-                .foregroundStyle(colorScheme == .dark ? .black : .white)
+                .foregroundStyle(Color.lumeOnAccent)
                 .frame(maxWidth: .infinity)
-                .frame(height: 30)
+                .frame(minHeight: 30)
         }
         .buttonStyle(.borderedProminent)
-        .tint(colorScheme == .dark ? .white : .black)
+        .tint(Color.lumeAccent)
         .controlSize(.large)
         .disabled(!isEnabled)
     }
@@ -230,11 +227,11 @@ struct GlassIconButton: View {
                 // Toggle callers (favorite, watched, download) swap their glyph in
                 // place; constant-symbol callers such as Back are unaffected.
                 .symbolReplaceTransition(value: systemImage)
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(.white)
-                .frame(width: 34, height: 34)
-                .background(.ultraThinMaterial, in: Circle())
-                .overlay(Circle().stroke(.white.opacity(0.15), lineWidth: 0.5))
+                .font(.body.weight(.semibold))
+                .foregroundStyle(.primary)
+                .frame(minWidth: 44, minHeight: 44)
+                .glassEffectCompat(.regularInteractive, in: Circle())
+                .contentShape(Circle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(accessibilityLabel)
