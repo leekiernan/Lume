@@ -93,8 +93,17 @@ final class LumeMarkLayer: CALayer {
         CATransaction.commit()
     }
 
-    /// Re-applies the current motion: after a change, a size change, or the
-    /// layer returning to a window (the system may drop running animations).
+    /// Restarts the motion only if the system dropped its animations (e.g.
+    /// the app went to the background). Re-parenting alone keeps them —
+    /// restarting there froze the mark on its first keyframe in views that
+    /// rebuild often, like the player's overlays.
+    func resumeIfNeeded() {
+        let animated = !motion.isStatic && !reduceMotion
+        let running = ([inner, outer, trace] + emits).contains { !($0.animationKeys() ?? []).isEmpty }
+        if animated, !running { applyMotion(from: motion) }
+    }
+
+    /// Re-applies the current motion: after a change, or a size change.
     func applyMotion(from previous: LumeMark.Motion) {
         let effective: LumeMark.Motion = reduceMotion && !motion.isStatic ? .still : motion
         rest(at: effective)
@@ -143,9 +152,10 @@ final class LumeMarkLayer: CALayer {
                               duration: LumeMarkFrame.pulsePeriod)
         inner.opacity = 0.14
         outer.opacity = 0.14
+        pulse.timeOffset = Self.phase(LumeMarkFrame.pulsePeriod)
         inner.add(pulse, forKey: "pulse")
         // The outer ring runs 1.3 s ahead (the board's -1.3 s delay).
-        pulse.timeOffset = 1.3
+        pulse.timeOffset += 1.3
         outer.add(pulse, forKey: "pulse")
     }
 
@@ -163,7 +173,7 @@ final class LumeMarkLayer: CALayer {
             group.timingFunction = CAMediaTimingFunction(controlPoints: 0.2, 0.6, 0.4, 1)
             group.repeatCount = .infinity
             group.isRemovedOnCompletion = false
-            group.timeOffset = Double(index)
+            group.timeOffset = Self.phase(LumeMarkFrame.emitPeriod) + Double(index)
             layer.add(group, forKey: "emit")
         }
     }
@@ -171,6 +181,8 @@ final class LumeMarkLayer: CALayer {
     private func startTrace() {
         let draw = keyframes("strokeEnd", values: [0, 1, 1], times: [0, 0.7, 1], duration: LumeMarkFrame.tracePeriod)
         let fade = keyframes("opacity", values: [1, 1, 0], times: [0, 0.86, 1], duration: LumeMarkFrame.tracePeriod)
+        draw.timeOffset = Self.phase(LumeMarkFrame.tracePeriod)
+        fade.timeOffset = draw.timeOffset
         trace.add(draw, forKey: "draw")
         trace.add(fade, forKey: "fade")
     }
@@ -183,6 +195,13 @@ final class LumeMarkLayer: CALayer {
         let outerGlow = keyframes("opacity", values: [0.3, 0.3, 0.85, 0.3],
                                   times: [0, 0.84, 1.56, 2.52].map { $0 / 2.52 }, duration: 2.52, repeats: false)
         outer.add(outerGlow, forKey: "launch")
+    }
+
+    /// Loops run on the shared media clock rather than from when they were
+    /// added: a host SwiftUI rebuilds continues mid-cycle instead of
+    /// restarting, and every loader on screen moves in step.
+    private static func phase(_ period: TimeInterval) -> TimeInterval {
+        CACurrentMediaTime().truncatingRemainder(dividingBy: period)
     }
 
     private func keyframes(
@@ -246,7 +265,7 @@ final class LumeMarkLayer: CALayer {
 
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
-            if window != nil { mark.applyMotion(from: mark.motion) }
+            if window != nil { mark.resumeIfNeeded() }
         }
     }
 #else
@@ -289,7 +308,7 @@ final class LumeMarkLayer: CALayer {
 
         override func didMoveToWindow() {
             super.didMoveToWindow()
-            if window != nil { mark.applyMotion(from: mark.motion) }
+            if window != nil { mark.resumeIfNeeded() }
         }
     }
 #endif

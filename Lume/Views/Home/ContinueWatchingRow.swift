@@ -29,12 +29,13 @@ enum ContinueWatchingMetrics {
 
     #if os(tvOS)
         static let inset: CGFloat = 16
-        static let labelFont: Font = .system(size: 20, weight: .semibold)
+        /// The foundations' Caption: 22 Medium.
+        static let labelFont: Font = .system(size: 22, weight: .medium)
         static let glyphFont: Font = .system(size: 16, weight: .bold)
         static let fallbackTitleFont: Font = .system(size: 26, weight: .bold)
     #else
         static let inset: CGFloat = 8
-        static let labelFont: Font = .system(size: 10, weight: .semibold)
+        static let labelFont: Font = .system(size: 11, weight: .medium)
         static let glyphFont: Font = .system(size: 8, weight: .bold)
         static let fallbackTitleFont: Font = .system(size: 13, weight: .bold)
     #endif
@@ -282,7 +283,9 @@ private struct ContinueWatchingCard: View {
                 if let label {
                     Text(label)
                         .font(Metrics.labelFont)
-                        .foregroundStyle(.white.opacity(0.9))
+                        .foregroundStyle(Color.lumeTextSecondary)
+                        // Always over the card's dark scrim, in either appearance.
+                        .environment(\.colorScheme, .dark)
                         .lineLimit(1)
                 }
             }

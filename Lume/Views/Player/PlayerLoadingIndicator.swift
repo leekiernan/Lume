@@ -80,11 +80,10 @@ struct PlayerLoadingIndicator: View {
         }
     }
 
-    /// Opening a live channel is "going live" (Emit); anything else — a
-    /// first open of a title, or a mid-stream stall — is buffering (Pulse).
+    /// Opening anything — Play, Resume or a channel — is "going live"
+    /// (Emit); a mid-stream stall is buffering (Pulse).
     private var motion: LumeMark.Motion {
-        if title != nil, let channel, case .live = channel.kind { return .emit }
-        return .pulse
+        title != nil ? .emit : .pulse
     }
 
     /// The programme on air on a live channel, from the guide, off the main

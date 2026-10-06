@@ -29,7 +29,13 @@ struct EPGRulerStrip: View {
             .overlay(alignment: .leading) {
                 ZStack(alignment: .topLeading) {
                     EPGTimeRuler(timeline: timeline, metrics: metrics)
-                    nowPill.offset(x: timeline.x(for: now))
+                    // Centred on a zero-width anchor at the current time, so
+                    // the pill sits over the grid's now line without widening
+                    // the ruler (an alignment guide here shifted both).
+                    Color.clear
+                        .frame(width: 0, height: metrics.headerHeight)
+                        .overlay(alignment: .top) { nowPill }
+                        .offset(x: timeline.x(for: now))
                 }
                 .frame(width: timeline.totalWidth, alignment: .leading)
                 .offset(x: -sync.mirror.x)
@@ -37,15 +43,21 @@ struct EPGRulerStrip: View {
             .clipped()
     }
 
+    /// The guide board's pill: Lume pink, Ink text.
     private var nowPill: some View {
         Text("Now")
+        #if os(tvOS)
+            .font(.system(size: 22, weight: .bold))
+            .padding(.horizontal, 14)
+            .padding(.vertical, 3)
+        #else
             .font(.caption2.weight(.bold))
-            .foregroundStyle(.white)
             .padding(.horizontal, 7)
             .padding(.vertical, 2)
-            .background(Capsule().fill(Color.red))
+        #endif
+            .foregroundStyle(Color.lumeOnAccent)
+            .background(Capsule().fill(Color.lumeAccent))
             .fixedSize()
-            .alignmentGuide(.leading) { $0.width / 2 }
     }
 }
 
