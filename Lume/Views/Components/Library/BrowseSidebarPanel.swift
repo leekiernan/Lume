@@ -312,9 +312,9 @@ struct BrowseSidebarPanel: View {
 }
 
 /// Quiet row treatment: the label carries the emphasis; a fill appears under
-/// focus or press, and faintly behind the selected row. Where a row is
-/// selected the others step back; a list with no selection stays at full
-/// strength.
+/// focus or press, and the selected row takes the redesign's selection (Lume
+/// pink on a pink tint). Where a row is selected the others step back; a list
+/// with no selection stays at full strength.
 private struct BrowseSidebarRowButtonStyle: ButtonStyle {
     let isSelected: Bool
     let dimsAtRest: Bool
@@ -326,18 +326,32 @@ private struct BrowseSidebarRowButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         #if os(tvOS)
             configuration.label
-                .foregroundStyle(isFocused || isSelected || !dimsAtRest ? Color.white : Color.white.opacity(0.72))
+                .foregroundStyle(tvForeground)
                 .background(
                     RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .fill(Color.white.opacity(isFocused ? 0.18 : isSelected ? 0.1 : 0))
+                        .fill(tvFill)
                 )
         #else
             configuration.label
-                .foregroundStyle(isSelected || !dimsAtRest ? Color.primary : Color.secondary)
+                .foregroundStyle(isSelected ? Color.lumeAccent : !dimsAtRest ? Color.primary : Color.secondary)
                 .background(
                     RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(Color.primary.opacity(configuration.isPressed ? 0.12 : isSelected ? 0.08 : 0))
+                        .fill(configuration.isPressed ? Color.primary.opacity(0.12)
+                            : isSelected ? Color.lumeAccent.opacity(0.18) : .clear)
                 )
         #endif
     }
+
+    #if os(tvOS)
+        private var tvForeground: Color {
+            if isFocused { return .white }
+            if isSelected { return .lumeAccent }
+            return dimsAtRest ? .white.opacity(0.72) : .white
+        }
+
+        private var tvFill: Color {
+            if isFocused { return .white.opacity(0.18) }
+            return isSelected ? Color.lumeAccent.opacity(0.18) : .clear
+        }
+    #endif
 }

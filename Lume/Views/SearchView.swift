@@ -161,14 +161,11 @@ struct SearchView: View {
     @ViewBuilder
     private var filterBar: some View {
         if !filters.isEmpty {
-            Picker("Filter", selection: $selectedFilter) {
-                ForEach(filters) { filter in
-                    Text(filter.label).tag(filter)
-                }
-            }
-            .pickerStyle(.segmented)
-            .padding(.horizontal)
-            .padding(.vertical, 8)
+            FilterChips(options: filters, selection: $selectedFilter) { Text($0.label) }
+                .accessibilityElement(children: .contain)
+                .accessibilityLabel(Text("Filter"))
+                .padding(.horizontal)
+                .padding(.vertical, 8)
         }
     }
 

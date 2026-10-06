@@ -229,7 +229,7 @@
                         Button("Season \(season)") {
                             withAnimation(.easeInOut(duration: 0.2)) { selectedSeason = season }
                         }
-                        .buttonStyle(TVChipButtonStyle(isSelected: season == selectedSeason))
+                        .buttonStyle(FilterChipStyle(isSelected: season == selectedSeason, shape: .tab))
                         .focused($focus, equals: .season(season))
                     }
                 }
@@ -258,7 +258,7 @@
                         .font(.system(size: 26))
                         .foregroundStyle(.white.opacity(0.6))
                     Button("Retry") { Task { await loader.loadEpisodes(series, playlist: seriesPlaylist, in: modelContext) } }
-                        .buttonStyle(TVChipButtonStyle(isSelected: false))
+                        .buttonStyle(FilterChipStyle(isSelected: false, shape: .tab))
                 }
             }
         }
@@ -411,46 +411,6 @@
         func markFollowingUnwatched(_ episode: Episode) {
             episode.markLaterEpisodesUnwatched()
             try? modelContext.save()
-        }
-    }
-
-    // MARK: - Season chip style
-
-    /// A focusable selectable pill used by the season selector and small
-    /// secondary actions.
-    struct TVChipButtonStyle: ButtonStyle {
-        var isSelected: Bool
-
-        func makeBody(configuration: Configuration) -> some View {
-            StyleBody(configuration: configuration, isSelected: isSelected)
-        }
-
-        struct StyleBody: View {
-            let configuration: ButtonStyleConfiguration
-            let isSelected: Bool
-            @Environment(\.isFocused) private var isFocused
-
-            var body: some View {
-                let highlighted = isFocused || isSelected
-                configuration.label
-                    .font(.system(size: 24, weight: .semibold))
-                    .foregroundStyle(highlighted ? .black : .white)
-                    .padding(.horizontal, 28)
-                    .frame(height: 60)
-                    .background(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .fill(fill)
-                    )
-                    .scaleEffect(isFocused ? 1.06 : 1.0)
-                    .animation(.easeOut(duration: 0.18), value: isFocused)
-                    .animation(.easeOut(duration: 0.18), value: isSelected)
-            }
-
-            private var fill: AnyShapeStyle {
-                if isFocused { return AnyShapeStyle(.white) }
-                if isSelected { return AnyShapeStyle(.white.opacity(0.85)) }
-                return AnyShapeStyle(.regularMaterial)
-            }
         }
     }
 

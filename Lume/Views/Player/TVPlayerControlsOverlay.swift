@@ -303,7 +303,7 @@
             HStack(spacing: 16) {
                 ForEach(Array(tabKinds.enumerated()), id: \.offset) { index, kind in
                     Button(tabTitle(kind)) { toggle(tab: kind) }
-                        .buttonStyle(TVChipButtonStyle(isSelected: openTab == kind))
+                        .buttonStyle(FilterChipStyle(isSelected: openTab == kind, shape: .tab))
                         .focused($focus, equals: .tab(index))
                 }
             }
