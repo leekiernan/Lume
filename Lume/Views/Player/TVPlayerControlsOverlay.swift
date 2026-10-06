@@ -58,6 +58,7 @@
         /// not stay one tab away.
         @Environment(\.contentRestriction) var restriction
         @Environment(\.playerBuffering) var isBuffering
+        @Environment(PlayerControlsBridge.self) var remoteBridge: PlayerControlsBridge?
 
         // Resolved SwiftData backing for the active stream.
         @State var episode: Episode?
@@ -80,9 +81,14 @@
         // pauses playback and enters a scrub mode where left/right step the
         // playhead. A second select commits the seek (and resumes playback if
         // it had been playing); the Menu button cancels without seeking.
-        @State var isScrubbing = false
-        @State var scrubTarget: TimeInterval = 0
-        @State var wasPlayingBeforeScrub = false
+        @State var scrub = PlayerScrubMachine()
+        var isScrubbing: Bool {
+            scrub.isScrubbing
+        }
+
+        var scrubTarget: TimeInterval {
+            scrub.target
+        }
 
         enum TabKind: Hashable { case episodes, recent, info }
         @State var openTab: TabKind?
@@ -143,6 +149,18 @@
                 } else {
                     closePanel()
                 }
+            }
+            .onPlayPauseCommand {
+                PlayerControlsBridge.performPlayPause(using: remoteBridge) {
+                    if isScrubbing { commitScrub(play: true) } else { onTogglePlay() }
+                }
+            }
+            .onChange(of: coordinator.isPlaying) { _, playing in
+                if scrub.playbackChanged(isPlaying: playing) { releaseScrubControls() }
+            }
+            .onDisappear {
+                scrub.reset()
+                onPanelOpenChange(false)
             }
             .task(id: media.playbackSessionID) { await resolveContent() }
             .task(id: media.playbackSessionID) { await resolveStreamInfo() }
@@ -240,10 +258,6 @@
 
                 // The scrubber lives in its own view so the high-frequency
                 // playback clock (`currentTime`/`duration`) re-renders only it.
-                // Reading those bindings here would re-evaluate the whole
-                // overlay — including the audio/subtitle `Menu`s — on every tick,
-                // which makes an open menu flicker heavily on tvOS. The bindings
-                // are forwarded (projected), not read, so no dependency is added.
                 TVPlayerScrubber(
                     isLive: media.isLive,
                     epgNow: epgNow,
