@@ -25,6 +25,7 @@ struct PlayableMediaTests {
         #expect(unwrapped.url.absoluteString == "http://example.com:8080/movie/user/pass/100.mp4")
         #expect(unwrapped.title == "Test Movie")
         #expect(unwrapped.posterURL?.absoluteString == "http://example.com/poster.jpg")
+        #expect(unwrapped.nowPlayingArtworkURL == unwrapped.posterURL)
         #expect(unwrapped.kind == .vod)
         #expect(unwrapped.isLive == false)
         #expect(unwrapped.startTime == 30)
@@ -80,6 +81,69 @@ struct PlayableMediaTests {
         #expect(media.subtitle == "S2 E3 · Standalone")
     }
 
+    @Test func `episode now playing uses series portrait without replacing the episode still`() throws {
+        let series = Series(id: "portrait-series", seriesId: 1, name: "Series")
+        series.posterPath = "/portrait.jpg"
+        let episode = Episode(id: "portrait-episode", episodeId: "50", title: "Pilot", containerExtension: "mp4",
+                              seasonNum: 1, episodeNum: 1, series: series)
+        episode.movieImage = "https://image.tmdb.org/t/p/w500/still.jpg"
+        let media = try #require(PlayableMedia.from(episode: episode, playlist: makePlaylist()))
+        #expect(media.posterURL?.absoluteString == episode.movieImage)
+        #expect(media.nowPlayingArtworkURL?.absoluteString == "https://image.tmdb.org/t/p/w500/portrait.jpg")
+        #expect(media.title == "Series")
+        #expect(media.subtitle == "S1 E1 · Pilot")
+    }
+
+    @Test func `episode now playing falls back to its still without a usable series poster`() throws {
+        let series = Series(id: "fallback-series", seriesId: 2, name: "Series")
+        let episode = Episode(id: "fallback-episode", episodeId: "51", title: "Pilot", containerExtension: "mp4",
+                              seasonNum: 1, episodeNum: 1, series: series)
+        episode.movieImage = "https://image.tmdb.org/t/p/w500/still.jpg"
+        for path in [nil, "", "//provider.example/private.jpg", "/poster.jpg?secret=token"] as [String?] {
+            series.posterPath = path
+            let media = try #require(PlayableMedia.from(episode: episode, playlist: makePlaylist()))
+            #expect(media.seriesPosterURL == nil)
+            #expect(media.nowPlayingArtworkURL == media.posterURL)
+        }
+    }
+
+    @Test func `downloaded episode keeps its portrait while using local playback`() throws {
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent("lume-artwork-test-\(UUID().uuidString).mp4")
+        try Data().write(to: file)
+        defer { try? FileManager.default.removeItem(at: file) }
+        let series = Series(id: "download-series", seriesId: 4, name: "Series")
+        series.posterPath = "/portrait.jpg"
+        let episode = Episode(id: "download-episode", episodeId: "53", title: "Pilot", containerExtension: "mp4",
+                              seasonNum: 1, episodeNum: 1, series: series)
+        episode.localFileURL = file.path
+        episode.downloadStatus = .completed
+        episode.movieImage = "https://image.tmdb.org/t/p/w500/still.jpg"
+        let media = try #require(PlayableMedia.from(episode: episode, playlist: makePlaylist()))
+        #expect(media.url == file)
+        #expect(media.nowPlayingArtworkURL?.absoluteString == "https://image.tmdb.org/t/p/w500/portrait.jpg")
+        #expect(media.posterURL?.absoluteString == episode.movieImage)
+    }
+
+    @Test func `series portrait survives encoding resume and URL replacement`() throws {
+        let series = Series(id: "snapshot-series", seriesId: 3, name: "Series")
+        series.posterPath = "/portrait.jpg"
+        let episode = Episode(id: "snapshot-episode", episodeId: "52", title: "Pilot", containerExtension: "mp4",
+                              seasonNum: 1, episodeNum: 1, series: series)
+        episode.movieImage = "https://image.tmdb.org/t/p/w500/still.jpg"
+        let media = try #require(PlayableMedia.from(episode: episode, playlist: makePlaylist()))
+        let data = try JSONEncoder().encode(media)
+        let decoded = try JSONDecoder().decode(PlayableMedia.self, from: data)
+        #expect(decoded == media)
+        #expect(decoded.seriesPosterURL == media.seriesPosterURL)
+        #expect(media.resuming(at: 30).seriesPosterURL == media.seriesPosterURL)
+        #expect(try media.replacingURL(#require(URL(string: "https://example.com/replaced.mp4"))).seriesPosterURL == media.seriesPosterURL)
+        var legacy = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        legacy.removeValue(forKey: "seriesPosterURL")
+        let restored = try JSONDecoder().decode(PlayableMedia.self, from: JSONSerialization.data(withJSONObject: legacy))
+        #expect(restored.seriesPosterURL == nil)
+        #expect(restored.nowPlayingArtworkURL == media.posterURL)
+    }
+
     // MARK: - from(stream:playlist:client:)
 
     @Test func `from live stream creates media`() throws {
@@ -92,6 +156,7 @@ struct PlayableMediaTests {
         #expect(media.title == "News Channel")
         #expect(media.subtitle == nil)
         #expect(media.posterURL?.absoluteString == "http://example.com/logo.png")
+        #expect(media.nowPlayingArtworkURL == media.posterURL)
         #expect(media.kind == .live)
         #expect(media.isLive == true)
         #expect(media.startTime == 0)

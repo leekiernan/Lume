@@ -3,8 +3,8 @@
 //  Lume
 //
 //  Publishes the active playback session to the system: `MPNowPlayingInfoCenter`
-//  metadata + `MPRemoteCommandCenter` transport on every platform, and (on iOS)
-//  the lock-screen / Dynamic Island Live Activity. On tvOS this is what makes
+//  metadata + `MPRemoteCommandCenter` transport on every platform.
+//  On tvOS this is what makes
 //  an iPhone's Apple TV remote surface show what Lume is playing.
 //
 //  One instance serves all four engines. `FullScreenPlayerView` runs a session
@@ -39,9 +39,7 @@ final class NowPlayingService {
         var advance: ((PlayerMediaSwapper.Step) -> Bool)?
     }
 
-    /// The stream whose session is currently published, if any. Read by the
-    /// `lume://resume` deep-link handler to avoid re-presenting a player that
-    /// is already up.
+    /// Also lets browse shortcuts yield to an active player's remote commands.
     private(set) var currentMedia: PlayableMedia?
 
     private var transport: Transport?
@@ -52,6 +50,7 @@ final class NowPlayingService {
 
     private var clock: PlaybackClock?
     private var artwork: MPMediaItemArtwork?
+    private var artworkOwner = RequestToken()
     private var channelName: String?
     private var channelEPG: ChannelEPG?
 
@@ -83,23 +82,25 @@ final class NowPlayingService {
     /// Publishes `media` for as long as the calling `.task(id:)` lives — the
     /// host cancels and restarts it on every stream swap (channel surf, next
     /// episode). Registers remote commands, publishes metadata + artwork,
-    /// keeps live-TV EPG now/next fresh across programme boundaries, and
-    /// drives the iOS Live Activity.
-    func runSession(media: PlayableMedia, clock: PlaybackClock, container: ModelContainer) async {
+    /// and keeps live-TV EPG now/next fresh across programme boundaries.
+    func runSession(
+        media: PlayableMedia, clock: PlaybackClock, container: ModelContainer
+    ) async {
         currentMedia = media
         self.clock = clock
         channelName = nil
         channelEPG = nil
         artwork = nil
-        PlaybackResumeStore.save(media)
+        artworkOwner = RequestToken()
+        let artworkRequest = artworkOwner
+        let artworkProfile = ActiveProfileStore.current
         registerCommands(for: media)
         publish()
-        #if os(iOS)
-            PlaybackActivityController.shared.startOrUpdate(state: makeActivityState())
-        #endif
 
         await withTaskGroup(of: Void.self) { group in
-            group.addTask { await self.loadArtwork(for: media) }
+            group.addTask {
+                await self.loadArtwork(for: media, container: container, profile: artworkProfile, owner: artworkRequest)
+            }
             if media.isLive {
                 group.addTask { await self.refreshEPGLoop(media: media, container: container) }
             }
@@ -108,38 +109,23 @@ final class NowPlayingService {
     }
 
     /// A catch-up seek swapped in another segment of the programme already
-    /// published. The session — metadata, commands, artwork, Live Activity —
-    /// carries on (the host keys it on `playbackSessionID`); only the stream a
-    /// resume snapshot reopens moves to the new segment.
+    /// published. The session — metadata, commands and artwork — carries on
+    /// (the host keys it on `playbackSessionID`).
     func continueSession(with media: PlayableMedia) {
         guard let current = currentMedia, current.playbackSessionID == media.playbackSessionID else { return }
         currentMedia = media
-        PlaybackResumeStore.save(media)
     }
 
-    /// Tear the whole session down: player dismissed. Also snapshots the final
-    /// position so the Live Activity's tap-to-resume can reopen where playback
-    /// left off even after the session is gone.
+    /// Tear the whole session down when the player is dismissed.
     func endSession() {
-        if let media = currentMedia {
-            let position = clock?.current ?? 0
-            // The clock is programme time for catch-up; the snapshot reopens
-            // this segment, so it resumes at the segment's own playhead.
-            let resumeAt = media.enginePosition(position)
-            PlaybackResumeStore.save(
-                !media.isLive && resumeAt > 1 ? media.resuming(at: resumeAt) : media
-            )
-        }
         currentMedia = nil
         clock = nil
         artwork = nil
+        artworkOwner = RequestToken()
         channelEPG = nil
         channelName = nil
         removeCommands()
         MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
-        #if os(iOS)
-            PlaybackActivityController.shared.end()
-        #endif
     }
 
     // MARK: - Remote commands
@@ -309,9 +295,6 @@ final class NowPlayingService {
         }
         MPNowPlayingInfoCenter.default().nowPlayingInfo = info
         setPlaybackState(playing: playing)
-        #if os(iOS)
-            PlaybackActivityController.shared.startOrUpdate(state: makeActivityState(isPaused: !playing))
-        #endif
     }
 
     /// `playbackState` drives the macOS Now Playing widget; iOS/tvOS infer the
@@ -324,22 +307,39 @@ final class NowPlayingService {
 
     // MARK: - Artwork
 
-    private func loadArtwork(for media: PlayableMedia) async {
-        guard let posterURL = media.posterURL else { return }
+    private func loadArtwork(for media: PlayableMedia, container: ModelContainer, profile: UUID?, owner: RequestToken) async {
+        var posterURL = media.nowPlayingArtworkURL
+        if !media.isLive, media.seriesPosterURL == nil {
+            let recovery = PosterArtworkRecovery(container: container)
+            if let portrait = await recovery.playbackPoster(for: media.contentRef, profile: profile) {
+                posterURL = portrait
+            }
+        }
+        guard !Task.isCancelled, artworkOwner == owner, profile == ActiveProfileStore.current else { return }
+        guard let posterURL else { return }
         guard let image = try? await ImagePipeline.shared.image(for: posterURL, maxPixelSize: 600) else { return }
-        guard currentMedia?.playbackSessionID == media.playbackSessionID else { return }
+        guard !Task.isCancelled, artworkOwner == owner, profile == ActiveProfileStore.current else { return }
         artwork = Self.makeArtwork(image)
         publish()
-        #if os(iOS)
-            PlaybackActivityController.shared.setArtwork(image, mediaID: media.id)
-            PlaybackActivityController.shared.startOrUpdate(state: makeActivityState())
-        #endif
     }
 
     /// The request handler is invoked by the system from arbitrary threads;
     /// capturing the immutable image by value keeps it isolation-safe.
     private nonisolated static func makeArtwork(_ image: PlatformImage) -> MPMediaItemArtwork {
-        MPMediaItemArtwork(boundsSize: image.size) { [image] _ in image }
+        // Precompute once, not on every system artwork request.
+        #if os(macOS)
+            let source = image.cgImage(forProposedRect: nil, context: nil, hints: nil)
+            let square = source.flatMap(NowPlayingArtwork.centeredSquare).map {
+                NSImage(cgImage: $0, size: CGSize(width: $0.width, height: $0.height))
+            }
+        #else
+            let square = image.cgImage.flatMap(NowPlayingArtwork.centeredSquare).map {
+                UIImage(cgImage: $0, scale: image.scale, orientation: .up)
+            }
+        #endif
+        return MPMediaItemArtwork(boundsSize: image.size) { [image, square] size in
+            NowPlayingArtwork.usesCompactCrop(for: size) ? (square ?? image) : image
+        }
     }
 
     // MARK: - Live TV EPG
@@ -356,9 +356,6 @@ final class NowPlayingService {
             channelName = resolved?.channelName
             channelEPG = resolved?.epg
             publish()
-            #if os(iOS)
-                PlaybackActivityController.shared.startOrUpdate(state: makeActivityState())
-            #endif
             // Re-resolve at the programme boundary; when the guide has no
             // current entry, retry on a slow cadence in case a sync lands one.
             let boundary = resolved?.epg.current?.end ?? Date.now.addingTimeInterval(15 * 60)
@@ -412,51 +409,6 @@ final class NowPlayingService {
             lastPlaying = playing
             lastWall = .now
         }
-    }
-
-    // MARK: - Live Activity state
-
-    #if os(iOS)
-        private func makeActivityState(isPaused: Bool? = nil) -> PlaybackActivityAttributes.ContentState {
-            let media = currentMedia
-            let paused = isPaused ?? !(transport?.isPlaying() ?? true)
-            var state = PlaybackActivityAttributes.ContentState(
-                title: media?.title ?? "",
-                subtitle: media?.subtitle,
-                isLive: media?.isLive ?? false,
-                isPaused: paused
-            )
-            if media?.isLive == true {
-                state.programmeTitle = channelEPG?.current?.title
-                state.windowStart = channelEPG?.current?.start
-                state.windowEnd = channelEPG?.current?.end
-                state.nextTitle = channelEPG?.next?.title
-                state.nextStart = channelEPG?.next?.start
-            } else if let clock, clock.duration > 0 {
-                state.elapsed = clock.current
-                state.duration = clock.duration
-                state.windowStart = Date.now.addingTimeInterval(-clock.current)
-                state.windowEnd = Date.now.addingTimeInterval(clock.duration - clock.current)
-            }
-            return state
-        }
-    #endif
-}
-
-/// Snapshot of the last played stream, for the Live Activity's tap-to-resume
-/// (`lume://resume`) after the player — or the whole app — is gone.
-/// `PlayableMedia` is `Codable`, so the snapshot round-trips as JSON.
-enum PlaybackResumeStore {
-    private static let key = "nowPlaying.lastMediaSnapshot"
-
-    static func save(_ media: PlayableMedia) {
-        guard let data = try? JSONEncoder().encode(media) else { return }
-        UserDefaults.standard.set(data, forKey: key)
-    }
-
-    static func load() -> PlayableMedia? {
-        guard let data = UserDefaults.standard.data(forKey: key) else { return nil }
-        return try? JSONDecoder().decode(PlayableMedia.self, from: data)
     }
 }
 

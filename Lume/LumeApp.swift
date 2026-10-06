@@ -35,6 +35,7 @@ struct LumeApp: App {
         LaunchTimeline.appCodeStarts()
         // First, so the launch marker precedes anything the setup below logs.
         DiagnosticSession.start()
+        if !Self.isUnitTestHost { DownloadCompletionNotifications.shared.configure() }
         let (catalog, cloud) = Self.makeModelContainers()
         catalogContainer = catalog
         cloudContainer = cloud
@@ -281,12 +282,6 @@ struct LumeApp: App {
                     // crossing is VOD-only. A cheap synchronous `UserDefaults`
                     // write, and idempotent per process on the callee's side.
                     AppStoreReviewPrompt.shared.noteAppLaunched()
-
-                    // A playback Live Activity outlives the process when the app is
-                    // killed mid-session; nothing else would ever end it.
-                    #if os(iOS)
-                        PlaybackActivityController.shared.endOrphanedActivities()
-                    #endif
 
                     // Give DownloadManager access to the model container so it
                     // can persist download state from its delegate callbacks.

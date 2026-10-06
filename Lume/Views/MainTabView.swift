@@ -41,19 +41,11 @@ struct MainTabView: View {
     /// `onOpenURL` deep link can switch tabs and push a detail screen.
     @State private var router = DeepLinkRouter()
 
-    /// The stream a `lume://resume` deep link (a Live Activity tap) asked to
-    /// reopen. Presented directly here, independent of any tab's own player
-    /// cover.
-    @State private var resumeMedia: PlayableMedia?
-
-    /// Whether a `lume://downloads` deep link (a download Live Activity tap)
+    /// Whether a `lume://downloads` deep link (a download notification tap)
     /// asked for the downloads list. Presented as a sheet from here rather than
     /// pushed into Settings, so the link doesn't disturb whatever the user had
     /// open.
     @State private var showsDownloads = false
-    #if os(macOS)
-        @Environment(\.openWindow) private var openWindow
-    #endif
 
     /// Not `private`: the auto-sync state below is driven by the
     /// MainTabView+AutoSync extension (separate file).
@@ -208,11 +200,6 @@ struct MainTabView: View {
             .onOpenURL { url in
                 handleDeepLink(url)
             }
-        #if !os(macOS)
-            .fullScreenCover(item: $resumeMedia) { media in
-                FullScreenPlayerView(media: media)
-            }
-        #endif
             .task(id: autoSyncTrigger) {
                 // On launch, playlist insertion, profile switch, or area toggle,
                 // sync the active playlist if it is due (plus any playlist that
@@ -500,19 +487,7 @@ struct MainTabView: View {
             router.selectedTab = .series
             router.seriesPath = NavigationPath()
             router.seriesPath.append(series)
-        case .resume:
-            // The Live Activity was tapped. When a player session is already
-            // up, foregrounding the app is all that's needed; otherwise reopen
-            // the last played stream where it left off.
-            guard NowPlayingService.shared.currentMedia == nil,
-                  let media = PlaybackResumeStore.load() else { return }
-            #if os(macOS)
-                MacPlayerWindowRouter.shared.play(media, using: openWindow)
-            #else
-                resumeMedia = media
-            #endif
         case .downloads:
-            // The download Live Activity was tapped.
             showsDownloads = true
         }
     }

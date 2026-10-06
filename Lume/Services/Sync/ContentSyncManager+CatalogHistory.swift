@@ -39,7 +39,7 @@ extension ContentSyncManager {
     /// extension-driven incremental refresh, a "what changed since" view)
     /// cannot be built on top of this call — it would have to stop making it.
     /// Safe today because `default.store` has exactly one client: the app
-    /// process. `LumeWidgets` links no SwiftData, and the mirror lives in its
+    /// process. The mirror lives in its
     /// own container — so there is no peer holding a history token this drops
     /// changes out from under.
     ///
