@@ -7,7 +7,7 @@
 //  On tvOS this is what makes
 //  an iPhone's Apple TV remote surface show what Lume is playing.
 //
-//  One instance serves all four engines. `FullScreenPlayerView` runs a session
+//  One instance serves all three engines. `FullScreenPlayerView` runs a session
 //  per active stream; the engine views attach a `Transport` while they are on
 //  screen so remote commands can drive whichever engine is playing.
 //
@@ -446,4 +446,3 @@ extension NowPlayingService.Transport {
 
 extension AVPlayerCoordinator: NowPlayingControllable {}
 extension VLCPlayerCoordinator: NowPlayingControllable {}
-extension LumeEngineCoordinator: NowPlayingControllable {}

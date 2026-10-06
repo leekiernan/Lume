@@ -7,9 +7,7 @@
 //  priority order. Two presentations share this file: grouped `Form` sections
 //  for iOS/macOS, and the flat Apple-TV-style detail blocks for tvOS.
 //
-//  The Lume Engine's own surfaces live in `LumeEngineSettingsViews.swift` —
-//  this file was at the file-length limit. Shared `TVOption*` rows now live in
-//  `TVSettingsOptionRows.swift`; `PlayerOptionCycle` remains here.
+//  Shared tvOS option rows live in `TVSettingsOptionRows.swift`.
 //
 //  Every control is backed directly by `@AppStorage`, so changes persist
 //  immediately and are read back by the engines via `VLCPlayerOptions` /

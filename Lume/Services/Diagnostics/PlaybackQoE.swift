@@ -14,10 +14,9 @@
 //  * **Startup failures / engine fallbacks**: how often the preferred engine
 //    can't open a stream and hands off.
 //
-//  All four engines report into this one object at choke points they already
+//  All three engines report into this one object at choke points they already
 //  have (`hasStartedPlayback` flipping true, the startup watchdog arming), so
-//  the numbers are directly comparable across KSPlayer, VLCKit, AVPlayer and
-//  LumeEngine. It also emits the `PlayerStartup` signpost interval, which is
+//  the numbers are directly comparable across KSPlayer, VLCKit and AVPlayer. It also emits the `PlayerStartup` signpost interval, which is
 //  what `LumePerformanceTests` and Instruments read.
 //
 //  Counters are aggregated in memory and flushed to `UserDefaults` at session

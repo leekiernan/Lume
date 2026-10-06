@@ -28,8 +28,8 @@ import Foundation
 ///
 /// Started means one of:
 /// - **The engine's own signal** (`noteEngineStarted`) — KSPlayer's
-///   `.bufferFinished`, VLC's `.playing`, AVPlayer's `.playing`, LumeEngine's
-///   `.playing`. An engine whose callbacks can be stale (KSPlayer) passes
+///   `.bufferFinished`, VLC's `.playing`, AVPlayer's `.playing`. An engine whose
+///   callbacks can be stale (KSPlayer) passes
 ///   `requiringReady` and reports its "ready" state through `noteEngineReady`,
 ///   so a leftover callback from the previous stream is ignored.
 /// - **The playhead advancing** (`notePlayhead`) by `proofAdvance` past the
@@ -60,7 +60,7 @@ nonisolated struct PlaybackStartTracker: Equatable {
 
     /// How far the playhead must advance on one stream before that alone
     /// counts as its first frame: several ticks of every engine's time
-    /// callback (0.1 s KSPlayer / LumeEngine, 0.5 s AVPlayer), so one stale
+    /// callback (0.1 s KSPlayer, 0.5 s AVPlayer), so one stale
     /// sample from the stream being replaced can't pass for progress.
     static let defaultProofAdvance: TimeInterval = 0.5
 

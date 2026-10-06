@@ -6,7 +6,7 @@
 //  embedded in the stream — what the OpenSubtitles search sheet hands back.
 //
 //  Each engine gets there differently (KSPlayer takes a `SubtitleInfo`, VLCKit
-//  a "playback slave", LumeEngine an FFmpeg sidecar demux), so the conformances
+//  a "playback slave"), so the conformances
 //  live here side by side rather than scattered through four coordinators.
 //  AVPlayer is the one engine that genuinely can't: `AVURLAsset` has no
 //  sidecar-subtitle API, so it declares itself unsupported and the search entry

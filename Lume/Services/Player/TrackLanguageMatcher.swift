@@ -3,17 +3,12 @@
 //  Lume
 //
 //  Ordered language-preference matching over the audio / subtitle tracks a
-//  container advertises, shared by all four engines.
+//  container advertises, shared by all three engines.
 //
 //  Foundation only, and deliberately outside every engine-guarded file: the
-//  test target links none of KSPlayer, VLCKit or LumeEngine, so anything that
+//  test target links none of KSPlayer or VLCKit, so anything that
 //  imported one would be untestable. Each engine adapts its own track type to
 //  `Track` at the call site instead.
-//
-//  A same-named matcher exists inside the LumeEngine package. That one runs
-//  engine-side while the pipeline is being built and takes already-normalised
-//  codes; this is the app-side copy that also has to cope with raw container
-//  tags and free-text track names. They are intentionally separate.
 //
 //  Every entry point is `nonisolated`: matching runs from
 //  `KSOptions.wantedAudio(tracks:)` (an open nonisolated override) and from

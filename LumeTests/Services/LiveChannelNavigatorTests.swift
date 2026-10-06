@@ -85,7 +85,7 @@ struct LiveChannelNavigatorTests {
     // MARK: - Remote direction
 
     /// Surfing one press in `direction` under `mode`, from Bravo, the middle of
-    /// `threeChannels`. Wraps the argument list the four engine hosts pass so a
+    /// `threeChannels`. Wraps the argument list the engine hosts pass so a
     /// direction test reads as the press it stands for.
     private func surf(
         _ direction: LiveChannelNavigator.SurfDirection,

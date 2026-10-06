@@ -66,7 +66,7 @@ import SwiftUI
 
                 // Viewer-facing too, so it belongs up here with Languages
                 // rather than among the engine sections — and it is
-                // engine-independent: all four hosts route their up/down
+                // engine-independent: all three hosts route their up/down
                 // presses through LiveChannelNavigator.
                 VStack(alignment: .leading, spacing: 8) {
                     TVSettingsSectionLabel("Live TV")
@@ -155,7 +155,6 @@ import SwiftUI
                     VStack(spacing: 2) {
                         tvEngineOptionsRow(.vlcKit)
                         tvEngineOptionsRow(.ksPlayer)
-                        tvEngineOptionsRow(.lumeEngine)
                     }
                 }
             }

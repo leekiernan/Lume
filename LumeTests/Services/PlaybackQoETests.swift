@@ -125,12 +125,12 @@ struct PlaybackQoETests {
         let (qoe, suite) = makeTracker()
         defer { tearDown(suite) }
 
-        qoe.beginStartup(engine: .lumeEngine, isLive: true, owner: engineInstance)
+        qoe.beginStartup(engine: .avPlayer, isLive: true, owner: engineInstance)
         qoe.noteFirstFrame()
         qoe.noteStallBegan()
         qoe.endSession(owner: engineInstance)
 
-        #expect(qoe.summary.engines[PlayerEngineKind.lumeEngine.rawValue]?.rebuffers == 1)
+        #expect(qoe.summary.engines[PlayerEngineKind.avPlayer.rawValue]?.rebuffers == 1)
     }
 
     @Test

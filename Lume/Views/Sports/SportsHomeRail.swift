@@ -291,7 +291,7 @@ struct SportsHomeRail: View {
         /// `fullScreenCover` presented while it is still animating out is torn down
         /// and re-presented by UIKit once the sheet has gone — two player instances,
         /// two stream opens, and the second one trips the provider's connection cap
-        /// (LumeEngine fails, KSPlayer gets HTTP 429). So when a sheet was open the
+        /// (for example, HTTP 429). So when a sheet was open the
         /// media waits here and the sheet's `onDismiss` presents it.
         private func present(_ media: PlayableMedia, afterSheet: Bool) {
             #if os(macOS)

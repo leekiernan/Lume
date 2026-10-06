@@ -2,7 +2,7 @@
 //  PlayerControlsAutoHide.swift
 //  Lume
 //
-//  Whether the player chrome may auto-hide, for the four engine views that
+//  Whether the player chrome may auto-hide, for the three engine views that
 //  schedule the hide. A policy, not a view concern — it lives here rather than
 //  on the caption leaf that motivated it.
 //

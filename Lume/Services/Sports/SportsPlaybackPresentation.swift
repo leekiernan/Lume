@@ -7,8 +7,7 @@
 //  and a sheet's dismissal isn't done when its binding drops to `nil`. A
 //  full-screen player presented while it is still animating out is torn down
 //  and re-presented once it has gone: two players, two stream opens, and the
-//  second trips the provider's connection cap (LumeEngine fails, KSPlayer gets
-//  HTTP 429). So media chosen from a sheet waits here until the sheet's
+//  second trips the provider's connection cap (for example, HTTP 429). So media chosen from a sheet waits here until the sheet's
 //  `onDismiss`. Standard hub/Home sheets share it; the tvOS hub also uses its
 //  direct-play path. Pushed tvOS Match Centre keeps its own player above the
 //  detail screen, with no sheet dismissal needed.

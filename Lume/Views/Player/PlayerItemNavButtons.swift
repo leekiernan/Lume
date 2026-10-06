@@ -4,7 +4,7 @@
 //
 //  The previous / next transport control that flanks play-pause in every
 //  non-tvOS engine overlay: the surrounding episodes of a series, or the
-//  channels either side of a live one. Authored once because all four engines
+//  channels either side of a live one. Authored once because all three engines
 //  mount it — adopting it in three of them would make the control vanish the
 //  moment playback fell back to the fourth.
 //
