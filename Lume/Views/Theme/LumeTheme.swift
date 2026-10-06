@@ -25,12 +25,10 @@
 //  Focus stays white, as tvOS draws it. Interface text is the system font;
 //  Unbounded is the wordmark only (`LumeWordmark`).
 //
-//  The accent appears only where a view asks for `Color.lumeAccent` — one
-//  path, applied on purpose. It is deliberately *not* the app's
-//  `AccentColor`: that tints system chrome implicitly — the tvOS tab bar's
-//  selection, every plain form button — so setting it spread the brand into
-//  places that read badly, in states hard to predict. With `AccentColor` left
-//  to the system, controls look as the platform intends, and the brand adds
-//  flair only where chosen. The sets' `tv` entries hold the dark value under
-//  both appearances: Lume's tvOS screens are always dark, even on a TV set to
-//  a light appearance.
+//  On iPhone, iPad and Mac the accent is also the scene's tint, as the light
+//  and dark foundations specify: selected tabs, primary buttons, links and
+//  toggles, with destructive roles still the system red. It stays out of the
+//  app's `AccentColor`, and tvOS sets no tint: there it would recolour the tab
+//  bar's selection and the focus treatment, which stay as tvOS draws them.
+//  The sets' `tv` entries hold the dark value under both appearances: Lume's
+//  tvOS screens are always dark, even on a TV set to a light appearance.

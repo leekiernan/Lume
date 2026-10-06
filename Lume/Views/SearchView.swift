@@ -91,6 +91,10 @@ struct SearchView: View {
         NavigationStack {
             content
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+            #if !os(tvOS)
+                // tvOS draws the ambient ground behind every tab.
+                .background { LumeAmbientBackground() }
+            #endif
                 .searchField(text: $searchText, prompt: SearchPrompt.field(for: searchableAreas))
                 .navigationDestination(for: SearchSection.self) { section in
                     sectionDestination(section)

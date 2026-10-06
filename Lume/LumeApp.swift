@@ -261,6 +261,11 @@ struct LumeApp: App {
         WindowGroup {
             ContentView()
                 .lumeProgressViews()
+            #if !os(tvOS)
+                // The foundations' tint: selected tabs, primary buttons, links and
+                // toggles. tvOS keeps the system's focus colours.
+                .tint(.lumeAccent)
+            #endif
                 .syncCompletionToasts(priority: 0)
                 .environment(TraktService.shared)
                 .environment(PremiumManager.shared)
@@ -420,6 +425,7 @@ struct LumeApp: App {
                 }
                 .appAppearance(AppAppearance.resolve(appearanceRaw))
                 .lumeProgressViews()
+                .tint(.lumeAccent)
             }
             .modelContainer(catalogContainer)
             .environment(TraktService.shared)

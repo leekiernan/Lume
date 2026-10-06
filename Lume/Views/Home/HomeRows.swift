@@ -161,7 +161,7 @@ struct ForYouRow: View {
                 Text("For You")
                     .font(PosterCardMetrics.railTitleFont)
                     .fontWeight(.bold)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.primary)
                     .padding(.horizontal)
                 placeholder
                     .padding(.horizontal)

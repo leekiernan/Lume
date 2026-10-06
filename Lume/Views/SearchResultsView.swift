@@ -211,7 +211,7 @@ struct SearchResultsView<Header: View>: View {
             Text(title)
                 .font(PosterCardMetrics.railTitleFont)
                 .fontWeight(.bold)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(.primary)
             Spacer()
             if let showAll {
                 NavigationLink(value: showAll) {
