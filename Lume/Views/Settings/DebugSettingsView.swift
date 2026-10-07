@@ -50,7 +50,7 @@ enum DiagnosticsReport {
     nonisolated static func mailtoLink(summary: String, appVersion: String) -> String {
         var allowed = CharacterSet.urlQueryAllowed
         allowed.remove(charactersIn: "&=+?#")
-        let subject = "Lume Diagnostics — \(appVersion)"
+        let subject = "lume Diagnostics — \(appVersion)"
         let encodedSubject = subject.addingPercentEncoding(withAllowedCharacters: allowed) ?? ""
         let encodedBody = summary.addingPercentEncoding(withAllowedCharacters: allowed) ?? ""
         return "mailto:\(SupportInfo.diagnosticsEmail)?subject=\(encodedSubject)&body=\(encodedBody)"
@@ -191,7 +191,7 @@ extension SettingsView {
             .sheet(item: $mailItem) { item in
                 MailComposeView(
                     recipient: SupportInfo.diagnosticsEmail,
-                    subject: String(localized: "Lume Diagnostics — \(SupportInfo.appVersion)"),
+                    subject: String(localized: "lume Diagnostics — \(SupportInfo.appVersion)"),
                     body: mailBody,
                     attachmentURL: item.url
                 )

@@ -41,10 +41,12 @@ final class EPGListing {
     /// migration; deliberately kept out of the guide loaders' `propertiesToFetch`
     /// so the hot now/next and guide-window fetches don't pay for it.
     var subtitle: String?
-    /// XMLTV `<category>` values joined with ", ". Captured at ingest but not
-    /// currently read: the Sports Hub matches on title, sub-title and
-    /// description, not on categories.
+    /// XMLTV `<category>` values joined with ", ". The Live TV hub uses movie
+    /// categories to disambiguate title matches; Sports still matches text.
     var category: String?
+    /// Programme artwork, not the channel logo. Optional for existing guides.
+    var artworkURL: String?
+    var releaseYear: String?
 
     init(
         id: String,
@@ -55,7 +57,9 @@ final class EPGListing {
         end: Date,
         sourceID: UUID? = nil,
         subtitle: String? = nil,
-        category: String? = nil
+        category: String? = nil,
+        artworkURL: String? = nil,
+        releaseYear: String? = nil
     ) {
         self.id = id
         self.channelId = channelId
@@ -66,6 +70,8 @@ final class EPGListing {
         self.sourceID = sourceID
         self.subtitle = subtitle
         self.category = category
+        self.artworkURL = artworkURL
+        self.releaseYear = releaseYear
     }
 
     /// Updates every field a refresh can change, skipping the write when a
@@ -80,5 +86,7 @@ final class EPGListing {
         if end != programme.end { end = programme.end }
         if subtitle != programme.subtitle { subtitle = programme.subtitle }
         if self.category != category { self.category = category }
+        if artworkURL != programme.artworkURL { artworkURL = programme.artworkURL }
+        if releaseYear != programme.releaseYear { releaseYear = programme.releaseYear }
     }
 }

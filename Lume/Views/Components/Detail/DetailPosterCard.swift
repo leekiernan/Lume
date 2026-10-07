@@ -8,7 +8,6 @@ struct DetailPosterCard: View {
     var posterPath: String?
     var request: PosterArtworkRequest?
     var badge: String?
-    var isSeries: Bool = false
 
     var body: some View {
         posterCard
@@ -16,13 +15,13 @@ struct DetailPosterCard: View {
 
     var posterCard: PosterCard {
         PosterCard(title: title, provider: imageURL?.absoluteString, posterPath: posterPath,
-                   request: request, fallbackSymbol: isSeries ? "tv" : "film", badge: badge)
+                   request: request, badge: badge)
     }
 }
 
 extension DetailPosterCard {
     init(item: HomeMediaItem, badge: String? = nil) {
         self.init(title: item.title, imageURL: item.imageURL, posterPath: item.posterPath,
-                  request: item.posterRecoveryRequest, badge: badge, isSeries: item.posterRecoveryRequest?.kind == .series)
+                  request: item.posterRecoveryRequest, badge: badge)
     }
 }

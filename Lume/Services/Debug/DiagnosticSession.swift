@@ -53,7 +53,7 @@ nonisolated enum DiagnosticSession {
         let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "—"
         let osVersion = ProcessInfo.processInfo.operatingSystemVersionString
         Logger.app.notice(
-            "Session started — Lume \(SupportInfo.appVersion) (\(build)), \(DebugLogExporter.platformName) \(osVersion), \(DebugLogExporter.deviceModel), launch #\(launches)"
+            "Session started — lume \(SupportInfo.appVersion) (\(build)), \(DebugLogExporter.platformName) \(osVersion), \(DebugLogExporter.deviceModel), launch #\(launches)"
         )
         if defaults.bool(forKey: inForegroundKey) {
             defaults.set(Date().timeIntervalSinceReferenceDate, forKey: lastUnexpectedEndKey)

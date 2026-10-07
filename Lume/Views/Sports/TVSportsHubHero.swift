@@ -214,23 +214,6 @@
         }
     }
 
-    private extension View {
-        /// Pages the carousel when the remote moves past the hero's outermost
-        /// button. Deferred out of the move-command handler, as Home's hero
-        /// does: tvOS delivers it inside the focus engine's animated update.
-        @ViewBuilder
-        func onCarouselEdge(_ edge: MoveCommandDirection, _ onPage: ((Int) -> Void)?) -> some View {
-            if let onPage {
-                onMoveCommand { direction in
-                    guard direction == edge else { return }
-                    Task { onPage(edge == .left ? -1 : 1) }
-                }
-            } else {
-                self
-            }
-        }
-    }
-
     /// The team colours the hub's top washes in behind the hero.
     struct TVSportsHubHeroBackdrop: View {
         let fixture: SportsFixture

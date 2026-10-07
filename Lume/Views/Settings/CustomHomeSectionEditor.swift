@@ -144,11 +144,11 @@
             VStack(alignment: .leading, spacing: 6) {
                 switch surface {
                 case .home:
-                    Text("Paste the address of a public list. Lume matches the titles on it against your playlist and shows the ones you have.")
+                    Text("Paste the address of a public list. lume matches the titles on it against your playlist and shows the ones you have.")
                 case .movies:
-                    Text("Paste the address of a public list. Lume matches the titles on it against your playlist and shows the movies you have.")
+                    Text("Paste the address of a public list. lume matches the titles on it against your playlist and shows the movies you have.")
                 case .series:
-                    Text("Paste the address of a public list. Lume matches the titles on it against your playlist and shows the series you have.")
+                    Text("Paste the address of a public list. lume matches the titles on it against your playlist and shows the series you have.")
                 }
                 Text("Supported: \(supportedProviders).")
             }

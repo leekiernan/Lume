@@ -276,7 +276,7 @@ struct DiagnosticReportTests {
         )
         let summary = exporter.compactSummary(maxLength: 120)
         #expect(summary.count <= 120)
-        #expect(summary.hasPrefix("Lume 9.9 (1)"))
+        #expect(summary.hasPrefix("lume 9.9 (1)"))
     }
 
     @Test func `mailto link encodes the body`() {

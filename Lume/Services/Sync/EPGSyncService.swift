@@ -219,7 +219,7 @@ final class EPGSyncService {
             }
             isSyncing = false
             task = nil
-            SyncCompletionNotifications.shared.report(
+            InAppNotifications.shared.report(
                 Task.isCancelled ? .cancelled : outcome,
                 subject: .guide, startedUnder: profileToken, currentProfileToken: ActiveProfileStore.current?.uuidString ?? ""
             )

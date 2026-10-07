@@ -175,6 +175,9 @@ struct MainTabView: View {
             .onChange(of: activeProfileToken) { _, _ in repairSelectionIfNeeded() }
         #if os(tvOS)
             .disabled(blockingOverlayOwnsScreen || router.isQuickSwitchPresented)
+            // The brand's ambient ground behind every tab; screens with their
+            // own art (hero, detail backdrops) paint over it.
+            .background { LumeAmbientBackground() }
             .background(
                 TVPlayPauseGesture(
                     onShortPress: toggleQuickSwitch,
@@ -186,6 +189,7 @@ struct MainTabView: View {
             }
             .launchSplash(homeShown: selection.wrappedValue == .home)
         #endif
+            .liveTVProgrammeReminders()
             .environment(router)
             .environment(\.contentRestriction, contentRestriction)
             // A tab switch is the one browse interaction that has no scroll
@@ -489,6 +493,9 @@ struct MainTabView: View {
             router.seriesPath.append(series)
         case .downloads:
             showsDownloads = true
+        case .liveTV:
+            router.selectedTab = .liveTV
+            router.liveTVPath = NavigationPath()
         }
     }
 

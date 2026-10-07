@@ -100,7 +100,7 @@ extension SettingsView {
                                 .font(.title3)
                                 .frame(width: 30)
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("Unlock Lume Pro")
+                                Text("Unlock lume Pro")
                                     .foregroundStyle(.primary)
                                 Text("Free plan · See what's included")
                                     .font(.caption)
@@ -118,7 +118,7 @@ extension SettingsView {
                 // Not "Subscription" — lifetime owners see this section too, and
                 // labelling a one-time purchase a subscription is what sent people
                 // hunting for a cancel button that couldn't exist.
-                Text("Lume Pro")
+                Text("lume Pro")
             }
         }
 
@@ -155,10 +155,8 @@ extension SettingsView {
         var tvPremiumDetail: some View {
             VStack(alignment: .leading, spacing: 28) {
                 VStack(alignment: .leading, spacing: 8) {
-                    TVSettingsSectionLabel("Premium")
-
                     TVSettingsSummary(
-                        systemImage: "crown", title: Text(premium.isPremium ? "Lume Pro" : "Free Plan"),
+                        systemImage: "crown", title: Text(premium.isPremium ? "lume Pro" : "Free Plan"),
                         detail: Text(premium.isPremium ? premiumStatusDetail : String(localized: "Upgrade to unlock the features below"))
                     )
                 }

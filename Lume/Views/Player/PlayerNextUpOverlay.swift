@@ -70,7 +70,7 @@ private struct NextEpisodeCountdown: View {
         GeometryReader { geometry in
             ZStack(alignment: .trailing) {
                 Capsule().fill(.white.opacity(0.25))
-                Capsule().fill(.white)
+                Capsule().fill(Color.lumeAccent)
                     .frame(width: geometry.size.width * remaining)
             }
         }

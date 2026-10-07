@@ -75,7 +75,7 @@
                         .transition(.opacity)
                 }
             }
-            .background(Color.black)
+            .background(Color.lumeNight)
             .ignoresSafeArea()
             .fullScreenCover(item: $playingMedia) { media in
                 FullScreenPlayerView(media: media)
@@ -146,6 +146,7 @@
 
         private var hero: some View {
             TVDetailHero(
+                presentation: .series,
                 title: series.name,
                 backdropURL: TMDBClient.backdropURL(series.backdropPath),
                 posterFallbackURL: URL(string: series.cover ?? ""),
@@ -164,11 +165,7 @@
                 .focused($focus, equals: .play)
 
                 HStack(spacing: 18) {
-                    TVSecondaryActionButton(
-                        title: series.isFavorite ? "Remove from Favorites" : "Add to Favorites",
-                        systemImage: series.isFavorite ? "heart.fill" : "heart",
-                        action: toggleFavorite
-                    )
+                    MediaFavoriteButton(isFavorite: MediaFavorites.isFavorite(series), action: toggleFavorite)
                     Spacer(minLength: 0)
                 }
             }
@@ -229,7 +226,7 @@
                         Button("Season \(season)") {
                             withAnimation(.easeInOut(duration: 0.2)) { selectedSeason = season }
                         }
-                        .buttonStyle(TVChipButtonStyle(isSelected: season == selectedSeason))
+                        .buttonStyle(FilterChipStyle(isSelected: season == selectedSeason, shape: .tab))
                         .focused($focus, equals: .season(season))
                     }
                 }
@@ -258,7 +255,7 @@
                         .font(.system(size: 26))
                         .foregroundStyle(.white.opacity(0.6))
                     Button("Retry") { Task { await loader.loadEpisodes(series, playlist: seriesPlaylist, in: modelContext) } }
-                        .buttonStyle(TVChipButtonStyle(isSelected: false))
+                        .buttonStyle(FilterChipStyle(isSelected: false, shape: .tab))
                 }
             }
         }
@@ -328,8 +325,8 @@
             {
                 items.append(TVMetaItem(label: "Released", value: date))
             }
-            if let genre = series.genre, !genre.isEmpty {
-                items.append(TVMetaItem(label: "Genre", value: shortGenre(genre)))
+            if let genre = DetailFormat.genres(series.genre) {
+                items.append(TVMetaItem(label: "Genre", value: genre))
             }
             if !availableSeasons.isEmpty {
                 items.append(TVMetaItem(label: "Seasons", value: DetailFormat.seasonCount(availableSeasons.count)))
@@ -353,12 +350,6 @@
                 items.append(TVMetaItem(label: "Rated", value: cert))
             }
             return items
-        }
-
-        private func shortGenre(_ genre: String) -> String {
-            genre.split(separator: ",").prefix(2)
-                .map { $0.trimmingCharacters(in: .whitespaces) }
-                .joined(separator: ", ")
         }
 
         private var seasonCountLabel: String {
@@ -400,7 +391,7 @@
         }
 
         func toggleFavorite() {
-            MediaFavorites.toggle(series, in: modelContext)
+            MediaFavorites.requestToggle(series, in: modelContext)
         }
 
         func markPreviousWatched(_ episode: Episode) {
@@ -411,46 +402,6 @@
         func markFollowingUnwatched(_ episode: Episode) {
             episode.markLaterEpisodesUnwatched()
             try? modelContext.save()
-        }
-    }
-
-    // MARK: - Season chip style
-
-    /// A focusable selectable pill used by the season selector and small
-    /// secondary actions.
-    struct TVChipButtonStyle: ButtonStyle {
-        var isSelected: Bool
-
-        func makeBody(configuration: Configuration) -> some View {
-            StyleBody(configuration: configuration, isSelected: isSelected)
-        }
-
-        struct StyleBody: View {
-            let configuration: ButtonStyleConfiguration
-            let isSelected: Bool
-            @Environment(\.isFocused) private var isFocused
-
-            var body: some View {
-                let highlighted = isFocused || isSelected
-                configuration.label
-                    .font(.system(size: 24, weight: .semibold))
-                    .foregroundStyle(highlighted ? .black : .white)
-                    .padding(.horizontal, 28)
-                    .frame(height: 60)
-                    .background(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .fill(fill)
-                    )
-                    .scaleEffect(isFocused ? 1.06 : 1.0)
-                    .animation(.easeOut(duration: 0.18), value: isFocused)
-                    .animation(.easeOut(duration: 0.18), value: isSelected)
-            }
-
-            private var fill: AnyShapeStyle {
-                if isFocused { return AnyShapeStyle(.white) }
-                if isSelected { return AnyShapeStyle(.white.opacity(0.85)) }
-                return AnyShapeStyle(.regularMaterial)
-            }
         }
     }
 

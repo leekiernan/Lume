@@ -12,6 +12,7 @@ struct PosterGrid<Content: View>: View {
             spacing: PosterCardMetrics.gridSpacing,
             content: content
         )
+        .environment(\.posterPresentation, .grid)
     }
 }
 

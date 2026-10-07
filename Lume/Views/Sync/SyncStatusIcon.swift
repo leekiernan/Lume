@@ -21,17 +21,19 @@ enum SyncRowStatus: Equatable {
     }
 }
 
-/// Shared reporting icon, not a focus target. Platform dimensions and the
-/// standard step's ring versus the guide's plain spinner stay unchanged.
+/// Shared reporting icon, not a focus target. A running step is the mark's
+/// outer ring filled to the step's progress (Trace while that is unknown);
+/// the guide's background refresh, which reports no fraction, traces.
 struct SyncStatusIcon: View {
     let status: SyncRowStatus
+    var fraction: Double = 0
 
     var body: some View {
         Group {
             if let symbol = status.symbol {
                 Image(systemName: symbol)
                     .font(symbolFont)
-                    .foregroundStyle(status.isCompleted ? AnyShapeStyle(.green) : AnyShapeStyle(.tertiary))
+                    .foregroundStyle(status.isCompleted ? AnyShapeStyle(Color.lumeAccent) : AnyShapeStyle(.tertiary))
                     .symbolRenderingMode(.hierarchical)
             } else {
                 busyIndicator
@@ -48,20 +50,9 @@ struct SyncStatusIcon: View {
         #endif
     }
 
-    @ViewBuilder
     private var busyIndicator: some View {
-        #if os(tvOS)
-            ProgressView()
-        #else
-            if status == .step(.active) {
-                ZStack {
-                    Circle().stroke(Color.lumeAccent.opacity(0.25), lineWidth: 2)
-                    ProgressView().controlSize(.small)
-                }
-            } else {
-                ProgressView().controlSize(.small)
-            }
-        #endif
+        LumeMark(motion: status == .step(.active) && fraction > 0 ? .progress(fraction) : .trace)
+            .accessibilityLabel(Text("Loading…"))
     }
 }
 

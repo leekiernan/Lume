@@ -81,6 +81,9 @@ final class TraktService {
     private var scrobbleTask: Task<Void, Never>?
 
     private let client = TraktClient.shared
+    private var watchlistTask: Task<[TraktWatchlistItem], Error>?
+    private var watchlistTaskAccount: String?
+    private var watchlistTaskID: UUID?
 
     /// The catalog context the connect flow captured, so the history import can
     /// run the moment the device code is approved.
@@ -91,6 +94,9 @@ final class TraktService {
             session: session,
             outbox: TrackerMutationOutbox(storageKey: TraktAccountBackend.outboxStorageKey)
         )
+        mutations.refreshWatchlist = { [weak self] in
+            Task { await self?.refreshWatchlistIfNeeded() }
+        }
         session.didConnect = { [weak self] in
             // History imports on connect, as Simkl's does; the manual
             // re-import stays available for later.
@@ -153,6 +159,9 @@ final class TraktService {
     /// Disconnects: revokes the token server-side (best effort) and clears all
     /// local state.
     func disconnect() async {
+        watchlistTask?.cancel()
+        watchlistTask = nil
+        watchlistTaskID = nil
         scrobbleTask?.cancel()
         scrobbleTask = nil
         mutations.reset()
@@ -245,10 +254,45 @@ final class TraktService {
     /// an authoritative empty result. Feed caches use this to retain stale data
     /// until a later successful revalidation.
     func watchlistItems() async throws -> [TraktWatchlistItem] {
-        guard let accessToken = await session.validAccessToken() else {
-            throw TraktError.notAuthenticated
+        guard let account = mutations.account else { throw TraktError.notAuthenticated }
+        if let watchlistTask, watchlistTaskAccount == account { return try await watchlistTask.value }
+        mutations.watchlist.reset(account: account)
+        let revision = mutations.watchlist.revision
+        let id = UUID()
+        let task = Task {
+            defer {
+                if watchlistTaskID == id { watchlistTask = nil; watchlistTaskID = nil }
+            }
+            guard let accessToken = await session.validAccessToken(), mutations.account == account else {
+                throw TraktError.notAuthenticated
+            }
+            let items = try await client.watchlist(accessToken: accessToken)
+            guard mutations.account == account, watchlistTaskID == id else { throw TraktError.notAuthenticated }
+            let targets = Set(items.compactMap { item -> TrackerMutation.Target? in
+                if let id = item.movie?.ids.tmdb { return .movie(tmdbID: id) }
+                if let id = item.show?.ids.tmdb { return .show(tmdbID: id) }
+                return nil
+            })
+            mutations.updateWatchlist(targets, account: account, revision: revision)
+            return items
         }
-        return try await client.watchlist(accessToken: accessToken)
+        watchlistTask = task
+        watchlistTaskAccount = account
+        watchlistTaskID = id
+        return try await task.value
+    }
+
+    func refreshWatchlistIfNeeded() async {
+        guard let account = mutations.account else { return }
+        mutations.watchlist.reset(account: account)
+        guard mutations.watchlist.needsRefresh else { return }
+        let revision = mutations.watchlist.revision
+        _ = try? await watchlistItems()
+        // A delivery can invalidate a read while its request is in flight.
+        // Revalidate once after joining it, rather than accepting its old list.
+        if mutations.account == account, mutations.watchlist.revision != revision, mutations.watchlist.needsRefresh {
+            _ = try? await watchlistItems()
+        }
     }
 
     /// Mirrors a local movie favorite to the connected user's Trakt watchlist.

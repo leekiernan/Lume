@@ -44,18 +44,13 @@ extension SettingsView {
             VStack(alignment: .leading, spacing: 8) {
                 TVSettingsSectionLabel("Automatic Sync")
 
-                VStack(spacing: 2) {
+                VStack(spacing: TVSettingsMetrics.rowSpacing) {
                     ForEach(SyncFrequency.allCases) { frequency in
                         Button {
                             syncFrequency.wrappedValue = frequency
                         } label: {
-                            HStack(spacing: 16) {
+                            TVSettingsChoiceLabel(isSelected: syncFrequency.wrappedValue == frequency) {
                                 Text(frequency.label)
-                                Spacer(minLength: 0)
-                                if syncFrequency.wrappedValue == frequency {
-                                    Image(systemName: "checkmark")
-                                        .font(.system(size: 24, weight: .semibold))
-                                }
                             }
                         }
                         .buttonStyle(TVSettingsRowButtonStyle())

@@ -32,8 +32,8 @@ extension View {
     ) -> some View {
         let movie = item as? Movie
         return mediaFavoriteMenu(
-            isFavorite: { item.isFavorite },
-            onToggleFavorite: { MediaFavorites.toggle(item, in: context) },
+            isFavorite: { MediaFavorites.isFavorite(item) },
+            onToggleFavorite: { MediaFavorites.requestToggle(item, in: context) },
             onRemoveFromRecents: onRemoveFromRecents,
             onVote: onVote,
             watchedState: movie.map { movie in
@@ -131,8 +131,8 @@ extension View {
     func episodeFavoriteMenu(_ episode: Episode, in context: ModelContext) -> some View {
         if let series = episode.series {
             mediaFavoriteMenu(
-                isFavorite: { series.isFavorite },
-                onToggleFavorite: { MediaFavorites.toggle(series, in: context) },
+                isFavorite: { MediaFavorites.isFavorite(series) },
+                onToggleFavorite: { MediaFavorites.requestToggle(series, in: context) },
                 watchedState: { .init(isWatched: episode.isWatched, progress: episode.watchProgress, lastWatchedDate: episode.lastWatchedDate) },
                 onSetWatched: { MediaWatchState.setWatched($0, episode: episode, in: context) }
             )
@@ -159,12 +159,12 @@ extension View {
     /// switch kind — focus falls to the first row and the whole home jumps.
     func heroFavoriteMenu(_ hero: HeroItem, in context: ModelContext) -> some View {
         mediaFavoriteMenu(
-            isFavorite: { hero.movie?.isFavorite ?? hero.series?.isFavorite ?? false },
+            isFavorite: { hero.movie.map { MediaFavorites.isFavorite($0) } ?? hero.series.map { MediaFavorites.isFavorite($0) } ?? false },
             onToggleFavorite: {
                 if let movie = hero.movie {
-                    MediaFavorites.toggle(movie, in: context)
+                    MediaFavorites.requestToggle(movie, in: context)
                 } else if let series = hero.series {
-                    MediaFavorites.toggle(series, in: context)
+                    MediaFavorites.requestToggle(series, in: context)
                 }
             }
         )

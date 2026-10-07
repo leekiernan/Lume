@@ -303,7 +303,7 @@
             HStack(spacing: 16) {
                 ForEach(Array(tabKinds.enumerated()), id: \.offset) { index, kind in
                     Button(tabTitle(kind)) { toggle(tab: kind) }
-                        .buttonStyle(TVChipButtonStyle(isSelected: openTab == kind))
+                        .buttonStyle(FilterChipStyle(isSelected: openTab == kind, shape: .tab))
                         .focused($focus, equals: .tab(index))
                 }
             }
@@ -404,10 +404,9 @@
         /// works for live, series and movies via the resolved content.
         private var favoriteButton: some View {
             Button(action: toggleFavorite) {
-                Image(systemName: isFavorite ? "heart.fill" : "heart")
-                    .symbolReplaceTransition(value: isFavorite)
+                MediaFavoriteGlyph(isFavorite: isFavorite, showTrackers: !media.isLive, trackerSize: 22)
             }
-            .buttonStyle(TVPlayerCircleButtonStyle())
+            .buttonStyle(TVPlayerCircleButtonStyle(expandsToFit: !media.isLive))
             .focused($focus, equals: .favorite)
             .accessibilityLabel(isFavorite ? "In Favorites" : "Favorite")
         }
@@ -546,7 +545,7 @@
             if isLive {
                 ProgressView(value: progressFraction)
                     .progressViewStyle(.linear)
-                    .tint(.white)
+                    .tint(.lumeAccent)
             } else {
                 Button { onToggleScrub() } label: { Color.clear }
                     .buttonStyle(TVScrubBarStyle(fraction: scrubberFraction, isScrubbing: isScrubbing))

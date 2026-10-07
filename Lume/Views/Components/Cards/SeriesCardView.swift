@@ -20,7 +20,7 @@ struct SeriesCardView: View {
     var posterCard: PosterCard {
         PosterCard(title: series.name, provider: series.cover, posterPath: series.posterPath,
                    request: .init(kind: .series, id: series.id, categoryID: series.categoryId),
-                   fallbackSymbol: "tv", fillsWidth: fillsWidth)
+                   fillsWidth: fillsWidth)
     }
 }
 

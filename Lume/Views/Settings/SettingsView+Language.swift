@@ -92,7 +92,7 @@ import SwiftUI
                     }
                 } footer: {
                     // swiftlint:disable:next line_length
-                    Text("Lume selects the first of these languages the stream offers as an audio track. Drag to reorder. When the audio that plays is in none of them and the stream carries a forced subtitle track, that track is turned on. Applied the next time playback starts.")
+                    Text("lume selects the first of these languages the stream offers as an audio track. Drag to reorder. When the audio that plays is in none of them and the stream carries a forced subtitle track, that track is turned on. Applied the next time playback starts.")
                 }
             }
             .platformNavigationTitle("Audio Languages")

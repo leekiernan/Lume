@@ -39,10 +39,19 @@ import SwiftUI
     struct TVSectionLayoutDetail: View {
         private enum FocusTarget: Hashable {
             case addSection
-            case section(HomeSectionRef)
+        }
+
+        /// A section as a row of the shared reorderable list.
+        private struct Row: ReorderableRowItem {
+            let ref: HomeSectionRef
+            var id: String {
+                ref.token
+            }
         }
 
         let surface: SectionSurface
+        /// The settings pane's scroll view, so a lifted row stays in view.
+        let proxy: ScrollViewProxy
 
         @AppStorage(RecommendationSettings.enabledKey) private var recommendationsEnabled = RecommendationSettings.enabledDefault
         @AppStorage private var sectionOrderRaw: String
@@ -64,10 +73,12 @@ import SwiftUI
         @State private var editorURL = ""
         @State private var editorError: String?
         @State private var editorChecking = false
+        @State private var isReordering = false
         @FocusState private var focusedControl: FocusTarget?
 
-        init(surface: SectionSurface) {
+        init(surface: SectionSurface, proxy: ScrollViewProxy) {
             self.surface = surface
+            self.proxy = proxy
             _sectionOrderRaw = AppStorage(wrappedValue: "", HomeLayoutSettings.sectionOrderKey(surface))
             _disabledSectionsRaw = AppStorage(wrappedValue: "", HomeLayoutSettings.disabledSectionsKey(surface))
             _customSectionsRaw = AppStorage(wrappedValue: "", CustomHomeSections.storageKey(surface))
@@ -134,8 +145,6 @@ import SwiftUI
             )
         }
 
-        /// Move the section at `index` one slot up or down, persisting the new
-        /// order. Mirrors `moveEngine` in the player pane.
         /// Creates this surface's starting hero if it has none, as an ordinary
         /// section at the top of the list. Runs once: deleting it leaves it
         /// deleted. Mirrors the pages, which seed it too.
@@ -169,25 +178,30 @@ import SwiftUI
             heroSectionRaw = isHero(ref) ? "" : ref.token
         }
 
-        private func move(at index: Int, by offset: Int) {
-            var list = sections
-            guard list.move(at: index, by: offset) else { return }
-            sectionOrderRaw = HomeLayoutSettings.encode(
-                HomeLayoutSettings.normalized(list, custom: customSections, surface: surface)
-            )
-        }
-
         // MARK: - Sections list
 
         private var sectionsSection: some View {
             VStack(alignment: .leading, spacing: 8) {
                 TVSettingsSectionLabel("Sections")
 
-                VStack(spacing: 2) {
-                    ForEach(Array(sections.enumerated()), id: \.element) { index, ref in
-                        sectionRow(ref: ref, index: index)
-                    }
-                }
+                // Select a row to lift it, move, select again to place — the
+                // same row as every other reorderable list.
+                TVReorderableContentList(
+                    items: sections.map(Row.init),
+                    title: { name(for: $0.ref) },
+                    isHidden: { !isEnabled($0.ref) },
+                    onToggleHidden: { toggle($0.ref) },
+                    onCommitOrder: { rows in
+                        sectionOrderRaw = HomeLayoutSettings.encode(
+                            HomeLayoutSettings.normalized(rows.map(\.ref), custom: customSections, surface: surface)
+                        )
+                    },
+                    isReordering: $isReordering,
+                    scrollProxy: proxy,
+                    icon: { icon(for: $0.ref) },
+                    accessory: { AnyView(accessory(for: $0.ref)) },
+                    actions: { AnyView(actions(for: $0.ref)) }
+                )
 
                 Text(footerText)
                     .tvSettingsFooter()
@@ -206,56 +220,62 @@ import SwiftUI
             }
         }
 
-        /// One row of the tvOS section list: an on/off control and the section
-        /// name, then the shared trailing cluster of icon controls. A custom row
-        /// fills in the edit and remove slots there, so its up / down pair still
-        /// lines up with the built-in rows'. Mirrors `tvEnginePriorityRow`.
-        private func sectionRow(ref: HomeSectionRef, index: Int) -> some View {
-            let enabled = isEnabled(ref)
-            let custom = ref.customID.flatMap { id in customSections.first { $0.id == id } }
-            let name = custom?.title ?? ref.builtin?.displayName ?? ""
-            return TVSettingsReorderRow(
-                name: name,
-                index: index,
-                count: sections.count,
-                onMove: { move(at: index, by: $0) },
-                onEdit: custom.map { section in { beginEditing(section) } },
-                onRemove: custom.map { section in { remove(id: section.id) } },
-                onPromote: ref.isPromotable ? { togglePromoted(ref) } : nil,
-                isPromoted: isHero(ref),
-                leading: {
-                    Button {
-                        toggle(ref)
-                    } label: {
-                        Image(systemName: enabled ? "checkmark.circle.fill" : "circle")
-                    }
-                    .buttonStyle(TVContentIconButtonStyle())
-                    .focused($focusedControl, equals: .section(ref))
-                    .accessibilityLabel(Text(verbatim: name))
-                    .accessibilityValue(enabled ? Text("On") : Text("Off"))
+        private func custom(_ ref: HomeSectionRef) -> CustomHomeSection? {
+            ref.customID.flatMap { id in customSections.first { $0.id == id } }
+        }
 
-                    if let custom {
-                        Label {
-                            Text(verbatim: custom.title)
-                        } icon: {
-                            Image(systemName: "list.bullet.rectangle")
-                        }
-                        .font(.system(size: TVSettingsMetrics.rowFontSize))
-                        .foregroundStyle(enabled ? .primary : .secondary)
-                    } else if let section = ref.builtin {
-                        Label(section.title, systemImage: section.systemImage)
-                            .font(.system(size: TVSettingsMetrics.rowFontSize))
-                            .foregroundStyle(enabled ? .primary : .secondary)
+        private func name(for ref: HomeSectionRef) -> String {
+            custom(ref)?.title ?? ref.builtin?.displayName ?? ""
+        }
 
-                        // "For You" and "Sports" are Lume Pro features; badge them
-                        // for free users (Sideload/owned builds are always
-                        // premium, so this never shows).
-                        if section == .forYou || section == .sports, !premium.isPremium {
-                            PremiumBadge()
-                        }
-                    }
+        private func icon(for ref: HomeSectionRef) -> String? {
+            custom(ref) != nil ? "list.bullet.rectangle" : ref.builtin?.systemImage
+        }
+
+        /// "For You" and "Sports" are lume Pro features; badge them for free
+        /// users (Sideload/owned builds are always premium, so this never shows).
+        @ViewBuilder
+        private func accessory(for ref: HomeSectionRef) -> some View {
+            if let section = ref.builtin, section == .forYou || section == .sports, !premium.isPremium {
+                PremiumBadge()
+            }
+        }
+
+        /// Promote (a list row), then edit and remove (a custom row) — before
+        /// the list's own hide toggle.
+        @ViewBuilder
+        private func actions(for ref: HomeSectionRef) -> some View {
+            let title = name(for: ref)
+            if ref.isPromotable {
+                Button {
+                    togglePromoted(ref)
+                } label: {
+                    // Filled while this row *is* the hero, so the state reads
+                    // without moving focus onto it.
+                    Image(systemName: isHero(ref) ? "star.fill" : "star")
+                        .foregroundStyle(isHero(ref) ? AnyShapeStyle(Color.lumeAccent) : AnyShapeStyle(.foreground))
                 }
-            )
+                .buttonStyle(TVContentIconButtonStyle())
+                .accessibilityAddTraits(isHero(ref) ? .isSelected : [])
+                .accessibilityLabel(isHero(ref) ? "Stop showing \(title) as the hero" : "Show \(title) as the hero")
+            }
+            if let section = custom(ref) {
+                Button {
+                    beginEditing(section)
+                } label: {
+                    Image(systemName: "pencil")
+                }
+                .buttonStyle(TVContentIconButtonStyle())
+                .accessibilityLabel("Edit \(title)")
+
+                Button {
+                    remove(id: section.id)
+                } label: {
+                    Image(systemName: "minus")
+                }
+                .buttonStyle(TVContentIconButtonStyle())
+                .accessibilityLabel("Remove \(title)")
+            }
         }
 
         // MARK: - Custom sections
@@ -273,9 +293,9 @@ import SwiftUI
                     }
                     .buttonStyle(TVSettingsRowButtonStyle())
                     .focused($focusedControl, equals: .addSection)
-                    .disabled(customSections.count >= CustomHomeSections.maximumCount)
+                    .disabled(customSections.count >= CustomHomeSections.maximumCount || isReordering)
 
-                    Text("Build your own row from a public list, like a site's most-popular chart. Lume matches the list against your playlist and shows the titles you have.")
+                    Text("Build your own row from a public list, like a site's most-popular chart. lume matches the list against your playlist and shows the titles you have.")
                         .tvSettingsFooter()
                         .padding(.top, 6)
 
@@ -304,7 +324,7 @@ import SwiftUI
                         .padding(.horizontal, TVSettingsMetrics.rowHPadding)
                 }
 
-                VStack(spacing: 2) {
+                VStack(spacing: TVSettingsMetrics.rowSpacing) {
                     Button(editorChecking ? "Checking…" : "Save Section") {
                         saveCustomSection()
                     }
@@ -351,9 +371,8 @@ import SwiftUI
         }
 
         private func cancelEditor() {
-            let returnTarget = editor?.editingID.map { FocusTarget.section(.custom($0)) } ?? .addSection
             closeEditor()
-            restoreFocus(to: returnTarget)
+            restoreFocus(to: .addSection)
         }
 
         /// Focus restoration is deferred until the inline editor has left the
@@ -396,7 +415,7 @@ import SwiftUI
                     entries.contains { $0.mediaType == wanted }
                 } ?? true
                 closeEditor()
-                restoreFocus(to: .section(.custom(id)))
+                restoreFocus(to: .addSection)
                 if !matchesSurface { editorError = mismatchWarning }
             }
         }

@@ -2,7 +2,7 @@
 //  SettingsView+TVComponents.swift
 //  Lume
 //
-//  The tvOS sidebar categories, the About detail pane, and the SwiftUI previews,
+//  The tvOS sidebar and its categories, the About detail pane, and the SwiftUI previews,
 //  split out of SettingsView to keep that file within the project's size limit.
 //
 
@@ -39,6 +39,56 @@ import SwiftUI
     }
 
     extension SettingsView {
+        /// The categories on a glass panel, as the Settings boards draw them.
+        /// The tab bar already says this is Settings, so the panel has no
+        /// heading; the detail pane carries the category's name instead.
+        var tvSidebar: some View {
+            VStack(alignment: .leading, spacing: 0) {
+                VStack(spacing: 6) {
+                    ForEach(availableCategories) { category in
+                        Button {
+                            selectedCategory = category
+                        } label: {
+                            Text(category.title)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .buttonStyle(TVSettingsSidebarButtonStyle(isSelected: selectedCategory == category))
+                        .focused($focusedCategory, equals: category)
+                    }
+                }
+                .padding(14)
+                .background {
+                    let panel = RoundedRectangle(cornerRadius: 32, style: .continuous)
+                    panel.fill(.white.opacity(0.08))
+                        .overlay(panel.strokeBorder(.white.opacity(0.12), lineWidth: 1))
+                }
+
+                Spacer(minLength: 0)
+            }
+            .frame(width: 420, alignment: .leading)
+            .padding(.leading, TVLayoutMetrics.contentInset)
+            .padding(.trailing, 12)
+            .padding(.vertical, TVSettingsMetrics.pageVerticalInset)
+            .focusSection()
+            // Where focus goes when it enters the sidebar. Stating it means the
+            // engine picks the selected row *instead of* the geometrically
+            // nearest one, rather than landing on that one and being corrected
+            // afterwards — which is visible as the highlight jumping.
+            .defaultFocus($focusedCategory, selectedCategory, priority: .userInitiated)
+        }
+
+        /// The category's name over its pane. A drill-in (a playlist, an
+        /// engine's options, a language list) shows its own title instead.
+        @ViewBuilder var tvCategoryTitle: some View {
+            if selectedPlaylist == nil, selectedEngineOptions == nil, preferredLanguagePane == nil {
+                Text(selectedCategory.title)
+                    .font(.system(size: TVSettingsMetrics.paneTitleFontSize, weight: .bold))
+                    .padding(.horizontal, TVSettingsMetrics.rowHPadding)
+            }
+        }
+    }
+
+    extension SettingsView {
         /// The drilled-in options pane for a single engine.
         func tvEngineOptionsDetail(for engine: PlayerEngineKind) -> some View {
             VStack(alignment: .leading, spacing: 28) {
@@ -62,9 +112,7 @@ import SwiftUI
         var tvAboutDetail: some View {
             VStack(alignment: .leading, spacing: 36) {
                 VStack(alignment: .leading, spacing: 8) {
-                    TVSettingsSectionLabel("About")
-
-                    TVSettingsSummary(systemImage: "play.tv.fill", title: Text("Lume"), detail: Text("Version \(SupportInfo.appVersion)"))
+                    TVSettingsSummary(systemImage: "play.tv.fill", title: Text("lume"), detail: Text("Version \(SupportInfo.appVersion)"))
                 }
 
                 tvSupportSection
@@ -82,12 +130,12 @@ import SwiftUI
             VStack(alignment: .leading, spacing: 16) {
                 TVSettingsSectionLabel("Acknowledgements")
 
-                Text("Lume is free, open-source software, licensed under the GNU Affero General Public License v3.")
+                Text("lume is free, open-source software, licensed under the GNU Affero General Public License v3.")
                     .font(.system(size: TVSettingsMetrics.explanatoryFontSize))
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, TVSettingsMetrics.rowHPadding)
 
-                VStack(spacing: 2) {
+                VStack(spacing: TVSettingsMetrics.rowSpacing) {
                     ForEach(CreditsInfo.libraries) { library in
                         tvCreditRow(name: library.name, license: library.license)
                     }

@@ -25,6 +25,10 @@ struct FullScreenPlayerView: View {
     /// Stable for this presented player. The process-wide audio session uses it
     /// to reject a stale `onDisappear` after another player has already opened.
     @State var audioSessionOwner = UUID()
+    /// The engine mounts once the session is active, so KSPlayer's own
+    /// synchronous main-thread activation finds it already done, and once a
+    /// KSPlayer stream's provider redirect is resolved (`StreamRedirect`).
+    @State var isReadyToMount = false
     /// The in-flight progress write, so the review policy can wait for a
     /// finished title to be counted before it judges the session that
     /// finished it.
@@ -274,7 +278,7 @@ struct FullScreenPlayerView: View {
         .environment(controlsBridge)
         .persistentSystemOverlays(.hidden)
         .preferredColorScheme(.dark)
-        .syncCompletionToasts()
+        .inAppToasts()
         .macPlayerWindow(activeMedia: activeMedia, launchMedia: media) { switchMedia(to: $0) }
         // Synchronous on purpose, and ahead of the `.task` below: the engine
         // coordinators report `beginStartup` / `noteEngineFallback` from their
@@ -296,7 +300,13 @@ struct FullScreenPlayerView: View {
             // Pause background indexing — its periodic saves merge into the
             // main context and hitch KSPlayer's render loop.
             ContentIndexingService.shared.isPlaybackActive = true
+            // Resolved alongside the activation: the round trip is one FFmpeg
+            // would otherwise make on every read of the opening file.
+            let opening = engine == .ksPlayer ? activeMedia : nil
+            async let redirect: Void = { if let opening { await StreamRedirectCache.shared.prepare(opening) } }()
             await configureAudioSessionForPlayback()
+            await redirect
+            isReadyToMount = true
         }
         .task(id: activeMedia.id) {
             // Resolve a deferred Stalker placeholder into a real (short-lived)
@@ -386,6 +396,7 @@ struct FullScreenPlayerView: View {
             session.send(.leave(.dismiss))
             NowPlayingService.shared.endSession()
             releaseAudioSession()
+            StreamRedirectCache.shared.clear()
             ContentIndexingService.shared.isPlaybackActive = false
             endReviewSession(isChildWatching: profileManager?.activeProfileIsChild ?? false)
         }
@@ -404,14 +415,15 @@ struct FullScreenPlayerView: View {
 
     @ViewBuilder
     private var playerView: some View {
-        if let media = displayMedia {
+        if let media = displayMedia, isReadyToMount {
             engineView(for: media)
         } else if resolveError != nil {
             // Stalker `create_link` failed — surface the failure with a retry
             // rather than spinning forever.
             PlayerErrorIndicator(title: activeMedia.title, onRetry: retryResolve, onClose: closePlayer)
         } else {
-            // Resolving the Stalker stream URL before the engine can load it.
+            // Activating the audio session, or resolving a Stalker stream URL,
+            // before the engine can load it.
             PlayerLoadingIndicator(opening: activeMedia)
         }
     }

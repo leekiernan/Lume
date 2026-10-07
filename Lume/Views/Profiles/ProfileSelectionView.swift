@@ -65,7 +65,7 @@ struct ProfileSelectionView: View {
     @ViewBuilder
     private var background: some View {
         #if os(tvOS)
-            TVSettingsMetrics.background.ignoresSafeArea()
+            LumeAmbientBackground()
         #else
             Color.clear
         #endif

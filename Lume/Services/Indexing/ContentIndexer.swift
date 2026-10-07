@@ -26,7 +26,7 @@ import SwiftData
 
 actor ContentIndexer {
     private let modelContainer: ModelContainer
-    private let tmdbClient: TMDBClient
+    let tmdbClient: TMDBClient
 
     /// Items per chunk; the context is saved and progress published once per
     /// chunk so main-context merges stay infrequent.
@@ -127,7 +127,7 @@ actor ContentIndexer {
             counts = try currentCounts()
             await status.update(indexed: counts.indexed, total: counts.total)
 
-            let processed = try await indexNextChunk(embedder: embedder)
+            let processed = try await indexNextChunk(embedder: embedder, status: status)
             if processed == 0 {
                 break
             }
@@ -148,10 +148,13 @@ actor ContentIndexer {
     /// 227k-title library is ~4,500 of those merges, one per chunk, spread over
     /// hours of ordinary use).
     ///
-    /// Checked between chunks, not inside one: a chunk already in flight
-    /// finishes and saves, because abandoning it would only bring that same
-    /// save forward. Re-checked every `busyPause` rather than continuously —
-    /// nobody is waiting on the index, so resuming 20 s late costs nothing.
+    /// Checked before each chunk, and again inside one: a chunk in flight
+    /// stops fetching as soon as the app turns busy, and holds its save until
+    /// the app is idle again. Finishing it instead put up to 50 more TMDB
+    /// requests on the network while a stream opened, then landed the save a
+    /// few seconds into playback — the very hitch this gate exists to avoid.
+    /// Re-checked every `busyPause` rather than continuously — nobody is
+    /// waiting on the index, so resuming 20 s late costs nothing.
     private func waitWhileBusy(status: ContentIndexingService) async throws {
         while try await isBusy(status) {
             await status.setWaiting()
@@ -293,7 +296,7 @@ actor ContentIndexer {
     /// uncatchable `no such table` `NSException` that terminated the app. Here
     /// the only phase that suspends works purely on value snapshots; the
     /// objects are re-fetched and mutated synchronously while the store is open.
-    private func indexNextChunk(embedder: TextEmbedder) async throws -> Int {
+    private func indexNextChunk(embedder: TextEmbedder, status: ContentIndexingService) async throws -> Int {
         let pending = try fetchPending()
         guard !pending.isEmpty else { return 0 }
 
@@ -309,12 +312,24 @@ actor ContentIndexer {
                 if result.usedNetwork {
                     try await Task.sleep(for: itemPause)
                 }
+                // Playback or browsing started mid-chunk: stop here and write
+                // what's resolved once it ends (below). Only the service's
+                // flags, not the sync fetch, so the per-item check is free.
+                if await status.isBusyForIndexing { break }
             } catch {
                 // Transient failure or cancellation: stop fetching, but still
                 // write the items already resolved so progress isn't lost.
                 failure = error
                 break
             }
+        }
+
+        // The save merges into the main context, so it waits out playback and
+        // browsing like a chunk does. The results are plain values, safe to
+        // hold across the wait; cancelled meanwhile, they're simply redone
+        // next pass.
+        if !resolved.isEmpty {
+            try await waitWhileBusy(status: status)
         }
 
         // Phase 2 — write back fully synchronously (re-fetch → apply → embed →
@@ -526,45 +541,6 @@ actor ContentIndexer {
         embedder.prefersShortDocuments
             ? ContentIndexText.shortDocument(for: facts)
             : ContentIndexText.document(for: facts)
-    }
-
-    // MARK: - TMDB search with year fallback
-
-    /// Provider year tags are often wrong, so a year-constrained search that
-    /// finds nothing is retried without the year.
-    private func searchMovieID(query: String, year: Int?) async throws -> Int? {
-        if let id = try await tmdbClient.searchMovieID(query: query, year: year) {
-            return id
-        }
-        guard year != nil else { return nil }
-        return try await tmdbClient.searchMovieID(query: query, year: nil)
-    }
-
-    private func searchTVID(query: String, year: Int?) async throws -> Int? {
-        if let id = try await tmdbClient.searchTVID(query: query, year: year) {
-            return id
-        }
-        guard year != nil else { return nil }
-        return try await tmdbClient.searchTVID(query: query, year: nil)
-    }
-
-    /// Runs a TMDB request, converting *permanent* failures (no match, bad
-    /// payload) into nil so the item proceeds without TMDB data. Transient
-    /// failures (offline, 5xx, rate limit) rethrow and end the run — the next
-    /// kick retries those items.
-    private func skippingPermanentFailures<T>(_ request: () async throws -> T?) async throws -> T? {
-        do {
-            return try await request()
-        } catch let error as TMDBError {
-            switch error {
-            case let .serverError(code) where code == 404:
-                return nil
-            case .decodingError, .invalidURL, .missingToken:
-                return nil
-            case .serverError, .invalidResponse:
-                throw error
-            }
-        }
     }
 
     // MARK: - Store queries

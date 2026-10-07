@@ -17,7 +17,7 @@ import SwiftData
 import SwiftUI
 
 struct LibraryBrowseSidebar: View {
-    @Binding var isPresented: Bool
+    let state: BrowseSidebarState
     let categories: [Category]
     let genres: [String]
     let type: CategoryType
@@ -27,7 +27,7 @@ struct LibraryBrowseSidebar: View {
     var body: some View {
         // The app's own term for the type, so the panel header matches the
         // tab, Content Management and everywhere else.
-        BrowseSidebarPanel(isPresented: $isPresented, title: Text(type.localizedLabel), sections: panelSections)
+        BrowseSidebarPanel(state: state, title: Text(type.localizedLabel), sections: panelSections)
     }
 
     private var panelSections: [BrowseSidebarPanel.Section] {

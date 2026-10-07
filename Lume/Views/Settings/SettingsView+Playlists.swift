@@ -25,8 +25,6 @@ import SwiftUI
 
         private var tvPlaylistsList: some View {
             VStack(alignment: .leading, spacing: 8) {
-                TVSettingsSectionLabel("Playlists")
-
                 if playlists.isEmpty {
                     Text("No playlists yet. Add your IPTV provider to start streaming.")
                         .font(.system(size: 24))
@@ -62,7 +60,7 @@ import SwiftUI
                 .buttonStyle(TVSettingsRowButtonStyle())
 
                 if !premium.isPremium {
-                    Text("Free includes one playlist. Upgrade to Lume Pro to add more.")
+                    Text("Free includes one playlist. Upgrade to lume Pro to add more.")
                         .tvSettingsFooter()
                         .padding(.top, 6)
                 } else if playlists.count > 1 {

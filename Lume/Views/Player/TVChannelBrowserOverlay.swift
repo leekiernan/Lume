@@ -219,7 +219,7 @@
                 if channel.supportsCatchup {
                     Image(systemName: "clock.arrow.circlepath")
                         .font(.system(size: 18, weight: .semibold))
-                        .foregroundStyle(.blue)
+                        .foregroundStyle(Color.lumeFocusAwareAccent(isFocused: focus == .channel(channel.id)))
                         .accessibilityLabel("Catch-up available")
                 }
 
@@ -271,13 +271,13 @@
                         .lineLimit(1)
                     HStack(spacing: 8) {
                         Text(entry.start, format: .dateTime.weekday(.abbreviated).hour().minute())
+                            .opacity(0.65)
                         if isLive {
                             Text("Live")
-                                .foregroundStyle(EPGColors.live)
+                                .foregroundStyle(Color.lumeFocusAwareAccent(isFocused: focus == .guide(entry.id)))
                         }
                     }
                     .font(.system(size: 19))
-                    .opacity(0.65)
                 }
 
                 Spacer(minLength: 0)
@@ -285,7 +285,7 @@
                 if isPast, canReplay {
                     Image(systemName: "play.circle")
                         .font(.system(size: 24, weight: .semibold))
-                        .foregroundStyle(.blue)
+                        .foregroundStyle(Color.lumeFocusAwareAccent(isFocused: focus == .guide(entry.id)))
                 } else if isLive {
                     Image(systemName: "dot.radiowaves.left.and.right")
                         .font(.system(size: 20, weight: .semibold))

@@ -1,57 +1,21 @@
 {
   "fill" : {
-    "automatic-gradient" : "display-p3:0.95393,1.00000,0.95327,1.00000"
+    "solid" : "extended-srgb:0.07843,0.06275,0.12157,1.00000"
   },
   "groups" : [
     {
       "layers" : [
         {
           "blend-mode" : "normal",
-          "fill-specializations" : [
-            {
-              "value" : {
-                "linear-gradient" : [
-                  "display-p3:1.00000,0.54437,0.84501,1.00000",
-                  "display-p3:0.43938,0.00000,0.70496,1.00000"
-                ],
-                "orientation" : {
-                  "start" : {
-                    "x" : 0.5,
-                    "y" : 0.27784247008866125
-                  },
-                  "stop" : {
-                    "x" : 0.189814101472092,
-                    "y" : 0.8720039438726773
-                  }
-                }
-              }
-            },
-            {
-              "appearance" : "dark",
-              "value" : {
-                "linear-gradient" : [
-                  "display-p3:1.00000,0.54510,0.84314,1.00000",
-                  "display-p3:0.43922,0.00000,0.70588,1.00000"
-                ],
-                "orientation" : {
-                  "start" : {
-                    "x" : 0.5,
-                    "y" : 0.27784247008866125
-                  },
-                  "stop" : {
-                    "x" : 0.189814101472092,
-                    "y" : 0.8720039438726773
-                  }
-                }
-              }
-            }
-          ],
-          "glass" : false,
+          "fill" : {
+            "solid" : "extended-srgb:1.00000,0.53333,0.84314,1.00000"
+          },
+          "glass" : true,
           "hidden" : false,
-          "image-name" : "lume-bw.svg",
-          "name" : "lume-bw",
+          "image-name" : "mark-core.svg",
+          "name" : "triangle",
           "position" : {
-            "scale" : 2,
+            "scale" : 3,
             "translation-in-points" : [
               0,
               0
@@ -60,56 +24,39 @@
         },
         {
           "blend-mode" : "normal",
-          "fill-specializations" : [
-            {
-              "value" : {
-                "linear-gradient" : [
-                  "display-p3:0.31994,0.54437,0.84501,1.00000",
-                  "display-p3:0.96783,0.93485,0.00000,1.00000"
-                ],
-                "orientation" : {
-                  "start" : {
-                    "x" : 0.5,
-                    "y" : 0.27784247008866125
-                  },
-                  "stop" : {
-                    "x" : 0.189814101472092,
-                    "y" : 0.8720039438726773
-                  }
-                }
-              }
-            },
-            {
-              "appearance" : "dark",
-              "value" : {
-                "linear-gradient" : [
-                  "display-p3:1.00000,0.54437,0.84501,1.00000",
-                  "display-p3:0.43938,0.00000,0.70496,1.00000"
-                ],
-                "orientation" : {
-                  "start" : {
-                    "x" : 0.5,
-                    "y" : 0.27784247008866125
-                  },
-                  "stop" : {
-                    "x" : 0.189814101472092,
-                    "y" : 0.8720039438726773
-                  }
-                }
-              }
-            }
-          ],
-          "glass" : false,
-          "hidden" : true,
-          "image-name" : "lume-bw.svg",
-          "name" : "lume-bw",
+          "fill" : {
+            "solid" : "extended-srgb:1.00000,0.53333,0.84314,1.00000"
+          },
+          "glass" : true,
+          "hidden" : false,
+          "image-name" : "mark-inner.svg",
+          "name" : "inner-ring",
           "position" : {
-            "scale" : 2,
+            "scale" : 3,
             "translation-in-points" : [
               0,
               0
             ]
-          }
+          },
+          "opacity" : 0.6
+        },
+        {
+          "blend-mode" : "normal",
+          "fill" : {
+            "solid" : "extended-srgb:1.00000,0.53333,0.84314,1.00000"
+          },
+          "glass" : true,
+          "hidden" : false,
+          "image-name" : "mark-outer.svg",
+          "name" : "outer-ring",
+          "position" : {
+            "scale" : 3,
+            "translation-in-points" : [
+              0,
+              0
+            ]
+          },
+          "opacity" : 0.3
         }
       ],
       "lighting" : "individual",
@@ -119,7 +66,7 @@
       },
       "specular" : true,
       "translucency" : {
-        "enabled" : true,
+        "enabled" : false,
         "value" : 0.5
       }
     }

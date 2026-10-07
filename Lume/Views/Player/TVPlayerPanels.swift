@@ -45,15 +45,17 @@
     struct TVPlayerCircleButtonStyle: ButtonStyle {
         var diameter: CGFloat = 60
         var glyphSize: CGFloat = 24
+        var expandsToFit = false
 
         func makeBody(configuration: Configuration) -> some View {
-            StyleBody(configuration: configuration, diameter: diameter, glyphSize: glyphSize)
+            StyleBody(configuration: configuration, diameter: diameter, glyphSize: glyphSize, expandsToFit: expandsToFit)
         }
 
         struct StyleBody: View {
             let configuration: ButtonStyleConfiguration
             let diameter: CGFloat
             let glyphSize: CGFloat
+            let expandsToFit: Bool
             @Environment(\.isFocused) private var isFocused
             @Environment(\.isEnabled) private var isEnabled
 
@@ -62,8 +64,10 @@
                 configuration.label
                     .font(.system(size: glyphSize, weight: .semibold))
                     .foregroundStyle(isFocused ? .black : .white)
-                    .frame(width: diameter, height: diameter)
-                    .glassEffectCompat(isFocused ? .tintedInteractive(.white) : .regularInteractive, in: Circle())
+                    .padding(.horizontal, expandsToFit ? 18 : 0)
+                    .frame(minWidth: diameter, maxWidth: expandsToFit ? nil : diameter)
+                    .frame(height: diameter)
+                    .glassEffectCompat(isFocused ? .tintedInteractive(.white) : .regularInteractive, in: Capsule())
                     .scaleEffect(pressed ? 1.05 : (isFocused ? 1.14 : 1.0))
                     .opacity(isEnabled ? 1 : 0.35)
                     .shadow(color: .black.opacity(isFocused ? 0.4 : 0), radius: 16, y: 8)
@@ -114,10 +118,10 @@
                     let knobX = min(max(filled - knobSize / 2, 0), max(width - knobSize, 0))
                     ZStack(alignment: .leading) {
                         Capsule()
-                            .fill(.white.opacity(0.3))
+                            .fill(.white.opacity(0.22))
                             .frame(height: trackHeight)
                         Capsule()
-                            .fill(.white)
+                            .fill(Color.lumeAccent)
                             .frame(width: filled, height: trackHeight)
                         if knobSize > 0 {
                             Circle()
@@ -204,30 +208,16 @@
 
         private var still: some View {
             ZStack(alignment: .bottomLeading) {
-                CachedAsyncImage(url: URL(string: episode.movieImage ?? ""), maxPixelSize: cardWidth) { phase in
-                    switch phase {
-                    case let .success(image):
-                        image.resizable().aspectRatio(contentMode: .fill)
-                    case .empty where episode.movieImage != nil:
-                        Rectangle().fill(Color.white.opacity(0.08)).overlay { ProgressView() }
-                    default:
-                        Rectangle().fill(Color.white.opacity(0.08))
-                            .overlay {
-                                Image(systemName: "play.tv")
-                                    .font(.system(size: 40))
-                                    .foregroundStyle(.white.opacity(0.5))
-                            }
-                    }
+                EpisodeStillArtwork(title: episode.title, url: episode.movieImage.flatMap(URL.init(string:)), maxPixelSize: cardWidth) {
+                    Image(systemName: "play.tv")
+                        .font(.system(size: 40))
+                        .foregroundStyle(.white.opacity(0.5))
                 }
                 .frame(width: cardWidth, height: stillHeight)
                 .clipped()
 
                 if let progress = resumeFraction {
-                    ProgressView(value: progress)
-                        .progressViewStyle(.linear)
-                        .tint(.white)
-                        .padding(.horizontal, 8)
-                        .padding(.bottom, 8)
+                    ArtworkProgressBar(fraction: progress)
                 }
 
                 if isCurrent {

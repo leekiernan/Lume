@@ -86,8 +86,6 @@ import SwiftUI
 
         private var profilesPane: some View {
             VStack(alignment: .leading, spacing: 8) {
-                TVSettingsSectionLabel("Profiles")
-
                 ForEach(profileRows) { profileRow in
                     row(profileRow)
                 }
@@ -113,7 +111,7 @@ import SwiftUI
 
                 TVOptionToggleRow(title: "Ask on Startup", isOn: $askOnStartup)
 
-                Text("Choose a profile each time Lume launches. When off, Lume resumes the last profile you used.")
+                Text("Choose a profile each time lume launches. When off, lume resumes the last profile you used.")
                     .tvSettingsFooter()
                     .padding(.top, 6)
 

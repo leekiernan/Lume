@@ -29,7 +29,7 @@ enum SyncError: LocalizedError {
         case let .databaseError(error):
             "Database error: \(error.localizedDescription)"
         case .notImplemented:
-            "This playlist type cannot be synced by this version of Lume"
+            "This playlist type cannot be synced by this version of lume"
         }
     }
 }

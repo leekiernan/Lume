@@ -20,6 +20,8 @@
     import SwiftUI
 
     struct LibrarySettingsView: View {
+        @Environment(\.defaultMinListRowHeight) private var minimumRowHeight
+        @Environment(\.dynamicTypeSize) private var dynamicTypeSize
         @AppStorage(AppAreaSettings.disabledAreasKey) private var disabledAreasRaw = ""
         @AppStorage(SportsSyncService.enabledKey) private var sportsEnabled = SportsSyncService.enabledDefault
 
@@ -61,11 +63,20 @@
         private func areaRow(title: LocalizedStringKey, systemImage: String, enabled: Binding<Bool>,
                              canDisable: Bool = true, @ViewBuilder destination: () -> some View) -> some View
         {
-            HStack(spacing: 16) {
+            // Keep native labels and switches, but give the destination the
+            // full row width when large text would squeeze it beside a switch.
+            let layout = dynamicTypeSize.isAccessibilitySize
+                ? AnyLayout(VStackLayout(alignment: .trailing, spacing: 8))
+                : AnyLayout(HStackLayout(spacing: 16))
+            return layout {
                 NavigationLink(destination: destination) {
                     Label(title, systemImage: systemImage)
                         .foregroundStyle(enabled.wrappedValue ? .primary : .secondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                        // A link beside a switch doesn't inherit the whole
+                        // List cell's hit region. Use its native minimum while
+                        // allowing large text to make the label taller.
+                        .frame(maxWidth: .infinity, minHeight: minimumRowHeight, alignment: .leading)
+                        .contentShape(Rectangle())
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 Toggle(title, isOn: enabled)
@@ -104,9 +115,13 @@
                 // Provider categories are a separate drill-in, just as they
                 // are for Movies/Series, not a substitute for home sections.
                 List {
+                    if area == .liveTV { LiveTVSectionsSettings() }
                     LibraryCategorySettingsSection(categoryType: type)
                 }
                 .platformNavigationTitle(area.title)
+                #if os(iOS)
+                    .environment(\.editMode, .constant(.active))
+                #endif
             }
         }
     }

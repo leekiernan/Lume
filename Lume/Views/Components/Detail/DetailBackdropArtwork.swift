@@ -13,10 +13,6 @@ struct DetailBackdropArtwork: View {
     var appearance: Appearance = .standard
     @Environment(\.displayScale) private var displayScale
 
-    private var placeholderColor: Color {
-        appearance == .television ? .black.opacity(0.6) : .gray.opacity(0.25)
-    }
-
     var body: some View {
         GeometryReader { proxy in
             let source = DetailArtworkSource(backdropURL: backdropURL, posterFallbackURL: posterFallbackURL)
@@ -26,13 +22,13 @@ struct DetailBackdropArtwork: View {
                 CachedAsyncImage(url: rendition.url, maxPixelSize: rendition.decodeSizeInPoints) { phase in
                     switch phase {
                     case .empty:
-                        Rectangle().fill(placeholderColor).overlay { ProgressView() }
+                        placeholder.overlay { if appearance == .standard { ProgressView() } }
                     case let .success(image):
                         image.resizable().aspectRatio(contentMode: .fill)
                             .frame(width: proxy.size.width, height: proxy.size.height)
                             .clipped()
                     case .failure:
-                        Rectangle().fill(placeholderColor).overlay { failureSymbol }
+                        placeholder.overlay { if appearance == .standard { failureSymbol } }
                     @unknown default:
                         EmptyView()
                     }
@@ -40,14 +36,25 @@ struct DetailBackdropArtwork: View {
                 .frame(width: proxy.size.width, height: proxy.size.height)
             } else {
                 // A zero-size initial layout should not fetch/decode artwork.
-                Rectangle().fill(placeholderColor)
+                placeholder
             }
+        }
+    }
+
+    /// tvOS: the ambient glow the art loads over (the detail boards);
+    /// elsewhere the existing flat fill.
+    @ViewBuilder
+    private var placeholder: some View {
+        if appearance == .television {
+            LumeAmbientBackground(style: .backdrop)
+        } else {
+            Rectangle().fill(.gray.opacity(0.25))
         }
     }
 
     private var failureSymbol: some View {
         Image(systemName: fallbackSymbol)
-            .font(appearance == .television ? .system(size: 80) : .largeTitle)
-            .foregroundStyle(appearance == .television ? AnyShapeStyle(.white.opacity(0.4)) : AnyShapeStyle(.secondary))
+            .font(.largeTitle)
+            .foregroundStyle(.secondary)
     }
 }

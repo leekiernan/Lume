@@ -32,7 +32,7 @@ import SwiftUI
                 in: 0 ... max(clock.duration.isFinite ? clock.duration : 1, 1),
                 onEditingChanged: onEditingChanged
             )
-            .tint(.white)
+            .tint(.lumeAccent)
 
             HStack {
                 Text(PlaybackTimeLabel.clock(isSeeking ? seekPosition : clock.current))

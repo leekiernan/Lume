@@ -5,8 +5,15 @@ struct PosterRail<Destination: Hashable, Content: View>: View {
     let title: Text
     let showAll: Destination?
     var groupsFocus = false
-    var rowHeight: CGFloat = PosterCardMetrics.rowHeight
+    /// Overrides the role height for landscape cards such as Continue Watching.
+    var rowHeight: CGFloat?
+    var fitsContentHeight = false
     @ViewBuilder let content: () -> Content
+    @Environment(\.posterPresentation) private var presentation
+
+    private var layout: PosterCardMetrics.Layout {
+        PosterCardMetrics.layout(for: presentation)
+    }
 
     var body: some View {
         #if os(tvOS)
@@ -19,7 +26,7 @@ struct PosterRail<Destination: Hashable, Content: View>: View {
     private var rail: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                title.font(PosterCardMetrics.railTitleFont).fontWeight(.bold).foregroundStyle(.secondary)
+                title.railHeadingStyle()
                 Spacer()
                 if let showAll {
                     NavigationLink(value: showAll) { Text("Show All").font(.subheadline) }
@@ -27,12 +34,24 @@ struct PosterRail<Destination: Hashable, Content: View>: View {
             }
             .padding(.horizontal)
             ScrollView(.horizontal, showsIndicators: false) {
-                LazyHStack(spacing: PosterCardMetrics.railSpacing, content: content)
+                cards
                     .padding(.horizontal)
-                    .padding(.vertical, PosterCardMetrics.railVerticalPadding)
+                    .padding(.vertical, layout.railVerticalPadding)
             }
             .scrollClipDisabled()
-            .frame(height: rowHeight)
+            .fixedSize(horizontal: false, vertical: fitsContentHeight)
+            .frame(height: fitsContentHeight ? nil : rowHeight ?? layout.rowHeight)
+        }
+    }
+
+    @ViewBuilder private var cards: some View {
+        if fitsContentHeight {
+            // The short Continue Watching rail measures every card up front,
+            // so horizontal scrolling cannot change its height. Poster rails
+            // retain lazy loading and their fixed artwork geometry.
+            HStack(spacing: layout.spacing, content: content)
+        } else {
+            LazyHStack(spacing: layout.spacing, content: content)
         }
     }
 }

@@ -23,6 +23,9 @@ final class TrackerMutationQueue<Backend: TrackerAccountBackend> {
     private(set) var failedCount = 0
     private(set) var isSyncing = false
     private(set) var syncError: String?
+    let watchlist = TrackerWatchlistMembership()
+    @ObservationIgnored var refreshWatchlist: (() -> Void)?
+    @ObservationIgnored var didDeliverMutation: (() -> Void)?
 
     @ObservationIgnored private let session: TrackerAccountSession<Backend>
     @ObservationIgnored private let outbox: TrackerMutationOutbox
@@ -50,6 +53,10 @@ final class TrackerMutationQueue<Backend: TrackerAccountBackend> {
     func enqueue(_ kind: TrackerMutation.Kind, _ target: TrackerMutation.Target, isPresent: Bool) {
         guard let account else { return }
         outbox.enqueue(kind: kind, target: target, isPresent: isPresent, account: account)
+        if kind == .watchlist {
+            watchlist.reset(account: account)
+            watchlist.apply(target, isPresent: isPresent)
+        }
         refreshStatus()
         retry()
     }
@@ -99,6 +106,7 @@ final class TrackerMutationQueue<Backend: TrackerAccountBackend> {
     /// Stops sending and clears the status, on disconnect. The account's
     /// queued changes stay, partitioned under its scope.
     func reset() {
+        watchlist.reset(account: nil)
         drainTask?.cancel()
         drainTask = nil
         drainID = nil
@@ -115,7 +123,28 @@ final class TrackerMutationQueue<Backend: TrackerAccountBackend> {
             }
         }
         refreshStatus()
-        if confirmed { retry() }
+        watchlist.reset(account: account)
+        if confirmed {
+            retry()
+            refreshWatchlist?()
+        }
+    }
+
+    func isWatchlisted(_ target: TrackerMutation.Target) -> Bool {
+        guard let account else { return false }
+        if let intent = outbox.mutations(account: account).last(where: { $0.kind == .watchlist && $0.target == target }) {
+            return intent.isPresent
+        }
+        return watchlist.contains(target, account: account)
+    }
+
+    func updateWatchlist(_ targets: Set<TrackerMutation.Target>, account: String, revision: UUID) {
+        guard self.account == account else { return }
+        var targets = targets
+        for mutation in outbox.mutations(account: account) where mutation.kind == .watchlist {
+            if mutation.isPresent { targets.insert(mutation.target) } else { targets.remove(mutation.target) }
+        }
+        watchlist.replace(with: targets, account: account, revision: revision)
     }
 
     private func drain(account: String, id: UUID) async {
@@ -143,6 +172,11 @@ final class TrackerMutationQueue<Backend: TrackerAccountBackend> {
                     continue
                 }
                 outbox.acknowledge(id: mutation.id, account: account)
+                if self.account == account {
+                    didDeliverMutation?()
+                    watchlist.invalidate()
+                    refreshWatchlist?()
+                }
             } catch {
                 outbox.recordFailure(id: mutation.id, account: account)
                 Logger.network.warning("\(Backend.name) mutation failed: \(error)")

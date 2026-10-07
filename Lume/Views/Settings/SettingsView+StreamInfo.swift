@@ -48,18 +48,13 @@ extension SettingsView {
             VStack(alignment: .leading, spacing: 8) {
                 TVSettingsSectionLabel("Stream Information")
 
-                VStack(spacing: 2) {
+                VStack(spacing: TVSettingsMetrics.rowSpacing) {
                     ForEach(StreamInfoDetailLevel.allCases) { level in
                         Button {
                             streamInfoDetailLevelRaw = level.rawValue
                         } label: {
-                            HStack(spacing: 16) {
+                            TVSettingsChoiceLabel(isSelected: streamInfoDetailLevel == level) {
                                 Text(level.title)
-                                Spacer(minLength: 0)
-                                if streamInfoDetailLevel == level {
-                                    Image(systemName: "checkmark")
-                                        .font(.system(size: 24, weight: .semibold))
-                                }
                             }
                         }
                         .buttonStyle(TVSettingsRowButtonStyle())

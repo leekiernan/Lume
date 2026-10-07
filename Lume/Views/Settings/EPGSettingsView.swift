@@ -278,7 +278,7 @@ struct EPGSettingsView: View {
                         .foregroundStyle(.secondary)
                         .padding(.vertical, 8)
                 } else {
-                    VStack(spacing: 2) {
+                    VStack(spacing: TVSettingsMetrics.rowSpacing) {
                         ForEach(sources) { source in
                             tvSourceRow(source)
                         }
@@ -294,7 +294,7 @@ struct EPGSettingsView: View {
                     try? modelContext.save()
                 } label: {
                     TVSettingsToggleLabel(isOn: source.isEnabled) {
-                        VStack(alignment: .leading, spacing: 2) {
+                        VStack(alignment: .leading, spacing: TVSettingsMetrics.rowSpacing) {
                             Text(source.name)
                             Text(tvSubtitle(source))
                                 .font(.system(size: 20))
@@ -338,7 +338,7 @@ struct EPGSettingsView: View {
                         TVSettingsField(title: "Name", placeholder: "Name", text: $addName, contentType: .name)
                         TVSettingsField(title: "XMLTV URL", placeholder: "XMLTV URL", text: $addURL, contentType: .URL)
                     }
-                    VStack(spacing: 2) {
+                    VStack(spacing: TVSettingsMetrics.rowSpacing) {
                         Button("Add Source") {
                             addSource(name: addName, url: addURL)
                             addName = ""
@@ -366,18 +366,13 @@ struct EPGSettingsView: View {
             VStack(alignment: .leading, spacing: 8) {
                 TVSettingsSectionLabel("Automatic Refresh")
 
-                VStack(spacing: 2) {
+                VStack(spacing: TVSettingsMetrics.rowSpacing) {
                     ForEach(SyncFrequency.allCases) { option in
                         Button {
                             frequency.wrappedValue = option
                         } label: {
-                            HStack(spacing: 16) {
+                            TVSettingsChoiceLabel(isSelected: frequency.wrappedValue == option) {
                                 Text(option.label)
-                                Spacer(minLength: 0)
-                                if frequency.wrappedValue == option {
-                                    Image(systemName: "checkmark")
-                                        .font(.system(size: 24, weight: .semibold))
-                                }
                             }
                         }
                         .buttonStyle(TVSettingsRowButtonStyle())

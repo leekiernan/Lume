@@ -46,11 +46,11 @@ struct EPGProgramDetailView: View {
 
                         VStack(alignment: .leading, spacing: 8) {
                             if isLive {
-                                statusBadge("On Now", color: .red)
+                                statusBadge("On Now", color: .lumeAccent)
                             } else if cell.isPast(at: now) {
                                 statusBadge("Earlier", color: .secondary)
                             } else {
-                                statusBadge("Upcoming", color: .lumeAccent)
+                                statusBadge("Upcoming", color: .secondary)
                             }
 
                             Text(cell.title)
@@ -60,7 +60,7 @@ struct EPGProgramDetailView: View {
 
                             if isLive {
                                 ProgressView(value: cell.progress(at: now))
-                                    .tint(.red)
+                                    .tint(.lumeAccent)
                             }
                         }
 
@@ -74,10 +74,11 @@ struct EPGProgramDetailView: View {
                         if stream.supportsCatchup {
                             Label("Catch-up available for \(stream.catchupArchiveDays) days", systemImage: "clock.arrow.circlepath")
                                 .font(.subheadline)
-                                .foregroundStyle(.blue)
+                                .foregroundStyle(.lumeAccent)
                         }
 
                         watchButton
+                        if cell.start > now { reminderButton }
                     }
                     .padding(.horizontal)
                     .padding(.vertical, 24)
@@ -127,14 +128,14 @@ struct EPGProgramDetailView: View {
 
                         if isLive {
                             ProgressView(value: cell.progress(at: now))
-                                .tint(.red)
+                                .tint(.lumeAccent)
                                 .frame(maxWidth: 520)
                         }
 
                         if stream.supportsCatchup {
                             Label("Catch-up available for \(stream.catchupArchiveDays) days", systemImage: "clock.arrow.circlepath")
                                 .font(.system(size: 26))
-                                .foregroundStyle(.blue)
+                                .foregroundStyle(.lumeAccent)
                         }
 
                         // Keep the actions above the synopsis. The buttons are the
@@ -142,6 +143,7 @@ struct EPGProgramDetailView: View {
                         // only reveals content as focus moves. A long synopsis below
                         // them would otherwise push them off-screen and out of reach.
                         VStack(alignment: .leading, spacing: 20) {
+                            if cell.start > now { reminderButton }
                             if canPlayCatchup {
                                 TVPlayButton(title: "Watch from Start", systemImage: "play.fill") {
                                     onPlayCatchup()
@@ -200,20 +202,20 @@ struct EPGProgramDetailView: View {
         private var tvStatusBadge: some View {
             Group {
                 if isLive {
-                    tvBadge("On Now", color: .red)
+                    tvBadge("On Now", color: .lumeAccent, foreground: .lumeOnAccent)
                 } else if cell.isPast(at: now) {
                     tvBadge("Earlier", color: .secondary)
                 } else {
-                    tvBadge("Upcoming", color: .blue)
+                    tvBadge("Upcoming", color: .secondary)
                 }
             }
         }
 
-        private func tvBadge(_ title: LocalizedStringKey, color: Color) -> some View {
+        private func tvBadge(_ title: LocalizedStringKey, color: Color, foreground: Color = .white) -> some View {
             Text(title)
                 .font(.system(size: 24, weight: .bold))
                 .textCase(.uppercase)
-                .foregroundStyle(.white)
+                .foregroundStyle(foreground)
                 .padding(.horizontal, 18)
                 .padding(.vertical, 8)
                 .background(Capsule().fill(color))
@@ -258,6 +260,14 @@ struct EPGProgramDetailView: View {
         }
     }
 
+    private var reminderButton: some View {
+        LiveTVProgrammeReminderButton(programme: LiveTVHubProgramme(
+            id: cell.id, channel: LiveTVHubChannel(id: stream.id, name: stream.name, logoURL: stream.streamIcon,
+                                                   epgID: stream.epgChannelId, isFavorite: stream.isFavorite),
+            title: cell.title, start: cell.start, end: cell.end, artworkURL: nil, overview: cell.detail, candidateID: nil, rank: 0
+        ))
+    }
+
     private var timeRow: some View {
         HStack(spacing: 6) {
             Text(cell.start, format: .dateTime.weekday(.abbreviated).hour().minute())
@@ -287,15 +297,10 @@ struct EPGProgramDetailView: View {
     private var watchButton: some View {
         if canPlayCatchup {
             VStack(spacing: 10) {
-                Button {
+                PrimaryPlayButton(title: "Watch from Start") {
                     onPlayCatchup()
                     dismiss()
-                } label: {
-                    Label("Watch from Start", systemImage: "play.fill")
-                        .font(.headline)
-                        .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.borderedProminent)
 
                 Button {
                     onPlay()
@@ -310,16 +315,10 @@ struct EPGProgramDetailView: View {
             .controlSize(.large)
             .padding(.top, 4)
         } else {
-            Button {
+            PrimaryPlayButton(title: "Watch Live") {
                 onPlay()
                 dismiss()
-            } label: {
-                Label("Watch Live", systemImage: "play.fill")
-                    .font(.headline)
-                    .frame(maxWidth: .infinity)
             }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
             .padding(.top, 4)
         }
     }

@@ -36,13 +36,6 @@ import SwiftUI
                                 .foregroundStyle(.secondary)
                                 .lineLimit(2)
                         }
-
-                        if let progress = resumeFraction {
-                            ProgressView(value: progress)
-                                .progressViewStyle(.linear)
-                                .tint(.lumeAccent)
-                                .padding(.top, 2)
-                        }
                     }
 
                     Spacer(minLength: 0)
@@ -83,22 +76,17 @@ import SwiftUI
 
         private var thumbnail: some View {
             ZStack(alignment: .topLeading) {
-                CachedAsyncImage(url: URL(string: episode.movieImage ?? ""), maxPixelSize: 142) { phase in
-                    switch phase {
-                    case let .success(image):
-                        image.resizable().aspectRatio(contentMode: .fill)
-                    case .empty where episode.movieImage != nil:
-                        Rectangle().fill(Color.gray.opacity(0.25)).overlay { ProgressView() }
-                    default:
-                        Rectangle().fill(Color.gray.opacity(0.25))
-                            .overlay {
-                                Text("E\(episode.episodeNum)")
-                                    .font(.headline)
-                                    .foregroundStyle(.secondary)
-                            }
-                    }
+                EpisodeStillArtwork(title: episode.title, url: episode.movieImage.flatMap(URL.init(string:)), maxPixelSize: 142) {
+                    Text("E\(episode.episodeNum)")
+                        .font(.headline)
+                        .foregroundStyle(.white.opacity(0.7))
                 }
                 .frame(width: 142, height: 80)
+                .overlay {
+                    if let progress = resumeFraction {
+                        ArtworkProgressBar(fraction: progress)
+                    }
+                }
                 .clipShape(RoundedRectangle(cornerRadius: 8))
 
                 if let progress = downloadProgress {
@@ -139,10 +127,7 @@ import SwiftUI
                         .frame(width: 16, height: 16)
                 } else {
                     ProgressView()
-                        .progressViewStyle(.circular)
                         .controlSize(.mini)
-                        .tint(.white)
-                        .scaleEffect(0.65)
                 }
             }
             .frame(width: 24, height: 24)

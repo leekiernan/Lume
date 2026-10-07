@@ -348,7 +348,9 @@ actor EPGSyncManager {
                     end: programme.end,
                     sourceID: sourceInfo.id,
                     subtitle: programme.subtitle,
-                    category: category
+                    category: category,
+                    artworkURL: programme.artworkURL,
+                    releaseYear: programme.releaseYear
                 ))
             }
         }

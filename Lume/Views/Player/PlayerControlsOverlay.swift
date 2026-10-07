@@ -53,9 +53,9 @@ struct PlayerControlsActions {
         var itemNeighbours = PlayerItemNavigation.Neighbours.none
 
         @Environment(\.modelContext) private var modelContext
-        /// Mirrors the backing model's favorite flag; refreshed when the media
-        /// changes and updated locally on toggle so the heart re-renders.
-        @State private var isFavorite = false
+        private var isFavorite: Bool {
+            PlayerFavorites.isFavorite(for: media.contentRef, in: modelContext)
+        }
 
         var body: some View {
             ZStack {
@@ -68,9 +68,6 @@ struct PlayerControlsActions {
                     Spacer(minLength: 0)
                     bottomControls
                 }
-            }
-            .task(id: media.id) {
-                isFavorite = PlayerFavorites.isFavorite(for: media.contentRef, in: modelContext)
             }
         }
 
@@ -286,10 +283,15 @@ struct PlayerControlsActions {
 
         private var favoriteButton: some View {
             Button {
-                isFavorite = PlayerFavorites.toggle(for: media.contentRef, in: modelContext)
+                PlayerFavorites.requestToggle(for: media.contentRef, in: modelContext)
                 actions.resetHideTimer()
             } label: {
-                pillGlyph(isFavorite ? "heart.fill" : "heart")
+                MediaFavoriteGlyph(isFavorite: isFavorite, showTrackers: !media.isLive)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 12)
+                    .frame(minWidth: 44, minHeight: 44)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .accessibilityLabel(isFavorite ? "In Favorites" : "Favorite")

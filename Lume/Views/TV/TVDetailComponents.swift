@@ -3,7 +3,7 @@
 //  Lume
 //
 //  tvOS-only building blocks for the Apple TV+/App-Store-style movie and series
-//  detail screens. These mirror the Figma "TV App Asset Template" layout: a
+//  detail screens. These follow the redesign's film and series boards: a
 //  full-bleed backdrop with a three-column info band (action button · title +
 //  synopsis + rating · metadata key/values), then horizontal rails for
 //  episodes, cast and related titles, plus an "About" / ratings block.
@@ -17,29 +17,6 @@
 
     import Foundation
     import SwiftUI
-
-    // MARK: - Layout metrics
-
-    enum TVDetailMetrics {
-        /// Title-safe horizontal inset for content under the full-bleed hero.
-        static let horizontalInset: CGFloat = 90
-        /// Vertical gap between top-level sections under the hero.
-        static let sectionSpacing: CGFloat = 56
-        /// Gap between cards inside a horizontal rail.
-        static let railSpacing: CGFloat = 40
-        /// Height of the cinematic hero (leaves the rails just below the fold).
-        static let heroHeight: CGFloat = 900
-        /// Bottom padding of the hero info band.
-        static let heroBottomInset: CGFloat = 80
-
-        // Card sizes
-        static let episodeCardWidth: CGFloat = 392
-        static let episodeStillHeight: CGFloat = 220
-        static let posterCardWidth = PosterCardMetrics.posterWidth
-        static let posterCardHeight = PosterCardMetrics.posterHeight
-        static let castCardWidth: CGFloat = 200
-        static let castAvatar: CGFloat = 160
-    }
 
     // MARK: - Star rating
 
@@ -56,11 +33,11 @@
                     }
                 }
                 .font(.system(size: 26))
-                .foregroundStyle(.white)
+                .foregroundStyle(Color.lumeAccent)
 
                 if showsValue {
                     Text(String(format: "%.1f", rating))
-                        .font(.system(size: 28, weight: .semibold))
+                        .font(.system(size: 30, weight: .medium))
                         .foregroundStyle(.white)
                 }
             }
@@ -85,28 +62,26 @@
         var body: some View {
             let displayed = ratings.sorted { $0.source.displayPriority < $1.source.displayPriority }.prefix(4)
             if !displayed.isEmpty {
-                HStack(spacing: 22) {
+                // The redesign's ratings: one surface card per source, its
+                // name over a large score.
+                HStack(spacing: 28) {
                     ForEach(displayed) { rating in
-                        HStack(spacing: 14) {
-                            Circle()
-                                .fill(rating.tint)
-                                .frame(width: 16, height: 16)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(rating.value)
-                                    .font(.system(size: 28, weight: .semibold))
-                                    .foregroundStyle(.white)
-                                // Brand names are proper nouns — never localized.
-                                Text(rating.source.displayName)
-                                    .font(.system(size: 20))
-                                    .foregroundStyle(.white.opacity(0.6))
-                            }
+                        VStack(alignment: .leading, spacing: 8) {
+                            // Brand names are proper nouns — never localized.
+                            Text(rating.source.displayName)
+                                .font(.system(size: 24, weight: .semibold))
+                                .foregroundStyle(Color.lumeTextSecondary)
+                                .lineLimit(1)
+                            Text(rating.value)
+                                .font(.system(size: 48, weight: .bold))
+                                .foregroundStyle(.white)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.6)
                         }
-                        .padding(.horizontal, 22)
-                        .padding(.vertical, 14)
-                        .background(
-                            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                .fill(.white.opacity(0.08))
-                        )
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 30)
+                        .padding(.vertical, 26)
+                        .background(TVDetailSurface())
                     }
                 }
             }
@@ -127,11 +102,11 @@
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)
                 .background(
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
                         .fill(filled ? AnyShapeStyle(.white.opacity(0.18)) : AnyShapeStyle(.clear))
                         .overlay(
-                            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                .stroke(.white.opacity(0.5), lineWidth: filled ? 0 : 2)
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .stroke(.white.opacity(0.6), lineWidth: filled ? 0 : 2)
                         )
                 )
         }
@@ -154,14 +129,12 @@
         let items: [TVMetaItem]
 
         var body: some View {
-            VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: 22) {
                 ForEach(items) { item in
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(LocalizedStringKey(item.label)).textCase(.uppercase)
-                            .font(.system(size: 20, weight: .semibold))
-                            .foregroundStyle(.white.opacity(0.55))
+                    VStack(alignment: .leading, spacing: 4) {
+                        TVDetailLabel(item.label)
                         Text(item.value)
-                            .font(.system(size: 24, weight: .medium))
+                            .font(.system(size: 26))
                             .foregroundStyle(.white)
                             .lineLimit(2)
                     }
@@ -176,6 +149,7 @@
     /// with a three-column info band pinned to the lower edge. The `actions`
     /// slot holds the Play button and any secondary buttons.
     struct TVDetailHero<Actions: View>: View {
+        var presentation: TVDetailMetrics.Hero = .film
         let title: String
         let backdropURL: URL?
         let posterFallbackURL: URL?
@@ -191,9 +165,14 @@
             ZStack(alignment: .bottomLeading) {
                 DetailBackdropArtwork(backdropURL: backdropURL, posterFallbackURL: posterFallbackURL, fallbackSymbol: fallbackSymbol, appearance: .television)
 
-                // Bottom scrim for legibility over bright artwork.
+                // Bottom scrim into the Night ground (the detail boards': clear
+                // to 60% of the way down, Night at 55% by 70%, solid at the foot).
                 LinearGradient(
-                    colors: [.clear, .black.opacity(0.35), .black.opacity(0.92)],
+                    stops: [
+                        .init(color: .lumeNight.opacity(0), location: 0.4),
+                        .init(color: .lumeNight.opacity(0.55), location: 0.7),
+                        .init(color: .lumeNight, location: 1)
+                    ],
                     startPoint: .top,
                     endPoint: .bottom
                 )
@@ -209,17 +188,19 @@
                     // Title + synopsis + rating
                     VStack(alignment: .leading, spacing: 14) {
                         TitleLogo(url: logoURL, title: title, maxWidth: 820, maxHeight: 150) {
+                            // The boards' display title, when there is no logo.
                             Text(title)
-                                .font(.system(size: 52, weight: .bold))
+                                .font(.system(size: presentation.titleSize, weight: .heavy))
+                                .kerning(presentation.titleKerning)
                                 .foregroundStyle(.white)
                                 .lineLimit(2)
-                                .minimumScaleFactor(0.6)
+                                .minimumScaleFactor(0.4)
                                 .shadow(radius: 10)
                         }
 
                         if let tagline, !tagline.isEmpty {
                             Text(tagline)
-                                .font(.system(size: 24, weight: .medium))
+                                .font(.system(size: 28))
                                 .foregroundStyle(.white.opacity(0.85))
                                 .lineLimit(1)
                         }
@@ -258,8 +239,32 @@
 
         var body: some View {
             Text(title)
-                .font(.system(size: 36, weight: .bold))
+                .font(.system(size: 40, weight: .bold))
                 .foregroundStyle(.white)
+        }
+    }
+
+    /// The redesign's surface under detail cards: white 7%, 24-point corners.
+    struct TVDetailSurface: View {
+        var body: some View {
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .fill(.white.opacity(0.07))
+        }
+    }
+
+    /// An uppercase key above a detail value (RELEASED, GENRE, DIRECTOR…).
+    struct TVDetailLabel: View {
+        let key: String
+
+        init(_ key: String) {
+            self.key = key
+        }
+
+        var body: some View {
+            Text(LocalizedStringKey(key)).textCase(.uppercase)
+                .font(.system(size: 20, weight: .semibold))
+                .kerning(0.5)
+                .foregroundStyle(Color.lumeTextSecondary)
         }
     }
 
@@ -280,21 +285,21 @@
                     still
                     VStack(alignment: .leading, spacing: 6) {
                         Text(heading)
-                            .font(.system(size: 26, weight: .semibold))
+                            .font(.system(size: 28, weight: .semibold))
                             .foregroundStyle(.white)
                             .lineLimit(1)
 
                         if let metaLine {
                             Text(metaLine)
                                 .font(.system(size: 22))
-                                .foregroundStyle(.white.opacity(0.6))
+                                .foregroundStyle(Color.lumeTextSecondary)
                                 .lineLimit(1)
                         }
 
                         if let plot = episode.plot, !plot.isEmpty {
                             Text(plot)
                                 .font(.system(size: 22))
-                                .foregroundStyle(.white.opacity(0.6))
+                                .foregroundStyle(Color.lumeTextTertiary)
                                 .lineLimit(2)
                         }
                     }
@@ -314,30 +319,16 @@
 
         private var still: some View {
             ZStack(alignment: .bottom) {
-                CachedAsyncImage(url: URL(string: episode.movieImage ?? ""), maxPixelSize: 640) { phase in
-                    switch phase {
-                    case let .success(image):
-                        image.resizable().aspectRatio(contentMode: .fill)
-                    case .empty where episode.movieImage != nil:
-                        Rectangle().fill(Color.white.opacity(0.08)).overlay { ProgressView() }
-                    default:
-                        Rectangle().fill(Color.white.opacity(0.08))
-                            .overlay {
-                                Image(systemName: "play.tv")
-                                    .font(.system(size: 44))
-                                    .foregroundStyle(.white.opacity(0.5))
-                            }
-                    }
+                EpisodeStillArtwork(title: episode.title, url: episode.movieImage.flatMap(URL.init(string:)), maxPixelSize: 640) {
+                    Image(systemName: "play.tv")
+                        .font(.system(size: 44))
+                        .foregroundStyle(.white.opacity(0.5))
                 }
                 .frame(width: TVDetailMetrics.episodeCardWidth, height: TVDetailMetrics.episodeStillHeight)
                 .clipped()
 
                 if let progress = resumeFraction {
-                    ProgressView(value: progress)
-                        .progressViewStyle(.linear)
-                        .tint(.white)
-                        .padding(.horizontal, 10)
-                        .padding(.bottom, 8)
+                    ArtworkProgressBar(fraction: progress)
                 }
 
                 if episode.isWatched {
@@ -349,7 +340,7 @@
                 }
             }
             .frame(width: TVDetailMetrics.episodeCardWidth, height: TVDetailMetrics.episodeStillHeight)
-            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         }
 
         private var heading: String {
@@ -380,14 +371,14 @@
 
         var body: some View {
             VStack(spacing: 14) {
-                CachedAsyncImage(url: TMDBClient.profileURL(member.profilePath, size: "w342"), maxPixelSize: 160) { phase in
+                CachedAsyncImage(url: TMDBClient.profileURL(member.profilePath, size: "w342"), maxPixelSize: TVDetailMetrics.castAvatar) { phase in
                     switch phase {
                     case let .success(image):
                         image.resizable().aspectRatio(contentMode: .fill)
                     case .empty where member.profilePath != nil:
-                        Rectangle().fill(Color.white.opacity(0.08)).overlay { ProgressView() }
+                        Rectangle().fill(Color.white.opacity(0.10)).overlay { ProgressView() }
                     default:
-                        Rectangle().fill(Color.white.opacity(0.08))
+                        Rectangle().fill(Color.white.opacity(0.10))
                             .overlay {
                                 Image(systemName: "person.fill")
                                     .font(.system(size: 56))
@@ -408,8 +399,8 @@
                         .lineLimit(1)
                     if let role = member.role, !role.isEmpty {
                         Text(role)
-                            .font(.system(size: 22))
-                            .foregroundStyle(.white.opacity(0.6))
+                            .font(.system(size: 20))
+                            .foregroundStyle(Color.lumeTextTertiary)
                             .lineLimit(1)
                     }
                 }
@@ -430,28 +421,23 @@
         let items: [TVMetaItem]
 
         var body: some View {
-            VStack(alignment: .leading, spacing: 18) {
-                Text(title)
-                    .font(.system(size: 28, weight: .semibold))
-                    .foregroundStyle(.white)
-                ForEach(items) { item in
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(LocalizedStringKey(item.label)).textCase(.uppercase)
-                            .font(.system(size: 20, weight: .semibold))
-                            .foregroundStyle(.white.opacity(0.55))
-                        Text(item.value)
-                            .font(.system(size: 24, weight: .medium))
-                            .foregroundStyle(.white)
-                            .fixedSize(horizontal: false, vertical: true)
+            VStack(alignment: .leading, spacing: 24) {
+                TVSectionHeader(title: title)
+                VStack(alignment: .leading, spacing: 24) {
+                    ForEach(items) { item in
+                        VStack(alignment: .leading, spacing: 4) {
+                            TVDetailLabel(item.label)
+                            Text(item.value)
+                                .font(.system(size: 26))
+                                .foregroundStyle(.white)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
                     }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(32)
+                .background(TVDetailSurface())
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(28)
-            .background(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(.white.opacity(0.06))
-            )
         }
     }
 

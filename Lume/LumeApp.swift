@@ -260,7 +260,13 @@ struct LumeApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
-                .syncCompletionToasts(priority: 0)
+                .lumeProgressViews()
+            #if !os(tvOS)
+                // The foundations' tint: selected tabs, primary buttons, links and
+                // toggles. tvOS keeps the system's focus colours.
+                .tint(.lumeAccent)
+            #endif
+                .inAppToasts(priority: 0)
                 .environment(TraktService.shared)
                 .environment(PremiumManager.shared)
                 .environment(cloudSync)
@@ -282,6 +288,10 @@ struct LumeApp: App {
                     // crossing is VOD-only. A cheap synchronous `UserDefaults`
                     // write, and idempotent per process on the callee's side.
                     AppStoreReviewPrompt.shared.noteAppLaunched()
+
+                    // Core Audio's one-off component registration, off the main
+                    // thread, so pressing Play doesn't pay it (see the type).
+                    if !Self.isUnitTestHost { AudioEngineWarmUp.schedule() }
 
                     // Give DownloadManager access to the model container so it
                     // can persist download state from its delegate callbacks.
@@ -418,6 +428,8 @@ struct LumeApp: App {
                         .onDisappear { AppStoreReviewPrompt.shared.noteBlockingSheetDismissed() }
                 }
                 .appAppearance(AppAppearance.resolve(appearanceRaw))
+                .lumeProgressViews()
+                .tint(.lumeAccent)
             }
             .modelContainer(catalogContainer)
             .environment(TraktService.shared)
@@ -437,6 +449,7 @@ struct LumeApp: App {
                         FullScreenPlayerView(media: media)
                             .frame(minWidth: 800, minHeight: 450)
                     }
+                    .lumeProgressViews()
                 }
             }
             .modelContainer(catalogContainer)
@@ -456,6 +469,7 @@ struct LumeApp: App {
             Window("Multi-View", id: "multiview") {
                 MultiViewScreen()
                     .frame(minWidth: 900, minHeight: 520)
+                    .lumeProgressViews()
             }
             .modelContainer(catalogContainer)
             .environment(TraktService.shared)

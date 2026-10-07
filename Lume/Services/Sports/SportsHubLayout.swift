@@ -19,16 +19,14 @@ nonisolated enum SportsHubLayout {
 
     /// Follow keys hold ":" and "/", never a newline.
     static func hidden(_ raw: String) -> Set<String> {
-        Set(raw.split(separator: "\n").map(String.init))
+        Set(SectionTokens.decode(raw))
     }
 
     static func encode(_ keys: Set<String>) -> String {
-        keys.sorted().joined(separator: "\n")
+        SectionTokens.encode(keys.sorted())
     }
 
     static func toggling(_ key: String, in raw: String) -> String {
-        var keys = hidden(raw)
-        if keys.remove(key) == nil { keys.insert(key) }
-        return encode(keys)
+        SectionTokens.toggling(key, in: raw)
     }
 }

@@ -2,7 +2,7 @@
 //  PlayerLoadingIndicator.swift
 //  Lume
 //
-//  Centered spinner shown over the video host while the engine is preparing or
+//  The mark's load state, centred over the video host while the engine is preparing or
 //  (re)buffering. KSPlayer sits in `.preparing` / `.buffering` for ~10–20s
 //  before the first frame, so the host suppresses its controls and shows this
 //  instead — otherwise the idle Play button reads as "paused, press me".
@@ -11,9 +11,9 @@
 import SwiftData
 import SwiftUI
 
-/// Centered spinner shown while the engine is preparing or (re)buffering. The
-/// optional `title` is supplied only on the first open — where the dimmed
-/// backdrop reads as "Loading <title>…" — and dropped for mid-stream stalls so
+/// The mark's load state while the engine is preparing or (re)buffering. The
+/// optional `title` is supplied only on the first open — where the branded
+/// ground reads as "Loading <title>…" — and dropped for mid-stream stalls so
 /// the spinner sits unobtrusively over the paused frame. Opening a live
 /// channel, it also shows what's on it now, so a surf reads as where it's
 /// going before the picture arrives.
@@ -40,17 +40,12 @@ struct PlayerLoadingIndicator: View {
 
     var body: some View {
         ZStack {
-            // A light dim keeps the spinner legible over a bright first frame
-            // without fully hiding the video once it starts to come through.
-            Color.black.opacity(0.4)
-                .ignoresSafeArea()
+            PlayerLoadingBackground(isOpening: title != nil)
 
             VStack(spacing: spacing) {
-                ProgressView()
-                    .progressViewStyle(.circular)
-                    .controlSize(.large)
-                    .tint(.white)
-                    .scaleEffect(spinnerScale)
+                LumeMark(motion: motion)
+                    .frame(width: markSize, height: markSize)
+                    .accessibilityLabel(Text("Loading…"))
 
                 if let title, !title.isEmpty {
                     Text(title)
@@ -82,6 +77,12 @@ struct PlayerLoadingIndicator: View {
         }
     }
 
+    /// Opening anything — Play, Resume or a channel — is "going live"
+    /// (Emit); a mid-stream stall is buffering (Pulse).
+    private var motion: LumeMark.Motion {
+        title != nil ? .emit : .pulse
+    }
+
     /// The programme on air on a live channel, from the guide, off the main
     /// thread. Nil for anything but a live channel, or with no guide data.
     private static func programmeOnAir(for media: PlayableMedia?, in context: ModelContext) async -> String? {
@@ -101,8 +102,8 @@ struct PlayerLoadingIndicator: View {
             36
         }
 
-        private var spinnerScale: CGFloat {
-            2.2
+        private var markSize: CGFloat {
+            180
         }
 
         private var titleFont: Font {
@@ -117,8 +118,8 @@ struct PlayerLoadingIndicator: View {
             20
         }
 
-        private var spinnerScale: CGFloat {
-            1.3
+        private var markSize: CGFloat {
+            72
         }
 
         private var titleFont: Font {

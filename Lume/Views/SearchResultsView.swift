@@ -174,6 +174,7 @@ struct SearchResultsView<Header: View>: View {
                 animationNamespace: animationNamespace,
                 card: { MovieCardView(movie: $0) }
             )
+            .environment(\.posterPresentation, .search)
         }
     }
 
@@ -188,6 +189,7 @@ struct SearchResultsView<Header: View>: View {
                 animationNamespace: animationNamespace,
                 card: { SeriesCardView(series: $0) }
             )
+            .environment(\.posterPresentation, .search)
         }
     }
 
@@ -209,9 +211,7 @@ struct SearchResultsView<Header: View>: View {
     private func header(_ title: LocalizedStringKey, showAll: SearchSection?) -> some View {
         HStack {
             Text(title)
-                .font(PosterCardMetrics.railTitleFont)
-                .fontWeight(.bold)
-                .foregroundStyle(.secondary)
+                .railHeadingStyle()
             Spacer()
             if let showAll {
                 NavigationLink(value: showAll) {

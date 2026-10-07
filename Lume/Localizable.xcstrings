@@ -6933,6 +6933,64 @@
         }
       }
     },
+    "Australian Essentials" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Australische Sender"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Australian Essentials"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Canales esenciales de Australia"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chaînes incontournables australiennes"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Canali essenziali australiani"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "オーストラリアの主要チャンネル"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "호주 주요 채널"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Canais essenciais da Austrália"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "澳大利亚精选频道"
+          }
+        }
+      }
+    },
     "Australian Football" : {
       "localizations" : {
         "de" : {
@@ -8920,36 +8978,36 @@
         }
       }
     },
-    "Build your own row from a public list, like a site's most-popular chart. Lume matches the list against your playlist and shows the titles you have." : {
+    "Build your own row from a public list, like a site's most-popular chart. lume matches the list against your playlist and shows the titles you have." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Erstelle eine eigene Reihe aus einer öffentlichen Liste, etwa der Beliebtheits-Charts einer Website. Lume gleicht die Liste mit deiner Playlist ab und zeigt die Titel, die du hast."
+            "value" : "Erstelle eine eigene Reihe aus einer öffentlichen Liste, etwa der Beliebtheits-Charts einer Website. lume gleicht die Liste mit deiner Playlist ab und zeigt die Titel, die du hast."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Crea tu propia fila a partir de una lista pública, como el ranking de popularidad de un sitio. Lume compara la lista con tu lista de reproducción y muestra los títulos que tienes."
+            "value" : "Crea tu propia fila a partir de una lista pública, como el ranking de popularidad de un sitio. lume compara la lista con tu lista de reproducción y muestra los títulos que tienes."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Créez votre propre rangée à partir d'une liste publique, comme le classement des plus populaires d'un site. Lume compare la liste à votre playlist et affiche les titres que vous possédez."
+            "value" : "Créez votre propre rangée à partir d'une liste publique, comme le classement des plus populaires d'un site. lume compare la liste à votre playlist et affiche les titres que vous possédez."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Crea una riga personalizzata da un elenco pubblico, come la classifica dei più popolari di un sito. Lume confronta l'elenco con la tua playlist e mostra i titoli che hai."
+            "value" : "Crea una riga personalizzata da un elenco pubblico, come la classifica dei più popolari di un sito. lume confronta l'elenco con la tua playlist e mostra i titoli che hai."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "サイトの人気ランキングなど、公開リストから独自の行を作成できます。Lume がリストをプレイリストと照合し、所有しているタイトルを表示します。"
+            "value" : "サイトの人気ランキングなど、公開リストから独自の行を作成できます。lume がリストをプレイリストと照合し、所有しているタイトルを表示します。"
           }
         },
         "ko" : {
@@ -8961,13 +9019,13 @@
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Crie sua própria fileira a partir de uma lista pública, como o ranking de mais populares de um site. O Lume compara a lista com sua playlist e mostra os títulos que você tem."
+            "value" : "Crie sua própria fileira a partir de uma lista pública, como o ranking de mais populares de um site. O lume compara a lista com sua playlist e mostra os títulos que você tem."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "你可以基于公开列表（例如某网站的热门榜单）创建自己的内容行。Lume 会将列表与你的播放列表进行匹配，并显示你拥有的影片。"
+            "value" : "你可以基于公开列表（例如某网站的热门榜单）创建自己的内容行。lume 会将列表与你的播放列表进行匹配，并显示你拥有的影片。"
           }
         }
       }
@@ -9132,6 +9190,64 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "来自TMDB和MDBList的缓存海报、演员、预告片和评分将被移除。打开电影或节目时会重新获取。"
+          }
+        }
+      }
+    },
+    "Canadian Essentials" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kanadische Sender"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Canadian Essentials"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Canales esenciales de Canadá"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chaînes incontournables canadiennes"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Canali essenziali canadesi"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "カナダの主要チャンネル"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "캐나다 주요 채널"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Canais essenciais do Canadá"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "加拿大精选频道"
           }
         }
       }
@@ -10341,30 +10457,30 @@
         }
       }
     },
-    "Choose a profile each time Lume launches. When off, Lume resumes the last profile you used." : {
+    "Choose a profile each time lume launches. When off, lume resumes the last profile you used." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Wähle bei jedem Start von Lume ein Profil. Wenn deaktiviert, setzt Lume mit dem zuletzt verwendeten Profil fort."
+            "value" : "Wähle bei jedem Start von lume ein Profil. Wenn deaktiviert, setzt lume mit dem zuletzt verwendeten Profil fort."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Elige un perfil cada vez que se inicia Lume. Cuando está desactivado, Lume reanuda el último perfil que usaste."
+            "value" : "Elige un perfil cada vez que se inicia lume. Cuando está desactivado, lume reanuda el último perfil que usaste."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Choisissez un profil à chaque lancement de Lume. Lorsque cette option est désactivée, Lume reprend le dernier profil utilisé."
+            "value" : "Choisissez un profil à chaque lancement de lume. Lorsque cette option est désactivée, lume reprend le dernier profil utilisé."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Scegli un profilo a ogni avvio di Lume. Se disattivato, Lume riprende l'ultimo profilo utilizzato."
+            "value" : "Scegli un profilo a ogni avvio di lume. Se disattivato, lume riprende l'ultimo profilo utilizzato."
           }
         },
         "ja" : {
@@ -10382,7 +10498,7 @@
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Escolha um perfil sempre que o Lume for aberto. Quando desativado, o Lume retoma o último perfil que você usou."
+            "value" : "Escolha um perfil sempre que o lume for aberto. Quando desativado, o lume retoma o último perfil que você usou."
           }
         },
         "zh-Hans" : {
@@ -12713,54 +12829,54 @@
         }
       }
     },
-    "Couldn't load Lume Pro plans. Check your connection and try again." : {
+    "Couldn't load lume Pro plans. Check your connection and try again." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Die Lume-Pro-Tarife konnten nicht geladen werden. Prüfe deine Verbindung und versuche es erneut."
+            "value" : "Die lume-Pro-Tarife konnten nicht geladen werden. Prüfe deine Verbindung und versuche es erneut."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "No se pudieron cargar los planes de Lume Pro. Comprueba tu conexión y vuelve a intentarlo."
+            "value" : "No se pudieron cargar los planes de lume Pro. Comprueba tu conexión y vuelve a intentarlo."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Impossible de charger les formules Lume Pro. Vérifiez votre connexion et réessayez."
+            "value" : "Impossible de charger les formules lume Pro. Vérifiez votre connexion et réessayez."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Impossibile caricare i piani di Lume Pro. Controlla la connessione e riprova."
+            "value" : "Impossibile caricare i piani di lume Pro. Controlla la connessione e riprova."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lume Proのプランを読み込めませんでした。接続を確認してもう一度お試しください。"
+            "value" : "lume Proのプランを読み込めませんでした。接続を確認してもう一度お試しください。"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lume Pro 요금제를 불러올 수 없습니다. 연결 상태를 확인하고 다시 시도하세요."
+            "value" : "lume Pro 요금제를 불러올 수 없습니다. 연결 상태를 확인하고 다시 시도하세요."
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Não foi possível carregar os planos do Lume Pro. Verifique sua conexão e tente novamente."
+            "value" : "Não foi possível carregar os planos do lume Pro. Verifique sua conexão e tente novamente."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "无法加载 Lume Pro 方案。请检查网络连接后重试。"
+            "value" : "无法加载 lume Pro 方案。请检查网络连接后重试。"
           }
         }
       }
@@ -18921,31 +19037,31 @@
         }
       }
     },
-    "Enter your server address — Lume recognizes Jellyfin, Emby and Plex servers and WebDAV shares automatically." : {
+    "Enter your server address — lume recognizes Jellyfin, Emby and Plex servers and WebDAV shares automatically." : {
       "comment" : "Footer explaining that the media server kind is detected from the URL.",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Gib deine Serveradresse ein – Lume erkennt Jellyfin-, Emby- und Plex-Server sowie WebDAV-Freigaben automatisch."
+            "value" : "Gib deine Serveradresse ein – lume erkennt Jellyfin-, Emby- und Plex-Server sowie WebDAV-Freigaben automatisch."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Introduce la dirección de tu servidor: Lume reconoce automáticamente servidores Jellyfin, Emby y Plex y recursos WebDAV."
+            "value" : "Introduce la dirección de tu servidor: lume reconoce automáticamente servidores Jellyfin, Emby y Plex y recursos WebDAV."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Saisissez l’adresse de votre serveur — Lume reconnaît automatiquement les serveurs Jellyfin, Emby et Plex ainsi que les partages WebDAV."
+            "value" : "Saisissez l’adresse de votre serveur — lume reconnaît automatiquement les serveurs Jellyfin, Emby et Plex ainsi que les partages WebDAV."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Inserisci l’indirizzo del tuo server: Lume riconosce automaticamente i server Jellyfin, Emby e Plex e le condivisioni WebDAV."
+            "value" : "Inserisci l’indirizzo del tuo server: lume riconosce automaticamente i server Jellyfin, Emby e Plex e le condivisioni WebDAV."
           }
         },
         "ja" : {
@@ -18963,13 +19079,13 @@
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Digite o endereço do seu servidor — o Lume reconhece servidores Jellyfin, Emby e Plex e compartilhamentos WebDAV automaticamente."
+            "value" : "Digite o endereço do seu servidor — o lume reconhece servidores Jellyfin, Emby e Plex e compartilhamentos WebDAV automaticamente."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "输入服务器地址 —— Lume 会自动识别 Jellyfin、Emby 和 Plex 服务器以及 WebDAV 共享。"
+            "value" : "输入服务器地址 —— lume 会自动识别 Jellyfin、Emby 和 Plex 服务器以及 WebDAV 共享。"
           }
         }
       }
@@ -21447,36 +21563,36 @@
         }
       }
     },
-    "Follow the device appearance, or keep Lume always in Dark or Light Mode." : {
+    "Follow the device appearance, or keep lume always in Dark or Light Mode." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Folge dem Erscheinungsbild des Geräts oder verwende Lume immer im Dunkel- oder Hellmodus."
+            "value" : "Folge dem Erscheinungsbild des Geräts oder verwende lume immer im Dunkel- oder Hellmodus."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Sigue la apariencia del dispositivo o mantén Lume siempre en modo oscuro o claro."
+            "value" : "Sigue la apariencia del dispositivo o mantén lume siempre en modo oscuro o claro."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Suivez l'apparence de l'appareil ou gardez Lume toujours en mode sombre ou clair."
+            "value" : "Suivez l'apparence de l'appareil ou gardez lume toujours en mode sombre ou clair."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Segui l'aspetto del dispositivo oppure mantieni Lume sempre in modalità scura o chiara."
+            "value" : "Segui l'aspetto del dispositivo oppure mantieni lume sempre in modalità scura o chiara."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "デバイスの外観設定に従うか、Lume を常にダークモードまたはライトモードで表示します。"
+            "value" : "デバイスの外観設定に従うか、lume を常にダークモードまたはライトモードで表示します。"
           }
         },
         "ko" : {
@@ -21488,13 +21604,13 @@
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Siga a aparência do dispositivo ou mantenha o Lume sempre no modo escuro ou claro."
+            "value" : "Siga a aparência do dispositivo ou mantenha o lume sempre no modo escuro ou claro."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "跟随设备外观，或让 Lume 始终使用深色或浅色模式。"
+            "value" : "跟随设备外观，或让 lume 始终使用深色或浅色模式。"
           }
         }
       }
@@ -22194,30 +22310,30 @@
         }
       }
     },
-    "Free includes one playlist. Upgrade to Lume Pro to add more." : {
+    "Free includes one playlist. Upgrade to lume Pro to add more." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Kostenlos enthält eine Playlist. Mit Lume Pro kannst du weitere hinzufügen."
+            "value" : "Kostenlos enthält eine Playlist. Mit lume Pro kannst du weitere hinzufügen."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "El plan gratuito incluye una lista de reproducción. Pásate a Lume Pro para añadir más."
+            "value" : "El plan gratuito incluye una lista de reproducción. Pásate a lume Pro para añadir más."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "La formule gratuite inclut une playlist. Passez à Lume Pro pour en ajouter d’autres."
+            "value" : "La formule gratuite inclut une playlist. Passez à lume Pro pour en ajouter d’autres."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Il piano gratuito include una playlist. Passa a Lume Pro per aggiungerne altre."
+            "value" : "Il piano gratuito include una playlist. Passa a lume Pro per aggiungerne altre."
           }
         },
         "ja" : {
@@ -22229,13 +22345,13 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "무료에는 재생목록 한 개가 포함됩니다. 더 추가하려면 Lume Pro로 업그레이드하세요."
+            "value" : "무료에는 재생목록 한 개가 포함됩니다. 더 추가하려면 lume Pro로 업그레이드하세요."
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "O plano gratuito inclui uma playlist. Atualize para o Lume Pro para adicionar mais."
+            "value" : "O plano gratuito inclui uma playlist. Atualize para o lume Pro para adicionar mais."
           }
         },
         "zh-Hans" : {
@@ -22246,30 +22362,30 @@
         }
       }
     },
-    "Free includes one profile. Upgrade to Lume Pro for the whole household." : {
+    "Free includes one profile. Upgrade to lume Pro for the whole household." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Kostenlos enthält ein Profil. Mit Lume Pro für den ganzen Haushalt."
+            "value" : "Kostenlos enthält ein Profil. Mit lume Pro für den ganzen Haushalt."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "El plan gratuito incluye un perfil. Pásate a Lume Pro para toda la familia."
+            "value" : "El plan gratuito incluye un perfil. Pásate a lume Pro para toda la familia."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "La formule gratuite inclut un profil. Passez à Lume Pro pour tout le foyer."
+            "value" : "La formule gratuite inclut un profil. Passez à lume Pro pour tout le foyer."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Il piano gratuito include un profilo. Passa a Lume Pro per tutta la famiglia."
+            "value" : "Il piano gratuito include un profilo. Passa a lume Pro per tutta la famiglia."
           }
         },
         "ja" : {
@@ -22281,13 +22397,13 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "무료에는 프로필 한 개가 포함됩니다. 가족 모두를 위해 Lume Pro로 업그레이드하세요."
+            "value" : "무료에는 프로필 한 개가 포함됩니다. 가족 모두를 위해 lume Pro로 업그레이드하세요."
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "O plano gratuito inclui um perfil. Atualize para o Lume Pro para toda a família."
+            "value" : "O plano gratuito inclui um perfil. Atualize para o lume Pro para toda a família."
           }
         },
         "zh-Hans" : {
@@ -24883,6 +24999,64 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "隐藏并重新排列服务商提供的分类，并选择在浏览侧边栏中显示的内容。"
+          }
+        }
+      }
+    },
+    "Hide and reorder the Live TV home sections. Each appears only when it has something to show. Country selections use the channels available in your playlist." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Blende Bereiche der Live-TV-Startseite aus und ordne sie neu. Bereiche erscheinen nur, wenn sie Inhalte haben. Länderauswahlen nutzen die Sender deiner Playlist."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hide and reorder the Live TV home sections. Each appears only when it has something to show. Country selections use the channels available in your playlist."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Oculta y reordena las secciones de inicio de TV en directo. Solo aparecen cuando tienen contenido. Las selecciones por país usan los canales disponibles en tu lista."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Masquez et réorganisez les sections d’accueil de la TV en direct. Elles n’apparaissent que si elles ont du contenu. Les sélections par pays utilisent les chaînes disponibles dans votre playlist."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nascondi e riordina le sezioni della home della TV in diretta. Appaiono solo quando hanno contenuti. Le selezioni per paese usano i canali disponibili nella tua playlist."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ライブTVホームのセクションを非表示にしたり並べ替えたりできます。コンテンツがある場合のみ表示されます。国別の選択には、プレイリストで利用できるチャンネルが使われます。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "실시간 TV 홈 섹션을 숨기고 순서를 변경하세요. 표시할 콘텐츠가 있을 때만 나타납니다. 국가별 선택에는 재생목록에서 이용 가능한 채널이 사용됩니다."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Oculte e reordene as seções da página inicial da TV ao vivo. Elas aparecem apenas quando há conteúdo. As seleções por país usam os canais disponíveis na sua playlist."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "隐藏和重新排序直播电视主页的版块。版块仅在有内容时显示。各国精选使用你的播放列表中可用的频道。"
           }
         }
       }
@@ -30364,88 +30538,88 @@
         }
       }
     },
-    "Lume" : {
+    "lume" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lume"
+            "value" : "lume"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lume"
+            "value" : "lume"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lume"
+            "value" : "lume"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lume"
+            "value" : "lume"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lume"
+            "value" : "lume"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lume"
+            "value" : "lume"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lume"
+            "value" : "lume"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lume"
+            "value" : "lume"
           }
         }
       }
     },
-    "Lume couldn't reach that address on your local network. If you declined the local network prompt, only the system Settings app can allow it again." : {
+    "lume couldn't reach that address on your local network. If you declined the local network prompt, only the system Settings app can allow it again." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lume konnte diese Adresse in deinem lokalen Netzwerk nicht erreichen. Wenn du die Anfrage für das lokale Netzwerk abgelehnt hast, kann sie nur in der Einstellungen-App wieder erteilt werden."
+            "value" : "lume konnte diese Adresse in deinem lokalen Netzwerk nicht erreichen. Wenn du die Anfrage für das lokale Netzwerk abgelehnt hast, kann sie nur in der Einstellungen-App wieder erteilt werden."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lume no ha podido acceder a esa dirección en tu red local. Si rechazaste el permiso de red local, solo podrás volver a concederlo en la app Ajustes."
+            "value" : "lume no ha podido acceder a esa dirección en tu red local. Si rechazaste el permiso de red local, solo podrás volver a concederlo en la app Ajustes."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lume n’a pas pu joindre cette adresse sur votre réseau local. Si vous avez refusé l’autorisation de réseau local, seule l’app Réglages permet de la réactiver."
+            "value" : "lume n’a pas pu joindre cette adresse sur votre réseau local. Si vous avez refusé l’autorisation de réseau local, seule l’app Réglages permet de la réactiver."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lume non è riuscita a raggiungere questo indirizzo sulla rete locale. Se hai rifiutato la richiesta per la rete locale, potrai concederla di nuovo solo nell’app Impostazioni."
+            "value" : "lume non è riuscita a raggiungere questo indirizzo sulla rete locale. Se hai rifiutato la richiesta per la rete locale, potrai concederla di nuovo solo nell’app Impostazioni."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lume はローカルネットワーク上のそのアドレスに接続できませんでした。ローカルネットワークの許可を拒否した場合は、「設定」App からのみ再度許可できます。"
+            "value" : "lume はローカルネットワーク上のそのアドレスに接続できませんでした。ローカルネットワークの許可を拒否した場合は、「設定」App からのみ再度許可できます。"
           }
         },
         "ko" : {
@@ -30457,42 +30631,42 @@
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "O Lume não conseguiu acessar esse endereço na sua rede local. Se você recusou a permissão de rede local, só será possível permitir novamente no app Ajustes."
+            "value" : "O lume não conseguiu acessar esse endereço na sua rede local. Se você recusou a permissão de rede local, só será possível permitir novamente no app Ajustes."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lume 无法在本地网络中连接该地址。如果您拒绝了本地网络权限，只能在“设置”App 中重新允许。"
+            "value" : "lume 无法在本地网络中连接该地址。如果您拒绝了本地网络权限，只能在“设置”App 中重新允许。"
           }
         }
       }
     },
-    "Lume couldn't recognize a media server at that address. Enter your Jellyfin, Emby or Plex server's base address, or the full path of a WebDAV folder." : {
+    "lume couldn't recognize a media server at that address. Enter your Jellyfin, Emby or Plex server's base address, or the full path of a WebDAV folder." : {
       "comment" : "Error message when no media server kind was recognized at the entered address.",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lume konnte unter dieser Adresse keinen Medienserver erkennen. Gib die Basisadresse deines Jellyfin-, Emby- oder Plex-Servers ein oder den vollständigen Pfad eines WebDAV-Ordners."
+            "value" : "lume konnte unter dieser Adresse keinen Medienserver erkennen. Gib die Basisadresse deines Jellyfin-, Emby- oder Plex-Servers ein oder den vollständigen Pfad eines WebDAV-Ordners."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lume no reconoció ningún servidor multimedia en esa dirección. Introduce la dirección base de tu servidor Jellyfin, Emby o Plex, o la ruta completa de una carpeta WebDAV."
+            "value" : "lume no reconoció ningún servidor multimedia en esa dirección. Introduce la dirección base de tu servidor Jellyfin, Emby o Plex, o la ruta completa de una carpeta WebDAV."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lume n’a reconnu aucun serveur multimédia à cette adresse. Saisissez l’adresse de base de votre serveur Jellyfin, Emby ou Plex, ou le chemin complet d’un dossier WebDAV."
+            "value" : "lume n’a reconnu aucun serveur multimédia à cette adresse. Saisissez l’adresse de base de votre serveur Jellyfin, Emby ou Plex, ou le chemin complet d’un dossier WebDAV."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lume non ha riconosciuto alcun media server a questo indirizzo. Inserisci l’indirizzo base del tuo server Jellyfin, Emby o Plex, oppure il percorso completo di una cartella WebDAV."
+            "value" : "lume non ha riconosciuto alcun media server a questo indirizzo. Inserisci l’indirizzo base del tuo server Jellyfin, Emby o Plex, oppure il percorso completo di una cartella WebDAV."
           }
         },
         "ja" : {
@@ -30510,41 +30684,41 @@
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "O Lume não reconheceu nenhum servidor de mídia nesse endereço. Digite o endereço base do seu servidor Jellyfin, Emby ou Plex, ou o caminho completo de uma pasta WebDAV."
+            "value" : "O lume não reconheceu nenhum servidor de mídia nesse endereço. Digite o endereço base do seu servidor Jellyfin, Emby ou Plex, ou o caminho completo de uma pasta WebDAV."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lume 无法在该地址识别出媒体服务器。请输入 Jellyfin、Emby 或 Plex 服务器的基础地址，或 WebDAV 文件夹的完整路径。"
+            "value" : "lume 无法在该地址识别出媒体服务器。请输入 Jellyfin、Emby 或 Plex 服务器的基础地址，或 WebDAV 文件夹的完整路径。"
           }
         }
       }
     },
-    "Lume Diagnostics — %@" : {
+    "lume Diagnostics — %@" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lume-Diagnose – %@"
+            "value" : "lume-Diagnose – %@"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Diagnóstico de Lume: %@"
+            "value" : "Diagnóstico de lume: %@"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Diagnostics Lume — %@"
+            "value" : "Diagnostics lume — %@"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Diagnostica Lume — %@"
+            "value" : "Diagnostica lume — %@"
           }
         },
         "ja" : {
@@ -30556,47 +30730,47 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lume 진단 — %@"
+            "value" : "lume 진단 — %@"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Diagnóstico do Lume — %@"
+            "value" : "Diagnóstico do lume — %@"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lume 诊断 — %@"
+            "value" : "lume 诊断 — %@"
           }
         }
       }
     },
-    "Lume doesn't recognise that site. Paste a list URL from %@." : {
+    "lume doesn't recognise that site. Paste a list URL from %@." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lume kennt diese Website nicht. Füge eine Listen-URL von %@ ein."
+            "value" : "lume kennt diese Website nicht. Füge eine Listen-URL von %@ ein."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lume no reconoce ese sitio. Pega la URL de una lista de %@."
+            "value" : "lume no reconoce ese sitio. Pega la URL de una lista de %@."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lume ne reconnaît pas ce site. Collez l'URL d'une liste de %@."
+            "value" : "lume ne reconnaît pas ce site. Collez l'URL d'une liste de %@."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lume non riconosce questo sito. Incolla l'URL di una lista da %@."
+            "value" : "lume non riconosce questo sito. Incolla l'URL di una lista da %@."
           }
         },
         "ja" : {
@@ -30614,42 +30788,42 @@
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "O Lume não reconhece esse site. Cole o URL de uma lista do %@."
+            "value" : "O lume não reconhece esse site. Cole o URL de uma lista do %@."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lume 无法识别该网站。请粘贴来自 %@ 的列表 URL。"
+            "value" : "lume 无法识别该网站。请粘贴来自 %@ 的列表 URL。"
           }
         }
       }
     },
-    "Lume is free and open source. Premium supports development and unlocks a few extra conveniences." : {
+    "lume is free and open source. Premium supports development and unlocks a few extra conveniences." : {
       "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lume ist kostenlos und quelloffen. Premium unterstützt die Entwicklung und schaltet einige zusätzliche Annehmlichkeiten frei."
+            "value" : "lume ist kostenlos und quelloffen. Premium unterstützt die Entwicklung und schaltet einige zusätzliche Annehmlichkeiten frei."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lume es gratuito y de código abierto. Premium financia el desarrollo y desbloquea algunas comodidades adicionales."
+            "value" : "lume es gratuito y de código abierto. Premium financia el desarrollo y desbloquea algunas comodidades adicionales."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lume est gratuit et open source. Premium soutient le développement et débloque quelques commodités supplémentaires."
+            "value" : "lume est gratuit et open source. Premium soutient le développement et débloque quelques commodités supplémentaires."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lume è gratuito e open source. Premium sostiene lo sviluppo e sblocca alcune comodità extra."
+            "value" : "lume è gratuito e open source. Premium sostiene lo sviluppo e sblocca alcune comodità extra."
           }
         },
         "ja" : {
@@ -30667,7 +30841,7 @@
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "O Lume é gratuito e de código aberto. O Premium apoia o desenvolvimento e desbloqueia algumas conveniências extras."
+            "value" : "O lume é gratuito e de código aberto. O Premium apoia o desenvolvimento e desbloqueia algumas conveniências extras."
           }
         },
         "zh-Hans" : {
@@ -30678,32 +30852,32 @@
         }
       }
     },
-    "Lume is free and open source. Pro supports development and unlocks a few extra conveniences." : {
+    "lume is free and open source. Pro supports development and unlocks a few extra conveniences." : {
       "comment" : "A description of Lume Pro.",
       "isCommentAutoGenerated" : true,
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lume ist kostenlos und quelloffen. Pro unterstützt die Entwicklung und schaltet einige zusätzliche Annehmlichkeiten frei."
+            "value" : "lume ist kostenlos und quelloffen. Pro unterstützt die Entwicklung und schaltet einige zusätzliche Annehmlichkeiten frei."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lume es gratuito y de código abierto. Pro financia el desarrollo y desbloquea algunas comodidades adicionales."
+            "value" : "lume es gratuito y de código abierto. Pro financia el desarrollo y desbloquea algunas comodidades adicionales."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lume est gratuit et open source. Pro soutient le développement et débloque quelques commodités supplémentaires."
+            "value" : "lume est gratuit et open source. Pro soutient le développement et débloque quelques commodités supplémentaires."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lume è gratuito e open source. Pro sostiene lo sviluppo e sblocca alcune comodità extra."
+            "value" : "lume è gratuito e open source. Pro sostiene lo sviluppo e sblocca alcune comodità extra."
           }
         },
         "ja" : {
@@ -30721,7 +30895,7 @@
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "O Lume é gratuito e de código aberto. O Pro apoia o desenvolvimento e desbloqueia algumas conveniências extras."
+            "value" : "O lume é gratuito e de código aberto. O Pro apoia o desenvolvimento e desbloqueia algumas conveniências extras."
           }
         },
         "zh-Hans" : {
@@ -30732,30 +30906,30 @@
         }
       }
     },
-    "Lume is free, open-source software, licensed under the GNU Affero General Public License v3." : {
+    "lume is free, open-source software, licensed under the GNU Affero General Public License v3." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lume ist freie, quelloffene Software unter der GNU Affero General Public License v3."
+            "value" : "lume ist freie, quelloffene Software unter der GNU Affero General Public License v3."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lume es software gratuito y de código abierto, con licencia GNU Affero General Public License v3."
+            "value" : "lume es software gratuito y de código abierto, con licencia GNU Affero General Public License v3."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lume est un logiciel gratuit et open source, distribué sous licence GNU Affero General Public License v3."
+            "value" : "lume est un logiciel gratuit et open source, distribué sous licence GNU Affero General Public License v3."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lume è un software gratuito e open source, distribuito con licenza GNU Affero General Public License v3."
+            "value" : "lume è un software gratuito e open source, distribuito con licenza GNU Affero General Public License v3."
           }
         },
         "ja" : {
@@ -30773,7 +30947,7 @@
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "O Lume é um software gratuito e de código aberto, licenciado sob a GNU Affero General Public License v3."
+            "value" : "O lume é um software gratuito e de código aberto, licenciado sob a GNU Affero General Public License v3."
           }
         },
         "zh-Hans" : {
@@ -30784,30 +30958,30 @@
         }
       }
     },
-    "Lume plays each stream with the first engine and automatically falls back to the next if it can't be played. Drag to reorder." : {
+    "lume plays each stream with the first engine and automatically falls back to the next if it can't be played. Drag to reorder." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lume gibt jeden Stream mit der ersten Engine wieder und wechselt automatisch zur nächsten, wenn er nicht abgespielt werden kann. Zum Neuordnen ziehen."
+            "value" : "lume gibt jeden Stream mit der ersten Engine wieder und wechselt automatisch zur nächsten, wenn er nicht abgespielt werden kann. Zum Neuordnen ziehen."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lume reproduce cada stream con el primer motor y recurre automáticamente al siguiente si no se puede reproducir. Arrastra para reordenar."
+            "value" : "lume reproduce cada stream con el primer motor y recurre automáticamente al siguiente si no se puede reproducir. Arrastra para reordenar."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lume lit chaque flux avec le premier moteur et bascule automatiquement vers le suivant si la lecture échoue. Glissez pour réorganiser."
+            "value" : "lume lit chaque flux avec le premier moteur et bascule automatiquement vers le suivant si la lecture échoue. Glissez pour réorganiser."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lume riproduce ogni stream con il primo motore e passa automaticamente al successivo se non può essere riprodotto. Trascina per riordinare."
+            "value" : "lume riproduce ogni stream con il primo motore e passa automaticamente al successivo se non può essere riprodotto. Trascina per riordinare."
           }
         },
         "ja" : {
@@ -30825,7 +30999,7 @@
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "O Lume reproduz cada stream com o primeiro mecanismo e recorre automaticamente ao próximo se não for possível reproduzir. Arraste para reordenar."
+            "value" : "O lume reproduz cada stream com o primeiro mecanismo e recorre automaticamente ao próximo se não for possível reproduzir. Arraste para reordenar."
           }
         },
         "zh-Hans" : {
@@ -30836,36 +31010,36 @@
         }
       }
     },
-    "Lume plays each stream with your preferred engine and falls back to the next if it can't be played." : {
+    "lume plays each stream with your preferred engine and falls back to the next if it can't be played." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lume spielt jeden Stream mit deiner bevorzugten Engine ab und wechselt zur nächsten, wenn das nicht klappt."
+            "value" : "lume spielt jeden Stream mit deiner bevorzugten Engine ab und wechselt zur nächsten, wenn das nicht klappt."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lume reproduce cada stream con tu motor preferido y pasa al siguiente si no puede reproducirlo."
+            "value" : "lume reproduce cada stream con tu motor preferido y pasa al siguiente si no puede reproducirlo."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lume lit chaque flux avec votre moteur préféré et passe au suivant s'il ne peut pas être lu."
+            "value" : "lume lit chaque flux avec votre moteur préféré et passe au suivant s'il ne peut pas être lu."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lume riproduce ogni stream con il motore preferito e passa al successivo se non riesce a riprodurlo."
+            "value" : "lume riproduce ogni stream con il motore preferito e passa al successivo se non riesce a riprodurlo."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lume は各ストリームを優先エンジンで再生し、再生できない場合は次のエンジンに切り替えます。"
+            "value" : "lume は各ストリームを優先エンジンで再生し、再生できない場合は次のエンジンに切り替えます。"
           }
         },
         "ko" : {
@@ -30877,99 +31051,99 @@
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "O Lume reproduz cada stream com o motor preferido e passa para o seguinte se não conseguir reproduzi-lo."
+            "value" : "O lume reproduz cada stream com o motor preferido e passa para o seguinte se não conseguir reproduzi-lo."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lume 会使用你首选的引擎播放每个流，若无法播放则切换到下一个引擎。"
+            "value" : "lume 会使用你首选的引擎播放每个流，若无法播放则切换到下一个引擎。"
           }
         }
       }
     },
-    "Lume Pro" : {
+    "lume Pro" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lume Pro"
+            "value" : "lume Pro"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lume Pro"
+            "value" : "lume Pro"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lume Pro"
+            "value" : "lume Pro"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lume Pro"
+            "value" : "lume Pro"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lume Pro"
+            "value" : "lume Pro"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lume Pro"
+            "value" : "lume Pro"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lume Pro"
+            "value" : "lume Pro"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lume Pro"
+            "value" : "lume Pro"
           }
         }
       }
     },
-    "Lume selects the first of these languages the stream offers as an audio track, most preferred at the top. When the audio that plays is in none of them and the stream carries a forced subtitle track, that track is turned on. Applied the next time playback starts." : {
+    "lume selects the first of these languages the stream offers as an audio track, most preferred at the top. When the audio that plays is in none of them and the stream carries a forced subtitle track, that track is turned on. Applied the next time playback starts." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lume wählt die erste dieser Sprachen, die der Stream als Tonspur anbietet – die bevorzugte steht oben. Wenn der abgespielte Ton in keiner davon vorliegt und der Stream eine erzwungene Untertitelspur enthält, wird diese Spur aktiviert. Wird bei der nächsten Wiedergabe angewendet."
+            "value" : "lume wählt die erste dieser Sprachen, die der Stream als Tonspur anbietet – die bevorzugte steht oben. Wenn der abgespielte Ton in keiner davon vorliegt und der Stream eine erzwungene Untertitelspur enthält, wird diese Spur aktiviert. Wird bei der nächsten Wiedergabe angewendet."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lume selecciona el primero de estos idiomas que el stream ofrezca como pista de audio; el preferido va arriba. Si el audio que se reproduce no está en ninguno de ellos y el stream incluye una pista de subtítulos forzados, esa pista se activa. Se aplica la próxima vez que se inicie la reproducción."
+            "value" : "lume selecciona el primero de estos idiomas que el stream ofrezca como pista de audio; el preferido va arriba. Si el audio que se reproduce no está en ninguno de ellos y el stream incluye una pista de subtítulos forzados, esa pista se activa. Se aplica la próxima vez que se inicie la reproducción."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lume choisit la première de ces langues proposée par le flux comme piste audio, la préférée en haut. Si l'audio lu ne correspond à aucune d'elles et que le flux contient une piste de sous-titres forcés, cette piste est activée. Appliqué au prochain démarrage de la lecture."
+            "value" : "lume choisit la première de ces langues proposée par le flux comme piste audio, la préférée en haut. Si l'audio lu ne correspond à aucune d'elles et que le flux contient une piste de sous-titres forcés, cette piste est activée. Appliqué au prochain démarrage de la lecture."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lume seleziona la prima di queste lingue offerta dallo stream come traccia audio; la preferita è in cima. Se l'audio riprodotto non è in nessuna di queste lingue e lo stream contiene una traccia di sottotitoli forzati, quella traccia viene attivata. Applicato al successivo avvio della riproduzione."
+            "value" : "lume seleziona la prima di queste lingue offerta dallo stream come traccia audio; la preferita è in cima. Se l'audio riprodotto non è in nessuna di queste lingue e lo stream contiene una traccia di sottotitoli forzati, quella traccia viene attivata. Applicato al successivo avvio della riproduzione."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lume は、ストリームが音声トラックとして提供しているこれらの言語のうち最初のものを選択します。優先度の高いものを上に配置してください。再生される音声がいずれの言語でもなく、ストリームに強制字幕トラックがある場合は、そのトラックがオンになります。次回の再生開始時に適用されます。"
+            "value" : "lume は、ストリームが音声トラックとして提供しているこれらの言語のうち最初のものを選択します。優先度の高いものを上に配置してください。再生される音声がいずれの言語でもなく、ストリームに強制字幕トラックがある場合は、そのトラックがオンになります。次回の再生開始時に適用されます。"
           }
         },
         "ko" : {
@@ -30981,47 +31155,47 @@
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "O Lume seleciona o primeiro destes idiomas que o stream oferecer como faixa de áudio; o preferido fica no topo. Se o áudio reproduzido não estiver em nenhum deles e o stream tiver uma faixa de legendas forçadas, essa faixa é ativada. Aplicado na próxima vez que a reprodução começar."
+            "value" : "O lume seleciona o primeiro destes idiomas que o stream oferecer como faixa de áudio; o preferido fica no topo. Se o áudio reproduzido não estiver em nenhum deles e o stream tiver uma faixa de legendas forçadas, essa faixa é ativada. Aplicado na próxima vez que a reprodução começar."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lume 会选择流以音轨形式提供的这些语言中的第一种，最优先的排在最上方。如果播放的音轨不属于其中任何一种语言，且流中包含强制字幕轨道，则会自动开启该轨道。将在下次播放开始时生效。"
+            "value" : "lume 会选择流以音轨形式提供的这些语言中的第一种，最优先的排在最上方。如果播放的音轨不属于其中任何一种语言，且流中包含强制字幕轨道，则会自动开启该轨道。将在下次播放开始时生效。"
           }
         }
       }
     },
-    "Lume selects the first of these languages the stream offers as an audio track. Drag to reorder. When the audio that plays is in none of them and the stream carries a forced subtitle track, that track is turned on. Applied the next time playback starts." : {
+    "lume selects the first of these languages the stream offers as an audio track. Drag to reorder. When the audio that plays is in none of them and the stream carries a forced subtitle track, that track is turned on. Applied the next time playback starts." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lume wählt die erste dieser Sprachen, die der Stream als Tonspur anbietet. Zum Umsortieren ziehen. Wenn der abgespielte Ton in keiner davon vorliegt und der Stream eine erzwungene Untertitelspur enthält, wird diese Spur aktiviert. Wird bei der nächsten Wiedergabe angewendet."
+            "value" : "lume wählt die erste dieser Sprachen, die der Stream als Tonspur anbietet. Zum Umsortieren ziehen. Wenn der abgespielte Ton in keiner davon vorliegt und der Stream eine erzwungene Untertitelspur enthält, wird diese Spur aktiviert. Wird bei der nächsten Wiedergabe angewendet."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lume selecciona el primero de estos idiomas que el stream ofrezca como pista de audio. Arrastra para reordenar. Si el audio que se reproduce no está en ninguno de ellos y el stream incluye una pista de subtítulos forzados, esa pista se activa. Se aplica la próxima vez que se inicie la reproducción."
+            "value" : "lume selecciona el primero de estos idiomas que el stream ofrezca como pista de audio. Arrastra para reordenar. Si el audio que se reproduce no está en ninguno de ellos y el stream incluye una pista de subtítulos forzados, esa pista se activa. Se aplica la próxima vez que se inicie la reproducción."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lume choisit la première de ces langues proposée par le flux comme piste audio. Faites glisser pour réorganiser. Si l'audio lu ne correspond à aucune d'elles et que le flux contient une piste de sous-titres forcés, cette piste est activée. Appliqué au prochain démarrage de la lecture."
+            "value" : "lume choisit la première de ces langues proposée par le flux comme piste audio. Faites glisser pour réorganiser. Si l'audio lu ne correspond à aucune d'elles et que le flux contient une piste de sous-titres forcés, cette piste est activée. Appliqué au prochain démarrage de la lecture."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lume seleziona la prima di queste lingue offerta dallo stream come traccia audio. Trascina per riordinare. Se l'audio riprodotto non è in nessuna di queste lingue e lo stream contiene una traccia di sottotitoli forzati, quella traccia viene attivata. Applicato al successivo avvio della riproduzione."
+            "value" : "lume seleziona la prima di queste lingue offerta dallo stream come traccia audio. Trascina per riordinare. Se l'audio riprodotto non è in nessuna di queste lingue e lo stream contiene una traccia di sottotitoli forzati, quella traccia viene attivata. Applicato al successivo avvio della riproduzione."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lume は、ストリームが音声トラックとして提供しているこれらの言語のうち最初のものを選択します。ドラッグして並べ替えられます。再生される音声がいずれの言語でもなく、ストリームに強制字幕トラックがある場合は、そのトラックがオンになります。次回の再生開始時に適用されます。"
+            "value" : "lume は、ストリームが音声トラックとして提供しているこれらの言語のうち最初のものを選択します。ドラッグして並べ替えられます。再生される音声がいずれの言語でもなく、ストリームに強制字幕トラックがある場合は、そのトラックがオンになります。次回の再生開始時に適用されます。"
           }
         },
         "ko" : {
@@ -31033,18 +31207,76 @@
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "O Lume seleciona o primeiro destes idiomas que o stream oferecer como faixa de áudio. Arraste para reordenar. Se o áudio reproduzido não estiver em nenhum deles e o stream tiver uma faixa de legendas forçadas, essa faixa é ativada. Aplicado na próxima vez que a reprodução começar."
+            "value" : "O lume seleciona o primeiro destes idiomas que o stream oferecer como faixa de áudio. Arraste para reordenar. Se o áudio reproduzido não estiver em nenhum deles e o stream tiver uma faixa de legendas forçadas, essa faixa é ativada. Aplicado na próxima vez que a reprodução começar."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lume 会选择流以音轨形式提供的这些语言中的第一种。拖动可重新排序。如果播放的音轨不属于其中任何一种语言，且流中包含强制字幕轨道，则会自动开启该轨道。将在下次播放开始时生效。"
+            "value" : "lume 会选择流以音轨形式提供的这些语言中的第一种。拖动可重新排序。如果播放的音轨不属于其中任何一种语言，且流中包含强制字幕轨道，则会自动开启该轨道。将在下次播放开始时生效。"
           }
         }
       }
     },
-    "Lume's playback engines build on these open-source projects. Each remains under its own license." : {
+    "Lume will remind you while the app is open." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lume erinnert dich, solange die App geöffnet ist."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lume will remind you while the app is open."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lume te avisará mientras la app esté abierta."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lume vous rappellera le programme lorsque l’app est ouverte."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lume ti avviserà mentre l’app è aperta."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "アプリを開いている間、Lumeがお知らせします。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "앱이 열려 있는 동안 Lume이 알려드립니다."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O Lume irá lembrar você enquanto o app estiver aberto."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lume 会在应用打开时提醒你。"
+          }
+        }
+      }
+    },
+    "lume's playback engines build on these open-source projects. Each remains under its own license." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -31055,19 +31287,19 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Los motores de reproducción de Lume se basan en estos proyectos de código abierto. Cada uno mantiene su propia licencia."
+            "value" : "Los motores de reproducción de lume se basan en estos proyectos de código abierto. Cada uno mantiene su propia licencia."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Les moteurs de lecture de Lume s’appuient sur ces projets open source. Chacun reste soumis à sa propre licence."
+            "value" : "Les moteurs de lecture de lume s’appuient sur ces projets open source. Chacun reste soumis à sa propre licence."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "I motori di riproduzione di Lume si basano su questi progetti open source. Ciascuno rimane soggetto alla propria licenza."
+            "value" : "I motori di riproduzione di lume si basano su questi progetti open source. Ciascuno rimane soggetto alla propria licenza."
           }
         },
         "ja" : {
@@ -31085,7 +31317,7 @@
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Os mecanismos de reprodução do Lume são baseados nestes projetos de código aberto. Cada um permanece sob sua própria licença."
+            "value" : "Os mecanismos de reprodução do lume são baseados nestes projetos de código aberto. Cada um permanece sob sua própria licença."
           }
         },
         "zh-Hans" : {
@@ -33419,6 +33651,59 @@
         }
       }
     },
+    "Moving" : {
+      "comment" : "Trailing label on a tvOS settings row while it is picked up to be reordered.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wird verschoben"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Moviendo"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Déplacement"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spostamento"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "移動中"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이동 중"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Movendo"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "移动中"
+          }
+        }
+      }
+    },
     "Multi-View" : {
       "localizations" : {
         "de" : {
@@ -34092,6 +34377,64 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "新个人资料"
+          }
+        }
+      }
+    },
+    "New Zealand Essentials" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Neuseeländische Sender"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "New Zealand Essentials"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Canales esenciales de Nueva Zelanda"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chaînes incontournables néo-zélandaises"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Canali essenziali neozelandesi"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ニュージーランドの主要チャンネル"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "뉴질랜드 주요 채널"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Canais essenciais da Nova Zelândia"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "新西兰精选频道"
           }
         }
       }
@@ -39505,36 +39848,36 @@
         }
       }
     },
-    "Paste the address of a public list. Lume matches the titles on it against your playlist and shows the movies you have." : {
+    "Paste the address of a public list. lume matches the titles on it against your playlist and shows the movies you have." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Füge die Adresse einer öffentlichen Liste ein. Lume gleicht die Titel darauf mit deiner Playlist ab und zeigt die Filme, die du hast."
+            "value" : "Füge die Adresse einer öffentlichen Liste ein. lume gleicht die Titel darauf mit deiner Playlist ab und zeigt die Filme, die du hast."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Pega la dirección de una lista pública. Lume compara sus títulos con tu lista de reproducción y muestra las películas que tienes."
+            "value" : "Pega la dirección de una lista pública. lume compara sus títulos con tu lista de reproducción y muestra las películas que tienes."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Collez l'adresse d'une liste publique. Lume compare ses titres à votre playlist et affiche les films que vous possédez."
+            "value" : "Collez l'adresse d'une liste publique. lume compare ses titres à votre playlist et affiche les films que vous possédez."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Incolla l'indirizzo di un elenco pubblico. Lume confronta i titoli con la tua playlist e mostra i film che hai."
+            "value" : "Incolla l'indirizzo di un elenco pubblico. lume confronta i titoli con la tua playlist e mostra i film che hai."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "公開リストのアドレスを貼り付けてください。Lume がそのタイトルをプレイリストと照合し、所有している映画を表示します。"
+            "value" : "公開リストのアドレスを貼り付けてください。lume がそのタイトルをプレイリストと照合し、所有している映画を表示します。"
           }
         },
         "ko" : {
@@ -39546,47 +39889,47 @@
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Cole o endereço de uma lista pública. O Lume compara os títulos dela com sua playlist e mostra os filmes que você tem."
+            "value" : "Cole o endereço de uma lista pública. O lume compara os títulos dela com sua playlist e mostra os filmes que você tem."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "请粘贴公开列表的地址。Lume 会将其中的影片与你的播放列表进行匹配，并显示你拥有的电影。"
+            "value" : "请粘贴公开列表的地址。lume 会将其中的影片与你的播放列表进行匹配，并显示你拥有的电影。"
           }
         }
       }
     },
-    "Paste the address of a public list. Lume matches the titles on it against your playlist and shows the ones you have." : {
+    "Paste the address of a public list. lume matches the titles on it against your playlist and shows the ones you have." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Füge die Adresse einer öffentlichen Liste ein. Lume gleicht die Titel darauf mit deiner Playlist ab und zeigt die, die du hast."
+            "value" : "Füge die Adresse einer öffentlichen Liste ein. lume gleicht die Titel darauf mit deiner Playlist ab und zeigt die, die du hast."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Pega la dirección de una lista pública. Lume compara sus títulos con tu lista de reproducción y muestra los que tienes."
+            "value" : "Pega la dirección de una lista pública. lume compara sus títulos con tu lista de reproducción y muestra los que tienes."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Collez l'adresse d'une liste publique. Lume compare ses titres à votre playlist et affiche ceux que vous possédez."
+            "value" : "Collez l'adresse d'une liste publique. lume compare ses titres à votre playlist et affiche ceux que vous possédez."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Incolla l'indirizzo di un elenco pubblico. Lume confronta i titoli con la tua playlist e mostra quelli che hai."
+            "value" : "Incolla l'indirizzo di un elenco pubblico. lume confronta i titoli con la tua playlist e mostra quelli che hai."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "公開リストのアドレスを貼り付けてください。Lume がそのタイトルをプレイリストと照合し、所有しているものを表示します。"
+            "value" : "公開リストのアドレスを貼り付けてください。lume がそのタイトルをプレイリストと照合し、所有しているものを表示します。"
           }
         },
         "ko" : {
@@ -39598,47 +39941,47 @@
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Cole o endereço de uma lista pública. O Lume compara os títulos dela com sua playlist e mostra os que você tem."
+            "value" : "Cole o endereço de uma lista pública. O lume compara os títulos dela com sua playlist e mostra os que você tem."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "请粘贴公开列表的地址。Lume 会将其中的影片与你的播放列表进行匹配，并显示你拥有的内容。"
+            "value" : "请粘贴公开列表的地址。lume 会将其中的影片与你的播放列表进行匹配，并显示你拥有的内容。"
           }
         }
       }
     },
-    "Paste the address of a public list. Lume matches the titles on it against your playlist and shows the series you have." : {
+    "Paste the address of a public list. lume matches the titles on it against your playlist and shows the series you have." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Füge die Adresse einer öffentlichen Liste ein. Lume gleicht die Titel darauf mit deiner Playlist ab und zeigt die Serien, die du hast."
+            "value" : "Füge die Adresse einer öffentlichen Liste ein. lume gleicht die Titel darauf mit deiner Playlist ab und zeigt die Serien, die du hast."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Pega la dirección de una lista pública. Lume compara sus títulos con tu lista de reproducción y muestra las series que tienes."
+            "value" : "Pega la dirección de una lista pública. lume compara sus títulos con tu lista de reproducción y muestra las series que tienes."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Collez l'adresse d'une liste publique. Lume compare ses titres à votre playlist et affiche les séries que vous possédez."
+            "value" : "Collez l'adresse d'une liste publique. lume compare ses titres à votre playlist et affiche les séries que vous possédez."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Incolla l'indirizzo di un elenco pubblico. Lume confronta i titoli con la tua playlist e mostra le serie che hai."
+            "value" : "Incolla l'indirizzo di un elenco pubblico. lume confronta i titoli con la tua playlist e mostra le serie che hai."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "公開リストのアドレスを貼り付けてください。Lume がそのタイトルをプレイリストと照合し、所有しているシリーズを表示します。"
+            "value" : "公開リストのアドレスを貼り付けてください。lume がそのタイトルをプレイリストと照合し、所有しているシリーズを表示します。"
           }
         },
         "ko" : {
@@ -39650,13 +39993,13 @@
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Cole o endereço de uma lista pública. O Lume compara os títulos dela com sua playlist e mostra as séries que você tem."
+            "value" : "Cole o endereço de uma lista pública. O lume compara os títulos dela com sua playlist e mostra as séries que você tem."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "请粘贴公开列表的地址。Lume 会将其中的影片与你的播放列表进行匹配，并显示你拥有的剧集。"
+            "value" : "请粘贴公开列表的地址。lume 会将其中的影片与你的播放列表进行匹配，并显示你拥有的剧集。"
           }
         }
       }
@@ -44079,30 +44422,30 @@
         }
       }
     },
-    "Rate Lume" : {
+    "Rate lume" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lume bewerten"
+            "value" : "lume bewerten"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Valorar Lume"
+            "value" : "Valorar lume"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Noter Lume"
+            "value" : "Noter lume"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Valuta Lume"
+            "value" : "Valuta lume"
           }
         },
         "ja" : {
@@ -44114,13 +44457,13 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lume 평가하기"
+            "value" : "lume 평가하기"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Avaliar o Lume"
+            "value" : "Avaliar o lume"
           }
         },
         "zh-Hans" : {
@@ -45183,6 +45526,64 @@
         }
       }
     },
+    "Reminder limit reached" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Maximale Anzahl an Erinnerungen erreicht"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reminder limit reached"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Límite de recordatorios alcanzado"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Limite de rappels atteinte"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Limite dei promemoria raggiunto"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "リマインダーの上限に達しました"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "알림 한도에 도달했습니다"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Limite de lembretes atingido"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "提醒数量已达上限"
+          }
+        }
+      }
+    },
     "Reminder Set" : {
       "comment" : "tvOS Sports: button state once the viewer asked to be reminded when a game starts.",
       "extractionState" : "manual",
@@ -45452,6 +45853,64 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "将%@从收藏中移除"
+          }
+        }
+      }
+    },
+    "Remove a reminder before adding another." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Entferne eine Erinnerung, bevor du eine weitere hinzufügst."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remove a reminder before adding another."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Elimina un recordatorio antes de añadir otro."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Supprimez un rappel avant d’en ajouter un autre."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rimuovi un promemoria prima di aggiungerne un altro."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "別のリマインダーを追加する前に、既存のものを削除してください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "다른 알림을 추가하기 전에 기존 알림을 삭제하세요."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remova um lembrete antes de adicionar outro."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请先删除一个提醒，再添加新提醒。"
           }
         }
       }
@@ -54320,6 +54779,64 @@
         }
       }
     },
+    "South African Essentials" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Südafrikanische Sender"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "South African Essentials"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Canales esenciales de Sudáfrica"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chaînes incontournables sud-africaines"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Canali essenziali sudafricani"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "南アフリカの主要チャンネル"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "남아프리카공화국 주요 채널"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Canais essenciais da África do Sul"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "南非精选频道"
+          }
+        }
+      }
+    },
     "Spain" : {
       "localizations" : {
         "de" : {
@@ -55237,6 +55754,123 @@
         }
       }
     },
+    "Starting now on %@" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Beginnt jetzt auf %@"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Starting now on %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empieza ahora en %@"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Commence maintenant sur %@"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inizia ora su %@"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@で今開始"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@에서 지금 시작"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Começando agora em %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在 %@ 开始"
+          }
+        }
+      }
+    },
+    "Starting Soon" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Beginnt bald"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Starting Soon"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empieza pronto"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "À venir"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inizia tra poco"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "まもなく放送"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "곧 시작"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Começa em breve"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "即将播出"
+          }
+        }
+      }
+    },
     "Startup" : {
       "localizations" : {
         "de" : {
@@ -55758,59 +56392,59 @@
         }
       }
     },
-    "Streams open in the selected app instead of Lume's player. Downloads always play in Lume, and the built-in player is used when the app is not installed or the stream is outside the selected content." : {
+    "Streams open in the selected app instead of lume's player. Downloads always play in lume, and the built-in player is used when the app is not installed or the stream is outside the selected content." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Streams werden statt in Lumes Player in der ausgewählten App geöffnet. Downloads laufen immer in Lume, und der integrierte Player wird verwendet, wenn die App nicht installiert ist oder der Stream nicht zum ausgewählten Inhalt gehört."
+            "value" : "Streams werden statt in Lumes Player in der ausgewählten App geöffnet. Downloads laufen immer in lume, und der integrierte Player wird verwendet, wenn die App nicht installiert ist oder der Stream nicht zum ausgewählten Inhalt gehört."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Los streams se abren en la app seleccionada en lugar del reproductor de Lume. Las descargas siempre se reproducen en Lume, y se usa el reproductor integrado cuando la app no está instalada o el stream queda fuera del contenido seleccionado."
+            "value" : "Los streams se abren en la app seleccionada en lugar del reproductor de lume. Las descargas siempre se reproducen en lume, y se usa el reproductor integrado cuando la app no está instalada o el stream queda fuera del contenido seleccionado."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Les flux s'ouvrent dans l'app sélectionnée au lieu du lecteur de Lume. Les téléchargements sont toujours lus dans Lume, et le lecteur intégré est utilisé lorsque l'app n'est pas installée ou que le flux ne fait pas partie du contenu sélectionné."
+            "value" : "Les flux s'ouvrent dans l'app sélectionnée au lieu du lecteur de lume. Les téléchargements sont toujours lus dans lume, et le lecteur intégré est utilisé lorsque l'app n'est pas installée ou que le flux ne fait pas partie du contenu sélectionné."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Gli stream si aprono nell'app selezionata invece che nel lettore di Lume. I download vengono sempre riprodotti in Lume e il lettore integrato viene usato quando l'app non è installata o lo stream non rientra nel contenuto selezionato."
+            "value" : "Gli stream si aprono nell'app selezionata invece che nel lettore di lume. I download vengono sempre riprodotti in lume e il lettore integrato viene usato quando l'app non è installata o lo stream non rientra nel contenuto selezionato."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ストリームは Lume のプレーヤーではなく、選択したアプリで開きます。ダウンロードは常に Lume で再生され、アプリがインストールされていない場合や、ストリームが選択した対象外の場合は内蔵プレーヤーが使われます。"
+            "value" : "ストリームは lume のプレーヤーではなく、選択したアプリで開きます。ダウンロードは常に lume で再生され、アプリがインストールされていない場合や、ストリームが選択した対象外の場合は内蔵プレーヤーが使われます。"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "스트림은 Lume 플레이어 대신 선택한 앱에서 열립니다. 다운로드는 항상 Lume에서 재생되며, 앱이 설치되어 있지 않거나 스트림이 선택한 콘텐츠에 해당하지 않으면 내장 플레이어가 사용됩니다."
+            "value" : "스트림은 lume 플레이어 대신 선택한 앱에서 열립니다. 다운로드는 항상 Lume에서 재생되며, 앱이 설치되어 있지 않거나 스트림이 선택한 콘텐츠에 해당하지 않으면 내장 플레이어가 사용됩니다."
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Os streams abrem no app selecionado em vez do player do Lume. Os downloads são sempre reproduzidos no Lume, e o player integrado é usado quando o app não está instalado ou o stream está fora do conteúdo selecionado."
+            "value" : "Os streams abrem no app selecionado em vez do player do lume. Os downloads são sempre reproduzidos no lume, e o player integrado é usado quando o app não está instalado ou o stream está fora do conteúdo selecionado."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "流将在所选应用中打开，而不是 Lume 的播放器。下载内容始终在 Lume 中播放；如果未安装该应用，或该流不属于所选内容，则使用内置播放器。"
+            "value" : "流将在所选应用中打开，而不是 lume 的播放器。下载内容始终在 lume 中播放；如果未安装该应用，或该流不属于所选内容，则使用内置播放器。"
           }
         }
       }
     },
-    "Streams open in the selected external app instead of Lume's player, when it is installed. Some apps — Infuse among them — play movies and series but no live channels, so you can limit the hand-off to one or the other." : {
+    "Streams open in the selected external app instead of lume's player, when it is installed. Some apps — Infuse among them — play movies and series but no live channels, so you can limit the hand-off to one or the other." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -55821,43 +56455,43 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Los streams se abren en la app externa seleccionada en lugar del reproductor de Lume, si está instalada. Algunas apps —Infuse entre ellas— reproducen películas y series, pero no canales en directo, así que puedes limitar la transferencia a uno u otro."
+            "value" : "Los streams se abren en la app externa seleccionada en lugar del reproductor de lume, si está instalada. Algunas apps —Infuse entre ellas— reproducen películas y series, pero no canales en directo, así que puedes limitar la transferencia a uno u otro."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Les flux s'ouvrent dans l'app externe sélectionnée au lieu du lecteur de Lume, si elle est installée. Certaines apps — dont Infuse — lisent les films et séries mais pas les chaînes en direct : vous pouvez donc limiter le transfert à l'un ou à l'autre."
+            "value" : "Les flux s'ouvrent dans l'app externe sélectionnée au lieu du lecteur de lume, si elle est installée. Certaines apps — dont Infuse — lisent les films et séries mais pas les chaînes en direct : vous pouvez donc limiter le transfert à l'un ou à l'autre."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Gli stream si aprono nell'app esterna selezionata invece che nel lettore di Lume, se è installata. Alcune app — tra cui Infuse — riproducono film e serie ma non i canali in diretta, quindi puoi limitare il passaggio all'una o all'altra categoria."
+            "value" : "Gli stream si aprono nell'app esterna selezionata invece che nel lettore di lume, se è installata. Alcune app — tra cui Infuse — riproducono film e serie ma non i canali in diretta, quindi puoi limitare il passaggio all'una o all'altra categoria."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "選択した外部アプリがインストールされている場合、ストリームは Lume のプレーヤーではなくそのアプリで開きます。Infuse など一部のアプリは映画とシリーズは再生できますがライブチャンネルは再生できないため、受け渡しの対象をどちらかに限定できます。"
+            "value" : "選択した外部アプリがインストールされている場合、ストリームは lume のプレーヤーではなくそのアプリで開きます。Infuse など一部のアプリは映画とシリーズは再生できますがライブチャンネルは再生できないため、受け渡しの対象をどちらかに限定できます。"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "선택한 외부 앱이 설치되어 있으면 스트림은 Lume 플레이어 대신 그 앱에서 열립니다. Infuse를 비롯한 일부 앱은 영화와 시리즈는 재생하지만 라이브 채널은 재생하지 못하므로, 전달 대상을 한쪽으로 제한할 수 있습니다."
+            "value" : "선택한 외부 앱이 설치되어 있으면 스트림은 lume 플레이어 대신 그 앱에서 열립니다. Infuse를 비롯한 일부 앱은 영화와 시리즈는 재생하지만 라이브 채널은 재생하지 못하므로, 전달 대상을 한쪽으로 제한할 수 있습니다."
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Os streams abrem no app externo selecionado em vez do player do Lume, se estiver instalado. Alguns apps — o Infuse entre eles — reproduzem filmes e séries, mas não canais ao vivo, por isso você pode limitar a transferência a um ou a outro."
+            "value" : "Os streams abrem no app externo selecionado em vez do player do lume, se estiver instalado. Alguns apps — o Infuse entre eles — reproduzem filmes e séries, mas não canais ao vivo, por isso você pode limitar a transferência a um ou a outro."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "如果已安装所选的外部应用，流将在该应用中打开，而不是 Lume 的播放器。部分应用（如 Infuse）只能播放电影和剧集，无法播放直播频道，因此你可以将转交限制为其中一类。"
+            "value" : "如果已安装所选的外部应用，流将在该应用中打开，而不是 lume 的播放器。部分应用（如 Infuse）只能播放电影和剧集，无法播放直播频道，因此你可以将转交限制为其中一类。"
           }
         }
       }
@@ -60042,36 +60676,36 @@
         }
       }
     },
-    "The server returned a response Lume could not read." : {
+    "The server returned a response lume could not read." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Der Server hat eine Antwort gesendet, die Lume nicht lesen konnte."
+            "value" : "Der Server hat eine Antwort gesendet, die lume nicht lesen konnte."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "El servidor ha devuelto una respuesta que Lume no ha podido leer."
+            "value" : "El servidor ha devuelto una respuesta que lume no ha podido leer."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Le serveur a renvoyé une réponse que Lume n’a pas pu lire."
+            "value" : "Le serveur a renvoyé une réponse que lume n’a pas pu lire."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Il server ha restituito una risposta che Lume non è riuscita a leggere."
+            "value" : "Il server ha restituito una risposta che lume non è riuscita a leggere."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "サーバーから Lume が読み取れない応答が返されました。"
+            "value" : "サーバーから lume が読み取れない応答が返されました。"
           }
         },
         "ko" : {
@@ -60083,13 +60717,13 @@
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "O servidor retornou uma resposta que o Lume não conseguiu ler."
+            "value" : "O servidor retornou uma resposta que o lume não conseguiu ler."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "服务器返回了 Lume 无法读取的响应。"
+            "value" : "服务器返回了 lume 无法读取的响应。"
           }
         }
       }
@@ -62344,6 +62978,65 @@
         }
       }
     },
+    "Top Rated on Now" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bestbewertet – jetzt live"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Top Rated on Now"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mejor valorados en emisión"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les mieux notés en direct"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "I più votati in onda"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "高評価の放送中番組"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "지금 방송 중인 고평점 프로그램"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mais bem avaliados no ar"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "高分热播节目"
+          }
+        }
+      }
+    },
     "Total plays" : {
       "localizations" : {
         "de" : {
@@ -63594,6 +64287,65 @@
         }
       }
     },
+    "UK Essentials" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "UK-Kanäle"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "UK Essentials"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Canales esenciales del Reino Unido"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chaînes incontournables du Royaume-Uni"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Canali essenziali del Regno Unito"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "英国の主要チャンネル"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "영국 주요 채널"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Canais essenciais do Reino Unido"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "英国主要频道"
+          }
+        }
+      }
+    },
     "Unavailable" : {
       "localizations" : {
         "de" : {
@@ -63803,48 +64555,48 @@
         }
       }
     },
-    "Unlock Lume Pro" : {
+    "Unlock lume Pro" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lume Pro freischalten"
+            "value" : "lume Pro freischalten"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Desbloquear Lume Pro"
+            "value" : "Desbloquear lume Pro"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Débloquer Lume Pro"
+            "value" : "Débloquer lume Pro"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Sblocca Lume Pro"
+            "value" : "Sblocca lume Pro"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lume Proをアンロック"
+            "value" : "lume Proをアンロック"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lume Pro 잠금 해제"
+            "value" : "lume Pro 잠금 해제"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Desbloquear o Lume Pro"
+            "value" : "Desbloquear o lume Pro"
           }
         },
         "zh-Hans" : {
@@ -64719,6 +65471,64 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "URL"
+          }
+        }
+      }
+    },
+    "US Essentials" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "US-amerikanische Sender"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "US Essentials"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Canales esenciales de EE. UU."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chaînes incontournables américaines"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Canali essenziali statunitensi"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "アメリカの主要チャンネル"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "미국 주요 채널"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Canais essenciais dos EUA"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "美国精选频道"
           }
         }
       }

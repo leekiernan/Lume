@@ -31,7 +31,7 @@ struct StepRowView: View {
         #if os(tvOS)
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: SyncRowMetrics.spacing) {
-                    SyncStatusIcon(status: .step(state))
+                    SyncStatusIcon(status: .step(state), fraction: fraction)
                     title
                     Spacer(minLength: 16)
                     activeDetail
@@ -41,7 +41,7 @@ struct StepRowView: View {
             .padding(.vertical, 6)
         #else
             HStack(alignment: .top, spacing: SyncRowMetrics.spacing) {
-                SyncStatusIcon(status: .step(state))
+                SyncStatusIcon(status: .step(state), fraction: fraction)
                 VStack(alignment: .leading, spacing: 4) {
                     HStack {
                         title
@@ -76,11 +76,7 @@ struct StepRowView: View {
         if state == .active, fraction > 0 {
             ProgressView(value: fraction)
                 .progressViewStyle(.linear)
-            #if os(tvOS)
-                .tint(.white)
-            #else
                 .tint(.lumeAccent)
-            #endif
         }
     }
 }

@@ -364,7 +364,11 @@ extension KSPlayerEngineView {
             layer.options.startPlayTime = resumeAt
         }
         Logger.player.log("retry: rebuilding KSPlayer stream from failure overlay")
-        rebuildStream(on: layer)
+        if opensThroughRedirect {
+            rebuildFromFreshRedirect(on: layer)
+        } else {
+            rebuildStream(on: layer)
+        }
     }
 
     /// Tear down the current KSPlayer session and rebuild it from a fresh input.
@@ -379,8 +383,8 @@ extension KSPlayerEngineView {
     /// rebuild path (the layer's `url` didSet): an ordered shutdown of the old
     /// item — tracks first, format context last, serialized on the item's queue —
     /// then a fresh `MEPlayerItem`.
-    private func rebuildStream(on layer: KSPlayerLayer) {
-        layer.player.replace(url: layer.url, options: layer.options)
+    private func rebuildStream(on layer: KSPlayerLayer, url: URL? = nil) {
+        layer.player.replace(url: url ?? layer.url, options: layer.options)
         layer.prepareToPlay()
         // Ensure autoplay once the rebuilt input is ready (prepareToPlay only
         // arms preparation; play() sets isAutoPlay and resumes on ready).
@@ -410,8 +414,36 @@ extension KSPlayerEngineView {
         Logger.player.log("reconnect: reloading KSPlayer stream")
         if media.isLive {
             rebuildStream(on: layer)
+        } else if opensThroughRedirect {
+            rebuildFromFreshRedirect(on: layer)
         } else {
             layer.play()
+        }
+    }
+
+    /// What KSPlayer opens: the provider redirect's target when one was
+    /// resolved for this session (`StreamRedirectCache`), else `media.url`.
+    /// Stable across view updates — a changed URL rebuilds the session.
+    var streamURL: URL {
+        StreamRedirectCache.shared.target(for: media.url)
+    }
+
+    /// Whether the stream was opened on a redirect token, which a reconnect
+    /// must not reuse: by then the provider may have issued a newer one.
+    private var opensThroughRedirect: Bool {
+        streamURL != media.url
+    }
+
+    /// Rebuilds on a freshly resolved token, falling back to the provider URL
+    /// itself (FFmpeg then follows the redirect) when the resolve fails. The
+    /// layer keeps the URL it was built with, so the view's own URL still
+    /// matches it and `KSVideoPlayer` doesn't rebuild a second time.
+    private func rebuildFromFreshRedirect(on layer: KSPlayerLayer) {
+        let original = media.url
+        Task {
+            let fresh = await StreamRedirect.resolve(original) ?? original
+            guard coordinator.playerLayer === layer, media.url == original else { return }
+            rebuildStream(on: layer, url: fresh)
         }
     }
 }

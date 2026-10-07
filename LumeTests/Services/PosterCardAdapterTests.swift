@@ -15,7 +15,6 @@ struct PosterCardAdapterTests {
         #expect(rail.provider == movie.streamIcon)
         #expect(rail.posterPath == movie.posterPath)
         #expect(rail.request == PosterArtworkRequest(kind: .movie, id: movie.id, categoryID: movie.categoryId))
-        #expect(rail.fallbackSymbol == "film")
         #expect(!rail.fillsWidth)
         #expect(grid.fillsWidth)
         #expect(grid.request == rail.request)
@@ -23,7 +22,7 @@ struct PosterCardAdapterTests {
         #expect(grid.badge == nil)
     }
 
-    @Test func `series adapters retain series identity instead of movie fallback`() {
+    @Test func `series adapters retain series identity`() {
         let series = Series(id: "playlist-series", seriesId: 1, name: "Series")
         series.cover = "https://provider.test/series.jpg"
         series.posterPath = "/series.jpg"
@@ -32,7 +31,6 @@ struct PosterCardAdapterTests {
         #expect(card.provider == series.cover)
         #expect(card.posterPath == series.posterPath)
         #expect(card.request == PosterArtworkRequest(kind: .series, id: series.id, categoryID: series.categoryId))
-        #expect(card.fallbackSymbol == "tv")
         #expect(card.fillsWidth)
     }
 
@@ -43,7 +41,6 @@ struct PosterCardAdapterTests {
         #expect(card.title == series.name)
         #expect(card.posterPath == series.posterPath)
         #expect(card.request?.kind == .series)
-        #expect(card.fallbackSymbol == "tv")
         #expect(card.badge == "Other playlist")
         #expect(!card.fillsWidth)
         #expect(card.progress == nil)

@@ -1,0 +1,77 @@
+//
+//  LumeAmbientBackground.swift
+//  Lume
+//
+//  The ambient ground: Night with a violet glow from the top trailing corner
+//  and a faint pink one from the bottom leading corner. Behind plain screens,
+//  and behind hero art while it loads.
+//
+
+import SwiftUI
+
+struct LumeAmbientBackground: View {
+    /// The brand ground (launch, splash) glows from the centre instead.
+    var style: Style = .screen
+    @Environment(\.colorScheme) private var colorScheme
+
+    enum Style {
+        case screen
+        case brand
+        /// Behind a detail hero's backdrop while it loads.
+        case backdrop
+        /// Behind the tvOS Home hero's backdrop while it loads.
+        case hero
+    }
+
+    var body: some View {
+        GeometryReader { proxy in
+            let size = proxy.size
+            // The board's ellipses are sized for a 1920-point-wide screen.
+            let unit = max(size.width, 1) / 1920
+            ZStack {
+                ground
+                switch style {
+                case .screen:
+                    // Light: the foundations' pale violet and pink wash on Day;
+                    // dark (and tvOS): the violet glow on Night.
+                    let isLight = colorScheme == .light
+                    glow(Color.lumeViolet.opacity(isLight ? 0.14 : 0.38), width: 1200, height: 700, unit: unit)
+                        .position(x: size.width * 0.85, y: -size.height * 0.1)
+                    glow(Color(red: 1, green: 0x88 / 255, blue: 0xD7 / 255).opacity(isLight ? 0.24 : 0.10),
+                         width: 900, height: 600, unit: unit)
+                        .position(x: 0, y: size.height)
+                case .brand:
+                    glow(Color.lumeViolet.opacity(0.5), width: 760, height: 540, unit: unit)
+                        .position(x: size.width * 0.5, y: size.height * 0.44)
+                    glow(Color.lumeAccent.opacity(0.12), width: 900, height: 600, unit: unit)
+                        .position(x: size.width * 0.12, y: size.height)
+                case .backdrop:
+                    glow(Color.lumeViolet.opacity(0.5), width: 1000, height: 700, unit: unit)
+                        .position(x: size.width * 0.5, y: size.height * 0.3)
+                    glow(Color.lumeAccent.opacity(0.16), width: 700, height: 500, unit: unit)
+                        .position(x: size.width * 0.14, y: size.height * 0.2)
+                case .hero:
+                    glow(Color.lumeViolet.opacity(0.55), width: 1100, height: 640, unit: unit)
+                        .position(x: size.width * 0.72, y: size.height * 0.34)
+                    glow(Color.lumeAccent.opacity(0.22), width: 800, height: 520, unit: unit)
+                        .position(x: size.width * 0.94, y: size.height * 0.72)
+                }
+            }
+        }
+        .ignoresSafeArea()
+        .accessibilityHidden(true)
+    }
+
+    private var ground: Color {
+        style == .screen ? .lumeGround : .lumeInk
+    }
+
+    /// A CSS `radial-gradient(w h at …, colour, transparent 70%)`: an
+    /// elliptical falloff reaching clear at 70% of its radii.
+    private func glow(_ color: Color, width: CGFloat, height: CGFloat, unit: CGFloat) -> some View {
+        RadialGradient(colors: [color, color.opacity(0)], center: .center,
+                       startRadius: 0, endRadius: width * unit * 0.7)
+            .frame(width: width * unit * 2, height: width * unit * 2)
+            .scaleEffect(x: 1, y: height / width)
+    }
+}

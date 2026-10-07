@@ -34,7 +34,7 @@ extension SettingsView {
                 }
                 if let url = SupportInfo.appStoreReviewURL {
                     Link(destination: url) {
-                        Label("Rate Lume", systemImage: "star")
+                        Label("Rate lume", systemImage: "star")
                     }
                 }
             } header: {
@@ -56,7 +56,7 @@ extension SettingsView {
                         .background(.tint.opacity(0.1), in: .rect(cornerRadius: 6))
 
                     VStack(alignment: .leading, spacing: 1) {
-                        Text("Lume")
+                        Text("lume")
                         Text("Version \(SupportInfo.appVersion)")
                             .font(.caption)
                             .foregroundStyle(.secondary)
@@ -90,7 +90,7 @@ extension SettingsView {
                 .padding(.horizontal, TVSettingsMetrics.rowHPadding)
                 .padding(.top, 4)
 
-                VStack(spacing: 2) {
+                VStack(spacing: TVSettingsMetrics.rowSpacing) {
                     TVSettingsValueRow("Website", value: SupportInfo.websiteDisplay)
                     TVSettingsValueRow("Email", value: SupportInfo.email)
                 }

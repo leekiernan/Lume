@@ -27,6 +27,7 @@ enum SimklError: Error, Equatable {
     case server(Int)
     case decoding
     case notAuthenticated
+    case itemNotFound
 
     // Device-flow polling outcomes (Simkl AUTH V2, RFC 8628). There is no
     // "denied" signal: declining writes nothing, so the code simply keeps
@@ -212,7 +213,7 @@ nonisolated struct SimklClient {
 
     /// POSTs a sync payload. Content-Type is JSON; sync endpoints answer 200 or
     /// 201 (both accepted by `send`).
-    private func post<T: Decodable>(
+    func post<T: Decodable>(
         _ path: String,
         body: some Encodable,
         accessToken: String

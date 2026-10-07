@@ -464,14 +464,30 @@ struct ContentManagementView: View {
         /// Drawn before the name — a crest, for a sports follow.
         @ViewBuilder var icon: () -> Icon
 
+        /// The shared reorderable-row structure (as `TVReorderableContentList`'s
+        /// rows): hide leads, then icon and name, then restrict, then any
+        /// drill-in. A hidden row's name steps back to tertiary.
         var body: some View {
             HStack(spacing: 12) {
                 Button(action: onToggleHidden) {
                     Image(systemName: isHidden ? "eye.slash" : "eye")
-                        .foregroundStyle(isHidden ? Color.secondary : Color.accentColor)
+                        .foregroundStyle(isHidden ? Color.lumeTextTertiary : Color.lumeAccent)
                 }
                 .buttonStyle(.borderless)
                 .accessibilityLabel(isHidden ? "Show \(title)" : "Hide \(title)")
+
+                icon()
+                    .opacity(isHidden ? 0.5 : 1)
+                Group {
+                    if let titleLineLimit {
+                        Text(title).lineLimit(titleLineLimit)
+                    } else {
+                        Text(title)
+                    }
+                }
+                .foregroundStyle(isHidden ? Color.lumeTextTertiary : Color.primary)
+
+                Spacer()
 
                 if let onToggleRestricted {
                     Button(action: onToggleRestricted) {
@@ -481,18 +497,6 @@ struct ContentManagementView: View {
                     .buttonStyle(.borderless)
                     .accessibilityLabel(isRestricted ? "Unrestrict \(title)" : "Restrict \(title)")
                 }
-
-                icon()
-                Group {
-                    if let titleLineLimit {
-                        Text(title).lineLimit(titleLineLimit)
-                    } else {
-                        Text(title)
-                    }
-                }
-                .foregroundStyle(isHidden ? .secondary : .primary)
-
-                Spacer()
 
                 if let drillInValue {
                     Button {

@@ -58,7 +58,7 @@ struct PaywallView: View {
     private var productsPlaceholder: some View {
         if premium.productsLoadFailed, !premium.isLoadingProducts {
             VStack(spacing: 12) {
-                Text("Couldn't load Lume Pro plans. Check your connection and try again.")
+                Text("Couldn't load lume Pro plans. Check your connection and try again.")
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                 Button("Retry") {
@@ -96,7 +96,7 @@ struct PaywallView: View {
                     .frame(maxWidth: 520)
                     .frame(maxWidth: .infinity)
                 }
-                .navigationTitle("Lume Pro")
+                .navigationTitle("lume Pro")
                 #if os(iOS)
                     .navigationBarTitleDisplayMode(.inline)
                 #endif
@@ -141,10 +141,10 @@ struct PaywallView: View {
                 Image(systemName: "crown")
                     .font(.system(size: 44))
                     .foregroundStyle(.tint)
-                Text("Unlock Lume Pro")
+                Text("Unlock lume Pro")
                     .font(.title.bold())
                     .multilineTextAlignment(.center)
-                Text("Lume is free and open source. Pro supports development and unlocks a few extra conveniences.")
+                Text("lume is free and open source. Pro supports development and unlocks a few extra conveniences.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -218,9 +218,9 @@ struct PaywallView: View {
                         Image(systemName: "crown")
                             .font(.system(size: 56))
                             .foregroundStyle(.tint)
-                        Text("Lume Pro")
+                        Text("lume Pro")
                             .font(.system(size: 48, weight: .bold))
-                        Text("Lume is free and open source. Pro supports development and unlocks a few extra conveniences.")
+                        Text("lume is free and open source. Pro supports development and unlocks a few extra conveniences.")
                             .font(.system(size: 24))
                             .foregroundStyle(.secondary)
                             .frame(maxWidth: 560, alignment: .leading)

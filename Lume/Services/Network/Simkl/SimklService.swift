@@ -75,10 +75,12 @@ final class SimklService {
         mutations.syncError
     }
 
-    /// Durable watched intent — shared with Trakt, see `TrackerMutationQueue`.
+    /// Durable history and list-status intent — shared with Trakt.
     let mutations: TrackerMutationQueue<SimklAccountBackend>
 
     private var watchlistTask: Task<[SimklWatchlistEntry], Never>?
+    private var watchlistTaskAccount: String?
+    private var watchlistTaskID: UUID?
 
     /// The catalog context the connect flow captured, so the watched-history
     /// import can run the moment the device code is approved.
@@ -94,6 +96,10 @@ final class SimklService {
             session: session,
             outbox: outbox ?? TrackerMutationOutbox(storageKey: SimklAccountBackend.outboxStorageKey)
         )
+        mutations.refreshWatchlist = { [weak self] in
+            Task { await self?.refreshWatchlistIfNeeded() }
+        }
+        mutations.didDeliverMutation = { SimklWatchlistStore.clear() }
         session.didConnect = { [weak self] in
             // The account's watched history imports on connect, not only on
             // demand. Runs on the context the connect call captured; the manual
@@ -162,6 +168,9 @@ final class SimklService {
     /// Disconnects: revokes the token server-side (best effort) and clears all
     /// local state.
     func disconnect() async {
+        watchlistTask?.cancel()
+        watchlistTask = nil
+        watchlistTaskID = nil
         mutations.reset()
         await session.disconnect()
         // Parked watched state belongs to the account that was just signed out.
@@ -204,26 +213,60 @@ final class SimklService {
 
     // MARK: - Watchlist
 
+    /// On adds to Plan to Watch; off moves to Dropped without erasing history.
+    func syncWatchlist(movie: Movie, watchlisted: Bool) {
+        guard let tmdbID = movie.tmdbId else { return }
+        mutations.enqueue(.watchlist, .movie(tmdbID: tmdbID), isPresent: watchlisted)
+    }
+
+    func syncWatchlist(series: Series, watchlisted: Bool) {
+        guard let tmdbID = series.tmdbId else { return }
+        mutations.enqueue(.watchlist, .show(tmdbID: tmdbID), isPresent: watchlisted)
+    }
+
+    func refreshWatchlistIfNeeded() async {
+        guard let account = mutations.account else { return }
+        mutations.watchlist.reset(account: account)
+        guard mutations.watchlist.needsRefresh else { return }
+        let revision = mutations.watchlist.revision
+        _ = await fetchWatchlist()
+        if mutations.account == account, mutations.watchlist.revision != revision, mutations.watchlist.needsRefresh {
+            _ = await fetchWatchlist()
+        }
+    }
+
     /// The user's "Plan to Watch" titles, most recently added first. Served
     /// from the on-disk copy, refetching only the buckets `/sync/activities`
     /// says have moved (see `SimklWatchlist.swift`). Returns an empty array when
     /// not connected; on error it falls back to the cached copy, so the home row
     /// keeps what it last showed rather than blinking out.
     func fetchWatchlist() async -> [SimklWatchlistEntry] {
-        if let watchlistTask {
+        guard let account = mutations.account else { return [] }
+        if let watchlistTask, watchlistTaskAccount == account {
             return await watchlistTask.value
         }
+        mutations.watchlist.reset(account: account)
+        let revision = mutations.watchlist.revision
+        let id = UUID()
         let task = Task { [weak self] () -> [SimklWatchlistEntry] in
-            await self?.loadWatchlist() ?? []
+            guard let self else { return [] }
+            defer {
+                if watchlistTaskID == id { watchlistTask = nil; watchlistTaskID = nil }
+            }
+            let result = await loadWatchlist()
+            guard mutations.account == account, watchlistTaskID == id else { return [] }
+            mutations.updateWatchlist(Set(result.map(\.target)), account: account, revision: revision)
+            return result
         }
         watchlistTask = task
-        let result = await task.value
-        watchlistTask = nil
-        return result
+        watchlistTaskAccount = account
+        watchlistTaskID = id
+        return await task.value
     }
 
     private func loadWatchlist() async -> [SimklWatchlistEntry] {
-        guard let username, let accessToken = await session.validAccessToken() else { return [] }
+        guard let account = mutations.account, let username, let accessToken = await session.validAccessToken(), mutations.account == account else { return [] }
+        let revision = mutations.watchlist.revision
         var cache = SimklWatchlistStore.load(for: username) ?? SimklWatchlistCache(username: username)
         guard let activities = try? await client.activities(accessToken: accessToken) else {
             return cache.entries
@@ -241,8 +284,8 @@ final class SimklService {
         }
         // A disconnect mid-fetch already cleared the store; writing now would
         // resurrect the signed-out account's list.
-        guard self.username == username else { return [] }
-        if cache != original {
+        guard mutations.account == account, self.username == username else { return [] }
+        if cache != original, mutations.watchlist.revision == revision {
             SimklWatchlistStore.save(cache)
         }
         return cache.entries

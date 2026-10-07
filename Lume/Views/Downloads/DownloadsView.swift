@@ -102,8 +102,8 @@ import SwiftUI
                             itemToDelete = DeletionTarget(id: movie.id, name: movie.name)
                         }
                         .mediaFavoriteMenu(
-                            isFavorite: { movie.isFavorite },
-                            onToggleFavorite: { MediaFavorites.toggle(movie, in: modelContext) }
+                            isFavorite: { MediaFavorites.isFavorite(movie) },
+                            onToggleFavorite: { MediaFavorites.requestToggle(movie, in: modelContext) }
                         )
                     }
                 }
@@ -192,9 +192,11 @@ import SwiftUI
                     if item.fractionCompleted > 0 {
                         ProgressView(value: item.fractionCompleted)
                             .progressViewStyle(.linear)
+                            .tint(.lumeAccent)
                     } else {
                         ProgressView()
                             .progressViewStyle(.linear)
+                            .tint(.lumeAccent)
                     }
                     caption
                 }

@@ -58,7 +58,7 @@
                         .transition(.opacity)
                 }
             }
-            .background(Color.black)
+            .background(Color.lumeNight)
             .ignoresSafeArea()
             .fullScreenCover(item: $playingMedia) { media in
                 FullScreenPlayerView(media: media)
@@ -151,11 +151,7 @@
                 .focused($focus, equals: .play)
 
                 HStack(spacing: 18) {
-                    TVSecondaryActionButton(
-                        title: movie.isFavorite ? "Remove from Favorites" : "Add to Favorites",
-                        systemImage: movie.isFavorite ? "heart.fill" : "heart",
-                        action: toggleFavorite
-                    )
+                    MediaFavoriteButton(isFavorite: MediaFavorites.isFavorite(movie), action: toggleFavorite)
 
                     TVSecondaryActionButton(
                         title: movie.isWatched ? "Mark as Unwatched" : "Mark as Watched",
@@ -233,8 +229,8 @@
             {
                 items.append(TVMetaItem(label: "Released", value: date))
             }
-            if let genre = movie.genre, !genre.isEmpty {
-                items.append(TVMetaItem(label: "Genre", value: shortGenre(genre)))
+            if let genre = DetailFormat.genres(movie.genre) {
+                items.append(TVMetaItem(label: "Genre", value: genre))
             }
             if let duration = DetailFormat.duration(movie.durationSecs) {
                 items.append(TVMetaItem(label: "Runtime", value: duration))
@@ -260,12 +256,6 @@
             return items
         }
 
-        private func shortGenre(_ genre: String) -> String {
-            genre.split(separator: ",").prefix(2)
-                .map { $0.trimmingCharacters(in: .whitespaces) }
-                .joined(separator: ", ")
-        }
-
         /// The playlist this movie actually belongs to (ids are `"<playlistUUID>-…"`),
         /// so playback uses the correct credentials. Falls back to the first.
         private var moviePlaylist: Playlist? {
@@ -282,7 +272,7 @@
         }
 
         private func toggleFavorite() {
-            MediaFavorites.toggle(movie, in: modelContext)
+            MediaFavorites.requestToggle(movie, in: modelContext)
         }
 
         private func toggleWatched() {

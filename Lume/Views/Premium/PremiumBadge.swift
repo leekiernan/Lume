@@ -14,7 +14,7 @@ struct PremiumBadge: View {
         Image(systemName: "crown.fill")
             .font(Self.font)
             .foregroundStyle(Self.style)
-            .accessibilityLabel("Lume Pro")
+            .accessibilityLabel("lume Pro")
     }
 
     /// The accent elsewhere. tvOS takes the row's own foreground instead: the

@@ -4,6 +4,8 @@
       "CODE_SIGN_IDENTITY": "\"Apple Development\";",
       "DEAD_CODE_STRIPPING": "YES;",
       "DEVELOPMENT_TEAM": "2Q6FJ956B3;",
+      "INFOPLIST_KEY_CFBundleDisplayName": "lume;",
+      "INFOPLIST_KEY_NSLocalNetworkUsageDescription": "\"lume needs access to your local network to reach media servers and WebDAV shares running on it.\";",
       "INFOPLIST_KEY_NSSupportsLiveActivities": null,
       "INFOPLIST_KEY_NSSupportsLiveActivitiesFrequentUpdates": null,
       "PRODUCT_BUNDLE_IDENTIFIER": "com.leekiernan.lume;",
@@ -13,6 +15,8 @@
       "CODE_SIGN_IDENTITY": "\"Apple Development\";",
       "DEAD_CODE_STRIPPING": "YES;",
       "DEVELOPMENT_TEAM": "2Q6FJ956B3;",
+      "INFOPLIST_KEY_CFBundleDisplayName": "lume;",
+      "INFOPLIST_KEY_NSLocalNetworkUsageDescription": "\"lume needs access to your local network to reach media servers and WebDAV shares running on it.\";",
       "INFOPLIST_KEY_NSSupportsLiveActivities": null,
       "INFOPLIST_KEY_NSSupportsLiveActivitiesFrequentUpdates": null,
       "PRODUCT_BUNDLE_IDENTIFIER": "com.leekiernan.lume;",
@@ -33,22 +37,22 @@
     "C67C02EA2F880F2400842DBA": {
       "DEAD_CODE_STRIPPING": "YES;",
       "DEVELOPMENT_TEAM": "2Q6FJ956B3;",
-      "PRODUCT_BUNDLE_IDENTIFIER": "com.leekiernan.lume.LumeTests;"
+      "PRODUCT_BUNDLE_IDENTIFIER": "com.leekiernan.lume.lumetests;"
     },
     "C67C02EB2F880F2400842DBA": {
       "DEAD_CODE_STRIPPING": "YES;",
       "DEVELOPMENT_TEAM": "2Q6FJ956B3;",
-      "PRODUCT_BUNDLE_IDENTIFIER": "com.leekiernan.lume.LumeTests;"
+      "PRODUCT_BUNDLE_IDENTIFIER": "com.leekiernan.lume.lumetests;"
     },
     "C67C02ED2F880F2400842DBA": {
       "DEAD_CODE_STRIPPING": "YES;",
       "DEVELOPMENT_TEAM": "2Q6FJ956B3;",
-      "PRODUCT_BUNDLE_IDENTIFIER": "com.leekiernan.lume.LumeUITests;"
+      "PRODUCT_BUNDLE_IDENTIFIER": "com.leekiernan.lume.lumeuitests;"
     },
     "C67C02EE2F880F2400842DBA": {
       "DEAD_CODE_STRIPPING": "YES;",
       "DEVELOPMENT_TEAM": "2Q6FJ956B3;",
-      "PRODUCT_BUNDLE_IDENTIFIER": "com.leekiernan.lume.LumeUITests;"
+      "PRODUCT_BUNDLE_IDENTIFIER": "com.leekiernan.lume.lumeuitests;"
     },
     "C67C02F12F880F2400842DBA": {
       "CLANG_ANALYZER_LOCALIZABILITY_NONLOCALIZED": "YES;",
@@ -60,6 +64,8 @@
       "CODE_SIGN_IDENTITY": "\"Apple Development\";",
       "DEAD_CODE_STRIPPING": "YES;",
       "DEVELOPMENT_TEAM": "2Q6FJ956B3;",
+      "INFOPLIST_KEY_CFBundleDisplayName": "lume;",
+      "INFOPLIST_KEY_NSLocalNetworkUsageDescription": "\"lume needs access to your local network to reach media servers and WebDAV shares running on it.\";",
       "INFOPLIST_KEY_NSSupportsLiveActivities": null,
       "INFOPLIST_KEY_NSSupportsLiveActivitiesFrequentUpdates": null,
       "PRODUCT_BUNDLE_IDENTIFIER": "com.leekiernan.lume;",
@@ -68,32 +74,32 @@
     "C67C02F32F880F2400842DBA": {
       "DEAD_CODE_STRIPPING": "YES;",
       "DEVELOPMENT_TEAM": "2Q6FJ956B3;",
-      "PRODUCT_BUNDLE_IDENTIFIER": "com.leekiernan.lume.LumeTests;"
+      "PRODUCT_BUNDLE_IDENTIFIER": "com.leekiernan.lume.lumetests;"
     },
     "C67C02F42F880F2400842DBA": {
       "DEAD_CODE_STRIPPING": "YES;",
       "DEVELOPMENT_TEAM": "2Q6FJ956B3;",
-      "PRODUCT_BUNDLE_IDENTIFIER": "com.leekiernan.lume.LumeUITests;"
+      "PRODUCT_BUNDLE_IDENTIFIER": "com.leekiernan.lume.lumeuitests;"
     },
     "C6BE110000000000000000AA": {
       "DEAD_CODE_STRIPPING": "YES;",
       "DEVELOPMENT_TEAM": "2Q6FJ956B3;",
-      "PRODUCT_BUNDLE_IDENTIFIER": "com.leekiernan.lume.LumePerformanceTests;"
+      "PRODUCT_BUNDLE_IDENTIFIER": "com.leekiernan.lume.lumeperformancetests;"
     },
     "C6BE110000000000000000AB": {
       "DEAD_CODE_STRIPPING": "YES;",
       "DEVELOPMENT_TEAM": "2Q6FJ956B3;",
-      "PRODUCT_BUNDLE_IDENTIFIER": "com.leekiernan.lume.LumePerformanceTests;"
+      "PRODUCT_BUNDLE_IDENTIFIER": "com.leekiernan.lume.lumeperformancetests;"
     },
     "C6BE110000000000000000AC": {
       "DEAD_CODE_STRIPPING": "YES;",
       "DEVELOPMENT_TEAM": "2Q6FJ956B3;",
-      "PRODUCT_BUNDLE_IDENTIFIER": "com.leekiernan.lume.LumePerformanceTests;"
+      "PRODUCT_BUNDLE_IDENTIFIER": "com.leekiernan.lume.lumeperformancetests;"
     },
     "C6BE110000000000000000AD": {
       "DEAD_CODE_STRIPPING": "YES;",
       "DEVELOPMENT_TEAM": "2Q6FJ956B3;",
-      "PRODUCT_BUNDLE_IDENTIFIER": "com.leekiernan.lume.LumePerformanceTests;"
+      "PRODUCT_BUNDLE_IDENTIFIER": "com.leekiernan.lume.lumeperformancetests;"
     },
     "C6BE110000000000000000B1": {
       "CLANG_ANALYZER_LOCALIZABILITY_NONLOCALIZED": "YES;",
@@ -105,6 +111,8 @@
       "CODE_SIGN_IDENTITY": "\"Apple Development\";",
       "DEAD_CODE_STRIPPING": "YES;",
       "DEVELOPMENT_TEAM": "2Q6FJ956B3;",
+      "INFOPLIST_KEY_CFBundleDisplayName": "lume;",
+      "INFOPLIST_KEY_NSLocalNetworkUsageDescription": "\"lume needs access to your local network to reach media servers and WebDAV shares running on it.\";",
       "INFOPLIST_KEY_NSSupportsLiveActivities": null,
       "INFOPLIST_KEY_NSSupportsLiveActivitiesFrequentUpdates": null,
       "PRODUCT_BUNDLE_IDENTIFIER": "com.leekiernan.lume;",
@@ -113,12 +121,12 @@
     "C6BE110000000000000000B3": {
       "DEAD_CODE_STRIPPING": "YES;",
       "DEVELOPMENT_TEAM": "2Q6FJ956B3;",
-      "PRODUCT_BUNDLE_IDENTIFIER": "com.leekiernan.lume.LumeTests;"
+      "PRODUCT_BUNDLE_IDENTIFIER": "com.leekiernan.lume.lumetests;"
     },
     "C6BE110000000000000000B4": {
       "DEAD_CODE_STRIPPING": "YES;",
       "DEVELOPMENT_TEAM": "2Q6FJ956B3;",
-      "PRODUCT_BUNDLE_IDENTIFIER": "com.leekiernan.lume.LumeUITests;"
+      "PRODUCT_BUNDLE_IDENTIFIER": "com.leekiernan.lume.lumeuitests;"
     }
   },
   "attributes": {

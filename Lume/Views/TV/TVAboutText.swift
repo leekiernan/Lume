@@ -40,7 +40,8 @@
             } label: {
                 VStack(alignment: .leading, spacing: 12) {
                     Text(text)
-                        .font(.system(size: 26))
+                        .font(.system(size: 28))
+                        .lineSpacing(6)
                         .foregroundStyle(.white.opacity(0.85))
                         .lineLimit(isExpanded ? nil : collapsedLineLimit)
                         .multilineTextAlignment(.leading)
@@ -58,11 +59,8 @@
                     }
                 }
                 .frame(maxWidth: 1100, alignment: .leading)
-                .padding(28)
-                .background(
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .fill(.white.opacity(0.06))
-                )
+                .padding(32)
+                .background(TVDetailSurface())
                 .scaleEffect(isFocused ? 1.05 : 1.0)
                 .shadow(color: .black.opacity(isFocused ? 0.45 : 0), radius: 24, y: 12)
                 .animation(.easeOut(duration: 0.18), value: isFocused)
@@ -77,7 +75,8 @@
         private var truncationProbe: some View {
             ZStack(alignment: .topLeading) {
                 Text(text)
-                    .font(.system(size: 26))
+                    .font(.system(size: 28))
+                    .lineSpacing(6)
                     .lineLimit(collapsedLineLimit)
                     .background(
                         GeometryReader { geo in
@@ -86,7 +85,8 @@
                     )
 
                 Text(text)
-                    .font(.system(size: 26))
+                    .font(.system(size: 28))
+                    .lineSpacing(6)
                     .fixedSize(horizontal: false, vertical: true)
                     .background(
                         GeometryReader { geo in

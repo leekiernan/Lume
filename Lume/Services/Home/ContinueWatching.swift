@@ -35,6 +35,9 @@ nonisolated struct SeriesContinuation: Equatable {
     let episode: Int
     /// How far into that episode (0...1), or nil when it has no duration.
     let fraction: Double?
+    /// Seconds of that episode left — all of it when not started — or nil
+    /// when it has no duration.
+    var remaining: TimeInterval?
 }
 
 nonisolated enum ContinueWatching {
@@ -49,16 +52,19 @@ nonisolated enum ContinueWatching {
         if let inProgress = marks.filter({ $0.progress > 1 && !$0.isWatched }).max(by: { $0.order < $1.order }) {
             return SeriesContinuation(
                 season: inProgress.season, episode: inProgress.episode,
-                fraction: fraction(progress: inProgress.progress, duration: inProgress.duration)
+                fraction: fraction(progress: inProgress.progress, duration: inProgress.duration),
+                remaining: remaining(progress: inProgress.progress, duration: inProgress.duration)
             )
         }
         guard let watched = marks.filter(\.isWatched).max(by: { $0.order < $1.order }) else {
-            return SeriesContinuation(season: first.season, episode: first.episode, fraction: 0)
+            return SeriesContinuation(season: first.season, episode: first.episode, fraction: 0,
+                                      remaining: remaining(progress: 0, duration: first.duration))
         }
         guard let next = marks.filter({ $0.order > watched.order }).min(by: { $0.order < $1.order }) else {
             return nil
         }
-        return SeriesContinuation(season: next.season, episode: next.episode, fraction: 0)
+        return SeriesContinuation(season: next.season, episode: next.episode, fraction: 0,
+                                  remaining: remaining(progress: 0, duration: next.duration))
     }
 
     /// A movie stays until it's watched to the end (`WatchCompletion`).
@@ -91,6 +97,14 @@ nonisolated enum ContinueWatching {
         let amount = Duration.seconds(minutes * 60)
             .formatted(.units(allowed: [.hours, .minutes], width: .narrow))
         return String(localized: "\(amount) left", comment: "Time remaining in a movie, e.g. \"32m left\"")
+    }
+
+    /// "S7, E12 · 32m left": the episode and, when known, its time left —
+    /// both always shown on a Continue Watching card.
+    static func seriesLabel(_ continuation: SeriesContinuation) -> String {
+        [episodeLabel(continuation), continuation.remaining.map(remainingLabel)]
+            .compactMap(\.self)
+            .joined(separator: " · ")
     }
 
     /// "S7, E12" (localised).

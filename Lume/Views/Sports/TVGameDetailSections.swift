@@ -171,14 +171,16 @@
                 .background(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous).fill(fill))
         }
 
+        /// The redesign's selection: Lume pink on a pink tint; focus stays
+        /// the system's white lift.
         private var foreground: Color {
-            if isFocused { return .black }
-            return isActive ? .white : .white.opacity(0.5)
+            if isFocused { return .lumeNight }
+            return isActive ? .lumeAccent : .white.opacity(0.72)
         }
 
         private var fill: AnyShapeStyle {
             if isFocused { return AnyShapeStyle(.white) }
-            return isActive ? AnyShapeStyle(.white.opacity(0.22)) : AnyShapeStyle(.clear)
+            return isActive ? AnyShapeStyle(Color.lumeSelection) : AnyShapeStyle(.clear)
         }
     }
 

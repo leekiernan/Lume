@@ -41,16 +41,6 @@
         @ViewBuilder var rows: Rows
 
         @State private var model = TVHeroCarouselModel<HeroItem>(prefetchURL: \.imageURL)
-        @State private var zone: TVHomeZone = .expanded
-        @State private var containerHeight: CGFloat = 0
-
-        private var showcaseHeight: CGFloat {
-            max(containerHeight - TVHomeMetrics.rowPeek, 0)
-        }
-
-        private var belowFold: Bool {
-            zone != .expanded
-        }
 
         init(
             heroItems: [HeroItem],
@@ -71,55 +61,13 @@
         }
 
         var body: some View {
-            ZStack {
-                if hasHero {
-                    TVHeroBackdrop(
-                        model: model,
-                        belowFold: belowFold,
-                        warmStartBackdropURL: warmStartBackdropURL
-                    )
-                }
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: TVHomeMetrics.rowSpacing) {
-                        if hasHero {
-                            TVHeroShowcase(model: model, onSelect: onSelectHero)
-                        }
-                        rows
-                    }
-                    // The hero fills the top inset itself when it's showing.
-                    .padding(.top, hasHero ? 0 : PosterCardMetrics.sectionVerticalPadding)
-                    .padding(.bottom, PosterCardMetrics.sectionVerticalPadding)
-                }
-                .scrollIndicators(.hidden)
-                .scrollClipDisabled()
-                .scrollTargetBehavior(TVHomeFoldBehavior(
-                    zone: zone,
-                    showcaseHeight: hasHero ? showcaseHeight : 0
-                ))
-                .onScrollGeometryChange(for: TVHomeZone.self) { geometry in
-                    TVHomeZone(
-                        offset: geometry.contentOffset.y + geometry.contentInsets.top,
-                        showcaseHeight: hasHero ? showcaseHeight : 0
-                    )
-                } action: { _, newZone in
-                    guard newZone != zone else { return }
-                    withAnimation(.easeInOut(duration: 0.5)) { zone = newZone }
-                }
-            }
-            // Full-bleed vertically so the showcase spans the real screen height
-            // and the first row peeks at the true bottom edge. Ignoring on the
-            // CONTAINER (not the ScrollView) matters: a ScrollView keeps its
-            // safe-area-reduced frame and quietly ignores this modifier. The
-            // horizontal safe area stays so rows keep their overscan inset.
-            .ignoresSafeArea(edges: .vertical)
-            .onGeometryChange(for: CGFloat.self) { proxy in
-                proxy.size.height
-            } action: { height in
-                containerHeight = height
-            }
-            .onChange(of: zone) { _, newZone in
-                model.isPaused = newZone != .expanded
-            }
+            TVHeroFeedLayout(hasHero: hasHero, onFoldChange: { model.isPaused = $0 }, backdrop: { belowFold in
+                TVHeroBackdrop(model: model, belowFold: belowFold, warmStartBackdropURL: warmStartBackdropURL)
+            }, showcase: {
+                TVHeroShowcase(model: model, onSelect: onSelectHero)
+            }, rows: {
+                rows
+            })
             .onChange(of: heroItems) { _, items in
                 model.configure(items: items)
             }
@@ -145,7 +93,9 @@
 
         var body: some View {
             ZStack {
-                Color.black
+                // The board's unloaded hero: Ink with a violet glow, so a slow
+                // or missing backdrop still reads as Lume rather than black.
+                LumeAmbientBackground(style: .hero)
 
                 if let backdropURL {
                     HeroArtworkImage(url: backdropURL)
@@ -155,6 +105,18 @@
                         .id(backdropURL.absoluteString)
                         .transition(.opacity)
                 }
+
+                // The board's leading scrim into Night, behind the hero copy.
+                // (The Sports hub draws its own.)
+                LinearGradient(
+                    stops: [
+                        .init(color: .lumeNight.opacity(0.95), location: 0),
+                        .init(color: .lumeNight.opacity(0.5), location: 0.45),
+                        .init(color: .lumeNight.opacity(0), location: 0.7)
+                    ],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
             }
             .tvHeroBackdropTreatment(belowFold: belowFold)
             .onGeometryChange(for: CGSize.self) { proxy in
@@ -233,17 +195,22 @@
         /// re-scroll to track it on every manual page and the rows below would
         /// visibly jump.
         private func info(for hero: HeroItem) -> some View {
-            VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 22) {
                 TitleLogo(
                     url: hero.logoURL,
                     title: hero.title,
-                    maxWidth: 500,
-                    maxHeight: 130
+                    maxWidth: 640,
+                    maxHeight: 150
                 ) {
+                    // The board's display title, as on the detail hero. One
+                    // line that shrinks, so the slot's height holds.
                     Text(hero.title)
-                        .font(.system(size: 56, weight: .bold))
-                        .lineLimit(2)
-                        .shadow(radius: 6)
+                        .font(.system(size: 112, weight: .heavy))
+                        .kerning(-3)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.5)
+                        .shadow(radius: 10)
+                        .frame(maxWidth: 760, alignment: .leading)
                 }
                 // Fresh identity per slide: two logos have different fitted
                 // sizes, and a STABLE image view interpolates between them —
@@ -252,14 +219,22 @@
                 // The swap happens while `infoOpacity` is 0, so replacing the
                 // view outright is invisible.
                 .id(hero.id)
-                .frame(height: 130, alignment: .bottomLeading)
+                .frame(height: 150, alignment: .bottomLeading)
+
+                // Reserves its line when a title has no facts, for the same
+                // constant height.
+                Text(verbatim: hero.facts ?? "")
+                    .font(.system(size: 24, weight: .semibold))
+                    .foregroundStyle(Color.lumeTextSecondary)
+                    .lineLimit(1, reservesSpace: true)
 
                 Text(hero.overview)
-                    .font(.callout)
+                    .font(.system(size: 30))
+                    .lineSpacing(6)
                     .lineLimit(3, reservesSpace: true)
                     .foregroundStyle(.white.opacity(0.85))
                     .shadow(radius: 4)
-                    .frame(maxWidth: 640, alignment: .leading)
+                    .frame(maxWidth: 760, alignment: .leading)
 
                 // One STRUCTURALLY STABLE Button for every slide — a plain
                 // content swap on a stable view, so paging never drops focus.
@@ -316,7 +291,7 @@
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .focusSection()
-                .padding(.top, 10)
+                .padding(.top, 14)
             }
             .foregroundStyle(.white)
         }
@@ -326,17 +301,18 @@
         /// flip between a glassy resting style and a solid highlighted style.
         private var detailsPill: some View {
             Label("Details", systemImage: "info.circle")
-                .fontWeight(.semibold)
-                .padding(.horizontal, 28)
-                .padding(.vertical, 14)
+                .font(.system(size: 30, weight: .semibold))
+                .padding(.horizontal, 36)
+                .frame(height: 76)
                 .background(
                     heroFocused
                         ? AnyShapeStyle(.white)
                         : AnyShapeStyle(.ultraThinMaterial),
                     in: Capsule()
                 )
-                .foregroundStyle(heroFocused ? .black : .white)
-                .scaleEffect(heroFocused ? 1.04 : 1.0)
+                .foregroundStyle(heroFocused ? Color.lumeNight : .white)
+                .shadow(color: .black.opacity(heroFocused ? 0.55 : 0), radius: 25, y: 20)
+                .scaleEffect(heroFocused ? 1.06 : 1.0, anchor: .leading)
                 .animation(.easeOut(duration: 0.18), value: heroFocused)
         }
     }

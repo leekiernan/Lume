@@ -94,7 +94,8 @@ enum ProfileColor: String, CaseIterable, Identifiable {
 
     var color: Color {
         switch self {
-        case .lume: .lumeAccent
+        // Avatars draw a white glyph on the tint: the deep pink keeps it legible.
+        case .lume: .lumePinkDeep
         case .blue: .blue
         case .purple: .purple
         case .pink: .pink
