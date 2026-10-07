@@ -41,16 +41,6 @@
         @ViewBuilder var rows: Rows
 
         @State private var model = TVHeroCarouselModel<HeroItem>(prefetchURL: \.imageURL)
-        @State private var zone: TVHomeZone = .expanded
-        @State private var containerHeight: CGFloat = 0
-
-        private var showcaseHeight: CGFloat {
-            max(containerHeight - TVHomeMetrics.rowPeek, 0)
-        }
-
-        private var belowFold: Bool {
-            zone != .expanded
-        }
 
         init(
             heroItems: [HeroItem],
@@ -71,55 +61,13 @@
         }
 
         var body: some View {
-            ZStack {
-                if hasHero {
-                    TVHeroBackdrop(
-                        model: model,
-                        belowFold: belowFold,
-                        warmStartBackdropURL: warmStartBackdropURL
-                    )
-                }
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: TVHomeMetrics.rowSpacing) {
-                        if hasHero {
-                            TVHeroShowcase(model: model, onSelect: onSelectHero)
-                        }
-                        rows
-                    }
-                    // The hero fills the top inset itself when it's showing.
-                    .padding(.top, hasHero ? 0 : PosterCardMetrics.sectionVerticalPadding)
-                    .padding(.bottom, PosterCardMetrics.sectionVerticalPadding)
-                }
-                .scrollIndicators(.hidden)
-                .scrollClipDisabled()
-                .scrollTargetBehavior(TVHomeFoldBehavior(
-                    zone: zone,
-                    showcaseHeight: hasHero ? showcaseHeight : 0
-                ))
-                .onScrollGeometryChange(for: TVHomeZone.self) { geometry in
-                    TVHomeZone(
-                        offset: geometry.contentOffset.y + geometry.contentInsets.top,
-                        showcaseHeight: hasHero ? showcaseHeight : 0
-                    )
-                } action: { _, newZone in
-                    guard newZone != zone else { return }
-                    withAnimation(.easeInOut(duration: 0.5)) { zone = newZone }
-                }
-            }
-            // Full-bleed vertically so the showcase spans the real screen height
-            // and the first row peeks at the true bottom edge. Ignoring on the
-            // CONTAINER (not the ScrollView) matters: a ScrollView keeps its
-            // safe-area-reduced frame and quietly ignores this modifier. The
-            // horizontal safe area stays so rows keep their overscan inset.
-            .ignoresSafeArea(edges: .vertical)
-            .onGeometryChange(for: CGFloat.self) { proxy in
-                proxy.size.height
-            } action: { height in
-                containerHeight = height
-            }
-            .onChange(of: zone) { _, newZone in
-                model.isPaused = newZone != .expanded
-            }
+            TVHeroFeedLayout(hasHero: hasHero, onFoldChange: { model.isPaused = $0 }, backdrop: { belowFold in
+                TVHeroBackdrop(model: model, belowFold: belowFold, warmStartBackdropURL: warmStartBackdropURL)
+            }, showcase: {
+                TVHeroShowcase(model: model, onSelect: onSelectHero)
+            }, rows: {
+                rows
+            })
             .onChange(of: heroItems) { _, items in
                 model.configure(items: items)
             }

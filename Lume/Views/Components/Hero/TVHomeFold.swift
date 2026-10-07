@@ -1,5 +1,5 @@
 //
-//  TVHomeFold.swift
+//  TVHomeFold.swift — shared hero fold geometry
 //  Lume
 //
 //  Geometry and scroll-snapping for the immersive tvOS home in

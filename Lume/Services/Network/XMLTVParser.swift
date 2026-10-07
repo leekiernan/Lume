@@ -16,6 +16,8 @@ struct ParsedProgramme {
     let categories: [String]
     let start: Date
     let end: Date
+    var artworkURL: String?
+    var releaseYear: String?
 }
 
 /// Streaming SAX parser that yields batches via a callback to keep memory flat.
@@ -40,6 +42,9 @@ final nonisolated class XMLTVParser: NSObject, XMLParserDelegate {
     private var currentSubtitle = LocalizedText()
     private var currentDesc = LocalizedText()
     private var currentCategories: [String] = []
+    private var currentArtwork: String?
+    private var currentReleaseYear: String?
+    private var elements: [String] = []
     private var currentText: String = ""
     /// The `lang` attribute of the text element being read.
     private var currentLang: String?
@@ -113,6 +118,8 @@ final nonisolated class XMLTVParser: NSObject, XMLParserDelegate {
     }
 
     func parser(_: XMLParser, didStartElement elementName: String, namespaceURI _: String?, qualifiedName _: String?, attributes attributeDict: [String: String] = [:]) {
+        let parent = elements.last
+        elements.append(elementName)
         if rootElement == nil { rootElement = elementName }
         currentText = ""
         currentLang = attributeDict["lang"]
@@ -125,6 +132,10 @@ final nonisolated class XMLTVParser: NSObject, XMLParserDelegate {
             currentSubtitle = LocalizedText()
             currentDesc = LocalizedText()
             currentCategories = []
+            currentArtwork = nil
+            currentReleaseYear = nil
+        } else if elementName == "icon", parent == "programme", currentArtwork == nil {
+            currentArtwork = Self.artworkURL(attributeDict["src"])
         }
     }
 
@@ -133,6 +144,8 @@ final nonisolated class XMLTVParser: NSObject, XMLParserDelegate {
     }
 
     func parser(_ parser: XMLParser, didEndElement elementName: String, namespaceURI _: String?, qualifiedName _: String?) {
+        defer { elements.removeLast() }
+        let parent = elements.dropLast().last
         if elementName == "programme" {
             if let startDate = XMLTVDate.parse(currentStart),
                let endDate = XMLTVDate.parse(currentStop),
@@ -146,7 +159,9 @@ final nonisolated class XMLTVParser: NSObject, XMLParserDelegate {
                     description: currentDesc.value ?? "",
                     categories: currentCategories,
                     start: startDate,
-                    end: endDate
+                    end: endDate,
+                    artworkURL: currentArtwork,
+                    releaseYear: currentReleaseYear
                 ))
                 totalCount += 1
 
@@ -176,6 +191,26 @@ final nonisolated class XMLTVParser: NSObject, XMLParserDelegate {
             if !category.isEmpty {
                 currentCategories.append(category)
             }
+        } else {
+            captureProgrammeMetadata(element: elementName, parent: parent)
         }
+    }
+
+    private func captureProgrammeMetadata(element: String, parent: String?) {
+        guard parent == "programme" else { return }
+        if element == "image", currentArtwork == nil {
+            currentArtwork = Self.artworkURL(currentText)
+        } else if element == "date" {
+            let year = String(currentText.trimmingCharacters(in: .whitespacesAndNewlines).prefix(4))
+            if year.count == 4, year.allSatisfy(\.isNumber) { currentReleaseYear = year }
+        }
+    }
+
+    /// Only remote programme artwork; rating icons and channel logos are not
+    /// programme images. Keep malformed/file URLs out of the image pipeline.
+    static func artworkURL(_ raw: String?) -> String? {
+        guard let raw, let url = URL(string: raw.trimmingCharacters(in: .whitespacesAndNewlines)),
+              ["https", "http"].contains(url.scheme?.lowercased() ?? ""), url.host != nil else { return nil }
+        return url.absoluteString
     }
 }

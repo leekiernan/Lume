@@ -3,6 +3,30 @@ import Foundation
 import Testing
 
 struct TMDBClientTests {
+    @Test func `list responses carry discovery artwork original titles and release year`() async throws {
+        StubURLProtocol.register(host: "api.themoviedb.org", path: "/3/movie/top_rated", response: .init(status: 200, body: """
+        {"total_pages":1,"results":[{"id":987660,"title":"Localized Film","original_title":"Original Film",
+          "poster_path":"/portrait.jpg","backdrop_path":"/wide.jpg","overview":"Film synopsis","release_date":"2021-06-01"}]}
+        """))
+        StubURLProtocol.register(host: "api.themoviedb.org", path: "/3/tv/top_rated", response: .init(status: 200, body: """
+        {"total_pages":1,"results":[{"id":987661,"name":"Localized Show","original_name":"Original Show",
+          "poster_path":"/show.jpg","first_air_date":"2005-03-24"}]}
+        """))
+        let client = TMDBClient(session: StubURLProtocol.makeSession(), token: "test-token")
+        let movie = try #require(try await client.listEntries(apiPath: "movie/top_rated", media: .movie).first)
+        #expect(movie.title == "Localized Film")
+        #expect(movie.originalTitle == "Original Film")
+        #expect(movie.backdropPath == "/wide.jpg")
+        #expect(movie.posterPath == "/portrait.jpg")
+        #expect(movie.overview == "Film synopsis")
+        #expect(movie.releaseYear == "2021")
+        let series = try #require(try await client.listEntries(apiPath: "tv/top_rated", media: .series).first)
+        #expect(series.mediaType == .series)
+        #expect(series.originalTitle == "Original Show")
+        #expect(series.releaseYear == "2005")
+        #expect(series.backdropPath == nil)
+    }
+
     @Test func `movie and show details decode portrait posters without requiring images append data`() async throws {
         for (path, poster) in [("/3/movie/987651", "/movie-poster.jpg"), ("/3/tv/987652", "/show-poster.jpg")] {
             StubURLProtocol.register(host: "api.themoviedb.org", path: path, response: .init(status: 200, body: "{\"poster_path\":\"\(poster)\",\"backdrop_path\":\"/wide.jpg\"}"))

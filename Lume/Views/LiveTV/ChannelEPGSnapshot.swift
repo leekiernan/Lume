@@ -19,11 +19,12 @@ nonisolated struct EPGSlot: Equatable {
     let title: String
     let start: Date
     let end: Date
+    var artworkURL: String?
 }
 
 nonisolated extension EPGSlot {
     init(_ listing: EPGListing) {
-        self.init(title: listing.title, start: listing.start, end: listing.end)
+        self.init(title: listing.title, start: listing.start, end: listing.end, artworkURL: listing.artworkURL)
     }
 
     init(_ listing: EPGWindowListing) {
@@ -85,10 +86,10 @@ enum ChannelEPGLoader {
             },
             sortBy: [SortDescriptor(\.channelId), SortDescriptor(\.start)]
         )
-        // The four fields a `ChannelEPG` is built from. `listingDescription` is
+        // The narrow fields a `ChannelEPG` is built from. `listingDescription` is
         // the widest column in the table and nothing here reads it, so a partial
         // fetch keeps it out of the rows entirely.
-        descriptor.propertiesToFetch = [\.channelId, \.title, \.start, \.end]
+        descriptor.propertiesToFetch = [\.channelId, \.title, \.start, \.end, \.artworkURL]
         guard let listings = try? context.fetch(descriptor) else { return [:] }
 
         var grouped: [String: [EPGListing]] = [:]

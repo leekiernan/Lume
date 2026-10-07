@@ -1,5 +1,5 @@
 //
-//  HeroPageIndicator.swift
+//  HeroPageIndicator.swift — shared carousel dots
 //  Lume
 //
 //  The hero carousel's slide dots, shared by the iOS/macOS carousel

@@ -14,21 +14,6 @@
 
 import Foundation
 
-/// A single title from a remote list, keyed by TMDB id (the same key the
-/// trending and Trakt rows match on) and ordered by the list's own ordering.
-nonisolated struct HomeListEntry: Hashable {
-    enum MediaType: Hashable {
-        case movie
-        case series
-    }
-
-    let tmdbId: Int
-    let mediaType: MediaType
-    /// The list's own title for the entry. Only used for diagnostics and the
-    /// editor's preview — the row itself shows the local catalog's title.
-    let title: String
-}
-
 nonisolated enum HomeListError: LocalizedError, Equatable {
     /// The URL doesn't belong to any provider we know how to read.
     case unsupportedSource

@@ -13,13 +13,6 @@
 
 import Foundation
 
-/// One entry of a TMDB collection, reduced to what a section needs.
-nonisolated struct TMDBListEntry: Hashable {
-    let id: Int
-    let mediaType: HomeListEntry.MediaType
-    let title: String
-}
-
 extension TMDBClient {
     /// How many pages to walk. TMDB serves 20 per page, so this is 100 titles —
     /// comfortably more than a row shows, and enough that a sparse catalog
@@ -78,10 +71,24 @@ private nonisolated struct TMDBListRow: Decodable {
     let title: String?
     let name: String?
     let mediaType: String?
+    let originalTitle: String?
+    let originalName: String?
+    let backdropPath: String?
+    let posterPath: String?
+    let overview: String?
+    let releaseDate: String?
+    let firstAirDate: String?
 
     enum CodingKeys: String, CodingKey {
         case id, title, name
         case mediaType = "media_type"
+        case originalTitle = "original_title"
+        case originalName = "original_name"
+        case backdropPath = "backdrop_path"
+        case posterPath = "poster_path"
+        case overview
+        case releaseDate = "release_date"
+        case firstAirDate = "first_air_date"
     }
 
     func entry(defaulting media: HomeListEntry.MediaType?) -> TMDBListEntry? {
@@ -93,6 +100,11 @@ private nonisolated struct TMDBListRow: Decodable {
         case nil: media
         }
         guard let kind else { return nil }
-        return TMDBListEntry(id: id, mediaType: kind, title: title ?? name ?? "")
+        return TMDBListEntry(
+            id: id, mediaType: kind, title: title ?? name ?? "",
+            originalTitle: originalTitle ?? originalName, backdropPath: backdropPath,
+            posterPath: posterPath, overview: overview,
+            releaseYear: (releaseDate ?? firstAirDate).map { String($0.prefix(4)) }
+        )
     }
 }

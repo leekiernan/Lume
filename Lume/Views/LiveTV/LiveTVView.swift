@@ -36,6 +36,11 @@ struct LiveTVView: View {
     @Environment(DeepLinkRouter.self) private var selectionRouter: DeepLinkRouter?
     @State private var localSection: LiveTVSection?
     @State private var localSeededPrefix: String?
+    @State private var localPath = NavigationPath()
+
+    private var navigationPath: Binding<NavigationPath> {
+        DetailNavigation.pathBinding(in: selectionRouter, at: \.liveTVPath, fallback: $localPath)
+    }
 
     private var selectedSection: LiveTVSection? {
         get { selectionRouter?.liveTVSection ?? localSection }
@@ -136,7 +141,7 @@ struct LiveTVView: View {
     #endif
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: navigationPath) {
             if shouldResolveSections {
                 // The rail resolves in a child view: gating the two virtual
                 // sections is a pair of playlist-scoped `LIMIT 1` probes, and
@@ -165,6 +170,13 @@ struct LiveTVView: View {
                     onReturnToContent: browseReturnHandler
                 )
             }
+        }
+        .onChange(of: playlistPrefix) { _, _ in
+            // A pushed browse screen must not survive a playlist change just
+            // because its hub root's task is currently off-screen.
+            navigationPath.wrappedValue = NavigationPath()
+            selectedSection = nil
+            seededPrefix = nil
         }
         #if os(tvOS)
         .onChange(of: playlistPrefix) { _, _ in contentFocus.cancel() }
@@ -203,6 +215,11 @@ struct LiveTVView: View {
                 isPresented: $showingBrowse,
                 isEnabled: sections?.isEmpty == false
             )
+            .navigationDestination(for: LiveTVSection.self) { section in
+                layout(displayed: section)
+                    .browseSidebarToolbar(isPresented: $showingBrowse, isEnabled: sections?.isEmpty == false)
+                    .onAppear { selectedSection = section }
+            }
             // Hands the sections up to the panel, which sits above the stack.
             .onChange(of: sections?.map(\.id), initial: true) { _, _ in browseSections = sections }
         #if os(iOS) || os(tvOS)
@@ -227,8 +244,18 @@ struct LiveTVView: View {
                     description: Text("Add a playlist in Settings to start watching live TV")
                 )
             } else if let sections, !sections.isEmpty {
-                layout(for: sections)
-                    .task(id: playlistPrefix) { seedSelection(from: sections) }
+                LiveTVHubView(
+                    playlistPrefix: playlistPrefix, syncedAt: activePlaylist?.lastSyncDate,
+                    onOpenBrowse: { showingBrowse = true },
+                    onOpenGuide: {
+                        layoutModeRaw = LiveTVLayoutMode.guide.rawValue
+                        if let section = displayedSection(in: sections) { selectSection(section) }
+                    },
+                    onPlay: playHubChannel,
+                    onWatchFromStart: { playHubCatchup($0, programme: $1) },
+                    onStartMultiView: startHubMultiView
+                )
+                .task(id: playlistPrefix) { seedSelection(from: sections) }
             } else {
                 LiveTVEmptyState(sourceType: activePlaylist?.knownSourceType, playlistPrefix: playlistPrefix, restriction: restriction)
             }
@@ -243,9 +270,7 @@ struct LiveTVView: View {
 
     /// This platform's browse layout for the resolved sections. The displayed
     /// section resolves here once per render.
-    @ViewBuilder
-    private func layout(for sections: [LiveTVSection]) -> some View {
-        let displayed = displayedSection(in: sections)
+    private func layout(displayed: LiveTVSection?) -> some View {
         Group {
             #if os(tvOS)
                 tvOSLayout(displayed: displayed)
@@ -311,6 +336,9 @@ struct LiveTVView: View {
     private func selectSection(_ section: LiveTVSection) {
         selectedSection = section
         showingBrowse = false
+        // Browse is a destination, like Movies/Series categories, never a
+        // replacement for the hub. Sidebar changes replace this one level.
+        navigationPath.wrappedValue = NavigationPath([section])
         #if os(tvOS)
             // A different category is a different list: nothing to return to,
             // so the new one takes focus at the top.
@@ -329,6 +357,7 @@ struct LiveTVView: View {
         /// Leaving the panel without picking a category: the list is unchanged,
         /// so focus goes back to the channel it came from.
         private func returnFromBrowse() {
+            guard !navigationPath.wrappedValue.isEmpty else { return }
             guard let section = displayedSection(in: browseSections ?? []) else { return }
             requestContentFocus(for: section, channelID: browseReturnChannelID)
         }
@@ -382,6 +411,7 @@ struct LiveTVView: View {
     /// favorite removed) is left to `displayedSection(in:)`, as before.
     private func seedSelection(from sections: [LiveTVSection]) {
         if seededPrefix != nil, seededPrefix != playlistPrefix {
+            navigationPath.wrappedValue = NavigationPath()
             selectedSection = sections.first
         } else if selectedSection == nil {
             selectedSection = sections.first
@@ -406,6 +436,25 @@ struct LiveTVView: View {
         guard let playlist = activePlaylist,
               let media = PlayableMedia.from(stream: stream, playlist: playlist, scope: scope) else { return }
         present(media)
+    }
+
+    /// Resolve only the selected row onto the main context. Hub loading and
+    /// EPG matching pass values across actors, never managed catalog objects.
+    private func hubStream(_ id: String) -> LiveStream? {
+        LiveTVHubSelection.stream(id, prefix: playlistPrefix, restriction: restriction, in: modelContext)
+    }
+
+    private func playHubChannel(_ id: String, scope: LiveChannelScope?) {
+        if let stream = hubStream(id) { playChannel(stream, scope: scope) }
+    }
+
+    private func playHubCatchup(_ id: String, programme: EPGSlot) {
+        guard let stream = hubStream(id), stream.restartableProgramme(programme, now: .now) != nil else { return }
+        playCatchup(stream, programme: programme)
+    }
+
+    private func startHubMultiView(_ id: String) {
+        if let stream = hubStream(id) { startMultiView(with: stream) }
     }
 
     /// Replays a programme from the channel's catch-up archive — a finished one

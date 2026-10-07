@@ -27,12 +27,14 @@ enum LiveTVSection: Identifiable, Hashable {
     case favorites
     case recentlyWatched
     case category(Category)
+    case collection(id: String, title: String, channelIDs: [String])
 
     var id: String {
         switch self {
         case .favorites: "lume.liveSection.favorites"
         case .recentlyWatched: "lume.liveSection.recentlyWatched"
         case let .category(category): category.id
+        case let .collection(id, _, _): id
         }
     }
 
@@ -41,6 +43,7 @@ enum LiveTVSection: Identifiable, Hashable {
         case .favorites: .favorites
         case .recentlyWatched: .recentlyWatched
         case let .category(category): .category(category.id)
+        case let .collection(_, _, ids): .channels(ids)
         }
     }
 
@@ -50,6 +53,7 @@ enum LiveTVSection: Identifiable, Hashable {
         case .favorites: "heart.fill"
         case .recentlyWatched: "clock.arrow.circlepath"
         case .category: nil
+        case .collection: "rectangle.stack"
         }
     }
 
@@ -60,6 +64,7 @@ enum LiveTVSection: Identifiable, Hashable {
         case .favorites: Text("Favorites")
         case .recentlyWatched: Text("Recently Watched")
         case let .category(category): Text(category.name)
+        case let .collection(_, title, _): Text(title)
         }
     }
 
@@ -70,12 +75,13 @@ enum LiveTVSection: Identifiable, Hashable {
         case .favorites: String(localized: "Favorites")
         case .recentlyWatched: String(localized: "Recently Watched")
         case let .category(category): category.name
+        case let .collection(_, title, _): title
         }
     }
 
     var isVirtual: Bool {
         switch self {
-        case .favorites, .recentlyWatched: true
+        case .favorites, .recentlyWatched, .collection: true
         case .category: false
         }
     }
@@ -107,6 +113,8 @@ nonisolated enum LiveChannelScope: Hashable, Codable {
     case favorites
     /// Recently watched channels in the active playlist, newest first.
     case recentlyWatched
+    /// Bounded editorial/discovery collection in its displayed order.
+    case channels([String])
 }
 
 // MARK: - Query
@@ -133,6 +141,8 @@ nonisolated enum LiveChannelQuery {
     /// this predicate and the two compositions diverge.
     static func descriptor(for scope: LiveChannelScope, sort: ContentSortOption) -> FetchDescriptor<LiveStream> {
         switch scope {
+        case let .channels(ids):
+            return FetchDescriptor<LiveStream>(predicate: #Predicate { ids.contains($0.id) && !$0.isHidden })
         case let .category(categoryId):
             return FetchDescriptor<LiveStream>(
                 predicate: #Predicate { $0.categoryId == categoryId && $0.isHidden == false },
@@ -162,6 +172,8 @@ nonisolated enum LiveChannelQuery {
         for scope: LiveChannelScope, sort: ContentSortOption
     ) -> [SortDescriptor<LiveStream>] {
         switch scope {
+        case .channels:
+            [SortDescriptor(\LiveStream.id)]
         case .category:
             sort.liveStreamDescriptors
         case .favorites:
@@ -241,11 +253,14 @@ nonisolated enum LiveChannelQuery {
         let hasCategory = categoryID != nil
         let favoritesOnly = scope == .favorites
         let recentsOnly = scope == .recentlyWatched
+        let channelIDs: [String] = if case let .channels(ids) = scope { ids } else { [] }
+        let collectionOnly = if case .channels = scope { true } else { false }
         return probe(predicate: #Predicate { stream in
             hasPlaylist && stream.id.starts(with: prefix)
                 && (!hasCategory || stream.categoryId == categoryID)
                 && (!favoritesOnly || stream.isFavorite)
                 && (!recentsOnly || stream.lastWatchedDate != nil)
+                && (!collectionOnly || channelIDs.contains(stream.id))
                 && (stream.isHidden || excluded.contains(stream.categoryId))
         })
     }
@@ -281,10 +296,14 @@ nonisolated enum LiveChannelQuery {
         restriction: ContentRestriction
     ) -> [LiveStream] {
         switch scope {
+        case let .channels(ids):
+            let byID = Dictionary(streams.filter { isVisible($0, playlistPrefix: playlistPrefix, restriction: restriction) }
+                .map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+            return ids.compactMap { byID[$0] }
         case .category:
-            streams.excludingRestricted(restriction)
+            return streams.excludingRestricted(restriction)
         case .favorites, .recentlyWatched:
-            streams.filter { isVisible($0, playlistPrefix: playlistPrefix, restriction: restriction) }
+            return streams.filter { isVisible($0, playlistPrefix: playlistPrefix, restriction: restriction) }
         }
     }
 
@@ -308,7 +327,7 @@ nonisolated enum LiveChannelQuery {
         playlistPrefix: String,
         restriction: ContentRestriction
     ) -> Bool {
-        stream.id.hasPrefix(playlistPrefix) && !restriction.hides(categoryID: stream.categoryId)
+        !stream.isHidden && stream.id.hasPrefix(playlistPrefix) && !restriction.hides(categoryID: stream.categoryId)
     }
 
     /// The live categories of the active playlist this viewer may see: scoped by

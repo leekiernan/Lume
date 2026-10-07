@@ -222,6 +222,11 @@ nonisolated enum LiveChannelNavigator {
         let predicate: Predicate<LiveStream>
 
         switch scope {
+        case let .channels(ids):
+            predicate = #Predicate { stream in
+                ids.contains(stream.id) && stream.id.starts(with: prefix) && !stream.isHidden
+                    && (!filters || !excluded.contains(stream.categoryId))
+            }
         case let .category(categoryId):
             if let admitted {
                 predicate = #Predicate { stream in
@@ -401,7 +406,12 @@ nonisolated enum LiveChannelNavigator {
         in context: ModelContext
     ) -> (ring: Ring, index: Int)? {
         let ring: Ring
-        if scope == .recentlyWatched {
+        if case .channels = scope {
+            let descriptor = scopeDescriptor(scope: scope, sort: sort, playlistPrefix: prefix,
+                                             restriction: restriction, admittingHidden: nil)
+            guard let page = try? context.fetch(descriptor) else { return nil }
+            ring = .page(LiveChannelQuery.scoped(page, scope: scope, playlistPrefix: prefix, restriction: restriction))
+        } else if scope == .recentlyWatched {
             guard let recents = recentsRing(
                 sort: sort, prefix: prefix, restriction: restriction, in: context
             ) else { return nil }

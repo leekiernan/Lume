@@ -22,6 +22,7 @@ final class DeepLinkRouter {
     var seriesPath = NavigationPath()
     var sportsPath = NavigationPath()
     var homePath = NavigationPath()
+    var liveTVPath = NavigationPath()
     /// Live TV's selected section, and the playlist it was seeded for.
     var liveTVSection: LiveTVSection?
     var liveTVSeededPrefix: String?
