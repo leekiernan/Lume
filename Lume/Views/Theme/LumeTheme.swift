@@ -38,6 +38,12 @@
 import SwiftUI
 
 extension Color {
+    /// Brand status/progress on a resting TV row or its native white focus fill.
+    /// Accent-filled controls instead use `lumeOnAccent` for their foreground.
+    static func lumeFocusAwareAccent(isFocused: Bool) -> Color {
+        isFocused ? .lumePinkDeep : .lumeAccent
+    }
+
     /// Red text on the resting Settings surface or its white tvOS focus lift.
     static func lumeDestructiveText(isFocused: Bool) -> Color {
         isFocused ? .lumeLiveRed : .lumeDestructive

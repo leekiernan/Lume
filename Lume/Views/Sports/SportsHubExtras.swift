@@ -367,6 +367,7 @@ struct SportsHeroInfo: View {
                             Image(systemName: "play.fill")
                         }
                         .font(.subheadline.weight(.bold))
+                        .foregroundStyle(Color.lumeOnAccent)
                         .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.borderedProminent)
@@ -375,6 +376,7 @@ struct SportsHeroInfo: View {
                     SportsReminderButton(fixture: fixture) { label in
                         label
                             .font(.subheadline.weight(.bold))
+                            .foregroundStyle(Color.lumeOnAccent)
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.borderedProminent)

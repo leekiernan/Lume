@@ -74,7 +74,7 @@ struct EPGProgramDetailView: View {
                         if stream.supportsCatchup {
                             Label("Catch-up available for \(stream.catchupArchiveDays) days", systemImage: "clock.arrow.circlepath")
                                 .font(.subheadline)
-                                .foregroundStyle(.blue)
+                                .foregroundStyle(.lumeAccent)
                         }
 
                         watchButton
@@ -134,7 +134,7 @@ struct EPGProgramDetailView: View {
                         if stream.supportsCatchup {
                             Label("Catch-up available for \(stream.catchupArchiveDays) days", systemImage: "clock.arrow.circlepath")
                                 .font(.system(size: 26))
-                                .foregroundStyle(.blue)
+                                .foregroundStyle(.lumeAccent)
                         }
 
                         // Keep the actions above the synopsis. The buttons are the
@@ -200,7 +200,7 @@ struct EPGProgramDetailView: View {
         private var tvStatusBadge: some View {
             Group {
                 if isLive {
-                    tvBadge("On Now", color: .lumeAccent)
+                    tvBadge("On Now", color: .lumeAccent, foreground: .lumeOnAccent)
                 } else if cell.isPast(at: now) {
                     tvBadge("Earlier", color: .secondary)
                 } else {
@@ -209,11 +209,11 @@ struct EPGProgramDetailView: View {
             }
         }
 
-        private func tvBadge(_ title: LocalizedStringKey, color: Color) -> some View {
+        private func tvBadge(_ title: LocalizedStringKey, color: Color, foreground: Color = .white) -> some View {
             Text(title)
                 .font(.system(size: 24, weight: .bold))
                 .textCase(.uppercase)
-                .foregroundStyle(.white)
+                .foregroundStyle(foreground)
                 .padding(.horizontal, 18)
                 .padding(.vertical, 8)
                 .background(Capsule().fill(color))
@@ -287,15 +287,10 @@ struct EPGProgramDetailView: View {
     private var watchButton: some View {
         if canPlayCatchup {
             VStack(spacing: 10) {
-                Button {
+                PrimaryPlayButton(title: "Watch from Start") {
                     onPlayCatchup()
                     dismiss()
-                } label: {
-                    Label("Watch from Start", systemImage: "play.fill")
-                        .font(.headline)
-                        .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.borderedProminent)
 
                 Button {
                     onPlay()
@@ -310,16 +305,10 @@ struct EPGProgramDetailView: View {
             .controlSize(.large)
             .padding(.top, 4)
         } else {
-            Button {
+            PrimaryPlayButton(title: "Watch Live") {
                 onPlay()
                 dismiss()
-            } label: {
-                Label("Watch Live", systemImage: "play.fill")
-                    .font(.headline)
-                    .frame(maxWidth: .infinity)
             }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
             .padding(.top, 4)
         }
     }

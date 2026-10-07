@@ -408,7 +408,7 @@ struct EPGProgramBlockView: View {
         #if os(tvOS)
             // Pink on the translucent fill; the deep pink on the focused white
             // one, where the light pink would wash out.
-            return isFocused ? .lumePinkDeep : EPGColors.live
+            return .lumeFocusAwareAccent(isFocused: isFocused)
         #else
             // `lumeOnAccent`: the focused block's fill is the accent itself.
             return isFocused ? .lumeOnAccent : .lumeAccent

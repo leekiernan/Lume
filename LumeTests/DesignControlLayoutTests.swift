@@ -19,6 +19,17 @@ struct DesignControlLayoutTests {
         #expect(image.height >= 44)
     }
 
+    @Test func `the shared primary play action grows with accessibility text`() throws {
+        let button = PrimaryPlayButton(title: "Watch from Start", action: {})
+            .frame(width: 320)
+        let standard = try #require(ImageRenderer(content: button.dynamicTypeSize(.large)).cgImage)
+        let accessible = try #require(ImageRenderer(content: button.dynamicTypeSize(.accessibility5)).cgImage)
+        #expect(standard.height >= 44)
+        #expect(accessible.height > standard.height)
+        #expect(standard.width == 320)
+        #expect(accessible.width == 320)
+    }
+
     private func chipSize(at size: DynamicTypeSize) throws -> CGSize {
         let renderer = ImageRenderer(content:
             Button("Movies", action: {})
