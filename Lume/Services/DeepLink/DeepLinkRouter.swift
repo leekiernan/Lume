@@ -23,8 +23,6 @@ final class DeepLinkRouter {
     var sportsPath = NavigationPath()
     var homePath = NavigationPath()
     var liveTVPath = NavigationPath()
-    /// Live TV's pushed browse section. The hub clears this on returning to root.
-    var liveTVSection: LiveTVSection?
     #if os(tvOS)
         /// Non-nil while Multi-View is covering the app; carries the channels it
         /// opened with, when it was started from a channel's long-press menu

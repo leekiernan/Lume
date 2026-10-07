@@ -7,13 +7,12 @@
 //  styled after the Apple TV app's browse panel, sitting close to the screen
 //  edge with the page still visible behind it.
 //
-//  Rows hand their selection back through their own action rather than
-//  navigating themselves, so each screen keeps its own meaning for "pick":
-//  Movies and Live TV push a category destination, Sports changes
-//  the hub's scope.
+//  The shared state remembers a row and dismisses the panel before invoking
+//  its destination action. Areas describe rows and typed destinations only;
+//  the menu does not keep a separate active-category/filter selection.
 //
 //  On tvOS the panel is focus-driven (`browseSidebarFocus`): it takes focus when
-//  it opens — on the selected row, else the row it was last left on, else the
+//  it opens — on the row it was last left on, else the
 //  first — and closes as soon as focus leaves it. Pressing right returns to the
 //  content, Menu goes back up. Only Select acts; moving through the list never
 //  does. Elsewhere a tap on the scrim closes it.
@@ -61,21 +60,15 @@ struct BrowseSidebarPanel: View {
         }
     }
 
-    @Binding var isPresented: Bool
+    @Bindable var state: BrowseSidebarState
     let title: Text
     let sections: [Section]
-    /// The row for what the page currently shows: checked, and where focus
-    /// lands when the panel opens, even if another row was last focused.
-    var selectedId: String?
     /// Hands focus back to where the page had it as the panel closes. Without
     /// one, the page is left to the focus engine.
     var onReturnToContent: (() -> Void)?
 
     #if os(tvOS)
         @FocusState private var focusedRow: String?
-        /// The row the panel was last left on, so reopening returns there. Kept
-        /// here, on a view that outlives the panel's own content.
-        @State private var lastFocusedRow: String?
     #endif
 
     // MARK: - Metrics
@@ -158,7 +151,7 @@ struct BrowseSidebarPanel: View {
 
     var body: some View {
         ZStack(alignment: .leading) {
-            if isPresented {
+            if state.isPresented {
                 scrim
                 panel
                     .transition(.move(edge: .leading).combined(with: .opacity))
@@ -173,7 +166,7 @@ struct BrowseSidebarPanel: View {
         // On iOS the panel respects the bottom safe area supplied by TabView,
         // including its expanded/minimized navigation. Only the scrim extends
         // beyond it, so the final browse row stays visible and tappable.
-        .animation(.snappy(duration: 0.28), value: isPresented)
+        .animation(.snappy(duration: 0.28), value: state.isPresented)
     }
 
     private var scrim: some View {
@@ -182,7 +175,7 @@ struct BrowseSidebarPanel: View {
             .ignoresSafeArea()
         // tvOS has no pointer to dismiss with — Menu and focus do it instead.
         #if !os(tvOS)
-            .onTapGesture { isPresented = false }
+            .onTapGesture { state.isPresented = false }
         #endif
             .accessibilityHidden(true)
             .transition(.opacity)
@@ -195,7 +188,7 @@ struct BrowseSidebarPanel: View {
                     // The panel covers the toolbar's browse button, so it
                     // carries its own: the same icon, closing it.
                     Button {
-                        isPresented = false
+                        state.isPresented = false
                     } label: {
                         Image(systemName: "line.3.horizontal")
                             .font(.title3.weight(.semibold))
@@ -226,11 +219,11 @@ struct BrowseSidebarPanel: View {
                 .scrollIndicators(.hidden)
                 #if os(tvOS)
                     .browseSidebarFocus(
-                        isPresented: $isPresented,
+                        isPresented: $state.isPresented,
                         focus: $focusedRow,
                         scrollProxy: proxy,
                         scrollTarget: { AnyHashable(EntryID.row($0)) },
-                        lastFocused: $lastFocusedRow,
+                        lastFocused: $state.rememberedRowID,
                         onReturnToContent: onReturnToContent,
                         target: { landingRow }
                     )
@@ -288,8 +281,9 @@ struct BrowseSidebarPanel: View {
     /// One full-width row. Full width matters on tvOS: a narrow target won't
     /// catch "down" from the row above (see CLAUDE.md).
     private func rowView(_ row: Row) -> some View {
-        let isSelected = row.id == selectedId
-        return Button(action: row.action) {
+        return Button {
+            state.activate(rowID: row.id, navigate: row.action)
+        } label: {
             HStack(spacing: iconSpacing) {
                 if let systemImage = row.systemImage {
                     Image(systemName: systemImage)
@@ -314,39 +308,31 @@ struct BrowseSidebarPanel: View {
                     .font(rowFont)
                     .lineLimit(row.titleLineLimit)
                 Spacer(minLength: 0)
-                if isSelected {
-                    Image(systemName: "checkmark")
-                        .font(.subheadline.weight(.semibold))
-                }
             }
             .contentShape(Rectangle())
             .padding(.horizontal, contentPadding)
             .padding(.vertical, rowVerticalPadding)
         }
-        .buttonStyle(BrowseSidebarRowButtonStyle(isSelected: isSelected, dimsAtRest: selectedId != nil))
+        .buttonStyle(BrowseSidebarRowButtonStyle())
         #if os(tvOS)
             .focused($focusedRow, equals: row.id)
         #endif
     }
 
     #if os(tvOS)
-        /// The selected row, then the row last left on, then the top — each
+        /// The row last left on, then the top — each
         /// checked against the current rows, which can change between opens.
         private var landingRow: String? {
-            BrowseSidebarFocusPolicy.landingID(selectedID: selectedId, lastFocusedID: lastFocusedRow,
+            BrowseSidebarFocusPolicy.landingID(lastFocusedID: state.rememberedRowID,
                                                availableIDs: sections.flatMap(\.rows).map(\.id))
         }
     #endif
 }
 
-/// Quiet row treatment: the label carries the emphasis; a fill appears under
-/// focus or press, and the selected row takes the redesign's selection (Lume
-/// pink on a pink tint). Where a row is selected the others step back; a list
-/// with no selection stays at full strength.
+/// Browse is navigation, not a persistent filter selection. Every area uses
+/// the same quiet rows, with a fill only under native focus or press. Remembered
+/// focus never checks a category or dims the other destinations.
 private struct BrowseSidebarRowButtonStyle: ButtonStyle {
-    let isSelected: Bool
-    let dimsAtRest: Bool
-
     #if os(tvOS)
         @Environment(\.isFocused) private var isFocused
     #endif
@@ -354,32 +340,18 @@ private struct BrowseSidebarRowButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         #if os(tvOS)
             configuration.label
-                .foregroundStyle(tvForeground)
+                .foregroundStyle(.white)
                 .background(
                     RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .fill(tvFill)
+                        .fill(isFocused ? .white.opacity(0.18) : .clear)
                 )
         #else
             configuration.label
-                .foregroundStyle(isSelected ? Color.lumeAccent : !dimsAtRest ? Color.primary : Color.secondary)
+                .foregroundStyle(Color.primary)
                 .background(
                     RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(configuration.isPressed ? Color.primary.opacity(0.12)
-                            : isSelected ? Color.lumeSelection : .clear)
+                        .fill(configuration.isPressed ? Color.primary.opacity(0.12) : .clear)
                 )
         #endif
     }
-
-    #if os(tvOS)
-        private var tvForeground: Color {
-            if isFocused { return .white }
-            if isSelected { return .lumeAccent }
-            return dimsAtRest ? .white.opacity(0.72) : .white
-        }
-
-        private var tvFill: Color {
-            if isFocused { return .white.opacity(0.18) }
-            return isSelected ? Color.lumeSelection : .clear
-        }
-    #endif
 }

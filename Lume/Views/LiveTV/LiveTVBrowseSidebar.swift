@@ -9,9 +9,8 @@
 import SwiftUI
 
 struct LiveTVBrowseSidebar: View {
-    @Binding var isPresented: Bool
+    let state: BrowseSidebarState
     let sections: [LiveTVSection]
-    let selectedSection: LiveTVSection?
     let onSelect: (LiveTVSection) -> Void
     /// Hands focus back to the channel the viewer came from — see
     /// `LiveTVView.returnFromBrowse`.
@@ -19,10 +18,9 @@ struct LiveTVBrowseSidebar: View {
 
     var body: some View {
         BrowseSidebarPanel(
-            isPresented: $isPresented,
+            state: state,
             title: Text("Live TV"),
             sections: panelSections,
-            selectedId: sections.first { $0.id == selectedSection?.id }?.id,
             onReturnToContent: onReturnToContent
         )
     }

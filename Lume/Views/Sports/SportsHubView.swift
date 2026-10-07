@@ -53,7 +53,7 @@ struct SportsHubView: View {
     @State private var selectedFixture: SportsFixture?
     @State private var pickerFixture: SportsFixture?
     @State private var showManageTeams = false
-    @State private var showingBrowse = false
+    @State private var browse = BrowseSidebarState()
     @State private var showPaywall = false
     @State private var pendingEvent: SportsPayPerView.Event?
     /// A team page's season: drawn below its games, and the source of the
@@ -91,7 +91,7 @@ struct SportsHubView: View {
                         showingSettings: $showingSettings,
                         activePlaylist: playlists.active(for: selectedPlaylistID)
                     ))
-                    .browseSidebarToolbar(isPresented: $showingBrowse, isEnabled: premium.isPremium)
+                    .browseSidebarToolbar(isPresented: $browse.isPresented, isEnabled: premium.isPremium)
                     .navigationDestination(for: SportsFollowRoute.self) { route in
                         SportsHubView(pageKey: route.key)
                     }
@@ -101,14 +101,10 @@ struct SportsHubView: View {
             .overlay(alignment: .leading) {
                 if premium.isPremium {
                     SportsBrowseSidebar(
-                        isPresented: $showingBrowse,
+                        state: browse,
                         entries: grouping.sidebarEntries,
-                        onSelect: { key in
-                            showingBrowse = false
-                            open(follow: key)
-                        },
+                        onSelect: open(follow:),
                         onManageTeams: {
-                            showingBrowse = false
                             showManageTeams = true
                         }
                     )

@@ -92,7 +92,7 @@
                     if let item {
                         handoff.didFocusRow()
                         // Where to reopen: wherever the panel was left.
-                        lastFocused = item
+                        if handoff.shouldRememberFocus { lastFocused = item }
                         return
                     }
                     // Focus left the panel some other way than the exits
