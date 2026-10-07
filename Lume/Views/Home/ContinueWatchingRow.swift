@@ -21,24 +21,38 @@ enum ContinueWatchingMetrics {
     /// The most the logo may take.
     static let infoWidth: CGFloat = (cardWidth * 0.6).rounded()
     static let logoMaxHeight: CGFloat = (cardHeight * 0.3).rounded()
-    static let rowHeight: CGFloat = cardHeight + 2 * PosterCardMetrics.railVerticalPadding
     /// TMDB sizes: the card is never wider than ~340pt (tvOS), so `w780`
     /// covers 2× without pulling a 1920px hero backdrop per card.
     static let backdropSize = "w780"
     static let logoSize = "w500"
 
     #if os(tvOS)
+        static let rowHeight: CGFloat? = cardHeight + 2 * PosterCardMetrics.railVerticalPadding
+        static let fixedCardHeight: CGFloat? = cardHeight
+        static let titleWidth: CGFloat = infoWidth
         static let inset: CGFloat = 16
         /// The foundations' Caption: 22 Medium.
         static let labelFont: Font = .system(size: 22, weight: .medium)
         static let glyphFont: Font = .system(size: 16, weight: .bold)
         static let fallbackTitleFont: Font = .system(size: 26, weight: .bold)
     #else
+        /// The horizontal rail fits the tallest card rather than clipping larger text.
+        static let rowHeight: CGFloat? = nil
+        static let fixedCardHeight: CGFloat? = nil
+        static let titleWidth: CGFloat = cardWidth - 2 * inset
         static let inset: CGFloat = 8
-        static let labelFont: Font = .system(size: 11, weight: .medium)
-        static let glyphFont: Font = .system(size: 8, weight: .bold)
-        static let fallbackTitleFont: Font = .system(size: 13, weight: .bold)
+        static let labelFont: Font = .caption.weight(.medium)
+        static let glyphFont: Font = .caption2.weight(.bold)
+        static let fallbackTitleFont: Font = .subheadline.weight(.bold)
     #endif
+
+    static func metadataLineLimit(at size: DynamicTypeSize) -> Int? {
+        #if os(tvOS)
+            1
+        #else
+            size.isAccessibilitySize ? nil : 2
+        #endif
+    }
 }
 
 struct ContinueWatchingRow: View {
@@ -233,7 +247,7 @@ private struct ContinueWatchingCell: View {
 
 // MARK: - Cards
 
-private struct ContinueWatchingCard: View {
+struct ContinueWatchingCard: View {
     let title: String
     let backdropURL: URL?
     /// The portrait provider art, shown filled when there's no backdrop.
@@ -243,33 +257,15 @@ private struct ContinueWatchingCard: View {
     let label: String?
 
     private typealias Metrics = ContinueWatchingMetrics
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         ZStack(alignment: .bottomLeading) {
-            CachedAsyncImage(url: backdropURL ?? posterURL, maxPixelSize: Metrics.cardWidth) { phase in
-                switch phase {
-                case let .success(image):
-                    image
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                default:
-                    Rectangle().fill(PosterTitleTile.color(for: title))
-                }
-            }
-            .frame(width: Metrics.cardWidth, height: Metrics.cardHeight)
-
-            // Keeps the logo and the label legible on any backdrop.
-            LinearGradient(
-                colors: [.clear, .black.opacity(0.75)],
-                startPoint: UnitPoint(x: 0.5, y: 0.35),
-                endPoint: .bottom
-            )
-
             VStack(alignment: .leading, spacing: Metrics.inset / 2) {
                 TitleLogo(
                     url: logoURL,
                     title: title,
-                    maxWidth: Metrics.infoWidth,
+                    maxWidth: Metrics.titleWidth,
                     maxHeight: Metrics.logoMaxHeight,
                     alignment: .leading
                 ) {
@@ -278,7 +274,7 @@ private struct ContinueWatchingCard: View {
                         .foregroundStyle(.white)
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
-                        .frame(maxWidth: Metrics.infoWidth, alignment: .leading)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 if let label {
                     Text(label)
@@ -286,7 +282,7 @@ private struct ContinueWatchingCard: View {
                         .foregroundStyle(Color.lumeTextSecondary)
                         // Always over the card's dark scrim, in either appearance.
                         .environment(\.colorScheme, .dark)
-                        .lineLimit(1)
+                        .lineLimit(Metrics.metadataLineLimit(at: dynamicTypeSize))
                 }
             }
             .padding(Metrics.inset)
@@ -296,7 +292,27 @@ private struct ContinueWatchingCard: View {
                 ArtworkProgressBar(fraction: fraction)
             }
         }
-        .frame(width: Metrics.cardWidth, height: Metrics.cardHeight)
+        .frame(width: Metrics.cardWidth)
+        .frame(minHeight: Metrics.cardHeight, alignment: .bottomLeading)
+        .frame(height: Metrics.fixedCardHeight)
+        .background {
+            CachedAsyncImage(url: backdropURL ?? posterURL, maxPixelSize: Metrics.cardWidth) { phase in
+                switch phase {
+                case let .success(image):
+                    image.resizable().aspectRatio(contentMode: .fill)
+                default:
+                    Rectangle().fill(PosterTitleTile.color(for: title))
+                }
+            }
+            // Keeps the logo and metadata legible as the card grows.
+            .overlay {
+                LinearGradient(
+                    colors: [.clear, .black.opacity(0.75)],
+                    startPoint: UnitPoint(x: 0.5, y: 0.35),
+                    endPoint: .bottom
+                )
+            }
+        }
         .clipShape(RoundedRectangle(cornerRadius: PosterCardMetrics.cornerRadius))
         .contentShape(RoundedRectangle(cornerRadius: PosterCardMetrics.cornerRadius))
         #if !os(tvOS)
@@ -309,48 +325,66 @@ private struct ContinueWatchingCard: View {
 
 /// A channel from Recently Watched: its logo on the plate the poster rails use,
 /// and LIVE where a title shows its progress.
-private struct ContinueWatchingChannelCard: View {
+struct ContinueWatchingChannelCard: View {
     let name: String
     let logoURL: URL?
 
     private typealias Metrics = ContinueWatchingMetrics
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
-        ZStack(alignment: .bottomLeading) {
-            LinearGradient(colors: [Color(white: 0.30), Color(white: 0.14)], startPoint: .top, endPoint: .bottom)
-            CachedAsyncImage(url: logoURL, maxPixelSize: Metrics.cardWidth) { phase in
-                if case let .success(image) = phase {
-                    image
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                } else {
-                    Image(systemName: "antenna.radiowaves.left.and.right")
-                        .font(.largeTitle)
-                        .foregroundStyle(.white.opacity(0.6))
-                }
+        cardContent
+            .frame(width: Metrics.cardWidth)
+            .frame(minHeight: Metrics.cardHeight, alignment: .bottomLeading)
+            .frame(height: Metrics.fixedCardHeight)
+            .background {
+                LinearGradient(colors: [Color(white: 0.30), Color(white: 0.14)], startPoint: .top, endPoint: .bottom)
             }
-            .padding(.horizontal, Metrics.cardWidth * 0.2)
-            .padding(.vertical, Metrics.cardHeight * 0.2)
-            .frame(width: Metrics.cardWidth, height: Metrics.cardHeight)
+            .clipShape(RoundedRectangle(cornerRadius: PosterCardMetrics.cornerRadius))
+            .contentShape(RoundedRectangle(cornerRadius: PosterCardMetrics.cornerRadius))
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(Text(name))
+    }
 
-            HStack(spacing: Metrics.inset / 2) {
-                Text(name)
-                    .font(Metrics.labelFont)
-                    .lineLimit(1)
-                Text("LIVE")
-                    .font(Metrics.glyphFont)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(Color.lumeLiveRed, in: Capsule())
+    @ViewBuilder private var cardContent: some View {
+        #if os(tvOS)
+            ZStack(alignment: .bottomLeading) { logo; metadata }
+        #else
+            VStack(alignment: .leading, spacing: 0) { logo; metadata }
+        #endif
+    }
+
+    private var logo: some View {
+        CachedAsyncImage(url: logoURL, maxPixelSize: Metrics.cardWidth) { phase in
+            if case let .success(image) = phase {
+                image
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+            } else {
+                Image(systemName: "antenna.radiowaves.left.and.right")
+                    .font(.largeTitle)
+                    .foregroundStyle(.white.opacity(0.6))
             }
-            .foregroundStyle(.white)
-            .frame(maxWidth: Metrics.cardWidth - 2 * Metrics.inset, alignment: .leading)
-            .padding(Metrics.inset)
         }
-        .frame(width: Metrics.cardWidth, height: Metrics.cardHeight)
-        .clipShape(RoundedRectangle(cornerRadius: PosterCardMetrics.cornerRadius))
-        .contentShape(RoundedRectangle(cornerRadius: PosterCardMetrics.cornerRadius))
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Text(name))
+        .padding(.horizontal, Metrics.cardWidth * 0.2)
+        .padding(.vertical, Metrics.cardHeight * 0.2)
+        .frame(width: Metrics.cardWidth, height: Metrics.fixedCardHeight ?? Metrics.cardHeight * 0.65)
+    }
+
+    private var metadata: some View {
+        HStack(spacing: Metrics.inset / 2) {
+            Text(name)
+                .font(Metrics.labelFont)
+                .lineLimit(Metrics.metadataLineLimit(at: dynamicTypeSize))
+            Text("LIVE")
+                .font(Metrics.glyphFont)
+                .fixedSize()
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(Color.lumeLiveRed, in: Capsule())
+        }
+        .foregroundStyle(.white)
+        .frame(maxWidth: Metrics.cardWidth - 2 * Metrics.inset, alignment: .leading)
+        .padding(Metrics.inset)
     }
 }

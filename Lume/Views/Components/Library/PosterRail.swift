@@ -5,7 +5,8 @@ struct PosterRail<Destination: Hashable, Content: View>: View {
     let title: Text
     let showAll: Destination?
     var groupsFocus = false
-    var rowHeight: CGFloat = PosterCardMetrics.rowHeight
+    /// Nil lets metadata-bearing cards grow with Dynamic Type.
+    var rowHeight: CGFloat? = PosterCardMetrics.rowHeight
     @ViewBuilder let content: () -> Content
 
     var body: some View {
@@ -27,12 +28,24 @@ struct PosterRail<Destination: Hashable, Content: View>: View {
             }
             .padding(.horizontal)
             ScrollView(.horizontal, showsIndicators: false) {
-                LazyHStack(spacing: PosterCardMetrics.railSpacing, content: content)
+                cards
                     .padding(.horizontal)
                     .padding(.vertical, PosterCardMetrics.railVerticalPadding)
             }
             .scrollClipDisabled()
+            .fixedSize(horizontal: false, vertical: rowHeight == nil)
             .frame(height: rowHeight)
+        }
+    }
+
+    @ViewBuilder private var cards: some View {
+        if rowHeight == nil {
+            // The short Continue Watching rail measures every card up front,
+            // so horizontal scrolling cannot change its height. Poster rails
+            // retain lazy loading and their fixed artwork geometry.
+            HStack(spacing: PosterCardMetrics.railSpacing, content: content)
+        } else {
+            LazyHStack(spacing: PosterCardMetrics.railSpacing, content: content)
         }
     }
 }
