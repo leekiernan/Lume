@@ -12,8 +12,8 @@ import SwiftData
 import SwiftUI
 
 /// The mark's load state while the engine is preparing or (re)buffering. The
-/// optional `title` is supplied only on the first open — where the dimmed
-/// backdrop reads as "Loading <title>…" — and dropped for mid-stream stalls so
+/// optional `title` is supplied only on the first open — where the branded
+/// ground reads as "Loading <title>…" — and dropped for mid-stream stalls so
 /// the spinner sits unobtrusively over the paused frame. Opening a live
 /// channel, it also shows what's on it now, so a surf reads as where it's
 /// going before the picture arrives.
@@ -40,10 +40,7 @@ struct PlayerLoadingIndicator: View {
 
     var body: some View {
         ZStack {
-            // A light dim keeps the spinner legible over a bright first frame
-            // without fully hiding the video once it starts to come through.
-            Color.black.opacity(0.4)
-                .ignoresSafeArea()
+            PlayerLoadingBackground(isOpening: title != nil)
 
             VStack(spacing: spacing) {
                 LumeMark(motion: motion)
