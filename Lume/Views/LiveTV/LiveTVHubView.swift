@@ -156,18 +156,14 @@ struct LiveTVHubView: View {
 
     @ViewBuilder private func programmeRail(title: Text, programmes: [LiveTVHubProgramme], now: Date) -> some View {
         if !programmes.isEmpty {
-            PosterRail<LiveTVSection, _>(title: title, showAll: nil, groupsFocus: true, fitsContentHeight: true) {
+            PosterRail<LiveTVSection, _>(title: title, showAll: nil, groupsFocus: true, rowHeight: LiveTVHubCard.height + 56) {
                 ForEach(programmes) { programme in
-                    VStack(alignment: .leading, spacing: 12) {
-                        Button { selectedProgramme = programme } label: {
-                            LiveTVHubCard(channel: programme.channel,
-                                          slot: EPGSlot(title: programme.title, start: programme.start, end: programme.end, artworkURL: programme.artworkURL),
-                                          now: now, programmeArtwork: true)
-                        }
-                        .liveTVHubCardStyle()
-                        LiveTVProgrammeReminderButton(programme: programme)
+                    Button { selectedProgramme = programme } label: {
+                        LiveTVHubCard(channel: programme.channel,
+                                      slot: EPGSlot(title: programme.title, start: programme.start, end: programme.end, artworkURL: programme.artworkURL),
+                                      now: now, programmeArtwork: true)
                     }
-                    .padding(.vertical, 12)
+                    .liveTVHubCardStyle()
                 }
             }
         }
