@@ -76,7 +76,7 @@ struct SyncProgressView: View {
                 standardBody
             #endif
         }
-        .syncCompletionToasts(priority: 2)
+        .inAppToasts(priority: 2)
         .retryingSync(of: playlist.id, failed: phase == .failed, retry: startSync)
         .onChange(of: epg.isSyncing) { _, running in
             if running, finishedAt != nil { sawGuideRunning = true }

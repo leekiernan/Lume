@@ -3,6 +3,10 @@ import Foundation
 import Testing
 
 struct DeepLinkTests {
+    @Test func `programme reminder opens Live TV without starting playback`() throws {
+        #expect(try DeepLink(url: #require(URL(string: "lume://live-tv"))) == .liveTV)
+    }
+
     @Test func `parses movie link`() throws {
         let url = try #require(URL(string: "lume://movie/603"))
         #expect(DeepLink(url: url) == .movie(tmdbId: 603))

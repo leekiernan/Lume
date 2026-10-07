@@ -33,7 +33,7 @@ struct PlaylistSyncRunTests {
         let fileURL = try playlistFile()
         defer { try? FileManager.default.removeItem(at: fileURL) }
         let playlist = try makePlaylist(container: container, fileURL: fileURL)
-        let notifications = SyncCompletionNotifications()
+        let notifications = InAppNotifications()
         let plan = PlaylistSyncPlan(sourceType: .m3u, enabledAreas: [.movies, .series])
 
         try await PlaylistSyncRun.perform(playlist, container: container, plan: plan, notifications: notifications)
@@ -49,7 +49,7 @@ struct PlaylistSyncRunTests {
             container: container,
             fileURL: FileManager.default.temporaryDirectory.appendingPathComponent("missing-\(UUID()).m3u")
         )
-        let notifications = SyncCompletionNotifications()
+        let notifications = InAppNotifications()
         let plan = PlaylistSyncPlan(sourceType: .m3u, enabledAreas: [.movies, .series])
 
         do {
@@ -66,7 +66,7 @@ struct PlaylistSyncRunTests {
         let fileURL = try playlistFile()
         defer { try? FileManager.default.removeItem(at: fileURL) }
         let playlist = try makePlaylist(container: container, fileURL: fileURL)
-        let notifications = SyncCompletionNotifications()
+        let notifications = InAppNotifications()
         let plan = PlaylistSyncPlan(sourceType: .m3u, enabledAreas: [.movies, .series])
 
         let task = Task {

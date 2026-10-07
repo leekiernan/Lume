@@ -266,7 +266,7 @@ struct LumeApp: App {
                 // toggles. tvOS keeps the system's focus colours.
                 .tint(.lumeAccent)
             #endif
-                .syncCompletionToasts(priority: 0)
+                .inAppToasts(priority: 0)
                 .environment(TraktService.shared)
                 .environment(PremiumManager.shared)
                 .environment(cloudSync)

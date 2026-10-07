@@ -18,6 +18,8 @@ struct LiveTVHubView: View {
     @State private var feed = LiveTVHubFeed()
     @State private var epgSync = EPGSyncService.shared
     @State private var selectedProgramme: LiveTVHubProgramme?
+    @AppStorage(LiveTVHubLayout.orderKey) private var sectionOrderRaw = ""
+    @AppStorage(LiveTVHubLayout.hiddenKey) private var hiddenSectionsRaw = ""
 
     init(
         playlistPrefix: String, syncedAt: Date?, onOpenBrowse: @escaping () -> Void,
@@ -87,21 +89,16 @@ struct LiveTVHubView: View {
                 rows(now: now)
             })
         #else
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: PosterCardMetrics.sectionSpacing) {
-                    if !heroes.isEmpty {
-                        HeroCarousel(items: heroes, imageURL: { $0.artworkURL.flatMap(URL.init(string:)) }, backdrop: { hero in
-                            LiveTVHubBackdrop(programme: hero)
-                        }, info: { hero, compact in
-                            LiveTVHubHeroInfo(programme: hero, now: now, isCompact: compact,
-                                              onPlay: { watch(hero) }, onInfo: { selectedProgramme = hero })
-                        })
-                    }
-                    rows(now: now)
+            HeroFeedLayout(reservesHero: !heroes.isEmpty, hero: {
+                if !heroes.isEmpty {
+                    HeroCarousel(items: heroes, imageURL: { $0.artworkURL.flatMap(URL.init(string:)) }, backdrop: { hero in
+                        LiveTVHubBackdrop(programme: hero)
+                    }, info: { hero, compact in
+                        LiveTVHubHeroInfo(programme: hero, now: now, isCompact: compact,
+                                          onPlay: { watch(hero) }, onInfo: { selectedProgramme = hero })
+                    })
                 }
-                .padding(.top, heroes.isEmpty ? PosterCardMetrics.sectionVerticalPadding : 0)
-                .padding(.bottom, PosterCardMetrics.sectionVerticalPadding)
-            }
+            }, rows: { rows(now: now) })
         #endif
     }
 
@@ -112,15 +109,26 @@ struct LiveTVHubView: View {
             if feed.isLoading { ProgressView().controlSize(.small) }
         }
         .padding(.horizontal)
-        if !recentChannels.isEmpty { personalRail(recentChannels, section: .recentlyWatched, now: now) }
-        if !favoriteChannels.isEmpty { personalRail(favoriteChannels, section: .favorites, now: now) }
-        ForEach(snapshot.collections) { collection in
-            let section = LiveTVSection.collection(id: collection.id, title: collection.title, channelIDs: collection.channels.map(\.id))
-            channelRail(collection.channels, section: section, now: now)
+        ForEach(LiveTVHubLayout.rows(orderRaw: sectionOrderRaw, hiddenRaw: hiddenSectionsRaw)) { row in
+            sectionRow(row, now: now)
         }
-        programmeRail(title: Text("Top Rated on Now"), programmes: LiveTVHubPolicy.discovery(snapshot.programmes, now: now, liveOnly: true), now: now)
-        programmeRail(title: Text("Starting Soon"), programmes: LiveTVHubPolicy.discovery(snapshot.programmes, now: now, liveOnly: false), now: now)
         BrowseCategoriesButton(onOpen: onOpenBrowse)
+    }
+
+    @ViewBuilder private func sectionRow(_ row: LiveTVHubRow, now: Date) -> some View {
+        switch row {
+        case .recentlyWatched:
+            if !recentChannels.isEmpty { personalRail(recentChannels, section: .recentlyWatched, now: now) }
+        case .favorites:
+            if !favoriteChannels.isEmpty { personalRail(favoriteChannels, section: .favorites, now: now) }
+        case .startingSoon:
+            programmeRail(title: Text(verbatim: row.title), programmes: LiveTVHubPolicy.discovery(snapshot.programmes, now: now, liveOnly: false), now: now)
+        default:
+            if let collection = snapshot.collections.first(where: { $0.id == row.id }) {
+                let section = LiveTVSection.collection(id: collection.id, title: collection.title, channelIDs: collection.channels.map(\.id))
+                channelRail(collection.channels, section: section, now: now)
+            }
+        }
     }
 
     private func personalRail(_ streams: [LiveStream], section: LiveTVSection, now: Date) -> some View {
@@ -148,16 +156,18 @@ struct LiveTVHubView: View {
 
     @ViewBuilder private func programmeRail(title: Text, programmes: [LiveTVHubProgramme], now: Date) -> some View {
         if !programmes.isEmpty {
-            PosterRail<LiveTVSection, _>(title: title, showAll: nil, groupsFocus: true, rowHeight: LiveTVHubCard.height + 56) {
+            PosterRail<LiveTVSection, _>(title: title, showAll: nil, groupsFocus: true, fitsContentHeight: true) {
                 ForEach(programmes) { programme in
-                    Button {
-                        if programme.isLive(at: now) { watch(programme) } else { selectedProgramme = programme }
-                    } label: {
-                        LiveTVHubCard(channel: programme.channel,
-                                      slot: EPGSlot(title: programme.title, start: programme.start, end: programme.end, artworkURL: programme.artworkURL),
-                                      now: now, programmeArtwork: true)
+                    VStack(alignment: .leading, spacing: 12) {
+                        Button { selectedProgramme = programme } label: {
+                            LiveTVHubCard(channel: programme.channel,
+                                          slot: EPGSlot(title: programme.title, start: programme.start, end: programme.end, artworkURL: programme.artworkURL),
+                                          now: now, programmeArtwork: true)
+                        }
+                        .liveTVHubCardStyle()
+                        LiveTVProgrammeReminderButton(programme: programme)
                     }
-                    .liveTVHubCardStyle()
+                    .padding(.vertical, 12)
                 }
             }
         }

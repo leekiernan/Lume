@@ -98,4 +98,35 @@ struct LiveTVHubPolicyTests {
         #expect(LiveTVChannelCollections.channelKey("BBC One +1") != LiveTVTitleIndex.key("BBC One"))
         #expect(LiveTVChannelCollections.channelKey("BBC One Scotland") != LiveTVTitleIndex.key("BBC One"))
     }
+
+    @Test func `country selections share resolution and reject foreign aliases`() {
+        let channels = [channel("us-abc", name: "US | ABC HD"), channel("us-cbs", name: "USA: CBS FHD"),
+                        channel("us-nbc", name: "NBC", epgID: "NBC.us@East"),
+                        channel("au-abc", name: "AUS | ABC HD"), channel("au-seven", name: "AU: Seven"),
+                        channel("au-nine", name: "AU | Nine"), channel("foreign", name: "NZ | Bravo"),
+                        channel("unlabelled", name: "Bravo")]
+        let collections = LiveTVChannelCollections.resolve(channels)
+        #expect(collections.map(\.id) == ["us-essentials", "au-essentials"])
+        #expect(collections[0].channels.map(\.id) == ["us-abc", "us-cbs", "us-nbc"])
+        #expect(collections[1].channels.map(\.id) == ["au-abc", "au-seven", "au-nine"])
+    }
+
+    @Test func `every additional country has a covered collection`() {
+        for (country, ids) in [("ca", ["CBCTelevision.ca", "CTV.ca", "GlobalTelevisionNetwork.ca"]),
+                               ("nz", ["TVNZ1.nz", "TVNZ2.nz", "Three.nz"]),
+                               ("za", ["SABC1.za", "SABC2.za", "SABC3.za"])]
+        {
+            let channels = ids.map { channel($0, name: "Provider name", epgID: $0) }
+            #expect(LiveTVChannelCollections.resolve(channels).first?.id == "\(country)-essentials")
+            #expect(LiveTVChannelCollections.resolve(channels).first?.channels.map(\.id) == ids)
+        }
+    }
+
+    @Test func `exact schedule outranks name-only favorite and regional variants stay separate`() {
+        let channels = [channel("alias", name: "BBC One", favorite: true),
+                        channel("exact", epgID: "BBCOne.uk"), channel("two", name: "BBC Two"), channel("itv", name: "ITV1"),
+                        channel("foreign", name: "US | BBC One", favorite: true)]
+        #expect(LiveTVChannelCollections.resolve(channels).first?.channels.first?.id == "exact")
+        #expect(LiveTVChannelCollections.channelKey("CA: CBC +1 HD") == LiveTVTitleIndex.key("CBC +1"))
+    }
 }

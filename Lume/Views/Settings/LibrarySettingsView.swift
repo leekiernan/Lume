@@ -115,9 +115,13 @@
                 // Provider categories are a separate drill-in, just as they
                 // are for Movies/Series, not a substitute for home sections.
                 List {
+                    if area == .liveTV { LiveTVSectionsSettings() }
                     LibraryCategorySettingsSection(categoryType: type)
                 }
                 .platformNavigationTitle(area.title)
+                #if os(iOS)
+                    .environment(\.editMode, .constant(.active))
+                #endif
             }
         }
     }

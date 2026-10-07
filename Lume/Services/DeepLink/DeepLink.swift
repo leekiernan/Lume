@@ -16,6 +16,8 @@ nonisolated enum DeepLink: Equatable {
     case series(tmdbId: Int)
     /// Opens the downloads list from a download-completion notification.
     case downloads
+    /// A programme reminder opens the hub, never starts playback implicitly.
+    case liveTV
 
     /// The app's registered URL scheme (see `CFBundleURLTypes` in Info.plist).
     static let scheme = "lume"
@@ -26,6 +28,9 @@ nonisolated enum DeepLink: Equatable {
     init?(url: URL) {
         guard url.scheme?.lowercased() == Self.scheme else { return nil }
         switch url.host()?.lowercased() {
+        case "live-tv":
+            self = .liveTV
+            return
         case "downloads":
             self = .downloads
             return

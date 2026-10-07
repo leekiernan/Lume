@@ -21,25 +21,13 @@ struct HeroFeedPage<Rows: View>: View {
                 rows: rows
             )
         #else
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: PosterCardMetrics.sectionSpacing) {
-                    if !heroItems.isEmpty {
-                        HomeHeroCarousel(items: heroItems)
-                    } else if reservesHero {
-                        HomeHeroWarmStart(backdropURL: warmStartBackdropURL, posterURL: warmStartPosterURL())
-                    }
-                    rows()
+            HeroFeedLayout(reservesHero: reservesHero, hidesScrollIndicators: hidesScrollIndicators, hero: {
+                if !heroItems.isEmpty {
+                    HomeHeroCarousel(items: heroItems)
+                } else if reservesHero {
+                    HomeHeroWarmStart(backdropURL: warmStartBackdropURL, posterURL: warmStartPosterURL())
                 }
-                .padding(.top, reservesHero ? 0 : PosterCardMetrics.sectionVerticalPadding)
-                .padding(.bottom, PosterCardMetrics.sectionVerticalPadding)
-            }
-            .scrollIndicators(hidesScrollIndicators ? .hidden : .automatic)
-            // The brand's ground: Day or Night with its wash (tvOS draws it
-            // behind every tab instead).
-            .background { LumeAmbientBackground() }
-            // A hero fills the top inset itself. Without one the first rail
-            // must remain below the navigation bar.
-            .ignoresSafeArea(edges: reservesHero ? .top : [])
+            }, rows: rows)
         #endif
     }
 }

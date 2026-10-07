@@ -1,11 +1,6 @@
 import Foundation
 import OSLog
 import UserNotifications
-#if os(macOS)
-    import AppKit
-#elseif canImport(UIKit)
-    import UIKit
-#endif
 
 /// Local alerts only: permission is requested on Download, never at launch or
 /// by a background completion. Downloading does not depend on that permission.
@@ -26,12 +21,7 @@ final class DownloadCompletionNotifications: NSObject {
                     requestAuthorization: { try await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) },
                     schedule: { try await UNUserNotificationCenter.current().add($0) },
                     openDownloads: {
-                        let url = DownloadCompletionNotification.downloadsURL
-                        #if os(macOS)
-                            NSWorkspace.shared.open(url)
-                        #elseif canImport(UIKit)
-                            UIApplication.shared.open(url)
-                        #endif
+                        AppNotificationDelegate.open(DownloadCompletionNotification.downloadsURL)
                     }
                 )
             }
@@ -49,7 +39,7 @@ final class DownloadCompletionNotifications: NSObject {
     /// Set early enough to receive taps when a notification launches the app.
     func configure() {
         #if !os(tvOS)
-            UNUserNotificationCenter.current().delegate = self
+            AppNotificationDelegate.shared.configure()
         #endif
     }
 
@@ -74,7 +64,7 @@ final class DownloadCompletionNotifications: NSObject {
         #if !os(tvOS)
             await permissionTask?.value
             let status = await dependencies.authorizationStatus()
-            guard DownloadCompletionNotification.canDeliver(status) else { return }
+            guard LocalNotificationAuthorization.canDeliver(status) else { return }
             do {
                 try await dependencies.schedule(DownloadCompletionNotification.request(info: info, taskID: taskID))
             } catch {
@@ -93,43 +83,9 @@ final class DownloadCompletionNotifications: NSObject {
 }
 
 #if !os(tvOS)
-    extension DownloadCompletionNotifications: UNUserNotificationCenterDelegate {
-        nonisolated func userNotificationCenter(
-            _: UNUserNotificationCenter,
-            willPresent _: UNNotification,
-            withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
-        ) {
-            completionHandler([.banner, .list, .sound])
-        }
-
-        nonisolated func userNotificationCenter(
-            _: UNUserNotificationCenter,
-            didReceive response: UNNotificationResponse,
-            withCompletionHandler completionHandler: @escaping () -> Void
-        ) {
-            let category = response.notification.request.content.categoryIdentifier
-            let action = response.actionIdentifier
-            Task { @MainActor in
-                self.handleResponse(category: category, action: action)
-                completionHandler()
-            }
-        }
-    }
-
     nonisolated enum DownloadCompletionNotification {
         static let category = "download.completed"
         static let downloadsURL = URL(string: "lume://downloads")!
-
-        static func canDeliver(_ status: UNAuthorizationStatus) -> Bool {
-            switch status {
-            case .authorized, .provisional: true
-            #if os(iOS)
-                case .ephemeral: true
-            #endif
-            case .denied, .notDetermined: false
-            @unknown default: false
-            }
-        }
 
         static func request(info: DownloadTaskInfo, taskID: Int) -> UNNotificationRequest {
             let content = UNMutableNotificationContent()

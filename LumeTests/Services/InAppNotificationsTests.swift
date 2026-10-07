@@ -3,11 +3,23 @@ import Foundation
 import Testing
 
 @MainActor
-struct SyncCompletionNotificationsTests {
+struct InAppNotificationsTests {
+    @Test func `programme reminders share the queue without masquerading as sync results`() throws {
+        let notifications = InAppNotifications()
+        report(.succeeded, to: notifications)
+        notifications.remind(id: "airing", title: "Programme", channel: "Channel", profileToken: "profile-a")
+        #expect(notifications.pending.count == 2)
+        let reminder = try #require(notifications.pending.last)
+        #expect(reminder.outcome == nil)
+        #expect(reminder.subject == .programme("airing", title: "Programme", channel: "Channel"))
+        notifications.retainProfile("profile-b")
+        #expect(notifications.pending.isEmpty)
+    }
+
     private func report(
         _ outcome: SyncRefreshOutcome,
-        to notifications: SyncCompletionNotifications,
-        subject: SyncCompletionNotifications.Subject = .guide,
+        to notifications: InAppNotifications,
+        subject: InAppNotifications.Subject = .guide,
         started: String = "profile-a",
         current: String = "profile-a"
     ) {
@@ -16,7 +28,7 @@ struct SyncCompletionNotificationsTests {
 
     @Test(arguments: [SyncRefreshOutcome.succeeded, .failed])
     func `success and failure each queue a single completion`(_ outcome: SyncRefreshOutcome) throws {
-        let notifications = SyncCompletionNotifications()
+        let notifications = InAppNotifications()
         report(outcome, to: notifications)
         let notice = try #require(notifications.pending.first)
         #expect(notice.outcome == outcome)
@@ -26,14 +38,14 @@ struct SyncCompletionNotificationsTests {
 
     @Test(arguments: [SyncRefreshOutcome.skipped, .cancelled])
     func `skips and cancellations stay silent`(_ outcome: SyncRefreshOutcome) {
-        let notifications = SyncCompletionNotifications()
+        let notifications = InAppNotifications()
         report(outcome, to: notifications)
         #expect(notifications.pending.isEmpty)
     }
 
     @Test func `playlist and guide completions queue separately`() throws {
-        let notifications = SyncCompletionNotifications()
-        let playlist = SyncCompletionNotifications.Subject.playlist(UUID(), name: "My playlist")
+        let notifications = InAppNotifications()
+        let playlist = InAppNotifications.Subject.playlist(UUID(), name: "My playlist")
         report(.succeeded, to: notifications, subject: playlist)
         report(.failed, to: notifications)
         #expect(notifications.pending.map(\.subject) == [playlist, .guide])
@@ -45,7 +57,7 @@ struct SyncCompletionNotificationsTests {
     }
 
     @Test func `suspended app keeps only the latest result for a source`() {
-        let notifications = SyncCompletionNotifications()
+        let notifications = InAppNotifications()
         report(.failed, to: notifications)
         report(.succeeded, to: notifications)
         #expect(notifications.pending.count == 1)
@@ -53,7 +65,7 @@ struct SyncCompletionNotificationsTests {
     }
 
     @Test func `inactive presentation leaves completion queued until the app returns`() {
-        let notifications = SyncCompletionNotifications()
+        let notifications = InAppNotifications()
         let host = UUID()
         notifications.registerHost(host, priority: 0)
         report(.succeeded, to: notifications)
@@ -65,7 +77,7 @@ struct SyncCompletionNotificationsTests {
     }
 
     @Test func `profile switch drops old completions and rejects old in-flight work`() {
-        let notifications = SyncCompletionNotifications()
+        let notifications = InAppNotifications()
         report(.succeeded, to: notifications)
         notifications.retainProfile("profile-b")
         #expect(notifications.pending.isEmpty)
@@ -76,7 +88,7 @@ struct SyncCompletionNotificationsTests {
     }
 
     @Test func `sheets and covers own the toast without duplicates and return it to the root`() {
-        let notifications = SyncCompletionNotifications()
+        let notifications = InAppNotifications()
         let root = UUID(), settings = UUID(), progress = UUID()
         // Parent appearance can follow child appearance; explicit priorities
         // keep it from stealing the sheet's presentation in either order.

@@ -189,6 +189,7 @@ struct MainTabView: View {
             }
             .launchSplash(homeShown: selection.wrappedValue == .home)
         #endif
+            .liveTVProgrammeReminders()
             .environment(router)
             .environment(\.contentRestriction, contentRestriction)
             // A tab switch is the one browse interaction that has no scroll
@@ -492,6 +493,9 @@ struct MainTabView: View {
             router.seriesPath.append(series)
         case .downloads:
             showsDownloads = true
+        case .liveTV:
+            router.selectedTab = .liveTV
+            router.liveTVPath = NavigationPath()
         }
     }
 
