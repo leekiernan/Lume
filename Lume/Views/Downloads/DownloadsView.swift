@@ -103,7 +103,9 @@ import SwiftUI
                         }
                         .mediaFavoriteMenu(
                             isFavorite: { MediaFavorites.isFavorite(movie) },
-                            onToggleFavorite: { MediaFavorites.requestToggle(movie, in: modelContext) }
+                            onToggleFavorite: { MediaFavorites.requestToggle(movie, in: modelContext) },
+                            favoriteModel: { movie },
+                            favoriteContext: modelContext
                         )
                     }
                 }

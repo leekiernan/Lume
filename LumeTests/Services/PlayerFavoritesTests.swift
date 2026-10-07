@@ -12,6 +12,23 @@ struct PlayerFavoritesTests {
 
     // MARK: - isFavorite
 
+    @Test func `independent menu resolves the same movie and episode parent as the heart`() throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        let movie = Movie(id: "m-menu", streamId: 1, name: "Movie")
+        let series = Series(id: "s-menu", seriesId: 1, name: "Series")
+        let episode = Episode(id: "e-menu", episodeId: "1", title: "Ep 1", containerExtension: "mp4", seasonNum: 1, episodeNum: 1, series: series)
+        context.insert(movie)
+        context.insert(series)
+        context.insert(episode)
+        try context.save()
+
+        #expect(PlayerFavorites.watchlistModel(for: .movie(movie.id), in: context)?.id == movie.id)
+        #expect(PlayerFavorites.watchlistModel(for: .episode(episode.id), in: context)?.id == series.id)
+        #expect(PlayerFavorites.watchlistModel(for: .episode("missing"), in: context) == nil)
+        #expect(PlayerFavorites.watchlistModel(for: .live("channel"), in: context) == nil)
+    }
+
     @Test func `isFavorite for movie returns false by default`() throws {
         let container = try makeContainer()
         let context = ModelContext(container)

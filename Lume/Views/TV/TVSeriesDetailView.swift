@@ -165,7 +165,7 @@
                 .focused($focus, equals: .play)
 
                 HStack(spacing: 18) {
-                    MediaFavoriteButton(isFavorite: MediaFavorites.isFavorite(series), action: toggleFavorite)
+                    MediaFavoriteButton(model: series)
                     Spacer(minLength: 0)
                 }
             }
@@ -388,10 +388,6 @@
                   let media = PlayableMedia.from(episode: episode, playlist: playlist) else { return }
             if ExternalPlayback.open(media) { return }
             playingMedia = media
-        }
-
-        func toggleFavorite() {
-            MediaFavorites.requestToggle(series, in: modelContext)
         }
 
         func markPreviousWatched(_ episode: Episode) {

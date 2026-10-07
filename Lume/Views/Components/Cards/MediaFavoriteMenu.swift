@@ -34,6 +34,8 @@ extension View {
         return mediaFavoriteMenu(
             isFavorite: { MediaFavorites.isFavorite(item) },
             onToggleFavorite: { MediaFavorites.requestToggle(item, in: context) },
+            favoriteModel: { item },
+            favoriteContext: context,
             onRemoveFromRecents: onRemoveFromRecents,
             onVote: onVote,
             watchedState: movie.map { movie in
@@ -57,6 +59,8 @@ extension View {
     func mediaFavoriteMenu(
         isFavorite: @escaping () -> Bool,
         onToggleFavorite: @escaping () -> Void,
+        favoriteModel: (() -> (any WatchlistFavoritable)?)? = nil,
+        favoriteContext: ModelContext? = nil,
         onRemoveFromRecents: (() -> Void)? = nil,
         onVote: ((RecommendationVote) -> Void)? = nil,
         watchedState: (() -> MediaWatchedMenu.State)? = nil,
@@ -66,6 +70,12 @@ extension View {
             FavoriteMenuItems.favorite(isFavorite: isFavorite()) {
                 onToggleFavorite()
                 favoriteToggleFeedback()
+            }
+
+            if let model = favoriteModel?(), let context = favoriteContext {
+                Menu("Favorites") {
+                    MediaFavoriteDestinationItems(model: model, context: context, onChange: favoriteToggleFeedback)
+                }
             }
 
             if let watchedState, let onSetWatched {
@@ -133,6 +143,8 @@ extension View {
             mediaFavoriteMenu(
                 isFavorite: { MediaFavorites.isFavorite(series) },
                 onToggleFavorite: { MediaFavorites.requestToggle(series, in: context) },
+                favoriteModel: { series },
+                favoriteContext: context,
                 watchedState: { .init(isWatched: episode.isWatched, progress: episode.watchProgress, lastWatchedDate: episode.lastWatchedDate) },
                 onSetWatched: { MediaWatchState.setWatched($0, episode: episode, in: context) }
             )
@@ -166,7 +178,12 @@ extension View {
                 } else if let series = hero.series {
                     MediaFavorites.requestToggle(series, in: context)
                 }
-            }
+            },
+            favoriteModel: {
+                if let movie = hero.movie { return movie }
+                return hero.series
+            },
+            favoriteContext: context
         )
     }
 }

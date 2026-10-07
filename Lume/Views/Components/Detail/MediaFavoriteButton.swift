@@ -1,15 +1,30 @@
+import SwiftData
 import SwiftUI
 
 /// Uses the existing platform button treatment, with room for connected trackers.
 struct MediaFavoriteButton: View {
-    let isFavorite: Bool
-    let action: () -> Void
+    let model: any WatchlistFavoritable
+    @Environment(\.modelContext) private var modelContext
+
+    private var isFavorite: Bool {
+        MediaFavorites.isFavorite(model)
+    }
+
+    private func action() {
+        MediaFavorites.requestToggle(model, in: modelContext)
+    }
 
     private var title: LocalizedStringKey {
         isFavorite ? "Remove from Favorites" : "Add to Favorites"
     }
 
     var body: some View {
+        button.contextMenu {
+            MediaFavoriteDestinationItems(model: model, context: modelContext)
+        }
+    }
+
+    private var button: some View {
         #if os(tvOS)
             Button(action: action) {
                 MediaFavoriteGlyph(isFavorite: isFavorite, trackerSize: 26)

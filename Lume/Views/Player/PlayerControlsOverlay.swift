@@ -295,6 +295,7 @@ struct PlayerControlsActions {
             }
             .buttonStyle(.plain)
             .accessibilityLabel(isFavorite ? "In Favorites" : "Favorite")
+            .playerFavoriteDestinationsMenu(for: media.contentRef, in: modelContext, onChange: actions.resetHideTimer)
         }
 
         @ViewBuilder

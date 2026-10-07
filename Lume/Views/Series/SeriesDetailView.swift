@@ -232,11 +232,11 @@ struct SeriesDetailView: View {
                 }
             }
             ToolbarItem(placement: .topBarTrailing) {
-                MediaFavoriteButton(isFavorite: MediaFavorites.isFavorite(series), action: toggleFavorite)
+                MediaFavoriteButton(model: series)
             }
         #else
             ToolbarItem(placement: .primaryAction) {
-                MediaFavoriteButton(isFavorite: MediaFavorites.isFavorite(series), action: toggleFavorite)
+                MediaFavoriteButton(model: series)
             }
         #endif
     }
@@ -400,10 +400,6 @@ private extension SeriesDetailView {
         #else
             playingMedia = media
         #endif
-    }
-
-    func toggleFavorite() {
-        MediaFavorites.requestToggle(series, in: modelContext)
     }
 
     func markPreviousWatched(_ episode: Episode) {

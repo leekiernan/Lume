@@ -302,10 +302,6 @@ struct MovieDetailView: View {
         #endif
     }
 
-    private func toggleFavorite() {
-        MediaFavorites.requestToggle(movie, in: modelContext)
-    }
-
     private func toggleWatched() {
         MediaWatchState.setWatched(!movie.isWatched, movie: movie, in: modelContext)
     }
@@ -338,7 +334,7 @@ struct MovieDetailView: View {
                             systemImage: movie.isWatched ? "checkmark.circle.fill" : "checkmark.circle",
                             accessibilityLabel: movie.isWatched ? "Mark as unwatched" : "Mark as watched"
                         ) { toggleWatched() }
-                        MediaFavoriteButton(isFavorite: MediaFavorites.isFavorite(movie), action: toggleFavorite)
+                        MediaFavoriteButton(model: movie)
                     }
                 }
             #elseif os(macOS)
@@ -350,7 +346,7 @@ struct MovieDetailView: View {
                     .help(movie.isWatched ? "Mark as Unwatched" : "Mark as Watched")
                 }
                 ToolbarItem(placement: .primaryAction) {
-                    MediaFavoriteButton(isFavorite: MediaFavorites.isFavorite(movie), action: toggleFavorite)
+                    MediaFavoriteButton(model: movie)
                 }
                 ToolbarItem(placement: .primaryAction) {
                     downloadMacItem

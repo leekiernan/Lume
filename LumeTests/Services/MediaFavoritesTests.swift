@@ -182,6 +182,51 @@ struct MediaFavoritesTests {
 
     // MARK: - Round trip
 
+    @Test func `local only menu action preserves watched history`() throws {
+        let container = try makeTestContainer()
+        let context = ModelContext(container)
+        let movie = Movie(id: "m-local-menu", streamId: 1, name: "Target")
+        movie.isWatched = true
+        movie.watchProgress = 120
+        let watchedAt = Date()
+        movie.lastWatchedDate = watchedAt
+        context.insert(movie)
+        try context.save()
+
+        MediaFavorites.set(true, in: .local, for: movie, context: context)
+        #expect(movie.isFavorite)
+        #expect(movie.addedToWatchlistDate != nil)
+        movie.favoriteOrder = 3
+        MediaFavorites.set(false, in: .local, for: movie, context: context)
+        #expect(!movie.isFavorite)
+        #expect(movie.favoriteOrder == nil)
+        #expect(movie.addedToWatchlistDate == nil)
+        #expect(movie.isWatched)
+        #expect(movie.watchProgress == 120)
+        #expect(movie.lastWatchedDate == watchedAt)
+    }
+
+    @Test func `unavailable tracker menu actions leave local fields alone`() throws {
+        let container = try makeTestContainer()
+        let context = ModelContext(container)
+        // Without a TMDB ID this title cannot be watchlisted on either service,
+        // even if the test host has a connected account.
+        let series = Series(id: "s-menu-no-id", seriesId: 1, name: "Target")
+        series.isFavorite = true
+        series.favoriteOrder = 2
+        let addedAt = Date()
+        series.addedToWatchlistDate = addedAt
+        context.insert(series)
+        try context.save()
+
+        for destination in [MediaFavoriteState.Destination.trakt, .simkl] {
+            MediaFavorites.set(false, in: destination, for: series, context: context)
+        }
+        #expect(series.isFavorite)
+        #expect(series.favoriteOrder == 2)
+        #expect(series.addedToWatchlistDate == addedAt)
+    }
+
     /// A re-favorite must not inherit the slot it held before, which would
     /// silently jump the user's hand-ordering.
     @Test func `re favorite does not inherit its old order`() throws {

@@ -409,6 +409,7 @@
             .buttonStyle(TVPlayerCircleButtonStyle(expandsToFit: !media.isLive))
             .focused($focus, equals: .favorite)
             .accessibilityLabel(isFavorite ? "In Favorites" : "Favorite")
+            .playerFavoriteDestinationsMenu(for: media.contentRef, in: modelContext, onChange: onResetHideTimer)
         }
 
         @ViewBuilder

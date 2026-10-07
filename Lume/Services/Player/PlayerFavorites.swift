@@ -16,6 +16,16 @@ import Foundation
 import SwiftData
 
 enum PlayerFavorites {
+    /// The VOD owner behind a player's heart; episodes use the parent series.
+    /// Live channels have no tracker watchlists and keep their local toggle.
+    static func watchlistModel(for ref: PlayableMedia.ContentRef, in context: ModelContext) -> (any WatchlistFavoritable)? {
+        switch ref {
+        case let .episode(id): PlayerContentLookup.episode(id, in: context)?.series
+        case let .movie(id): PlayerContentLookup.movie(id, in: context)
+        case .live: nil
+        }
+    }
+
     /// Whether the content behind `ref` is currently favorited.
     static func isFavorite(for ref: PlayableMedia.ContentRef, in context: ModelContext) -> Bool {
         switch ref {

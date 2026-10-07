@@ -50,8 +50,8 @@ enum MediaFavorites {
         let simkl = SimklService.shared
         return MediaFavoriteState(
             local: model.isFavorite,
-            trakt: trakt.isConnected ? target.map { trakt.mutations.isWatchlisted($0) } ?? false : nil,
-            simkl: simkl.isConnected ? target.map { simkl.mutations.isWatchlisted($0) } ?? false : nil
+            trakt: trakt.isConnected ? target.map { trakt.mutations.isWatchlisted($0) } : nil,
+            simkl: simkl.isConnected ? target.map { simkl.mutations.isWatchlisted($0) } : nil
         )
     }
 
@@ -69,15 +69,31 @@ enum MediaFavorites {
     static func toggle(_ model: some WatchlistFavoritable, in context: ModelContext) -> Bool {
         let state = state(model)
         let favorited = state.toggled
-        if favorited {
-            model.isFavorite = true
-            model.addedToWatchlistDate = Date()
-        } else {
-            clearFavoriteFields(model)
-        }
-        try? context.save()
-        syncWatchlists(model, trakt: state.traktIntent, simkl: state.simklIntent)
+        apply(state.toggleChange, to: model, in: context)
         return favorited
+    }
+
+    /// A native menu supplies an explicit choice, not a second combined toggle.
+    /// Tracker-only changes do not save or clear local favourites/watch history.
+    static func set(_ isPresent: Bool, in destination: MediaFavoriteState.Destination,
+                    for model: some WatchlistFavoritable, context: ModelContext)
+    {
+        guard !pendingToggles.contains(model.id),
+              let change = state(model).change(setting: isPresent, in: destination) else { return }
+        apply(change, to: model, in: context)
+    }
+
+    private static func apply(_ change: MediaFavoriteState.Change, to model: some WatchlistFavoritable, in context: ModelContext) {
+        if let local = change.local {
+            if local {
+                if !model.isFavorite { model.addedToWatchlistDate = Date() }
+                model.isFavorite = true
+            } else {
+                clearFavoriteFields(model)
+            }
+            try? context.save()
+        }
+        syncWatchlists(model, trakt: change.trakt, simkl: change.simkl)
     }
 
     @discardableResult
