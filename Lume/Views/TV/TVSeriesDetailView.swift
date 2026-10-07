@@ -146,6 +146,7 @@
 
         private var hero: some View {
             TVDetailHero(
+                presentation: .series,
                 title: series.name,
                 backdropURL: TMDBClient.backdropURL(series.backdropPath),
                 posterFallbackURL: URL(string: series.cover ?? ""),

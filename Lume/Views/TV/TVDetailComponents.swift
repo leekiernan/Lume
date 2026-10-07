@@ -18,29 +18,6 @@
     import Foundation
     import SwiftUI
 
-    // MARK: - Layout metrics
-
-    enum TVDetailMetrics {
-        /// Title-safe horizontal inset for content under the full-bleed hero.
-        static let horizontalInset: CGFloat = 90
-        /// Vertical gap between top-level sections under the hero.
-        static let sectionSpacing: CGFloat = 56
-        /// Gap between cards inside a horizontal rail.
-        static let railSpacing: CGFloat = 40
-        /// Height of the cinematic hero (leaves the rails just below the fold).
-        static let heroHeight: CGFloat = 900
-        /// Bottom padding of the hero info band.
-        static let heroBottomInset: CGFloat = 80
-
-        // Card sizes
-        static let episodeCardWidth: CGFloat = 392
-        static let episodeStillHeight: CGFloat = 220
-        static let posterCardWidth = PosterCardMetrics.posterWidth
-        static let posterCardHeight = PosterCardMetrics.posterHeight
-        static let castCardWidth: CGFloat = 200
-        static let castAvatar: CGFloat = 160
-    }
-
     // MARK: - Star rating
 
     /// Five-star rating (with halves) plus the numeric value, on a 0…5 scale.
@@ -172,6 +149,7 @@
     /// with a three-column info band pinned to the lower edge. The `actions`
     /// slot holds the Play button and any secondary buttons.
     struct TVDetailHero<Actions: View>: View {
+        var presentation: TVDetailMetrics.Hero = .film
         let title: String
         let backdropURL: URL?
         let posterFallbackURL: URL?
@@ -212,8 +190,8 @@
                         TitleLogo(url: logoURL, title: title, maxWidth: 820, maxHeight: 150) {
                             // The boards' display title, when there is no logo.
                             Text(title)
-                                .font(.system(size: 112, weight: .heavy))
-                                .kerning(-3)
+                                .font(.system(size: presentation.titleSize, weight: .heavy))
+                                .kerning(presentation.titleKerning)
                                 .foregroundStyle(.white)
                                 .lineLimit(2)
                                 .minimumScaleFactor(0.4)
@@ -393,7 +371,7 @@
 
         var body: some View {
             VStack(spacing: 14) {
-                CachedAsyncImage(url: TMDBClient.profileURL(member.profilePath, size: "w342"), maxPixelSize: 160) { phase in
+                CachedAsyncImage(url: TMDBClient.profileURL(member.profilePath, size: "w342"), maxPixelSize: TVDetailMetrics.castAvatar) { phase in
                     switch phase {
                     case let .success(image):
                         image.resizable().aspectRatio(contentMode: .fill)

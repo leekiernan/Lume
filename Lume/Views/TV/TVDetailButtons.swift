@@ -16,16 +16,19 @@
 
     import SwiftUI
 
-    /// A translucent pill for secondary hero actions (Favorite, Watched). Fills
+    /// A translucent surface for secondary hero actions (Favorite, Watched). Fills
     /// the available width so a row of these matches the Play button above, and
     /// tints solid white when focused.
     struct TVGlassButtonStyle: ButtonStyle {
+        var action: TVDetailMetrics.Action = .standard
+
         func makeBody(configuration: Configuration) -> some View {
-            StyleBody(configuration: configuration)
+            StyleBody(configuration: configuration, action: action)
         }
 
         struct StyleBody: View {
             let configuration: ButtonStyleConfiguration
+            let action: TVDetailMetrics.Action
             @Environment(\.isFocused) private var isFocused
 
             var body: some View {
@@ -39,9 +42,9 @@
                 return configuration.label
                     .foregroundStyle(foreground)
                     .frame(maxWidth: .infinity)
-                    .frame(height: 76)
+                    .frame(height: action.height)
                     .background(
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        RoundedRectangle(cornerRadius: action.cornerRadius, style: .continuous)
                             .fill(background)
                     )
                     .scaleEffect(isFocused ? 1.06 : 1.0)
@@ -104,7 +107,7 @@
             Button(action: action) {
                 Label(title, systemImage: systemImage)
             }
-            .buttonStyle(TVGlassButtonStyle())
+            .buttonStyle(TVGlassButtonStyle(action: .play))
             .disabled(!isEnabled)
         }
     }
@@ -123,7 +126,7 @@
                     .symbolReplaceTransition(value: systemImage)
                     .font(.system(size: 30, weight: .semibold))
             }
-            .buttonStyle(TVGlassButtonStyle())
+            .buttonStyle(TVGlassButtonStyle(action: .secondary))
             .accessibilityLabel(title)
         }
     }
