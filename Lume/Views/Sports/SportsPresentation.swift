@@ -38,25 +38,15 @@ struct SportsHighlightChip: View {
     }
 }
 
-struct SportsReminderLabel: View {
-    let isReminded: Bool
-
-    var body: some View {
-        Label(isReminded ? "Reminder Set" : "Remind Me", systemImage: isReminded ? "bell.fill" : "bell")
-    }
-}
-
 /// The label's dimensions and the enclosing button's focus/style are supplied
 /// by its host. Reminder persistence and kickoff-alert semantics are unchanged.
 struct SportsReminderButton<Content: View>: View {
     let fixture: SportsFixture
-    @ViewBuilder var label: (SportsReminderLabel) -> Content
+    @ViewBuilder var label: (ReminderLabel) -> Content
     @State private var reminders = SportsReminders.shared
 
     var body: some View {
-        Button { reminders.toggle(fixture) } label: {
-            label(SportsReminderLabel(isReminded: reminders.isReminded(fixture.id)))
-        }
+        ReminderButton(isReminded: reminders.isReminded(fixture.id), action: { reminders.toggle(fixture) }, label: label)
     }
 }
 

@@ -22,7 +22,7 @@ struct SportsBrowseSidebar: View {
         var isTeam = false
     }
 
-    @Binding var isPresented: Bool
+    let state: BrowseSidebarState
     let entries: [Entry]
     /// The follow picked: its key.
     let onSelect: (String) -> Void
@@ -32,7 +32,7 @@ struct SportsBrowseSidebar: View {
 
     var body: some View {
         BrowseSidebarPanel(
-            isPresented: $isPresented,
+            state: state,
             title: Text("Sports"),
             sections: sections,
             onReturnToContent: onReturnToContent

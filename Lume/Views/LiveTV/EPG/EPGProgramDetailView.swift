@@ -78,6 +78,7 @@ struct EPGProgramDetailView: View {
                         }
 
                         watchButton
+                        if cell.start > now { reminderButton }
                     }
                     .padding(.horizontal)
                     .padding(.vertical, 24)
@@ -142,6 +143,7 @@ struct EPGProgramDetailView: View {
                         // only reveals content as focus moves. A long synopsis below
                         // them would otherwise push them off-screen and out of reach.
                         VStack(alignment: .leading, spacing: 20) {
+                            if cell.start > now { reminderButton }
                             if canPlayCatchup {
                                 TVPlayButton(title: "Watch from Start", systemImage: "play.fill") {
                                     onPlayCatchup()
@@ -256,6 +258,14 @@ struct EPGProgramDetailView: View {
 
             Spacer(minLength: 0)
         }
+    }
+
+    private var reminderButton: some View {
+        LiveTVProgrammeReminderButton(programme: LiveTVHubProgramme(
+            id: cell.id, channel: LiveTVHubChannel(id: stream.id, name: stream.name, logoURL: stream.streamIcon,
+                                                   epgID: stream.epgChannelId, isFavorite: stream.isFavorite),
+            title: cell.title, start: cell.start, end: cell.end, artworkURL: nil, overview: cell.detail, candidateID: nil, rank: 0
+        ))
     }
 
     private var timeRow: some View {

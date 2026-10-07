@@ -1,13 +1,13 @@
 import SwiftUI
 
-private struct SyncCompletionToastModifier: ViewModifier {
+private struct InAppToastModifier: ViewModifier {
     let priority: Int
-    @State private var notifications = SyncCompletionNotifications.shared
+    @State private var notifications = InAppNotifications.shared
     @State private var hostID = UUID()
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage(ActiveProfileStore.key) private var profileToken = ""
 
-    private var notice: SyncCompletionNotifications.Notice? {
+    private var notice: InAppNotifications.Notice? {
         notifications.notice(for: hostID, profileToken: profileToken, isActive: scenePhase == .active)
     }
 
@@ -16,7 +16,7 @@ private struct SyncCompletionToastModifier: ViewModifier {
             .overlay(alignment: .top) {
                 ZStack {
                     if let notice {
-                        SyncCompletionToast(notice: notice)
+                        InAppToast(notice: notice)
                             .id(notice.id)
                             .padding()
                             .transition(.move(edge: .top).combined(with: .opacity))
@@ -41,23 +41,28 @@ private struct SyncCompletionToastModifier: ViewModifier {
     }
 }
 
-private struct SyncCompletionToast: View {
-    let notice: SyncCompletionNotifications.Notice
+private struct InAppToast: View {
+    let notice: InAppNotifications.Notice
 
-    private var title: LocalizedStringKey {
-        notice.outcome == .succeeded ? "Sync complete" : "Sync failed"
+    private var title: Text {
+        switch notice.subject {
+        case .playlist, .guide: Text(notice.outcome == .succeeded ? "Sync complete" : "Sync failed")
+        case let .programme(_, title, _), let .message(title, _): Text(verbatim: title)
+        }
     }
 
     var body: some View {
         HStack(spacing: 12) {
-            Image(systemName: notice.outcome == .succeeded ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
-                .foregroundStyle(notice.outcome == .succeeded ? Color.lumeAccent : .orange)
+            Image(systemName: notice.outcome == nil ? "bell.fill" : notice.outcome == .succeeded ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                .foregroundStyle(notice.outcome == .failed ? .orange : Color.lumeAccent)
             VStack(alignment: .leading, spacing: 4) {
-                Text(title)
+                title
                     .font(.headline)
                 switch notice.subject {
                 case let .playlist(_, name): Text(verbatim: name)
                 case .guide: Text("TV Guide")
+                case let .programme(_, _, channel): Text("Starting now on \(channel)")
+                case let .message(_, detail): Text(verbatim: detail)
                 }
             }
             .lineLimit(2)
@@ -71,7 +76,7 @@ private struct SyncCompletionToast: View {
 
 extension View {
     /// A scene-root host uses priority zero; sheets/covers register above it.
-    func syncCompletionToasts(priority: Int = 1) -> some View {
-        modifier(SyncCompletionToastModifier(priority: priority))
+    func inAppToasts(priority: Int = 1) -> some View {
+        modifier(InAppToastModifier(priority: priority))
     }
 }

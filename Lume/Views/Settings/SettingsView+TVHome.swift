@@ -26,6 +26,7 @@ import SwiftUI
                     tvAreaEnableNote
 
                     if AppAreaSettings.isEnabled(layoutArea, disabledRaw: disabledAreasRaw) {
+                        if layoutArea == .liveTV { LiveTVSectionsSettings(proxy: proxy) }
                         if let surface = layoutArea.sectionSurface {
                             TVSectionLayoutDetail(surface: surface, proxy: proxy)
                                 // Rebuild on switch: the pane's @AppStorage keys are

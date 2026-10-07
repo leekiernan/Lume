@@ -13,6 +13,42 @@ import SwiftData
 import Testing
 
 struct LiveChannelNavigatorTests {
+    @Test func `hub collections surf in displayed order instead of provider or alphabetical order`() throws {
+        let (context, playlist) = try makeWorld(streams: threeChannels)
+        let ids = [102, 100, 101].map { "\(playlist.id.uuidString)-live-\($0)" }
+        let scope = LiveChannelScope.channels(ids)
+        let alpha = try media(forStreamId: 100, playlist: playlist, scope: scope, in: context)
+        let next = LiveChannelNavigator.adjacentMedia(for: alpha, offset: 1, sort: .nameAscending, restriction: ContentRestriction(), in: context)
+        #expect(next?.contentRef == liveRef(101, playlist))
+        #expect(next?.channelScope == scope)
+        let previous = LiveChannelNavigator.adjacentMedia(for: alpha, offset: -1, sort: .nameAscending, restriction: ContentRestriction(), in: context)
+        #expect(previous?.contentRef == liveRef(102, playlist))
+        let charlie = try media(forStreamId: 102, playlist: playlist, scope: scope, in: context)
+        #expect(LiveChannelNavigator.adjacentMedia(for: charlie, offset: -1, sort: .playlist,
+                                                   restriction: ContentRestriction(), in: context)?.contentRef == liveRef(101, playlist))
+    }
+
+    @Test func `hub collections exclude hidden foreign and restricted channels`() throws {
+        let (context, playlist) = try makeWorld(streams: [
+            StreamSpec(num: 1, name: "Alpha", category: "allowed"),
+            StreamSpec(num: 2, name: "Hidden", category: "allowed", isHidden: true),
+            StreamSpec(num: 3, name: "Locked", category: "locked"),
+            StreamSpec(num: 4, name: "Delta", category: "allowed")
+        ])
+        let foreign = LiveStream(id: "other-live-100", streamId: 100, name: "Other", num: 0, categoryId: "allowed")
+        context.insert(foreign)
+        try context.save()
+        let ids = [100, 101, 102, 103].map { "\(playlist.id.uuidString)-live-\($0)" } + [foreign.id]
+        let scope = LiveChannelScope.channels(ids)
+        let restriction = ContentRestriction(isActive: true, restrictedCategoryIDs: ["locked"])
+        let alpha = try media(forStreamId: 100, playlist: playlist, scope: scope, in: context)
+        #expect(LiveChannelNavigator.adjacentMedia(for: alpha, offset: 1, sort: .playlist,
+                                                   restriction: restriction, in: context)?.contentRef == liveRef(103, playlist))
+        let rows = try context.fetch(LiveChannelQuery.descriptor(for: scope, sort: .playlist))
+        #expect(LiveChannelQuery.scoped(rows, scope: scope, playlistPrefix: playlist.id.uuidString + "-",
+                                        restriction: restriction).map(\.id) == [ids[0], ids[3]])
+    }
+
     /// One channel to seed. Only `num` / `name` / `category` matter to the plain
     /// category tests; the flags drive the Favorites / Recently Watched scopes
     /// and the hidden-channel filtering.

@@ -30,32 +30,19 @@ struct LiveTVView: View {
     @State private var categoryMemo = LiveTVCategoryMemo()
 
     @AppStorage(PlaylistSelectionStore.key) private var selectedPlaylistID: String = ""
-    /// The selection lives in `DeepLinkRouter`, so it survives the tab being
-    /// unmounted (`IdleUnmountingTab`, or a tvOS tab switch); these local copies
-    /// stand in only without a router (previews).
+    /// The navigation path lives in `DeepLinkRouter`, so destinations survive
+    /// tab unmounting. The local path is only a fallback for previews.
     @Environment(DeepLinkRouter.self) private var selectionRouter: DeepLinkRouter?
-    @State private var localSection: LiveTVSection?
-    @State private var localSeededPrefix: String?
+    @State private var localPath = NavigationPath()
 
-    private var selectedSection: LiveTVSection? {
-        get { selectionRouter?.liveTVSection ?? localSection }
-        nonmutating set {
-            if let selectionRouter { selectionRouter.liveTVSection = newValue } else { localSection = newValue }
-        }
-    }
-
-    /// The playlist `selectedSection` was last seeded for — see `seedSelection`.
-    private var seededPrefix: String? {
-        get { selectionRouter?.liveTVSeededPrefix ?? localSeededPrefix }
-        nonmutating set {
-            if let selectionRouter { selectionRouter.liveTVSeededPrefix = newValue } else { localSeededPrefix = newValue }
-        }
+    private var navigationPath: Binding<NavigationPath> {
+        DetailNavigation.pathBinding(in: selectionRouter, at: \.liveTVPath, fallback: $localPath)
     }
 
     @State private var showingSync = false
     @State private var playingMedia: PlayableMedia?
     @State private var showingSettings = false
-    @State private var showingBrowse = false
+    @State private var browse = BrowseSidebarState()
     /// The sections the browse panel lists, as the content last resolved them.
     @State private var browseSections: [LiveTVSection]?
     #if os(tvOS)
@@ -64,9 +51,9 @@ struct LiveTVView: View {
         /// than let the engine pick: after a category change, and on the way
         /// back out of the browse panel.
         @State private var contentFocus = TVContentFocusMachine()
-        /// The channel focus left when the browse panel was opened, so closing
-        /// it without picking anything puts the viewer back where they were.
-        @State private var browseReturnChannelID: String?
+        /// The content focus left when Browse opened. This is a temporary
+        /// handoff, not a second copy of the navigation/category selection.
+        @State private var browseReturnFocus: TVContentFocusRequest?
     #else
         /// Non-nil while Multi-View is up; carries the channels it opened with,
         /// when it was started from a channel rather than the toolbar.
@@ -136,7 +123,7 @@ struct LiveTVView: View {
     #endif
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: navigationPath) {
             if shouldResolveSections {
                 // The rail resolves in a child view: gating the two virtual
                 // sections is a pair of playlist-scoped `LIMIT 1` probes, and
@@ -158,15 +145,24 @@ struct LiveTVView: View {
         .overlay(alignment: .leading) {
             if let sections = browseSections {
                 LiveTVBrowseSidebar(
-                    isPresented: $showingBrowse,
+                    state: browse,
                     sections: sections,
-                    selectedSection: displayedSection(in: sections),
                     onSelect: selectSection,
                     onReturnToContent: browseReturnHandler
                 )
             }
         }
+        .onChange(of: playlistPrefix) { _, _ in
+            // A pushed browse screen must not survive a playlist change just
+            // because its hub root's task is currently off-screen.
+            navigationPath.wrappedValue = NavigationPath()
+        }
         #if os(tvOS)
+        .onChange(of: navigationPath.wrappedValue.isEmpty, initial: true) { _, isAtRoot in
+            guard isAtRoot else { return }
+            contentFocus.cancel()
+            browseReturnFocus = nil
+        }
         .onChange(of: playlistPrefix) { _, _ in contentFocus.cancel() }
         .onChange(of: restriction.visibilityToken) { _, _ in contentFocus.cancel() }
         .onChange(of: layoutModeRaw) { _, _ in contentFocus.cancel() }
@@ -200,9 +196,13 @@ struct LiveTVView: View {
                 activePlaylist: activePlaylist
             ))
             .browseSidebarToolbar(
-                isPresented: $showingBrowse,
+                isPresented: $browse.isPresented,
                 isEnabled: sections?.isEmpty == false
             )
+            .navigationDestination(for: LiveTVSection.self) { section in
+                layout(displayed: section)
+                    .browseSidebarToolbar(isPresented: $browse.isPresented, isEnabled: sections?.isEmpty == false)
+            }
             // Hands the sections up to the panel, which sits above the stack.
             .onChange(of: sections?.map(\.id), initial: true) { _, _ in browseSections = sections }
         #if os(iOS) || os(tvOS)
@@ -227,8 +227,17 @@ struct LiveTVView: View {
                     description: Text("Add a playlist in Settings to start watching live TV")
                 )
             } else if let sections, !sections.isEmpty {
-                layout(for: sections)
-                    .task(id: playlistPrefix) { seedSelection(from: sections) }
+                LiveTVHubView(
+                    playlistPrefix: playlistPrefix, syncedAt: activePlaylist?.lastSyncDate,
+                    onOpenBrowse: { browse.isPresented = true },
+                    onOpenGuide: {
+                        layoutModeRaw = LiveTVLayoutMode.guide.rawValue
+                        if let section = sections.first { selectSection(section) }
+                    },
+                    onPlay: playHubChannel,
+                    onWatchFromStart: { playHubCatchup($0, programme: $1) },
+                    onStartMultiView: startHubMultiView
+                )
             } else {
                 LiveTVEmptyState(sourceType: activePlaylist?.knownSourceType, playlistPrefix: playlistPrefix, restriction: restriction)
             }
@@ -243,9 +252,7 @@ struct LiveTVView: View {
 
     /// This platform's browse layout for the resolved sections. The displayed
     /// section resolves here once per render.
-    @ViewBuilder
-    private func layout(for sections: [LiveTVSection]) -> some View {
-        let displayed = displayedSection(in: sections)
+    private func layout(displayed: LiveTVSection?) -> some View {
         Group {
             #if os(tvOS)
                 tvOSLayout(displayed: displayed)
@@ -285,7 +292,7 @@ struct LiveTVView: View {
                         description: Text("Choose a category from the sidebar")
                     )
                 }
-                BrowseCategoriesButton(isPresented: $showingBrowse)
+                BrowseCategoriesButton(isPresented: $browse.isPresented)
             }
         }
     #endif
@@ -295,7 +302,7 @@ struct LiveTVView: View {
             TVLiveTVScreen(
                 displayedSection: displayed,
                 layoutModeRaw: $layoutModeRaw,
-                onOpenBrowse: { openBrowse(from: $0) },
+                onOpenBrowse: { openBrowse(from: $0, section: displayed) },
                 onPlay: { playChannel($0, scope: displayed?.scope) },
                 onPlayCatchup: { playCatchup($0, programme: $1) },
                 onOpenMultiView: { openMultiView() },
@@ -309,34 +316,42 @@ struct LiveTVView: View {
     #endif
 
     private func selectSection(_ section: LiveTVSection) {
-        selectedSection = section
-        showingBrowse = false
+        // Browse is a destination, like Movies/Series categories, never a
+        // replacement for the hub. Sidebar changes replace this one level.
+        navigationPath.wrappedValue = NavigationPath([section])
         #if os(tvOS)
             // A different category is a different list: nothing to return to,
             // so the new one takes focus at the top.
+            browseReturnFocus = nil
             requestContentFocus(for: section)
         #endif
     }
 
     #if os(tvOS)
         /// Opens the browse panel, remembering the channel focus is leaving.
-        private func openBrowse(from channelID: String?) {
+        private func openBrowse(from channelID: String?, section: LiveTVSection?) {
             contentFocus.cancel()
-            browseReturnChannelID = channelID
-            showingBrowse = true
+            browseReturnFocus = section.map { TVContentFocusRequest(scope: focusScope(for: $0), channelID: channelID) }
+            browse.isPresented = true
         }
 
         /// Leaving the panel without picking a category: the list is unchanged,
         /// so focus goes back to the channel it came from.
         private func returnFromBrowse() {
-            guard let section = displayedSection(in: browseSections ?? []) else { return }
-            requestContentFocus(for: section, channelID: browseReturnChannelID)
+            guard !navigationPath.wrappedValue.isEmpty else { return }
+            guard let target = browseReturnFocus,
+                  target.scope.playlistPrefix == playlistPrefix,
+                  target.scope.visibilityToken == restriction.visibilityToken else { return }
+            contentFocus.requestFocus(in: target.scope, channelID: target.channelID)
+            browseReturnFocus = nil
         }
 
         private func requestContentFocus(for section: LiveTVSection, channelID: String? = nil) {
-            contentFocus.requestFocus(in: TVContentFocusRequest.Scope(
-                playlistPrefix: playlistPrefix, channelScope: section.scope, visibilityToken: restriction.visibilityToken
-            ), channelID: channelID)
+            contentFocus.requestFocus(in: focusScope(for: section), channelID: channelID)
+        }
+
+        private func focusScope(for section: LiveTVSection) -> TVContentFocusRequest.Scope {
+            TVContentFocusRequest.Scope(playlistPrefix: playlistPrefix, channelScope: section.scope, visibilityToken: restriction.visibilityToken)
         }
     #endif
 
@@ -374,38 +389,31 @@ struct LiveTVView: View {
         )
     }
 
-    /// Points the rail at its first section. On first appearance that only means
-    /// seeding an empty selection; on a playlist switch it resets unconditionally,
-    /// because the previous selection belonged to the playlist that just went
-    /// away — the two moments the removed `.task` / `.onChange(of:)` pair covered.
-    /// Anything narrower (a category hidden in Content Management, the last
-    /// favorite removed) is left to `displayedSection(in:)`, as before.
-    private func seedSelection(from sections: [LiveTVSection]) {
-        if seededPrefix != nil, seededPrefix != playlistPrefix {
-            selectedSection = sections.first
-        } else if selectedSection == nil {
-            selectedSection = sections.first
-        }
-        seededPrefix = playlistPrefix
-    }
-
-    /// The section to render in the detail pane. Normally the user's selection,
-    /// but if that section just disappeared (a category hidden in Content
-    /// Management, or the last favorite removed) fall back to the first available
-    /// one rather than keep showing stale content.
-    private func displayedSection(in sections: [LiveTVSection]) -> LiveTVSection? {
-        guard let selectedSection else { return sections.first }
-        return sections.contains { $0.id == selectedSection.id }
-            ? selectedSection
-            : sections.first
-    }
-
     /// `scope` is the section the channel was picked from; it travels with the
     /// media so in-player channel surfing stays inside that list.
     private func playChannel(_ stream: LiveStream, scope: LiveChannelScope?) {
         guard let playlist = activePlaylist,
               let media = PlayableMedia.from(stream: stream, playlist: playlist, scope: scope) else { return }
         present(media)
+    }
+
+    /// Resolve only the selected row onto the main context. Hub loading and
+    /// EPG matching pass values across actors, never managed catalog objects.
+    private func hubStream(_ id: String) -> LiveStream? {
+        LiveTVHubSelection.stream(id, prefix: playlistPrefix, restriction: restriction, in: modelContext)
+    }
+
+    private func playHubChannel(_ id: String, scope: LiveChannelScope?) {
+        if let stream = hubStream(id) { playChannel(stream, scope: scope) }
+    }
+
+    private func playHubCatchup(_ id: String, programme: EPGSlot) {
+        guard let stream = hubStream(id), stream.restartableProgramme(programme, now: .now) != nil else { return }
+        playCatchup(stream, programme: programme)
+    }
+
+    private func startHubMultiView(_ id: String) {
+        if let stream = hubStream(id) { startMultiView(with: stream) }
     }
 
     /// Replays a programme from the channel's catch-up archive — a finished one

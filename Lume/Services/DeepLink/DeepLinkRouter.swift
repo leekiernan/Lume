@@ -22,9 +22,7 @@ final class DeepLinkRouter {
     var seriesPath = NavigationPath()
     var sportsPath = NavigationPath()
     var homePath = NavigationPath()
-    /// Live TV's selected section, and the playlist it was seeded for.
-    var liveTVSection: LiveTVSection?
-    var liveTVSeededPrefix: String?
+    var liveTVPath = NavigationPath()
     #if os(tvOS)
         /// Non-nil while Multi-View is covering the app; carries the channels it
         /// opened with, when it was started from a channel's long-press menu

@@ -162,7 +162,7 @@ struct SettingsView: View {
                 standardBody
             #endif
         }
-        .syncCompletionToasts()
+        .inAppToasts()
     }
 
     // MARK: - iOS / macOS (grouped list)

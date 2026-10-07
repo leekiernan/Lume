@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Owns only the copy overlay. Paging, artwork and focus remain screen-owned.
+/// Shared copy overlay owner. Paging, artwork and focus remain screen-owned.
 @MainActor @Observable
 final class HeroInfoTransition<ID: Hashable> {
     private(set) var displayedID: ID?

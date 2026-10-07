@@ -21,7 +21,7 @@ extension LiveChannelScope {
     var showsCategoryLabels: Bool {
         switch self {
         case .category: false
-        case .favorites, .recentlyWatched: true
+        case .favorites, .recentlyWatched, .channels: true
         }
     }
 }

@@ -7,22 +7,24 @@ nonisolated enum SyncRefreshOutcome: Equatable {
     case succeeded, failed, skipped, cancelled
 }
 
-/// In-app completion messages only: no system notifications, persistence or
+/// In-app sync completions and programme reminders: no system notifications, persistence or
 /// provider errors (which can contain connection credentials) in the message.
 @Observable
-final class SyncCompletionNotifications {
-    static let shared = SyncCompletionNotifications()
+final class InAppNotifications {
+    static let shared = InAppNotifications()
 
     struct Notice: Identifiable, Equatable {
         let id = UUID()
         let subject: Subject
-        let outcome: SyncRefreshOutcome
+        let outcome: SyncRefreshOutcome?
         let profileToken: String
     }
 
     enum Subject: Equatable {
         case playlist(UUID, name: String)
         case guide
+        case programme(String, title: String, channel: String)
+        case message(title: String, detail: String)
     }
 
     private struct Host {
@@ -72,6 +74,14 @@ final class SyncCompletionNotifications {
 
     func retainProfile(_ token: String) {
         pending.removeAll { $0.profileToken != token }
+    }
+
+    func remind(id: String, title: String, channel: String, profileToken: String) {
+        pending.append(Notice(subject: .programme(id, title: title, channel: channel), outcome: nil, profileToken: profileToken))
+    }
+
+    func message(title: String, detail: String, profileToken: String) {
+        pending.append(Notice(subject: .message(title: title, detail: detail), outcome: nil, profileToken: profileToken))
     }
 
     /// An old host's cancelled timer must never dismiss the next message.

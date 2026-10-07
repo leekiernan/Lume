@@ -37,6 +37,41 @@ private func parseAll(_ content: String) throws -> [ParsedProgramme] {
 // MARK: - Parser
 
 struct XMLTVParserTests {
+    @Test func `captures programme artwork and movie year but not channel or rating icons`() throws {
+        let guide = """
+        <tv>
+          <channel id="one"><icon src="https://example.com/channel.png"/></channel>
+          <programme start="20260918200000 +0000" stop="20260918220000 +0000" channel="one">
+            <title>Film</title><date>20210601</date>
+            <rating><icon src="https://example.com/rating.png"/></rating>
+            <icon src="https://example.com/film.jpg"/>
+          </programme>
+          <programme start="20260918220000 +0000" stop="20260918223000 +0000" channel="one">
+            <title>News</title>
+          </programme>
+        </tv>
+        """
+        let programmes = try parseAll(guide)
+        #expect(programmes.count == 2)
+        #expect(programmes.first?.artworkURL == "https://example.com/film.jpg")
+        #expect(programmes.first?.releaseYear == "2021")
+        #expect(programmes.last?.artworkURL == nil)
+        #expect(programmes.last?.releaseYear == nil)
+    }
+
+    @Test func `invalid artwork URLs are rejected and programme image is accepted`() throws {
+        let guide = """
+        <tv><programme start="20260918200000 +0000" stop="20260918220000 +0000" channel="one">
+          <title>Film</title><date>invalid</date>
+          <icon src="file:///private/poster.jpg"/>
+          <image type="backdrop"> https://example.com/backdrop.jpg </image>
+        </programme></tv>
+        """
+        let programme = try #require(try parseAll(guide).first)
+        #expect(programme.artworkURL == "https://example.com/backdrop.jpg")
+        #expect(programme.releaseYear == nil)
+    }
+
     @Test func `a malformed document is not reported as a valid empty guide`() throws {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("XMLTVParserTests-\(UUID().uuidString).xml")

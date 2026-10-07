@@ -20,7 +20,7 @@ struct LibraryAreaView<Kind: LibraryAreaKind>: View {
     @AppStorage(PlaylistSelectionStore.key) private var selectedPlaylistID: String = ""
     @State private var showingSync = false
     @State private var showingSettings = false
-    @State private var showingBrowse = false
+    @State private var browse = BrowseSidebarState()
     /// The remote-backed rows and the hero above them, shared with Home — see
     /// `SectionFeed`. Owned here rather than by `LibrarySectionsView` because on
     /// tvOS the hero sits outside the rows, wrapping them.
@@ -87,7 +87,7 @@ struct LibraryAreaView<Kind: LibraryAreaKind>: View {
                 showingSettings: $showingSettings,
                 activePlaylist: activePlaylist
             ))
-            .browseSidebarToolbar(isPresented: $showingBrowse, isEnabled: !sortedCategories.isEmpty)
+            .browseSidebarToolbar(isPresented: $browse.isPresented, isEnabled: !sortedCategories.isEmpty)
             .navigationDestination(for: Category.self) { category in
                 CatalogCategoryView<Kind>(category: category, animationNamespace: animationNamespace)
             }
@@ -110,7 +110,7 @@ struct LibraryAreaView<Kind: LibraryAreaKind>: View {
         // bar draws over anything inside the stack.
         .overlay(alignment: .leading) {
             LibraryBrowseSidebar(
-                isPresented: $showingBrowse,
+                state: browse,
                 categories: sortedCategories,
                 genres: genreLoader.snapshot(for: genreKey),
                 type: Kind.categoryType,
@@ -180,14 +180,14 @@ struct LibraryAreaView<Kind: LibraryAreaKind>: View {
             feed: feed,
             seriesResume: resumeKey.flatMap { resumeLoader?.snapshot(for: $0).fractions } ?? [:],
             animationNamespace: animationNamespace,
-            onRevealBrowse: { showingBrowse = true },
+            onRevealBrowse: { browse.isPresented = true },
             collectionRow: { kind in
                 Kind.collectionRow(kind, prefix: playlistPrefix, excluded: restriction.excludedCategoryIDs,
-                                   namespace: animationNamespace, onLeadingLeft: { showingBrowse = true })
+                                   namespace: animationNamespace, onLeadingLeft: { browse.isPresented = true })
             }
         )
 
-        BrowseCategoriesButton(isPresented: $showingBrowse)
+        BrowseCategoriesButton(isPresented: $browse.isPresented)
     }
 
     // MARK: - Navigation
@@ -206,14 +206,12 @@ struct LibraryAreaView<Kind: LibraryAreaKind>: View {
     }
 
     /// Picking from the sidebar navigates rather than filtering the page behind
-    /// it, so the panel closes as the push lands.
+    /// it. The shared sidebar owner remembers the row and closes before this.
     private func open(_ category: Category) {
-        showingBrowse = false
         navigationPath.wrappedValue.append(category)
     }
 
     private func open(genre: String) {
-        showingBrowse = false
         navigationPath.wrappedValue.append(GenreSelection(genre: genre, type: Kind.categoryType))
     }
 

@@ -53,7 +53,9 @@ struct ProfileScopedPreferencesTests {
                 SportsSyncService.tabEnabledKey,
                 SportsSyncService.hideScoresKey,
                 ProfileScopedPreferences.key(SportsAlertSettings.baseKey),
-                SportsHubLayout.hiddenKey
+                SportsHubLayout.hiddenKey,
+                LiveTVHubLayout.orderKey,
+                LiveTVHubLayout.hiddenKey
             ]
             for surface in SectionSurface.allCases {
                 expected.insert(HomeLayoutSettings.sectionOrderKey(surface))
@@ -78,7 +80,9 @@ struct ProfileScopedPreferencesTests {
             SportsSyncService.baseTabEnabledKey,
             SportsSyncService.baseHideScoresKey,
             SportsAlertSettings.baseKey,
-            SportsHubLayout.baseHiddenKey
+            SportsHubLayout.baseHiddenKey,
+            LiveTVHubLayout.baseOrderKey,
+            LiveTVHubLayout.baseHiddenKey
         ]
         for surface in SectionSurface.allCases {
             expectedBases.append(HomeLayoutSettings.baseSectionOrderKey(surface))

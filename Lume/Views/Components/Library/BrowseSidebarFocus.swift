@@ -34,6 +34,7 @@
             isPresented: Binding<Bool>,
             focus: FocusState<Item?>.Binding,
             scrollProxy: ScrollViewProxy,
+            scrollTarget: @escaping (Item) -> AnyHashable = { AnyHashable($0) },
             lastFocused: Binding<Item?>,
             onReturnToContent: (() -> Void)? = nil,
             target: @escaping () -> Item?
@@ -42,6 +43,7 @@
                 isPresented: isPresented,
                 focus: focus,
                 scrollProxy: scrollProxy,
+                scrollTarget: scrollTarget,
                 lastFocused: lastFocused,
                 onReturnToContent: onReturnToContent,
                 target: target
@@ -53,6 +55,7 @@
         @Binding var isPresented: Bool
         let focus: FocusState<Item?>.Binding
         let scrollProxy: ScrollViewProxy
+        let scrollTarget: (Item) -> AnyHashable
         @Binding var lastFocused: Item?
         /// Puts focus back where the page had it, for the panel to call as it
         /// closes. Without one, the page is left to the focus engine.
@@ -62,7 +65,7 @@
         /// Focus arrives a beat after the panel appears; until it has, a nil
         /// focus value means "not there yet", not "focus left". Fresh on every
         /// open, since the panel is built anew each time.
-        @State private var didTakeFocus = false
+        @State private var handoff = BrowseSidebarFocusPolicy.Handoff()
 
         func body(content: Content) -> some View {
             content
@@ -79,22 +82,25 @@
                     Task { returnToContent() }
                 }
                 .task {
-                    await landTVFocus(focus, on: target(), scrollingTo: scrollProxy) { isPresented }
+                    let target = target()
+                    await landTVFocus(focus, on: target, scrollingTo: scrollProxy,
+                                      scrollTarget: target.map(scrollTarget)) { isPresented }
+                    handoff.finishLanding()
                 }
                 .onChange(of: focus.wrappedValue) { _, item in
                     guard isPresented else { return }
                     if let item {
-                        didTakeFocus = true
+                        handoff.didFocusRow()
                         // Where to reopen: wherever the panel was left.
-                        lastFocused = item
+                        if handoff.shouldRememberFocus { lastFocused = item }
                         return
                     }
                     // Focus left the panel some other way than the exits
                     // above. Confirm a hop later: focus briefly reads nil while
                     // it moves between rows inside the panel too.
-                    guard didTakeFocus else { return }
+                    guard handoff.shouldReturnToContent else { return }
                     Task {
-                        guard focus.wrappedValue == nil, isPresented else { return }
+                        guard handoff.shouldReturnToContent, focus.wrappedValue == nil, isPresented else { return }
                         returnToContent()
                     }
                 }

@@ -44,7 +44,7 @@
         /// Follows taken off the hub in Settings ▸ Sports.
         @AppStorage(SportsHubLayout.hiddenKey) private var hiddenFollowsRaw = ""
         /// The scope panel, and where focus was when it opened.
-        @State var showingBrowse = false
+        @State var browse = BrowseSidebarState()
         @State var browseReturnFocus: TVSportsFocus?
         @State var resolution = SportsFixtureResolutionMachine()
         /// Rebuilt when either machine or the visibility changes — see

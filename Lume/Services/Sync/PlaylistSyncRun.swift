@@ -19,11 +19,11 @@ enum PlaylistSyncRun {
         container: ModelContainer,
         plan: PlaylistSyncPlan,
         progress: SyncProgress? = nil,
-        notifications: SyncCompletionNotifications? = nil
+        notifications: InAppNotifications? = nil
     ) async throws {
         let notifications = notifications ?? .shared
         let profileToken = ActiveProfileStore.current?.uuidString ?? ""
-        let subject = SyncCompletionNotifications.Subject.playlist(playlist.id, name: playlist.name)
+        let subject = InAppNotifications.Subject.playlist(playlist.id, name: playlist.name)
         // Reported to the guide refresh so the two never share the provider's
         // connection allowance: it stands aside (or is cut short) while this
         // runs, and catches up once nothing else is pending — see

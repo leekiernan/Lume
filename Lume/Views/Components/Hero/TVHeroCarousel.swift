@@ -1,5 +1,5 @@
 //
-//  TVHeroCarousel.swift
+//  TVHeroCarousel.swift — shared carousel owner
 //  Lume
 //
 //  The pieces of the immersive tvOS hero that Home and the Sports Hub share:

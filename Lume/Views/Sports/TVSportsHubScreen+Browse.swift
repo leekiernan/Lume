@@ -14,14 +14,10 @@
     extension TVSportsHubScreen {
         var browseSidebar: some View {
             SportsBrowseSidebar(
-                isPresented: $showingBrowse,
+                state: browse,
                 entries: SportsHubGrouping(scope: scope, follows: follows.follows, store: .shared).sidebarEntries,
-                onSelect: { key in
-                    showingBrowse = false
-                    open(follow: key)
-                },
+                onSelect: open(follow:),
                 onManageTeams: {
-                    showingBrowse = false
                     showManageTeams = true
                 },
                 onReturnToContent: returnFromBrowse
@@ -37,7 +33,7 @@
 
         func openBrowse() {
             browseReturnFocus = focus
-            showingBrowse = true
+            browse.isPresented = true
         }
 
         /// Focus back where the panel was opened from.
