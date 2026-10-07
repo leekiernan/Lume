@@ -5,9 +5,15 @@ struct PosterRail<Destination: Hashable, Content: View>: View {
     let title: Text
     let showAll: Destination?
     var groupsFocus = false
-    /// Nil lets metadata-bearing cards grow with Dynamic Type.
-    var rowHeight: CGFloat? = PosterCardMetrics.rowHeight
+    /// Overrides the role height for landscape cards such as Continue Watching.
+    var rowHeight: CGFloat?
+    var fitsContentHeight = false
     @ViewBuilder let content: () -> Content
+    @Environment(\.posterPresentation) private var presentation
+
+    private var layout: PosterCardMetrics.Layout {
+        PosterCardMetrics.layout(for: presentation)
+    }
 
     var body: some View {
         #if os(tvOS)
@@ -30,22 +36,22 @@ struct PosterRail<Destination: Hashable, Content: View>: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 cards
                     .padding(.horizontal)
-                    .padding(.vertical, PosterCardMetrics.railVerticalPadding)
+                    .padding(.vertical, layout.railVerticalPadding)
             }
             .scrollClipDisabled()
-            .fixedSize(horizontal: false, vertical: rowHeight == nil)
-            .frame(height: rowHeight)
+            .fixedSize(horizontal: false, vertical: fitsContentHeight)
+            .frame(height: fitsContentHeight ? nil : rowHeight ?? layout.rowHeight)
         }
     }
 
     @ViewBuilder private var cards: some View {
-        if rowHeight == nil {
+        if fitsContentHeight {
             // The short Continue Watching rail measures every card up front,
             // so horizontal scrolling cannot change its height. Poster rails
             // retain lazy loading and their fixed artwork geometry.
-            HStack(spacing: PosterCardMetrics.railSpacing, content: content)
+            HStack(spacing: layout.spacing, content: content)
         } else {
-            LazyHStack(spacing: PosterCardMetrics.railSpacing, content: content)
+            LazyHStack(spacing: layout.spacing, content: content)
         }
     }
 }

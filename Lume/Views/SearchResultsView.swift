@@ -174,6 +174,7 @@ struct SearchResultsView<Header: View>: View {
                 animationNamespace: animationNamespace,
                 card: { MovieCardView(movie: $0) }
             )
+            .environment(\.posterPresentation, .search)
         }
     }
 
@@ -188,6 +189,7 @@ struct SearchResultsView<Header: View>: View {
                 animationNamespace: animationNamespace,
                 card: { SeriesCardView(series: $0) }
             )
+            .environment(\.posterPresentation, .search)
         }
     }
 

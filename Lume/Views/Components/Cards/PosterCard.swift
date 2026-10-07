@@ -14,15 +14,20 @@ struct PosterCard: View {
     var fillsWidth = false
     var progress: Double?
     var badge: String?
+    @Environment(\.posterPresentation) private var presentation
+
+    private var layout: PosterCardMetrics.Layout {
+        PosterCardMetrics.layout(for: fillsWidth ? .grid : presentation)
+    }
 
     var body: some View {
         PosterArtworkView(
             provider: provider, posterPath: posterPath, request: request,
-            maxPixelSize: PosterCardMetrics.posterHeight
+            maxPixelSize: max(layout.height, PosterCardMetrics.posterHeight)
         ) { phase in
             PosterArtworkContent(phase: phase, title: title)
         }
-        .posterArtworkFrame(fillsWidth: fillsWidth)
+        .posterArtworkFrame(fillsWidth: fillsWidth, presentation: presentation)
         .overlay {
             if let progress {
                 ArtworkProgressBar(fraction: progress)

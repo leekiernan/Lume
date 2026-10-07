@@ -7,17 +7,9 @@ import SwiftUI
         var badge: String?
 
         var body: some View {
-            PosterArtworkView(
-                provider: item.imageURL?.absoluteString, posterPath: item.posterPath,
-                request: item.posterRecoveryRequest, maxPixelSize: PosterCardMetrics.posterHeight
-            ) { phase in
-                PosterArtworkContent(phase: phase, title: item.title)
-            }
-            .frame(width: PosterCardMetrics.posterWidth, height: PosterCardMetrics.posterHeight)
-            .clipShape(RoundedRectangle(cornerRadius: PosterCardMetrics.cornerRadius, style: .continuous))
-            .posterBadge(badge)
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel(Text(item.title))
+            PosterCard(title: item.title, provider: item.imageURL?.absoluteString, posterPath: item.posterPath,
+                       request: item.posterRecoveryRequest, badge: badge)
+                .environment(\.posterPresentation, .detail)
         }
     }
 #endif

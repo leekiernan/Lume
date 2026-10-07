@@ -31,7 +31,7 @@ struct ContinueWatchingLayoutTests {
     @Test func `the continue watching rail fits the growing cards`() throws {
         let content = card(label: "Season 12, Episode 24 · 42 minutes remaining")
         let rail = PosterRail<String, _>(title: Text("Continue Watching"), showAll: nil,
-                                         rowHeight: ContinueWatchingMetrics.rowHeight) { content }
+                                         rowHeight: ContinueWatchingMetrics.rowHeight, fitsContentHeight: true) { content }
             .frame(width: 390)
         let standard = try size(of: rail, at: .large)
         let accessible = try size(of: rail, at: .accessibility5)
@@ -43,9 +43,9 @@ struct ContinueWatchingLayoutTests {
     @Test func `offscreen metadata sets the rail height before scrolling`() throws {
         let short = card(label: "42 minutes remaining")
         let long = card(label: "Season 12, Episode 24 · 42 minutes remaining in this episode of the series")
-        let shortRail = PosterRail<String, _>(title: Text("Continue Watching"), showAll: nil, rowHeight: nil) { short }
+        let shortRail = PosterRail<String, _>(title: Text("Continue Watching"), showAll: nil, fitsContentHeight: true) { short }
             .frame(width: 390)
-        let mixedRail = PosterRail<String, _>(title: Text("Continue Watching"), showAll: nil, rowHeight: nil) {
+        let mixedRail = PosterRail<String, _>(title: Text("Continue Watching"), showAll: nil, fitsContentHeight: true) {
             short
             short
             long

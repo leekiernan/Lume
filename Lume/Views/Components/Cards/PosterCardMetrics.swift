@@ -11,39 +11,27 @@
 import SwiftUI
 
 enum PosterCardMetrics {
+    static let posterWidth = layout(for: .rail).width
+    static let posterHeight = layout(for: .rail).height
+    static let railSpacing = layout(for: .rail).spacing
+    static let railVerticalPadding = layout(for: .rail).railVerticalPadding
+    static let rowHeight = layout(for: .rail).rowHeight
+    static let gridMinimum = layout(for: .grid).width
+    static let gridSpacing = layout(for: .grid).spacing
+
     #if os(tvOS)
-        static let posterWidth: CGFloat = 240
-        static let posterHeight: CGFloat = 360
         static let cornerRadius: CGFloat = 16
         /// The title inside an unloaded card's tile.
         static let tileTitleFont: Font = .system(size: 24, weight: .bold)
         static let tileInset: CGFloat = 20
 
-        /// Gap between cards inside a horizontal browse rail.
-        static let railSpacing: CGFloat = 48
-        /// Vertical breathing room so the focus lift isn't clipped by the rail.
-        static let railVerticalPadding: CGFloat = 28
-        /// Height reserved for a rail: the poster and room for its focus lift.
-        /// Cards carry no caption: the title is on the poster or its tile.
-        static let rowHeight: CGFloat = posterHeight + 2 * railVerticalPadding
-        /// Minimum item width for the "Show All" adaptive grid.
-        static let gridMinimum: CGFloat = 240
-        static let gridSpacing: CGFloat = 48
         /// Inset between a transparent channel logo and its card plate.
         static let liveLogoInset: CGFloat = 32
     #else
-        static let posterWidth: CGFloat = 120
-        static let posterHeight: CGFloat = 180
         static let cornerRadius: CGFloat = 8
         static let tileTitleFont: Font = .caption.weight(.bold)
         static let tileInset: CGFloat = 10
 
-        static let railSpacing: CGFloat = 16
-        static let railVerticalPadding: CGFloat = 0
-        /// The poster plus its shadow; cards carry no caption.
-        static let rowHeight: CGFloat = posterHeight + 8
-        static let gridMinimum: CGFloat = 100
-        static let gridSpacing: CGFloat = 16
         static let liveLogoInset: CGFloat = 16
     #endif
 
@@ -77,16 +65,13 @@ enum PosterCardMetrics {
 extension View {
     /// Sizes a poster card's artwork.
     ///
-    /// Rails lay cards out at the fixed `posterWidth`; the category and genre
+    /// Rails lay cards out at their presentation role's fixed width; category and genre
     /// grids pass `fillsWidth: true` so the card takes its cell's width instead.
     /// An `.adaptive` column is only guaranteed to be *at least* `gridMinimum`
     /// wide, so on a wide window (macOS especially) a fixed-width card overflows
     /// its narrower cell, swallows `gridSpacing` and leaves the posters sitting
     /// flush against each other. Filling the cell keeps the gap exactly
-    /// `gridSpacing`, matching the browse rails.
-    ///
-    /// tvOS keeps the fixed size in both places: `gridMinimum` already equals
-    /// `posterWidth` there, so its cells never squeeze a card.
+    /// `gridSpacing`, independent of the rail roles.
     ///
     /// Every branch ends in `.contentShape(Rectangle())`, and that is
     /// load-bearing rather than cosmetic. Card artwork is drawn with
@@ -100,39 +85,31 @@ extension View {
     /// Jellyfin, Emby and Plex all serve a generated widescreen thumbnail
     /// when a title has no real poster.
     @ViewBuilder
-    func posterArtworkFrame(fillsWidth: Bool) -> some View {
-        #if os(tvOS)
-            frame(width: PosterCardMetrics.posterWidth, height: PosterCardMetrics.posterHeight)
+    func posterArtworkFrame(fillsWidth: Bool, presentation: PosterCardMetrics.Presentation = .rail) -> some View {
+        let layout = PosterCardMetrics.layout(for: presentation)
+        if fillsWidth {
+            // A grid cell proposes a definite width and no height, which
+            // `.fit` resolves into the matching 2:3 height; the artwork then
+            // fills that box as an overlay and the caller's clip shape trims
+            // the overhang.
+            Color.clear
+                .aspectRatio(PosterCardMetrics.posterAspectRatio, contentMode: .fit)
+                .overlay { self }
                 .contentShape(Rectangle())
-        #else
-            if fillsWidth {
-                // A grid cell proposes a definite width and no height, which
-                // `.fit` resolves into the matching 2:3 height; the artwork then
-                // fills that box as an overlay and the caller's clip shape trims
-                // the overhang.
-                Color.clear
-                    .aspectRatio(PosterCardMetrics.posterAspectRatio, contentMode: .fit)
-                    .overlay { self }
-                    .contentShape(Rectangle())
-            } else {
-                frame(width: PosterCardMetrics.posterWidth, height: PosterCardMetrics.posterHeight)
-                    .contentShape(Rectangle())
-            }
-        #endif
+        } else {
+            frame(width: layout.width, height: layout.height)
+                .contentShape(Rectangle())
+        }
     }
 
     /// Width for a poster card's title line, matching `posterArtworkFrame`.
     @ViewBuilder
-    func posterTitleFrame(fillsWidth: Bool) -> some View {
-        #if os(tvOS)
-            frame(width: PosterCardMetrics.posterWidth, alignment: .leading)
-        #else
-            if fillsWidth {
-                frame(maxWidth: .infinity, alignment: .leading)
-            } else {
-                frame(width: PosterCardMetrics.posterWidth, alignment: .leading)
-            }
-        #endif
+    func posterTitleFrame(fillsWidth: Bool, presentation: PosterCardMetrics.Presentation = .rail) -> some View {
+        if fillsWidth {
+            frame(maxWidth: .infinity, alignment: .leading)
+        } else {
+            frame(width: PosterCardMetrics.layout(for: presentation).width, alignment: .leading)
+        }
     }
 
     /// Applies the focus-aware card button style on tvOS (scale + shadow on
