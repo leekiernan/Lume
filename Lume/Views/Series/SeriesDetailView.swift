@@ -232,21 +232,11 @@ struct SeriesDetailView: View {
                 }
             }
             ToolbarItem(placement: .topBarTrailing) {
-                GlassIconButton(
-                    systemImage: series.isFavorite ? "heart.fill" : "heart",
-                    accessibilityLabel: series.isFavorite ? "Remove from favorites" : "Add to favorites"
-                ) { toggleFavorite() }
+                MediaFavoriteButton(isFavorite: MediaFavorites.isFavorite(series), action: toggleFavorite)
             }
         #else
             ToolbarItem(placement: .primaryAction) {
-                Button {
-                    toggleFavorite()
-                } label: {
-                    Image(systemName: series.isFavorite ? "heart.fill" : "heart")
-                        .foregroundStyle(series.isFavorite ? .red : .primary)
-                        .symbolReplaceTransition(value: series.isFavorite)
-                }
-                .help(series.isFavorite ? "Remove from Favorites" : "Add to Favorites")
+                MediaFavoriteButton(isFavorite: MediaFavorites.isFavorite(series), action: toggleFavorite)
             }
         #endif
     }
@@ -413,7 +403,7 @@ private extension SeriesDetailView {
     }
 
     func toggleFavorite() {
-        MediaFavorites.toggle(series, in: modelContext)
+        MediaFavorites.requestToggle(series, in: modelContext)
     }
 
     func markPreviousWatched(_ episode: Episode) {

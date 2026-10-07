@@ -9,8 +9,8 @@
 
 import Foundation
 
-/// Provider-neutral durable mutation. Trakt uses both history and watchlist;
-/// Simkl currently uses history, so collection kind stays part of the payload.
+/// Provider-neutral durable mutation. Both trackers keep history and watchlist
+/// intent separate; Simkl maps watchlist removal to Dropped, not history deletion.
 nonisolated struct TrackerMutation: Codable, Equatable, Identifiable {
     nonisolated enum Kind: String, Codable, Equatable {
         case history

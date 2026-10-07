@@ -79,10 +79,11 @@ struct SimklAccountBackend: TrackerAccountBackend {
         return SimklAccountIdentity(settings: settings)
     }
 
-    /// History only: the shared queue can carry Trakt's watchlist kinds and a
-    /// show-level target, which Simkl history has no request for.
+    /// Watchlist status changes never go through the history endpoints.
     func deliver(_ mutation: TrackerMutation, accessToken: String) async throws -> Bool {
-        guard mutation.kind == .history else { return false }
+        if mutation.kind == .watchlist {
+            return try await client.setWatchlist(mutation.target, watchlisted: mutation.isPresent, accessToken: accessToken)
+        }
         let items: SimklSyncItems? = switch mutation.target {
         case let .movie(tmdbID):
             SimklSyncItems.movie(tmdbID: tmdbID, title: nil)

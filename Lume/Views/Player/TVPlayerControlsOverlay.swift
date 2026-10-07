@@ -404,10 +404,9 @@
         /// works for live, series and movies via the resolved content.
         private var favoriteButton: some View {
             Button(action: toggleFavorite) {
-                Image(systemName: isFavorite ? "heart.fill" : "heart")
-                    .symbolReplaceTransition(value: isFavorite)
+                MediaFavoriteGlyph(isFavorite: isFavorite, showTrackers: !media.isLive, trackerSize: 22)
             }
-            .buttonStyle(TVPlayerCircleButtonStyle())
+            .buttonStyle(TVPlayerCircleButtonStyle(expandsToFit: !media.isLive))
             .focused($focus, equals: .favorite)
             .accessibilityLabel(isFavorite ? "In Favorites" : "Favorite")
         }

@@ -165,11 +165,7 @@
                 .focused($focus, equals: .play)
 
                 HStack(spacing: 18) {
-                    TVSecondaryActionButton(
-                        title: series.isFavorite ? "Remove from Favorites" : "Add to Favorites",
-                        systemImage: series.isFavorite ? "heart.fill" : "heart",
-                        action: toggleFavorite
-                    )
+                    MediaFavoriteButton(isFavorite: MediaFavorites.isFavorite(series), action: toggleFavorite)
                     Spacer(minLength: 0)
                 }
             }
@@ -395,7 +391,7 @@
         }
 
         func toggleFavorite() {
-            MediaFavorites.toggle(series, in: modelContext)
+            MediaFavorites.requestToggle(series, in: modelContext)
         }
 
         func markPreviousWatched(_ episode: Episode) {

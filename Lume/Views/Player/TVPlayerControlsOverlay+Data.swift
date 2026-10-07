@@ -341,18 +341,18 @@
         /// `TVPlayerControlsOverlay.favoriteButton`). Reads the resolved
         /// `@Observable` model so toggling re-renders the glyph.
         var isFavorite: Bool {
-            if isSeries { return episode?.series?.isFavorite ?? false }
+            if isSeries { return episode?.series.map { MediaFavorites.isFavorite($0) } ?? false }
             if media.isLive { return liveStream?.isFavorite ?? false }
-            return movie?.isFavorite ?? false
+            return movie.map { MediaFavorites.isFavorite($0) } ?? false
         }
 
         func toggleFavorite() {
             if isSeries, let series = episode?.series {
-                MediaFavorites.toggle(series, in: modelContext)
+                MediaFavorites.requestToggle(series, in: modelContext)
             } else if media.isLive, let liveStream {
                 LiveChannelFavorites.toggle(liveStream, in: modelContext)
             } else if let movie {
-                MediaFavorites.toggle(movie, in: modelContext)
+                MediaFavorites.requestToggle(movie, in: modelContext)
             }
             onResetHideTimer()
         }

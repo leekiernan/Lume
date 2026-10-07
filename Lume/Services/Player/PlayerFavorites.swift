@@ -20,11 +20,22 @@ enum PlayerFavorites {
     static func isFavorite(for ref: PlayableMedia.ContentRef, in context: ModelContext) -> Bool {
         switch ref {
         case let .episode(id):
-            PlayerContentLookup.episode(id, in: context)?.series?.isFavorite ?? false
+            PlayerContentLookup.episode(id, in: context)?.series.map { MediaFavorites.isFavorite($0) } ?? false
         case let .movie(id):
-            PlayerContentLookup.movie(id, in: context)?.isFavorite ?? false
+            PlayerContentLookup.movie(id, in: context).map { MediaFavorites.isFavorite($0) } ?? false
         case let .live(id):
             PlayerContentLookup.liveStream(id, in: context)?.isFavorite ?? false
+        }
+    }
+
+    static func requestToggle(for ref: PlayableMedia.ContentRef, in context: ModelContext) {
+        switch ref {
+        case let .episode(id):
+            if let series = PlayerContentLookup.episode(id, in: context)?.series { MediaFavorites.requestToggle(series, in: context) }
+        case let .movie(id):
+            if let movie = PlayerContentLookup.movie(id, in: context) { MediaFavorites.requestToggle(movie, in: context) }
+        case let .live(id):
+            if let stream = PlayerContentLookup.liveStream(id, in: context) { LiveChannelFavorites.toggle(stream, in: context) }
         }
     }
 

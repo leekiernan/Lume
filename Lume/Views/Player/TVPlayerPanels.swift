@@ -45,15 +45,17 @@
     struct TVPlayerCircleButtonStyle: ButtonStyle {
         var diameter: CGFloat = 60
         var glyphSize: CGFloat = 24
+        var expandsToFit = false
 
         func makeBody(configuration: Configuration) -> some View {
-            StyleBody(configuration: configuration, diameter: diameter, glyphSize: glyphSize)
+            StyleBody(configuration: configuration, diameter: diameter, glyphSize: glyphSize, expandsToFit: expandsToFit)
         }
 
         struct StyleBody: View {
             let configuration: ButtonStyleConfiguration
             let diameter: CGFloat
             let glyphSize: CGFloat
+            let expandsToFit: Bool
             @Environment(\.isFocused) private var isFocused
             @Environment(\.isEnabled) private var isEnabled
 
@@ -62,8 +64,10 @@
                 configuration.label
                     .font(.system(size: glyphSize, weight: .semibold))
                     .foregroundStyle(isFocused ? .black : .white)
-                    .frame(width: diameter, height: diameter)
-                    .glassEffectCompat(isFocused ? .tintedInteractive(.white) : .regularInteractive, in: Circle())
+                    .padding(.horizontal, expandsToFit ? 18 : 0)
+                    .frame(minWidth: diameter, maxWidth: expandsToFit ? nil : diameter)
+                    .frame(height: diameter)
+                    .glassEffectCompat(isFocused ? .tintedInteractive(.white) : .regularInteractive, in: Capsule())
                     .scaleEffect(pressed ? 1.05 : (isFocused ? 1.14 : 1.0))
                     .opacity(isEnabled ? 1 : 0.35)
                     .shadow(color: .black.opacity(isFocused ? 0.4 : 0), radius: 16, y: 8)

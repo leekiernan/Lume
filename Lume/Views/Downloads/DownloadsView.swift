@@ -102,8 +102,8 @@ import SwiftUI
                             itemToDelete = DeletionTarget(id: movie.id, name: movie.name)
                         }
                         .mediaFavoriteMenu(
-                            isFavorite: { movie.isFavorite },
-                            onToggleFavorite: { MediaFavorites.toggle(movie, in: modelContext) }
+                            isFavorite: { MediaFavorites.isFavorite(movie) },
+                            onToggleFavorite: { MediaFavorites.requestToggle(movie, in: modelContext) }
                         )
                     }
                 }

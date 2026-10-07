@@ -56,6 +56,30 @@ struct TrackerMutationQueueTests {
         try await waitUntil { !queue.isSyncing }
     }
 
+    @Test func `restored watchlist intent overrides a server snapshot until delivery`() async throws {
+        let target = TrackerMutation.Target.movie(tmdbID: 42)
+        let harness = await connected { outbox in
+            outbox.enqueue(kind: .watchlist, target: target, isPresent: false, account: alice.scope)
+        }
+        harness.tracker.deliveryResponses = [.failed]
+        let revision = harness.queue.watchlist.revision
+        harness.queue.updateWatchlist([target], account: alice.scope, revision: revision)
+        #expect(!harness.queue.isWatchlisted(target))
+        try await settle(harness.queue)
+        #expect(!harness.queue.isWatchlisted(target))
+    }
+
+    @Test func `successful watchlist delivery keeps optimistic membership and invalidates older reads`() async throws {
+        let harness = await connected()
+        let target = TrackerMutation.Target.movie(tmdbID: 42)
+        harness.queue.enqueue(.watchlist, target, isPresent: true)
+        let revision = harness.queue.watchlist.revision
+        try await settle(harness.queue)
+        harness.queue.updateWatchlist([], account: alice.scope, revision: revision)
+        #expect(harness.queue.isWatchlisted(target))
+        #expect(harness.queue.pendingCount == 0)
+    }
+
     @Test func `changes go out oldest first`() async throws {
         let harness = await connected()
         harness.queue.enqueue(.history, .movie(tmdbID: 1), isPresent: true)
