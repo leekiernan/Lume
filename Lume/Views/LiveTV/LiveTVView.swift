@@ -35,7 +35,6 @@ struct LiveTVView: View {
     /// stand in only without a router (previews).
     @Environment(DeepLinkRouter.self) private var selectionRouter: DeepLinkRouter?
     @State private var localSection: LiveTVSection?
-    @State private var localSeededPrefix: String?
     @State private var localPath = NavigationPath()
 
     private var navigationPath: Binding<NavigationPath> {
@@ -46,14 +45,6 @@ struct LiveTVView: View {
         get { selectionRouter?.liveTVSection ?? localSection }
         nonmutating set {
             if let selectionRouter { selectionRouter.liveTVSection = newValue } else { localSection = newValue }
-        }
-    }
-
-    /// The playlist `selectedSection` was last seeded for — see `seedSelection`.
-    private var seededPrefix: String? {
-        get { selectionRouter?.liveTVSeededPrefix ?? localSeededPrefix }
-        nonmutating set {
-            if let selectionRouter { selectionRouter.liveTVSeededPrefix = newValue } else { localSeededPrefix = newValue }
         }
     }
 
@@ -176,7 +167,16 @@ struct LiveTVView: View {
             // because its hub root's task is currently off-screen.
             navigationPath.wrappedValue = NavigationPath()
             selectedSection = nil
-            seededPrefix = nil
+        }
+        .onChange(of: navigationPath.wrappedValue.isEmpty, initial: true) { _, isAtRoot in
+            guard isAtRoot else { return }
+            // The hub isn't a category. Don't leave the last destination
+            // checked in the sidebar after the native Back action pops it.
+            selectedSection = nil
+            #if os(tvOS)
+                contentFocus.cancel()
+                browseReturnChannelID = nil
+            #endif
         }
         #if os(tvOS)
         .onChange(of: playlistPrefix) { _, _ in contentFocus.cancel() }
@@ -249,13 +249,12 @@ struct LiveTVView: View {
                     onOpenBrowse: { showingBrowse = true },
                     onOpenGuide: {
                         layoutModeRaw = LiveTVLayoutMode.guide.rawValue
-                        if let section = displayedSection(in: sections) { selectSection(section) }
+                        if let section = sections.first { selectSection(section) }
                     },
                     onPlay: playHubChannel,
                     onWatchFromStart: { playHubCatchup($0, programme: $1) },
                     onStartMultiView: startHubMultiView
                 )
-                .task(id: playlistPrefix) { seedSelection(from: sections) }
             } else {
                 LiveTVEmptyState(sourceType: activePlaylist?.knownSourceType, playlistPrefix: playlistPrefix, restriction: restriction)
             }
@@ -403,28 +402,12 @@ struct LiveTVView: View {
         )
     }
 
-    /// Points the rail at its first section. On first appearance that only means
-    /// seeding an empty selection; on a playlist switch it resets unconditionally,
-    /// because the previous selection belonged to the playlist that just went
-    /// away — the two moments the removed `.task` / `.onChange(of:)` pair covered.
-    /// Anything narrower (a category hidden in Content Management, the last
-    /// favorite removed) is left to `displayedSection(in:)`, as before.
-    private func seedSelection(from sections: [LiveTVSection]) {
-        if seededPrefix != nil, seededPrefix != playlistPrefix {
-            navigationPath.wrappedValue = NavigationPath()
-            selectedSection = sections.first
-        } else if selectedSection == nil {
-            selectedSection = sections.first
-        }
-        seededPrefix = playlistPrefix
-    }
-
-    /// The section to render in the detail pane. Normally the user's selection,
-    /// but if that section just disappeared (a category hidden in Content
-    /// Management, or the last favorite removed) fall back to the first available
-    /// one rather than keep showing stale content.
+    /// Only a pushed browse destination selects a sidebar row. Collections
+    /// opened from hub rails aren't provider categories and must not check the
+    /// first category instead. A removed category falls back to a visible one.
     private func displayedSection(in sections: [LiveTVSection]) -> LiveTVSection? {
-        guard let selectedSection else { return sections.first }
+        guard !navigationPath.wrappedValue.isEmpty, let selectedSection else { return nil }
+        if case .collection = selectedSection { return selectedSection }
         return sections.contains { $0.id == selectedSection.id }
             ? selectedSection
             : sections.first

@@ -9,11 +9,11 @@
 //
 //  Rows hand their selection back through their own action rather than
 //  navigating themselves, so each screen keeps its own meaning for "pick":
-//  Movies pushes a category's grid, Live TV swaps the list, Sports changes
+//  Movies and Live TV push a category destination, Sports changes
 //  the hub's scope.
 //
 //  On tvOS the panel is focus-driven (`browseSidebarFocus`): it takes focus when
-//  it opens — on the row it was last left on, else the selected row, else the
+//  it opens — on the selected row, else the row it was last left on, else the
 //  first — and closes as soon as focus leaves it. Pressing right returns to the
 //  content, Menu goes back up. Only Select acts; moving through the list never
 //  does. Elsewhere a tap on the scrim closes it.
@@ -40,11 +40,32 @@ struct BrowseSidebarPanel: View {
         let rows: [Row]
     }
 
+    /// Each row must be a direct lazy-stack child. A nested section group can
+    /// be unrealized below the fold, hiding its child IDs from scrollTo — the
+    /// same constraint as Sports' off-screen filter container.
+    private enum EntryID: Hashable {
+        case separator(String), heading(String), row(String)
+    }
+
+    private enum Entry: Identifiable {
+        case separator(String)
+        case heading(String, LocalizedStringKey, isFirst: Bool)
+        case row(Row)
+
+        var id: EntryID {
+            switch self {
+            case let .separator(id): .separator(id)
+            case let .heading(id, _, _): .heading(id)
+            case let .row(row): .row(row.id)
+            }
+        }
+    }
+
     @Binding var isPresented: Bool
     let title: Text
     let sections: [Section]
     /// The row for what the page currently shows: checked, and where focus
-    /// lands when there's no row the panel was last left on.
+    /// lands when the panel opens, even if another row was last focused.
     var selectedId: String?
     /// Hands focus back to where the page had it as the panel closes. Without
     /// one, the page is left to the focus engine.
@@ -195,8 +216,9 @@ struct BrowseSidebarPanel: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 2) {
-                        ForEach(Array(sections.enumerated()), id: \.element.id) { index, section in
-                            sectionView(section, isFirst: index == 0)
+                        ForEach(entries) { entry in
+                            entryView(entry)
+                                .id(entry.id)
                         }
                     }
                     .padding(.vertical, 12)
@@ -207,9 +229,11 @@ struct BrowseSidebarPanel: View {
                         isPresented: $isPresented,
                         focus: $focusedRow,
                         scrollProxy: proxy,
+                        scrollTarget: { AnyHashable(EntryID.row($0)) },
                         lastFocused: $lastFocusedRow,
-                        onReturnToContent: onReturnToContent
-                    ) { landingRow }
+                        onReturnToContent: onReturnToContent,
+                        target: { landingRow }
+                    )
                 #endif
             }
         }
@@ -232,22 +256,31 @@ struct BrowseSidebarPanel: View {
         #endif
     }
 
+    private var entries: [Entry] {
+        sections.enumerated().flatMap { index, section in
+            var entries: [Entry] = []
+            if section.isSeparated { entries.append(.separator(section.id)) }
+            if let title = section.title { entries.append(.heading(section.id, title, isFirst: index == 0)) }
+            entries.append(contentsOf: section.rows.map(Entry.row))
+            return entries
+        }
+    }
+
     @ViewBuilder
-    private func sectionView(_ section: Section, isFirst: Bool) -> some View {
-        if section.isSeparated {
+    private func entryView(_ entry: Entry) -> some View {
+        switch entry {
+        case .separator:
             Divider()
                 .padding(.horizontal, contentPadding)
                 .padding(.vertical, 12)
-        }
-        if let title = section.title {
+        case let .heading(_, title, isFirst):
             Text(title)
                 .font(sectionLabelFont)
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, contentPadding)
                 .padding(.top, isFirst ? 4 : 20)
                 .padding(.bottom, 6)
-        }
-        ForEach(section.rows) { row in
+        case let .row(row):
             rowView(row)
         }
     }
@@ -293,20 +326,15 @@ struct BrowseSidebarPanel: View {
         .buttonStyle(BrowseSidebarRowButtonStyle(isSelected: isSelected, dimsAtRest: selectedId != nil))
         #if os(tvOS)
             .focused($focusedRow, equals: row.id)
-            // Same value as the scroll id, so `landTVFocus` can bring a row
-            // below the fold on screen before asking for focus.
-            .id(row.id)
         #endif
     }
 
     #if os(tvOS)
-        /// The row last left on, then the selected row, then the top — each
+        /// The selected row, then the row last left on, then the top — each
         /// checked against the current rows, which can change between opens.
         private var landingRow: String? {
-            let ids = sections.flatMap(\.rows).map(\.id)
-            if let lastFocusedRow, ids.contains(lastFocusedRow) { return lastFocusedRow }
-            if let selectedId, ids.contains(selectedId) { return selectedId }
-            return ids.first
+            BrowseSidebarFocusPolicy.landingID(selectedID: selectedId, lastFocusedID: lastFocusedRow,
+                                               availableIDs: sections.flatMap(\.rows).map(\.id))
         }
     #endif
 }

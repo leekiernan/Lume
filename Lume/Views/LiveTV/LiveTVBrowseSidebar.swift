@@ -22,7 +22,7 @@ struct LiveTVBrowseSidebar: View {
             isPresented: $isPresented,
             title: Text("Live TV"),
             sections: panelSections,
-            selectedId: selectedSection?.id,
+            selectedId: sections.first { $0.id == selectedSection?.id }?.id,
             onReturnToContent: onReturnToContent
         )
     }
