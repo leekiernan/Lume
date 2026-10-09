@@ -180,10 +180,13 @@ nonisolated class M3UClient {
         }
     }
 
-    func gunzipIfNeeded(_ fileURL: URL, deleteOriginal: Bool) throws -> URL {
-        guard GzipFile.isGzip(fileURL) else { return fileURL }
+    func gunzipIfNeeded(_ fileURL: URL, deleteOriginal: Bool, maximumBytes: Int? = nil) throws -> URL {
+        guard GzipFile.isGzip(fileURL) else {
+            if let maximumBytes, try fileURL.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0 > maximumBytes { throw GzipFile.GzipError.sizeLimitExceeded }
+            return fileURL
+        }
         Logger.network.info("EPG file is gzipped, decompressing")
-        let decompressed = try GzipFile.decompress(fileURL)
+        let decompressed = try GzipFile.decompress(fileURL, maximumBytes: maximumBytes)
         if deleteOriginal {
             try? FileManager.default.removeItem(at: fileURL)
         }

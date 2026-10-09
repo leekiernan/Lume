@@ -6,6 +6,9 @@ import SwiftData
 /// downloader, SAX parser and write lease; there is no second guide ownership
 /// lane, unbounded programme table or per-card network work.
 actor EPGEnrichmentSync {
+    // One country feed at a time; never retain decompressed country files.
+    private nonisolated static let maximumXMLBytes = 768 * 1024 * 1024
+    private nonisolated static let storageReserve = 128 * 1024 * 1024
     static let feedURL = URL(string: "https://epgshare01.online/epgshare01/epg_ripper_US_LOCALS1.xml.gz")!
     private let client: M3UClient
     private let writeCoordinator: LocalStoreWriteCoordinator
@@ -82,9 +85,11 @@ actor EPGEnrichmentSync {
             return LoadResult(snapshot: usable, state: .deferred, retryAt: Date(timeIntervalSince1970: lastFailure + EPGEnrichmentSettings.retryInterval))
         }
         do {
+            try Self.checkStorage()
             let canValidate = cached?.isUsable(url: feedURL.absoluteString, now: now) == true && channelIDs.isSubset(of: cached?.channelIDs ?? [])
             let result = try await client.downloadGuide(
-                from: feedURL.absoluteString, lastModified: canValidate ? cached?.lastModified : nil, entityTag: canValidate ? cached?.entityTag : nil
+                from: feedURL.absoluteString, lastModified: canValidate ? cached?.lastModified : nil, entityTag: canValidate ? cached?.entityTag : nil,
+                maximumBytes: Self.maximumXMLBytes
             )
             let snapshot: EPGEnrichmentCache
             let state: EPGEnrichmentReport.State
@@ -139,16 +144,36 @@ actor EPGEnrichmentSync {
 
     private nonisolated enum EnrichmentError: Error {
         case invalidDocument
+        case insufficientStorage
+    }
+
+    private nonisolated static func checkStorage() throws {
+        let capacity = try FileManager.default.temporaryDirectory.resourceValues(forKeys: [.volumeAvailableCapacityKey]).volumeAvailableCapacity
+        if let capacity, capacity < maximumXMLBytes + storageReserve {
+            Logger.database.notice("EPG enrichment deferred: insufficient temporary storage; provider guide retained")
+            throw EnrichmentError.insufficientStorage
+        }
     }
 
     private nonisolated static func aliases(in context: ModelContext) throws -> [String: String] {
         var query = FetchDescriptor<LiveStream>()
-        query.propertiesToFetch = [\.name, \.epgChannelId]
-        let channels = try context.fetch(query).compactMap { stream -> EPGEnrichmentStations.Channel? in
+        query.propertiesToFetch = [\.name, \.epgChannelId, \.isHidden, \.categoryId]
+        let streams = try context.fetch(query)
+        let channels = streams.compactMap { stream -> EPGEnrichmentStations.Channel? in
             guard let id = stream.epgChannelId, !id.isEmpty else { return nil }
             return .init(name: stream.name, epgID: id)
         }
-        return EPGEnrichmentStations.aliases(for: channels)
+        let live = "live"
+        var categories = FetchDescriptor<Category>(predicate: #Predicate { $0.typeRaw == live && $0.isHidden })
+        categories.propertiesToFetch = [\.id]
+        let hidden = try Set(context.fetch(categories).map(\.id))
+        let eligible = Set(streams.compactMap { stream -> String? in
+            guard !stream.isHidden, !hidden.contains(stream.categoryId ?? "") else { return nil }
+            return stream.epgChannelId
+        })
+        // Verify against ALL references first: hiding an ambiguous station must
+        // never turn its shared provider ID into a supposedly safe alias.
+        return EPGEnrichmentStations.aliases(for: channels).filter { eligible.contains($0.value) }
     }
 
     private func publish(_ snapshot: EPGEnrichmentCache?, container: ModelContainer, enabled: Bool, fence: Fence, now: Date) async throws -> (stations: Int, matched: Int, changed: Int) {

@@ -20,7 +20,7 @@ struct EPGEnrichmentSyncTests {
         init(providerURL: URL) throws {
             directory = FileManager.default.temporaryDirectory.appendingPathComponent("EPGEnrichmentTests-\(UUID())", isDirectory: true)
             cacheURL = directory.appendingPathComponent("cache.json")
-            let schema = Schema([EPGListing.self, EPGSource.self, LiveStream.self])
+            let schema = Schema([EPGListing.self, EPGSource.self, LiveStream.self, Category.self, Playlist.self])
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
             container = try ModelContainer(for: schema, configurations: ModelConfiguration(schema: schema, url: directory.appendingPathComponent("catalog.store"), cloudKitDatabase: .none))
             defaults = try #require(UserDefaults(suiteName: "EPGEnrichmentTests-\(UUID())"))
@@ -172,6 +172,43 @@ struct EPGEnrichmentSyncTests {
         #expect(try fixture.row().artworkURL != nil)
     }
 
+    @Test(arguments: [true, false]) func `hidden channels and disabled categories never request external metadata`(hideChannel: Bool) async throws {
+        let requests = Mutex(0)
+        let server = try GuideHTTPServer { _ in requests.withLock { $0 += 1 }; return .init() }
+        defer { server.stop() }
+        let url = try await server.start()
+        let fixture = try Fixture(providerURL: url)
+        defer { fixture.cleanup() }
+        let context = ModelContext(fixture.container)
+        let stream = try #require(try context.fetch(FetchDescriptor<LiveStream>()).first)
+        let category = Category(apiId: "pbs", name: "PBS", parentId: 0, type: .live)
+        category.isHidden = !hideChannel
+        stream.isHidden = hideChannel
+        stream.categoryId = category.id
+        context.insert(category)
+        try context.save()
+        let report = try await fixture.supplement(url: url, coordinator: LocalStoreWriteCoordinator()).sync(container: fixture.container, enabled: true, fence: .live)
+        #expect(report.state == .unsupported)
+        #expect(requests.withLock { $0 } == 0)
+    }
+
+    @Test func `hidden conflicting identities remain unsafe aliases`() async throws {
+        let requests = Mutex(0)
+        let server = try GuideHTTPServer { _ in requests.withLock { $0 += 1 }; return .init() }
+        defer { server.stop() }
+        let url = try await server.start()
+        let fixture = try Fixture(providerURL: url)
+        defer { fixture.cleanup() }
+        let context = ModelContext(fixture.container)
+        let conflicting = LiveStream(id: "conflict", streamId: 2, name: "Unverified station", epgChannelId: "PBSKQED.us")
+        conflicting.isHidden = true
+        context.insert(conflicting)
+        try context.save()
+        let report = try await fixture.supplement(url: url, coordinator: LocalStoreWriteCoordinator()).sync(container: fixture.container, enabled: true, fence: .live)
+        #expect(report.state == .unsupported)
+        #expect(requests.withLock { $0 } == 0)
+    }
+
     @Test func `unsupported catalog never requests external metadata`() async throws {
         let requests = Mutex(0)
         let server = try GuideHTTPServer { _ in requests.withLock { $0 += 1 }; return .init() }
@@ -318,6 +355,36 @@ struct EPGEnrichmentSyncTests {
         try await sync.sync(container: fixture.container, enabled: true, fence: .live)
         #expect(try fixture.row().artworkURL == nil)
         #expect(try fixture.row().enrichmentBaseline == nil)
+    }
+}
+
+extension EPGEnrichmentSyncTests {
+    @Test(arguments: [true, false]) func `hiding a previously enriched channel or category restores provider metadata`(hideChannel: Bool) async throws {
+        let server = try GuideHTTPServer { _ in .init(body: Fixture.document(channel: "KQED-DT.us_locals1", artwork: "https://example.com/art.jpg")) }
+        defer { server.stop() }
+        let url = try await server.start()
+        let fixture = try Fixture(providerURL: url)
+        defer { fixture.cleanup() }
+        let context = ModelContext(fixture.container)
+        let sourceID = try #require(try context.fetch(FetchDescriptor<EPGSource>()).first).id
+        let stream = try #require(try context.fetch(FetchDescriptor<LiveStream>()).first)
+        let category = Category(apiId: "pbs", name: "PBS", parentId: 0, type: .live)
+        stream.categoryId = category.id
+        context.insert(category)
+        context.insert(EPGListing(id: "current", channelId: "PBSKQED.us", title: "Secrets of the Dead", listingDescription: "Provider",
+                                  start: fixture.start, end: fixture.end, sourceID: sourceID))
+        try context.save()
+        let sync = fixture.supplement(url: url, coordinator: LocalStoreWriteCoordinator())
+        try await sync.sync(container: fixture.container, enabled: true, fence: .live)
+        #expect(try fixture.row().artworkURL != nil)
+        stream.isHidden = hideChannel
+        category.isHidden = !hideChannel
+        try context.save()
+        let report = try await sync.sync(container: fixture.container, enabled: true, fence: .live)
+        #expect(report.verifiedStations == 0)
+        #expect(report.changedProgrammes == 1)
+        #expect(try fixture.row().artworkURL == nil)
+        #expect(try fixture.row().listingDescription == "Provider")
     }
 
     @Test func `an external 304 updates the check date without replacing the cache`() async throws {

@@ -21,15 +21,16 @@ nonisolated enum GzipFile {
         return magic.count == 2 && magic[magic.startIndex] == 0x1F && magic[magic.startIndex + 1] == 0x8B
     }
 
-    enum GzipError: Error {
+    enum GzipError: Error, Equatable {
         case malformedHeader
         case decompressionFailed
+        case sizeLimitExceeded
     }
 
     /// Decompresses a gzip file into a new temp file and returns its URL.
     /// The gzip wrapper (header + CRC trailer) is stripped manually because
     /// `Compression`'s zlib codec handles only the raw deflate stream inside.
-    static func decompress(_ source: URL) throws -> URL {
+    static func decompress(_ source: URL, maximumBytes: Int? = nil) throws -> URL {
         let input = try FileHandle(forReadingFrom: source)
         defer { try? input.close() }
 
@@ -43,16 +44,19 @@ nonisolated enum GzipFile {
         let destination = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString + ".xml")
         FileManager.default.createFile(atPath: destination.path, contents: nil)
+        var completed = false
+        defer { if !completed { try? FileManager.default.removeItem(at: destination) } }
         let output = try FileHandle(forWritingTo: destination)
         defer { try? output.close() }
 
-        try inflate(deflateHead: pending, input: input, output: output)
+        try inflate(deflateHead: pending, input: input, output: output, maximumBytes: maximumBytes)
+        completed = true
         return destination
     }
 
     /// Runs the raw deflate stream (the gzip body) through the Compression
     /// framework chunk by chunk, writing inflated bytes to `output`.
-    private static func inflate(deflateHead: Data, input: FileHandle, output: FileHandle) throws {
+    private static func inflate(deflateHead: Data, input: FileHandle, output: FileHandle, maximumBytes: Int?) throws {
         var pending = deflateHead
         let streamPointer = UnsafeMutablePointer<compression_stream>.allocate(capacity: 1)
         defer { streamPointer.deallocate() }
@@ -66,9 +70,11 @@ nonisolated enum GzipFile {
         defer { dstBuffer.deallocate() }
 
         var finished = false
+        var written = 0
         while !finished {
+            try Task.checkCancellation()
             if pending.isEmpty {
-                pending = (try? input.read(upToCount: bufferSize)) ?? Data()
+                pending = try input.read(upToCount: bufferSize) ?? Data()
             }
             let isLastChunk = pending.isEmpty
 
@@ -78,6 +84,7 @@ nonisolated enum GzipFile {
                 streamPointer.pointee.src_size = srcRaw.count
 
                 repeat {
+                    try Task.checkCancellation()
                     streamPointer.pointee.dst_ptr = dstBuffer
                     streamPointer.pointee.dst_size = bufferSize
                     let status = compression_stream_process(
@@ -87,7 +94,9 @@ nonisolated enum GzipFile {
                     case COMPRESSION_STATUS_OK, COMPRESSION_STATUS_END:
                         let produced = bufferSize - streamPointer.pointee.dst_size
                         if produced > 0 {
-                            output.write(Data(bytes: dstBuffer, count: produced))
+                            written += produced
+                            if let maximumBytes, written > maximumBytes { throw GzipError.sizeLimitExceeded }
+                            try output.write(contentsOf: Data(bytes: dstBuffer, count: produced))
                         }
                         if status == COMPRESSION_STATUS_END {
                             finished = true

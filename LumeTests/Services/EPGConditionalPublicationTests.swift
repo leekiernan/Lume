@@ -13,7 +13,7 @@ struct EPGConditionalPublicationTests {
     """
 
     private func store(url: URL) throws -> ModelContainer {
-        let schema = Schema([EPGSource.self, EPGListing.self, LiveStream.self])
+        let schema = Schema([EPGSource.self, EPGListing.self, LiveStream.self, Category.self, Playlist.self])
         let container = try ModelContainer(for: schema, configurations: ModelConfiguration(schema: schema, isStoredInMemoryOnly: true, cloudKitDatabase: .none))
         container.mainContext.insert(EPGSource(name: "Guide", url: url.absoluteString))
         container.mainContext.insert(LiveStream(id: "news", streamId: 1, name: "News", epgChannelId: "news"))

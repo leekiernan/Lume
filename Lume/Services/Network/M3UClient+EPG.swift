@@ -8,11 +8,11 @@ nonisolated enum EPGDownloadResult {
 nonisolated extension M3UClient {
     /// Prefer the modification date: some panels advertise an ETag but ignore
     /// If-None-Match. Unsupported validators simply yield an ordinary 200.
-    func downloadGuide(from urlString: String, lastModified: String? = nil, entityTag: String? = nil) async throws -> EPGDownloadResult {
+    func downloadGuide(from urlString: String, lastModified: String? = nil, entityTag: String? = nil, maximumBytes: Int? = nil) async throws -> EPGDownloadResult {
         guard let url = URL(string: urlString) else { throw M3UError.invalidURL }
         if url.isFileURL {
             guard FileManager.default.fileExists(atPath: url.path) else { throw M3UError.fileNotFound }
-            return try .file(gunzipIfNeeded(url, deleteOriginal: false), lastModified: nil, entityTag: nil)
+            return try .file(gunzipIfNeeded(url, deleteOriginal: false, maximumBytes: maximumBytes), lastModified: nil, entityTag: nil)
         }
         let request = Self.guideRequest(url: url, lastModified: lastModified, entityTag: entityTag)
         let temporary: URL
@@ -34,7 +34,7 @@ nonisolated extension M3UClient {
         let destination = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".xmltv")
         try FileManager.default.moveItem(at: temporary, to: destination)
         do {
-            let file = try gunzipIfNeeded(destination, deleteOriginal: true)
+            let file = try gunzipIfNeeded(destination, deleteOriginal: true, maximumBytes: maximumBytes)
             return .file(file, lastModified: response.value(forHTTPHeaderField: "Last-Modified"), entityTag: response.value(forHTTPHeaderField: "ETag"))
         } catch {
             try? FileManager.default.removeItem(at: destination)
