@@ -75,7 +75,8 @@ struct SportsFixtureResolutionMachineTests {
 
     @Test func `the request key follows the fixtures and the refresh signals`() {
         let key = SportsFixtureResolutionMachine.requestKey(for: [fixture("a"), fixture("b")], visibilityToken: "parent", refreshingOn: [false])
-        #expect(key == "parent|a,b|false")
+        #expect(key == "parent|a,b|0|false")
+        #expect(key != SportsFixtureResolutionMachine.requestKey(for: [fixture("a"), fixture("b")], visibilityToken: "parent", refreshingOn: [false], guideRevision: 1))
         #expect(key != SportsFixtureResolutionMachine.requestKey(for: [fixture("a"), fixture("b")], visibilityToken: "parent", refreshingOn: [true]))
         #expect(key != SportsFixtureResolutionMachine.requestKey(for: [fixture("a"), fixture("b")], visibilityToken: "child", refreshingOn: [false]))
     }

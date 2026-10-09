@@ -118,6 +118,13 @@ struct EPGSourceReconcilerTests {
 
         _ = EPGSourceReconciler.apply(playlist, in: context)
 
+        let previous = try #require(try context.fetch(FetchDescriptor<EPGSource>()).first)
+        previous.lastSyncDate = Date()
+        previous.lastAttemptDate = Date()
+        previous.validatorURL = previous.url
+        previous.lastModified = "Wed, 07 Oct 2026 12:00:00 GMT"
+        previous.entityTag = "old"
+        previous.committedGeneration = 7
         playlist.serverURL = "http://new.example.com:8080"
         let changed = EPGSourceReconciler.apply(playlist, in: context)
         #expect(changed)
@@ -125,6 +132,12 @@ struct EPGSourceReconcilerTests {
         let sources = try context.fetch(FetchDescriptor<EPGSource>())
         #expect(sources.count == 1)
         #expect(sources[0].url.contains("new.example.com"))
+        #expect(sources[0].lastSyncDate == nil)
+        #expect(sources[0].lastAttemptDate == nil)
+        #expect(sources[0].validatorURL == nil)
+        #expect(sources[0].lastModified == nil)
+        #expect(sources[0].entityTag == nil)
+        #expect(sources[0].committedGeneration == 0)
     }
 
     @Test func `apply updates existing source when name changes`() throws {

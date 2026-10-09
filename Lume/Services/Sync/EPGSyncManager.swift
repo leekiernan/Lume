@@ -38,7 +38,7 @@ actor EPGSyncManager {
     /// One aggregate outcome, including partial failure, rather than a message
     /// per source. No configured guide/channels is a skip, not a failure toast.
     @discardableResult
-    func syncAllSources() async -> SyncRefreshOutcome {
+    func syncAllSources(allowConditional: Bool = true) async -> SyncRefreshOutcome {
         guard !Task.isCancelled else { return .cancelled }
         let sources: [SourceInfo]
         let referencedChannelIDs: Set<String>?
@@ -66,7 +66,7 @@ actor EPGSyncManager {
         let fence = Fence.live
         for source in sources {
             guard !Task.isCancelled else { return .cancelled }
-            let result = await sync(source: source, knownChannelIDs: unclaimedChannelIDs, fence: fence)
+            let result = await sync(source: source, knownChannelIDs: unclaimedChannelIDs, fence: fence, allowConditional: allowConditional)
             unclaimedChannelIDs.subtract(result.claimedChannelIDs)
             everySourceSynced = everySourceSynced && result.didSync
         }
@@ -103,6 +103,8 @@ actor EPGSyncManager {
     private nonisolated struct StagedSource {
         let programmes: [ParsedProgramme]
         let parsedProgrammeCount: Int
+        var lastModified: String?
+        var entityTag: String?
 
         var channelIDs: Set<String> {
             Set(programmes.map(\.channelId))
@@ -115,7 +117,7 @@ actor EPGSyncManager {
         case sourceChanged
     }
 
-    private func sync(source: SourceInfo, knownChannelIDs: Set<String>, fence: Fence) async -> SourceResult {
+    private func sync(source: SourceInfo, knownChannelIDs: Set<String>, fence: Fence, allowConditional: Bool) async -> SourceResult {
         let interval = Perf.begin(.epgSourceSync)
         defer { Perf.end(interval) }
 
@@ -129,9 +131,8 @@ actor EPGSyncManager {
             // earlier one. Retire any snapshot this source previously owned,
             // or its old programmes would still overlap the earlier source.
             do {
-                try await publish(StagedSource(programmes: [], parsedProgrammeCount: 0), for: source, fence: fence)
+                try await publish(StagedSource(programmes: [], parsedProgrammeCount: 0), for: source, referenceIDs: [], fence: fence)
                 Logger.database.info("EPG source \(source.id, privacy: .public) retired, all channels already guided")
-                markSynced(source.id)
                 return SourceResult(didSync: true, claimedChannelIDs: [])
             } catch {
                 markStatus(source.id, .error)
@@ -141,16 +142,15 @@ actor EPGSyncManager {
         for attempt in 0 ... 1 {
             do {
                 try Task.checkCancellation()
-                let staged = try await stage(source.url, knownChannelIDs: knownChannelIDs)
+                let staged = try await stage(source, knownChannelIDs: knownChannelIDs, allowConditional: allowConditional && attempt == 0)
                 // A non-empty XMLTV document that yielded no programmes for the
                 // requested channels is a mapping failure, not evidence that a
                 // previously committed source snapshot should be erased.
-                guard staged.parsedProgrammeCount == 0 || !staged.programmes.isEmpty else {
+                guard staged == nil || staged?.parsedProgrammeCount == 0 || staged?.programmes.isEmpty == false else {
                     throw EPGPublicationError.suspiciousEmpty
                 }
-                try await publish(staged, for: source, fence: fence)
-                markSynced(source.id)
-                return SourceResult(didSync: true, claimedChannelIDs: staged.channelIDs)
+                try await publish(staged, for: source, referenceIDs: knownChannelIDs, fence: fence)
+                return try committedResult(staged, sourceID: source.id, knownChannelIDs: knownChannelIDs)
             } catch is CancellationError {
                 markStatus(source.id, .idle)
                 return SourceResult(
@@ -175,6 +175,18 @@ actor EPGSyncManager {
     }
 
     // MARK: - Source / channel lookups
+
+    /// A validated 304 already proved these rows intact. Read its small source
+    /// metadata instead of materializing every listing merely to reserve IDs.
+    private func committedResult(_ staged: StagedSource?, sourceID: UUID, knownChannelIDs: Set<String>) throws -> SourceResult {
+        if let staged {
+            Logger.database.info("EPG source published: \(staged.programmes.count) matched programmes, \(staged.channelIDs.count) channels")
+            return SourceResult(didSync: true, claimedChannelIDs: staged.channelIDs)
+        }
+        Logger.database.info("EPG source unchanged; retained committed guide")
+        let source = try ModelContext(modelContainer).fetch(FetchDescriptor<EPGSource>(predicate: #Predicate { $0.id == sourceID })).first
+        return SourceResult(didSync: true, claimedChannelIDs: Set(source?.snapshotChannelIDs ?? []).intersection(knownChannelIDs))
+    }
 
     private nonisolated struct SourceInfo {
         let id: UUID
@@ -221,12 +233,19 @@ actor EPGSyncManager {
     /// Fetching and parsing do not mutate SwiftData. An abandoned stage is
     /// therefore cleaned up by normal process teardown and cannot be observed
     /// by guide readers.
-    private func stage(_ url: String, knownChannelIDs: Set<String>) async throws -> StagedSource {
+    private func stage(_ sourceInfo: SourceInfo, knownChannelIDs: Set<String>, allowConditional: Bool) async throws -> StagedSource? {
         let interval = Perf.begin(.epgIngest)
         defer { Perf.end(interval) }
 
-        let isRemote = !(URL(string: url)?.isFileURL ?? false)
-        let fileURL = try await client.downloadEPG(from: url)
+        let context = ModelContext(modelContainer)
+        let sourceID = sourceInfo.id
+        let source = try context.fetch(FetchDescriptor<EPGSource>(predicate: #Predicate { $0.id == sourceID })).first
+        let canValidate = try allowConditional && source.map { try EPGCoverage.canValidate($0, referenceIDs: knownChannelIDs, in: context) } == true
+        let result = try await client.downloadGuide(
+            from: sourceInfo.url, lastModified: canValidate ? source?.lastModified : nil, entityTag: canValidate ? source?.entityTag : nil
+        )
+        guard case let .file(fileURL, lastModified, entityTag) = result else { return nil }
+        let isRemote = !(URL(string: sourceInfo.url)?.isFileURL ?? false)
         defer { if isRemote { try? FileManager.default.removeItem(at: fileURL) } }
 
         var programmesByKey: [String: ParsedProgramme] = [:]
@@ -249,7 +268,7 @@ actor EPGSyncManager {
         else { throw EPGPublicationError.invalidDocument }
         return StagedSource(
             programmes: programmesByKey.values.sorted(by: Self.stagingPrecedes),
-            parsedProgrammeCount: parseOutcome.programmeCount
+            parsedProgrammeCount: parseOutcome.programmeCount, lastModified: lastModified, entityTag: entityTag
         )
     }
 
@@ -275,7 +294,7 @@ actor EPGSyncManager {
     /// One source gets exactly one durable publication. If validation, a final
     /// cancellation check, or `save()` fails, the context rolls back and that
     /// source's prior committed snapshot remains visible.
-    private func publish(_ staged: StagedSource, for sourceInfo: SourceInfo, fence: Fence) async throws {
+    private func publish(_ staged: StagedSource?, for sourceInfo: SourceInfo, referenceIDs: Set<String>, fence: Fence) async throws {
         let sourceID = sourceInfo.id
         let request = LocalStoreWriteCoordinator.Request(
             scope: .epgPublish(sourceInfo.id),
@@ -294,7 +313,26 @@ actor EPGSyncManager {
             ).first, source.isEnabled, source.url == sourceInfo.url else {
                 throw EPGPublicationError.sourceChanged
             }
-            try Self.replaceSnapshot(staged, for: sourceInfo, source: source, in: context)
+            if let staged {
+                try Self.replaceSnapshot(staged, for: sourceInfo, source: source, in: context)
+                source.validatorURL = sourceInfo.url
+                source.lastModified = staged.lastModified
+                source.entityTag = staged.entityTag
+                source.snapshotReferenceIDs = referenceIDs.sorted()
+                source.snapshotChannelIDs = staged.channelIDs.sorted()
+                source.snapshotProgrammeCount = staged.programmes.count
+                source.snapshotSchemaVersion = SyncFrequency.epgCurrentSchemaVersion
+                source.snapshotEnd = staged.programmes.map(\.end).max()
+            } else {
+                // Revalidate under the write lease. If local data disappeared
+                // during the request, retry unconditionally instead of blessing
+                // a 304 against an absent snapshot.
+                guard try EPGCoverage.canValidate(source, referenceIDs: referenceIDs, in: context) else {
+                    throw EPGPublicationError.invalidDocument
+                }
+            }
+            source.lastSyncDate = Date()
+            source.syncStatus = .idle
             try Task.checkCancellation()
             guard Fence.live == fence else { throw LocalStoreWriteError.superseded }
             do {
@@ -357,7 +395,11 @@ actor EPGSyncManager {
         for stale in oldByID.values {
             context.delete(stale)
         }
-        source.committedGeneration &+= 1
+        // Repeated empty/shadowed publications contain no new reader data.
+        // They must not invalidate an earlier source's unchanged snapshot.
+        if source.committedGeneration == 0 || !oldRows.isEmpty || !staged.programmes.isEmpty {
+            source.committedGeneration &+= 1
+        }
     }
 
     /// A pre-LUM-13 guide was one aggregate snapshot, so its unowned rows
@@ -398,13 +440,9 @@ actor EPGSyncManager {
     // MARK: - Status bookkeeping
 
     private func markStatus(_ sourceID: UUID, _ status: SyncStatus) {
-        updateSource(sourceID) { $0.syncStatus = status }
-    }
-
-    private func markSynced(_ sourceID: UUID) {
         updateSource(sourceID) {
-            $0.syncStatus = .idle
-            $0.lastSyncDate = Date()
+            $0.syncStatus = status
+            if status == .syncing { $0.lastAttemptDate = Date() }
         }
     }
 

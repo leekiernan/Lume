@@ -24,10 +24,10 @@ nonisolated struct SportsFixtureResolutionMachine: Equatable {
     private(set) var resolved: [String: [ResolvedChannel]] = [:]
 
     /// The `.task(id:)` identity for resolving `fixtures`: the set shown, and
-    /// whatever else should prompt a fresh pass — a guide sync starting or
-    /// ending, a catalog sync settling.
-    static func requestKey(for fixtures: [SportsFixture], visibilityToken: String, refreshingOn signals: [Bool] = []) -> String {
-        ([visibilityToken, fixtures.map(\.id).joined(separator: ",")] + signals.map { String($0) }).joined(separator: "|")
+    /// whatever else should prompt a fresh pass — a committed guide snapshot,
+    /// foreground return or catalog sync settling.
+    static func requestKey(for fixtures: [SportsFixture], visibilityToken: String, refreshingOn signals: [Bool] = [], guideRevision: UInt64 = 0) -> String {
+        ([visibilityToken, fixtures.map(\.id).joined(separator: ","), String(guideRevision)] + signals.map { String($0) }).joined(separator: "|")
     }
 
     /// Hides the previous viewer's answers immediately, even before SwiftUI

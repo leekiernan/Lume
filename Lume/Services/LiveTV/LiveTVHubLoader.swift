@@ -75,7 +75,7 @@ final class LiveTVHubFeed {
         let visibility: String
         let profile: String
         let syncedAt: Date?
-        let guideIsSyncing: Bool
+        let guideRevision: UInt64
         let isActive: Bool
         let hour: Int
         let personalIDs: [String]
@@ -110,7 +110,6 @@ final class LiveTVHubFeed {
         let scope = "\(key.prefix)-\(key.visibility)-\(key.profile)"
         if self.scope != scope { snapshot = LiveTVHubSnapshot() }
         self.scope = scope
-        guard !key.guideIsSyncing else { return }
         isLoading = true
         defer { if request == token { isLoading = false } }
         do {

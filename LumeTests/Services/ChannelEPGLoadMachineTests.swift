@@ -30,11 +30,12 @@ struct ChannelEPGLoadMachineTests {
         _ visible: Set<String>,
         scope: ChannelEPGLoadMachine.Scope? = nil,
         channels: Set<String> = ["a", "b"],
-        syncing: Bool = false
+        revision: UInt64 = 0,
+        minute: Int = 0
     ) -> ChannelEPGLoadMachine.Key {
         .init(
             scope: scope ?? self.scope(),
-            refresh: .init(channelIDs: channels, guideIsSyncing: syncing),
+            refresh: .init(channelIDs: channels, revision: revision, minute: minute),
             visibleChannelIDs: visible
         )
     }
@@ -84,8 +85,8 @@ struct ChannelEPGLoadMachineTests {
         #expect(machine.snapshot(for: scope()) == ["b": pair])
     }
 
-    @Test func `channel changes and guide syncs refetch everything but keep the pairs on screen`() throws {
-        let refreshes = [key(["c", "d"], channels: ["c", "d"]), key(["a"], syncing: true)]
+    @Test func `channel changes committed snapshots and minute ticks refresh pairs without blanking`() throws {
+        let refreshes = [key(["c", "d"], channels: ["c", "d"]), key(["a"], revision: 1), key(["a"], minute: 1)]
         for refresh in refreshes {
             var machine = ChannelEPGLoadMachine()
             let initial = try begin(&machine, key(["a"]))
@@ -106,9 +107,9 @@ struct ChannelEPGLoadMachineTests {
         let original = ChannelEPG(current: pair.current, next: EPGSlot(title: "Next", start: now, end: now.addingTimeInterval(3600)))
         let initial = try begin(&machine, key(["a"]))
         machine.finish(initial, with: ["a": original])
-        let duringSync = try begin(&machine, key(["a"], syncing: true))
+        let duringSync = try begin(&machine, key(["a"], revision: 1))
         #expect(machine.snapshot(for: scope()) == ["a": original])
-        let afterSync = try begin(&machine, key(["a"], syncing: false))
+        let afterSync = try begin(&machine, key(["a"], revision: 2))
         #expect(machine.snapshot(for: scope()) == ["a": original])
         let stale = machine.finish(duringSync, with: [:])
         #expect(!stale)

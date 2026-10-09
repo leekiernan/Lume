@@ -11,6 +11,7 @@
 //
 
 import Foundation
+import OSLog
 import SwiftData
 
 /// A point-in-time programme entry for a channel card — plain values so it can
@@ -90,7 +91,13 @@ enum ChannelEPGLoader {
         // the widest column in the table and nothing here reads it, so a partial
         // fetch keeps it out of the rows entirely.
         descriptor.propertiesToFetch = [\.channelId, \.title, \.start, \.end, \.artworkURL]
-        guard let listings = try? context.fetch(descriptor) else { return [:] }
+        let listings: [EPGListing]
+        do {
+            listings = try context.fetch(descriptor)
+        } catch {
+            Logger.database.warning("EPG now/next read failed: \(error.localizedDescription, privacy: .public)")
+            return [:]
+        }
 
         var grouped: [String: [EPGListing]] = [:]
         for listing in listings {
@@ -165,7 +172,13 @@ enum EPGGuideLoader {
             },
             sortBy: [SortDescriptor(\.channelId), SortDescriptor(\.start)]
         )
-        guard let listings = try? context.fetch(descriptor) else { return [:] }
+        let listings: [EPGListing]
+        do {
+            listings = try context.fetch(descriptor)
+        } catch {
+            Logger.database.warning("EPG guide-window read failed: \(error.localizedDescription, privacy: .public)")
+            return [:]
+        }
 
         var grouped: [String: [EPGWindowListing]] = [:]
         for listing in listings {

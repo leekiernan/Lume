@@ -98,7 +98,7 @@ extension SyncFrequency {
 
     /// The guide-schema version this build ingests. A stored value below this
     /// forces one EPG refresh; see `EPGSyncService.isDue`.
-    static let epgCurrentSchemaVersion = 3
+    nonisolated static let epgCurrentSchemaVersion = 3
 
     /// Resolves a stored raw value to a case, falling back to the EPG default.
     static func resolveEPG(_ raw: String) -> SyncFrequency {

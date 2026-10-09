@@ -13,12 +13,13 @@ nonisolated struct ChannelEPGLoadMachine {
     }
 
     /// What can make the same list's pairs out of date: its channels changing
-    /// (a favourite added, a channel joining Recents) or a guide sync starting
-    /// or ending. A change refetches every visible channel, but keeps the old
+    /// (a favourite added, a channel joining Recents), a committed snapshot,
+    /// foreground return or minute boundary. A change refetches every visible channel, but keeps the old
     /// pairs on screen until the answer lands.
     struct Refresh: Hashable {
         let channelIDs: Set<String>
-        let guideIsSyncing: Bool
+        let revision: UInt64
+        var minute: Int = 0
     }
 
     struct Key: Hashable {

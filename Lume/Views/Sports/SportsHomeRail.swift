@@ -265,7 +265,7 @@ struct SportsHomeRail: View {
         /// while the hub, which never waited, showed them.
         private func resolveKey(_ fixtures: [SportsFixture]) -> String {
             guard premium.isPremium else { return "idle" }
-            return SportsFixtureResolutionMachine.requestKey(for: fixtures, visibilityToken: restriction.visibilityToken, refreshingOn: [epg.isSyncing, isSyncBusy])
+            return SportsFixtureResolutionMachine.requestKey(for: fixtures, visibilityToken: restriction.visibilityToken, refreshingOn: [isSyncBusy], guideRevision: epg.readRevision)
         }
 
         private func runResolve(_ fixtures: [SportsFixture]) async {

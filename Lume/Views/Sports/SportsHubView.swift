@@ -332,7 +332,7 @@ struct SportsHubView: View {
     /// off-main pass, re-running when the fixture set changes or an EPG refresh
     /// finishes (fresh sub-titles sharpen matching).
     private func resolveKey(_ fixtures: [SportsFixture]) -> String {
-        SportsFixtureResolutionMachine.requestKey(for: fixtures, visibilityToken: restriction.visibilityToken, refreshingOn: [epg.isSyncing])
+        SportsFixtureResolutionMachine.requestKey(for: fixtures, visibilityToken: restriction.visibilityToken, guideRevision: epg.readRevision)
     }
 
     private var heroSelectionContext: String {

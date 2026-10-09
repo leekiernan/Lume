@@ -174,20 +174,13 @@ nonisolated class M3UClient {
     /// guides (`guide.xml.gz` — the common way public EPGs are hosted) are
     /// decompressed to a fresh temp file first.
     func downloadEPG(from urlString: String) async throws -> URL {
-        guard let url = URL(string: urlString) else { throw M3UError.invalidURL }
-
-        if url.isFileURL {
-            guard FileManager.default.fileExists(atPath: url.path) else {
-                throw M3UError.fileNotFound
-            }
-            return try gunzipIfNeeded(url, deleteOriginal: false)
+        switch try await downloadGuide(from: urlString) {
+        case let .file(url, _, _): return url
+        case .notModified: throw M3UError.serverError(304)
         }
-
-        let downloaded = try await download(url, suffix: ".xmltv")
-        return try gunzipIfNeeded(downloaded, deleteOriginal: true)
     }
 
-    private func gunzipIfNeeded(_ fileURL: URL, deleteOriginal: Bool) throws -> URL {
+    func gunzipIfNeeded(_ fileURL: URL, deleteOriginal: Bool) throws -> URL {
         guard GzipFile.isGzip(fileURL) else { return fileURL }
         Logger.network.info("EPG file is gzipped, decompressing")
         let decompressed = try GzipFile.decompress(fileURL)

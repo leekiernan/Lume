@@ -53,16 +53,17 @@ struct LiveTVHubView: View {
             let key = LiveTVHubFeed.Key(
                 prefix: playlistPrefix, visibility: restriction.visibilityToken,
                 profile: profileToken,
-                syncedAt: syncedAt, guideIsSyncing: epgSync.isSyncing, isActive: scenePhase == .active,
+                syncedAt: syncedAt, guideRevision: epgSync.readRevision, isActive: scenePhase == .active,
                 hour: Int(now.timeIntervalSince1970 / 3600), personalIDs: (favoriteChannels + recentChannels).map(\.id)
             )
             page(now: now)
                 .task(id: key) {
                     guard scenePhase == .active else { return }
+                    epgSync.ensureCoverage(reason: "Live TV hub")
                     await feed.load(key: key, restriction: restriction, container: modelContext.container, now: now)
                 }
                 .task(id: "\(key)-\(Int(now.timeIntervalSince1970 / 60))-\(snapshot.collections.map(\.id))") {
-                    guard scenePhase == .active, !epgSync.isSyncing else { return }
+                    guard scenePhase == .active else { return }
                     let channels = (favoriteChannels + recentChannels).map(channel) + snapshot.collections.flatMap(\.channels)
                     await feed.refreshEPG(channelIDs: Array(Set(channels.compactMap(\.epgID))), container: modelContext.container,
                                           prefix: playlistPrefix, visibility: restriction.visibilityToken, profile: profileToken)
