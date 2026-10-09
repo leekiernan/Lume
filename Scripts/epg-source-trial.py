@@ -202,7 +202,7 @@ def render(report):
         if averages:
             lines.append(f"| {name} | {averages['provider_first']:.1f}% | {averages['external_first']:.1f}% | {averages['gap_fallback']:.1f}% |")
     lines += ["", "Source-first columns simulate the app's channel-level ownership (any rows claim that channel), not a cross-source time-window merge. Gap fallback preserves whole programmes and never clips conflicting intervals.", "",
-              "## Fixture audit", "", f"{report['fixture']['streams']} streams; {report['fixture']['with_epg_id']} have an EPG ID. All identified streams in this fixture are PBS affiliates; it does not represent UK essentials or sports.", "",
+              "## Fixture audit", "", f"{report['fixture']['streams']} streams; {report['fixture']['with_epg_id']} have an EPG ID. Only explicitly reviewed selections contribute to aggregate comparisons.", "",
               "Conflicting uses of one provider ID:"]
     for cid, names in report["fixture"]["shared_ids"].items():
         lines.append(f"- `{cid}`: {'; '.join(names)}")

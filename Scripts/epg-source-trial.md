@@ -76,6 +76,10 @@ correctness, licensing suitability or a useful polling cadence. Repeat over
 several days, retaining source-specific timestamps and hashes, before choosing
 a source or an independent refresh schedule.
 
+The [UK essentials/sports capture](epg-uk-sports-trial.md) records the first
+fresh provider/UK comparison and the repeat protocol; later independent
+snapshots are still pending.
+
 ## Production Swift enrichment trial
 
 The opt-in app experiment is under **Settings → TV Guide → EPGShare metadata
@@ -97,6 +101,45 @@ replaces the baseline; a provider 304 can still receive updated metadata.
 Effective changes increment the existing guide publication generation so all
 hub/guide/player readers share the normal invalidation path. No per-card
 queries or image-fetching lane was introduced.
+
+### Where the metadata appears
+
+Guide cells retain programme artwork/subtitles in their value snapshots. The
+existing programme popup displays those fields and the provider-first synopsis
+on both tvOS and iOS; there is no intermediate detail screen. Hub popups resolve
+only their selected listing off the main thread, including now/next hero
+fallbacks, rather than fetching descriptions in the broad discovery scan.
+The same landscape artwork component serves all hub channel/programme rails
+and the popup, reusing the shared episode-image/cache pipeline. Channel names
+remain visible, and missing/failed images fall back to fitted channel logos.
+The guide grid itself remains text-only and does not request images per cell.
+
+Stored-Series title matching is not added here: an exact series name alone
+cannot identify an episode or distinguish a remake. Discovery's existing
+TMDB match remains a fallback when the selected EPG listing has no synopsis.
+
+### Scope and temporary storage
+
+Only non-hidden channels outside hidden Live TV categories contribute eligible
+station IDs, checked again at publication. Identity verification still examines
+**all** channel references before applying that visibility filter: hiding a
+conflicting station cannot make its shared ID safe. Removed eligibility restores
+provider fields on the next metadata publication. Existing status counts now
+refer to this eligible verified subset. An unsupported/empty subset downloads
+nothing. Eligibility is reapplied on refresh, not by per-card observers.
+
+One country feed is downloaded, decompressed, parsed and cleaned up at a time;
+only the bounded selected-programme cache survives. There is currently only
+one production supplementary feed. Any expansion must retain that sequential
+lifetime, not use parallel country downloads or hold all inflated files until
+the end. Optional enrichment checks ordinary free space before downloading,
+requiring its 768 MiB XML allowance plus a 128 MiB reserve, and refuses an
+inflated/plain document above that allowance. This is a conservative admission
+check, not a reservation against other processes. Failure/cancellation removes
+partial inflated files; write errors propagate instead of silently succeeding.
+Provider downloads keep their existing size policy. Low-storage optional
+failure retains the provider schedule/recent metadata and reports the existing
+warning/retry status, with a specific storage reason in logs.
 
 ### Refresh status and interruption
 
