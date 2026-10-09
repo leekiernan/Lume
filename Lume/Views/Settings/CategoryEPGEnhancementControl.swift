@@ -20,19 +20,14 @@ struct CategoryEPGEnhancementControl: View {
 
     var body: some View {
         Button(action: toggle) {
-            HStack {
-                #if os(tvOS)
-                    Label("Enhance Guide", systemImage: effectiveOn ? "sparkles" : "sparkle")
-                    Text(effectiveOn ? "On" : "Off")
-                #else
-                    Label("Enhance Guide", systemImage: effectiveOn ? "sparkles" : "sparkle")
-                        .labelStyle(.iconOnly)
-                        .foregroundStyle(effectiveOn ? Color.lumeAccent : Color.secondary)
-                #endif
-            }
+            Label("Enhance Guide", systemImage: effectiveOn ? "sparkles" : "sparkle")
+                .labelStyle(.iconOnly)
+            #if !os(tvOS)
+                .foregroundStyle(effectiveOn ? Color.lumeAccent : Color.secondary)
+            #endif
         }
         #if os(tvOS)
-        .buttonStyle(TVContentActionButtonStyle())
+        .buttonStyle(TVContentIconButtonStyle(isSelected: effectiveOn))
         #else
         .buttonStyle(.borderless)
         #endif

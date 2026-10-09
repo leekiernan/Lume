@@ -23,6 +23,7 @@ struct EPGProgramDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @State private var details: EPGProgrammeDetails?
+    @State private var epgSync = EPGSyncService.shared
 
     private var synopsis: String {
         guard let value = details?.synopsis, !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return cell.detail }
@@ -54,7 +55,7 @@ struct EPGProgramDetailView: View {
                 standardBody
             #endif
         }
-        .task(id: cell.id) {
+        .task(id: EPGProgrammeDetails.ReadKey(programmeID: cell.id, channelID: stream.epgChannelId, guideRevision: epgSync.readRevision)) {
             details = nil
             let container = modelContext.container
             let channelID = stream.epgChannelId ?? ""

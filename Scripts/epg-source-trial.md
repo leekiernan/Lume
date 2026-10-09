@@ -4,6 +4,10 @@ Whole-category replay and category-control behaviour are documented in
 [`_NOTES/epg-category-enhancement.md`](../_NOTES/epg-category-enhancement.md).
 The shipping Swift enrichment CLI accepts optional category IDs after the feed
 argument, e.g. `uk 105,116`; full-catalog identity checks still run first.
+Its JSON report also includes `addedSynopses` and an `onAir` breakdown by
+provider guide ID with channel names, exact-match status and added fields.
+These compare against raw provider metadata, not a previous app publication.
+Stored artwork URLs still require separate reachability/rendering checks.
 
 Run without Xcode, an app, a simulator, a server or third-party Python packages:
 

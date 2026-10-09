@@ -18,7 +18,19 @@ struct EPGEnrichmentTrial {
         let addedSubtitles: Int
         let addedCategories: Int
         let addedYears: Int
+        let addedSynopses: Int
+        let onAir: [OnAir]
         let scheduleUnchanged: Bool
+    }
+
+    private struct OnAir: Encodable {
+        let channelID: String
+        let channels: [String]
+        let title: String
+        let matched: Bool
+        let addedArtwork: String?
+        let addedSubtitle: String?
+        let addedSynopsis: Bool
     }
 
     @MainActor static func main() throws {
@@ -56,8 +68,10 @@ struct EPGEnrichmentTrial {
                                       start: now.addingTimeInterval(-2 * 3600), end: now.addingTimeInterval(4 * 86400))
         let snapshot = EPGEnrichmentCache(url: "offline-trial", checkedAt: now, channelIDs: Set(aliases.keys), programmes: external, lastModified: nil, entityTag: nil)
         guard snapshot.isUsable(url: snapshot.url, now: now) else { throw TrialError.invalidCache }
-        let index = EPGProgrammeEnrichment.Index(programmes: external, aliases: aliases)
-        let report = try evaluate(provider, index: index, now: now, snapshot: snapshot, providerIDs: providerIDs.count)
+        let names = streams.reduce(into: [String: Set<String>]()) { result, stream in
+            if let id = stream.epgChannelID { result[id, default: []].insert(stream.name) }
+        }.mapValues { $0.sorted() }
+        let report = try evaluate(provider, aliases: aliases, now: now, snapshot: snapshot, names: names)
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         encoder.dateEncodingStrategy = .iso8601
@@ -66,7 +80,8 @@ struct EPGEnrichmentTrial {
         print(String(data: data, encoding: .utf8) ?? "")
     }
 
-    @MainActor private static func evaluate(_ provider: [ParsedProgramme], index: EPGProgrammeEnrichment.Index, now: Date, snapshot: EPGEnrichmentCache, providerIDs: Int) throws -> Report {
+    @MainActor private static func evaluate(_ provider: [ParsedProgramme], aliases: EPGEnrichmentStations.Aliases, now: Date, snapshot: EPGEnrichmentCache, names: [String: [String]]) throws -> Report {
+        let index = EPGProgrammeEnrichment.Index(programmes: snapshot.programmes, aliases: aliases)
         var matched = 0
         var enriched = 0
         var restored = 0
@@ -74,6 +89,8 @@ struct EPGEnrichmentTrial {
         var subtitles = 0
         var categories = 0
         var years = 0
+        var synopses = 0
+        var onAir: [OnAir] = []
         for programme in provider {
             let row = EPGListing(
                 id: "trial", channelId: programme.channelId, title: programme.title, listingDescription: programme.description,
@@ -82,25 +99,39 @@ struct EPGEnrichmentTrial {
                 artworkURL: programme.artworkURL, releaseYear: programme.releaseYear
             )
             let original = EPGProgrammeEnrichment.Metadata(row)
-            if index.metadata(channelID: row.channelId, start: row.start, end: row.end, title: row.title) != nil { matched += 1 }
+            let hasMatch = index.metadata(channelID: row.channelId, start: row.start, end: row.end, title: row.title) != nil
+            if hasMatch { matched += 1 }
             if try EPGProgrammeEnrichment.apply(index, to: row) { enriched += 1 }
             if original.artworkURL != row.artworkURL { artwork += 1 }
             if original.subtitle != row.subtitle { subtitles += 1 }
             if original.category != row.category { categories += 1 }
             if original.releaseYear != row.releaseYear { years += 1 }
-            guard row.title == programme.title, row.channelId == programme.channelId, row.start == programme.start, row.end == programme.end else {
-                throw TrialError.changedSchedule
+            if original.description != row.listingDescription { synopses += 1 }
+            if row.start <= now, now < row.end {
+                onAir.append(OnAir(channelID: row.channelId, channels: names[row.channelId] ?? [], title: row.title, matched: hasMatch,
+                                   addedArtwork: original.artworkURL != row.artworkURL ? row.artworkURL : nil,
+                                   addedSubtitle: original.subtitle != row.subtitle ? row.subtitle : nil,
+                                   addedSynopsis: original.description != row.listingDescription))
             }
-            if try EPGProgrammeEnrichment.apply(.init(), to: row) { restored += 1 }
-            guard EPGProgrammeEnrichment.Metadata(row) == original, row.enrichmentBaseline == nil else { throw TrialError.changedProviderMetadata }
+            if try restore(row, programme: programme, original: original) { restored += 1 }
         }
         return try Report(
-            evaluatedAt: now, verifiedStations: snapshot.channelIDs.count, providerIDs: providerIDs,
+            evaluatedAt: now, verifiedStations: snapshot.channelIDs.count, providerIDs: Set(aliases.values.flatMap(\.self)).count,
             cachedProgrammes: snapshot.programmes.count, cacheBytes: JSONEncoder().encode(snapshot).count,
             providerRows: provider.count, matchedRows: matched,
             enrichedRows: enriched, restoredRows: restored, addedArtwork: artwork, addedSubtitles: subtitles,
-            addedCategories: categories, addedYears: years, scheduleUnchanged: true
+            addedCategories: categories, addedYears: years, addedSynopses: synopses,
+            onAir: onAir.sorted { ($0.channelID, $0.title) < ($1.channelID, $1.title) }, scheduleUnchanged: true
         )
+    }
+
+    @MainActor private static func restore(_ row: EPGListing, programme: ParsedProgramme, original: EPGProgrammeEnrichment.Metadata) throws -> Bool {
+        guard row.title == programme.title, row.channelId == programme.channelId, row.start == programme.start, row.end == programme.end else {
+            throw TrialError.changedSchedule
+        }
+        let restored = try EPGProgrammeEnrichment.apply(.init(), to: row)
+        guard EPGProgrammeEnrichment.Metadata(row) == original, row.enrichmentBaseline == nil else { throw TrialError.changedProviderMetadata }
+        return restored
     }
 
     private static func programmes(at url: URL, channelIDs: Set<String>, start: Date, end: Date) throws -> [ParsedProgramme] {

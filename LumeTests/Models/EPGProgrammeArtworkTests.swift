@@ -4,6 +4,44 @@ import SwiftData
 import Testing
 
 struct EPGProgrammeArtworkTests {
+    @Test func `open programme details invalidate on metadata publication or channel changes`() {
+        let original = EPGProgrammeDetails.ReadKey(programmeID: "stable", channelID: "one", guideRevision: 1)
+        #expect(original == EPGProgrammeDetails.ReadKey(programmeID: "stable", channelID: "one", guideRevision: 1))
+        #expect(original != EPGProgrammeDetails.ReadKey(programmeID: "stable", channelID: "one", guideRevision: 2))
+        #expect(original != EPGProgrammeDetails.ReadKey(programmeID: "stable", channelID: "other", guideRevision: 1))
+        #expect(original != EPGProgrammeDetails.ReadKey(programmeID: "next", channelID: "one", guideRevision: 1))
+    }
+
+    @Test func `programme detail reload reads newly published metadata for the same guide cell`() throws {
+        let container = try ModelContainer(for: EPGListing.self, configurations: ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none))
+        let context = ModelContext(container)
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        let row = EPGListing(id: "stable", channelId: "one", title: "Film", listingDescription: "Provider synopsis", start: start, end: start.addingTimeInterval(3600))
+        context.insert(row)
+        try context.save()
+        let cell = EPGProgramCell(id: "grid-stable", title: row.title, detail: "", start: row.start, end: row.end, listingID: row.id, isGap: false, width: 100)
+        #expect(try EPGProgrammeDetails.load(container: container, channelID: "one", cell: cell)?.artworkURL == nil)
+
+        let writer = ModelContext(container)
+        let published = try #require(try writer.fetch(FetchDescriptor<EPGListing>()).first)
+        published.artworkURL = "https://example.com/enhanced.jpg"
+        published.subtitle = "Episode title"
+        try writer.save()
+
+        let reloaded = try #require(try EPGProgrammeDetails.load(container: container, channelID: "one", cell: cell))
+        #expect(reloaded.artworkURL == "https://example.com/enhanced.jpg")
+        #expect(reloaded.subtitle == "Episode title")
+        #expect(reloaded.synopsis == "Provider synopsis")
+
+        published.artworkURL = nil
+        published.subtitle = nil
+        try writer.save()
+        let restored = try #require(try EPGProgrammeDetails.load(container: container, channelID: "one", cell: cell))
+        #expect(restored.artworkURL == nil)
+        #expect(restored.subtitle == nil)
+        #expect(restored.synopsis == "Provider synopsis")
+    }
+
     @Test func `guide cells and now next snapshots retain programme artwork subtitles and synopsis`() throws {
         let start = Date(timeIntervalSince1970: 1_700_000_000)
         let row = EPGListing(id: "stable", channelId: "one", title: "Film", listingDescription: "Programme synopsis", start: start,

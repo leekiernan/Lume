@@ -4,6 +4,14 @@ import SwiftData
 /// Resolve the selected programme only. Hub rails deliberately omit synopses
 /// from their broad scans; no managed objects cross back to the presentation.
 nonisolated struct EPGProgrammeDetails {
+    /// Programme identity stays stable when a background metadata publication
+    /// changes its artwork/subtitle. Open popups must reload on that revision.
+    struct ReadKey: Hashable {
+        let programmeID: String
+        let channelID: String?
+        let guideRevision: UInt64
+    }
+
     let synopsis: String
     let artworkURL: String?
     let subtitle: String?
