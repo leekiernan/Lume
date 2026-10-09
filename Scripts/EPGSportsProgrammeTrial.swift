@@ -11,9 +11,11 @@ nonisolated enum EPGSportsProgrammeTrial {
         let providerTitle: String
         let providerSubtitle: String?
         let providerDescription: String
+        let externalChannelID: String?
         let externalTitle: String?
         let externalSubtitle: String?
         let externalDescription: String?
+        let externalArtworkURL: String?
         let decision: EPGSportsProgrammeIdentity.Decision
         let wouldAddArtwork: Bool
     }
@@ -63,7 +65,9 @@ nonisolated enum EPGSportsProgrammeTrial {
             }
             entries.append(Entry(channelID: interval.channelID, channels: names[interval.channelID] ?? [], start: row.start, end: row.end,
                                  providerTitle: row.title, providerSubtitle: row.subtitle, providerDescription: String(row.description.prefix(800)),
+                                 externalChannelID: external?.channelId,
                                  externalTitle: external?.title, externalSubtitle: external?.subtitle, externalDescription: external.map { String($0.description.prefix(800)) },
+                                 externalArtworkURL: external?.artworkURL,
                                  decision: decision, wouldAddArtwork: decision.isCandidate && row.artworkURL?.isEmpty != false && external?.artworkURL?.isEmpty == false))
         }
         var counts: [String: Int] = [:]

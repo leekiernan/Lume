@@ -2,8 +2,9 @@
 
 ## Scope
 
-Replays the **existing** paired 2026-10-09 12:50:17 UTC capture, not a new
-independent snapshot. No network calls, provider changes, new dependencies,
+The initial pass replayed the paired 2026-10-09 12:50:17 UTC capture.
+The validation below adds a fresh pair captured at 20:20 UTC that day.
+Replay itself makes no network calls. No provider changes, new dependencies,
 AI lookups or app publication. The shipping title matcher remains unchanged.
 
 This is programme-to-programme identity, not fixture-to-channel suggestions.
@@ -74,6 +75,7 @@ are **not** verified by this count. Collapsing identical title/time pairs
 across variants/simulcasts leaves 50 pairs, not 50 unique physical channels.
 Full candidate titles, subtitles, bounded descriptions and reasons are in
 the ignored JSON report's `sports.entries`; `publicationEnabled` is false.
+Validation adds `externalChannelID` and `externalArtworkURL` for provenance.
 All 50 collapsed candidate pairs were inspected; that is a text review,
 not independent verification of the broadcast or episode artwork.
 
@@ -94,6 +96,88 @@ Verification: 41 standalone optimized Swift checks, 149 existing focused macOS
 EPG tests, 13 Python comparison tests, strict SwiftLint/SwiftFormat and shell
 syntax checks. Existing provider-field restoration/schedule checks still pass
 in the replay. No simulators or new app build required for Scripts-only changes.
+
+## Fresh validation: 2026-10-09 20:20 UTC
+
+**Verdict: useful candidate discovery, not safe for automatic publication.**
+No identity rules were changed during validation and app matching is untouched.
+
+Fresh artifacts are ignored under
+`ExampleData/EPGTrial/2026-10-09T201959Z-uk/`:
+`capture.json` records completion time, sizes and SHA-256; headers record the
+external feed's 16:39:20 UTC last-modified time. Both guide hashes differ from
+the earlier capture, so this is an independent refresh, roughly 7.5 hours later,
+not another replay. It is still only two same-day snapshots, not a reliability
+study across days. No account URLs/credentials were written into reports.
+
+The fresh channel catalog has 10,056 streams; category IDs are unchanged.
+Downloads were sequential: 3.84 MB catalog, 147.52 MB provider XML, 2.96 MB UK
+gzip. No other countries fetched. The artwork sample adds 9.99 MB retained;
+temporary UK decompression is removed by the existing CLI.
+
+At the fresh evaluation instant, the next 48 hours contain 1,185 selected
+sports provider-ID intervals: **48 strict, 11 studio candidates, 44 fixture
+candidates, 185 conflicting/unrecognised identities, 897 unresolved**.
+The 55 additional candidates span 14 provider IDs and collapse to 38 distinct
+title/time pairs after variants/simulcasts. All 38 were text-reviewed; no clear
+new cross-source fixture contradiction was observed among those candidates.
+That does not verify the actual broadcast, exact historical edition or artwork.
+
+For a fixed-window comparison, the fresh pair was also evaluated at the old
+12:50:17 UTC anchor (`sports-identity-fixed-window.json`). All **991 common
+provider-ID/title/interval rows retained their decision**, including 47 candidate
+rows. There were no new candidate intervals in that fixed-window report.
+Counts differ as old listings disappear and a moving 48-hour window admits
+later fixtures; the drop from 74 to 55 is not evidence of a matching regression.
+
+Artwork results (`artwork-validation/report.json`): all **28 unique URLs**
+returned HTTP 200 JPEGs with readable 16:9 dimensions, 1024×576 or 1920×1080.
+There are only 25 distinct image byte hashes: three different Live NFL URLs
+return the same trophy photograph, and two PL Retro URLs return identical bytes.
+Visually inspected eight samples: Hull/Everton promotion and Cardiff/Wolves
+action are fixture-relevant; URC, Premier League Preview and TNT Reload are
+competition/show graphics; the NFL sample is a generic trophy. Chelsea/UCL
+artwork is plausible but does not independently prove the 2012 leg. This is a
+useful presentation improvement, not 55 new event-specific posters. Existing
+fixture/team artwork should remain primary; don't let generic EPG artwork
+overwrite it. HTTP success does not establish usage rights.
+
+The extra adversarial gate found **six unsafe acceptances**:
+
+1. `2014/15` versus `2015/16` seasons share the year 2015 and wrongly match.
+2. A source saying both second and third T20 matches a third-T20 source.
+3. Title Episode 40 plus description E41 matches external E41.
+4. Women's versus men's descriptions with otherwise equal fixture text match.
+5. Under-21 versus under-18 descriptions with equal fixture text match.
+6. Numeric team qualifiers are stripped: `England 21 v France 21` matches
+   `England 18 v France 18`.
+
+These are synthetic counterexamples, not six claimed errors in the downloaded
+55 candidates. They disprove readiness to publish automatically. Run:
+
+```sh
+bash Scripts/build-epg-trial.sh --validate
+```
+
+This separate promotion gate deliberately exits **1** until unsafe acceptances
+are fixed. The 41 baseline regressions remain green; they were insufficient to
+establish safety. Fresh real rejected cases also reveal contextual false
+negatives: NRL text references a previous 2001 final, and a player's career
+dates differ from a specific past trophy year. Treating every synopsis year or
+competition as the current event is unreliable in both directions.
+
+Next repair: separate explicit headline event identity from synopsis background
+references; compare season ranges as identities, not intersecting year sets;
+preserve age/gender/numeric name qualifiers; abstain on contradictory event
+evidence. Don't simply reject all multi-year/round descriptions: a correct
+second-leg synopsis can mention the first leg. Rerun these gates and both
+captures before promoting any rule. Then obtain a later-day capture.
+
+Verification: fresh and fixed-window CLI replays preserved schedule and
+restored all strict metadata additions (fresh selected-category report: 140
+changed/restored rows). Baseline 41 Swift checks, 149 focused EPG tests and
+13 Python comparison tests passed; formatting/lint/shell syntax clean. The
+promotion gate fails as described; no app build or simulator needed.
 
 ## Promotion and architecture
 

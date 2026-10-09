@@ -83,7 +83,10 @@ struct EPGSportsTrialTests {
                                              names: ["channel": ["Sky Sports NFL"]], teamAliases: aliases)
         }
         let result = report([provider], [external])
-        guard result.counts["studio"] == 1, result.candidateArtwork == 1, !result.publicationEnabled else { throw Failure(name: "candidate report") }
+        guard result.counts["studio"] == 1, result.candidateArtwork == 1, !result.publicationEnabled,
+              result.entries.first?.externalChannelID == external.channelId,
+              result.entries.first?.externalArtworkURL == external.artworkURL
+        else { throw Failure(name: "candidate report and artwork provenance") }
         guard report([provider, provider], [external]).counts["unresolved"] == 1 else { throw Failure(name: "provider duplicate") }
         guard report([provider], [external, external]).counts["unresolved"] == 1 else { throw Failure(name: "external duplicate") }
         guard report([provider], [external], false).counts["unresolved"] == 1 else { throw Failure(name: "verified station required") }

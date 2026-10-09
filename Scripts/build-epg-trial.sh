@@ -1,6 +1,7 @@
 #!/bin/bash
 # Compile the offline guide trial using shipping value types/parser/helpers.
 # --tests builds and runs standalone regressions; no simulator or app build.
+# --validate runs the adversarial promotion gate (nonzero until rules are safe).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -12,7 +13,11 @@ case "${1:-}" in
     trial_entrypoint=Scripts/epg-sports-trial-tests.swift
     trial_output=.build/epg-sports-trial-tests
     ;;
-  *) echo "Usage: bash Scripts/build-epg-trial.sh [--tests]" >&2; exit 2 ;;
+  --validate)
+    trial_entrypoint=Scripts/epg-sports-validation-probes.swift
+    trial_output=.build/epg-sports-validation-probes
+    ;;
+  *) echo "Usage: bash Scripts/build-epg-trial.sh [--tests|--validate]" >&2; exit 2 ;;
 esac
 mkdir -p .build
 swiftc -O -swift-version 5 -default-isolation MainActor \
@@ -30,6 +35,6 @@ swiftc -O -swift-version 5 -default-isolation MainActor \
   Scripts/EPGSportsProgrammeIdentity.swift \
   Scripts/EPGSportsProgrammeTrial.swift \
   "$trial_entrypoint" -o "$trial_output"
-if [[ "${1:-}" == --tests ]]; then
+if [[ "${1:-}" == --tests || "${1:-}" == --validate ]]; then
   "$trial_output"
 fi
