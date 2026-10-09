@@ -36,17 +36,30 @@ struct EPGSettingsView: View {
     @ViewBuilder private var enrichmentStatus: some View {
         if enrichmentEnabled, let report = epgSync.enrichmentReport {
             VStack(alignment: .leading, spacing: 4) {
-                Text(verbatim: report.message)
-                if report.verifiedStations > 0 {
-                    Text("\(report.verifiedStations) verified stations · \(report.matchedProgrammes) exact matches · \(report.changedProgrammes) changed")
-                }
-                if let checked = report.checkedAt {
-                    Text("Last metadata check: \(checked.formatted(date: .abbreviated, time: .shortened))")
-                }
-                if let retry = report.retryAt {
-                    Text("Retry after: \(retry.formatted(date: .abbreviated, time: .shortened))")
+                if report.feeds.isEmpty {
+                    enrichmentResult(report)
+                } else {
+                    ForEach(report.feeds, id: \.feedID) { feed in
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(verbatim: feed.feedID?.label ?? "EPGShare")
+                            enrichmentResult(feed)
+                        }
+                    }
                 }
             }
+        }
+    }
+
+    @ViewBuilder private func enrichmentResult(_ report: EPGEnrichmentReport) -> some View {
+        Text(verbatim: report.message)
+        if report.verifiedStations > 0 {
+            Text("\(report.verifiedStations) verified stations · \(report.matchedProgrammes) exact matches · \(report.changedProgrammes) changed")
+        }
+        if let checked = report.checkedAt {
+            Text("Last metadata check: \(checked.formatted(date: .abbreviated, time: .shortened))")
+        }
+        if let retry = report.retryAt {
+            Text("Retry after: \(retry.formatted(date: .abbreviated, time: .shortened))")
         }
     }
 
@@ -190,7 +203,10 @@ struct EPGSettingsView: View {
                     .disabled(epgSync.isSyncing)
                 enrichmentStatus.font(.caption).foregroundStyle(.secondary)
             } footer: {
-                Text("Adds artwork and programme details for verified US PBS stations without changing your provider's schedule. Uses a large daily guide download.")
+                Text("""
+                Adds programme artwork and details for verified UK broadcasters and US PBS stations in enabled categories. Keeps your provider's schedule. \
+                Country guides download one at a time: UK every 12 hours, US PBS daily.
+                """)
             }
         }
     }
@@ -447,8 +463,11 @@ struct EPGSettingsView: View {
                 .accessibilityValue(enrichmentEnabled ? Text("On") : Text("Off"))
                 .disabled(epgSync.isSyncing)
 
-                Text("Adds artwork and programme details for verified US PBS stations without changing your provider's schedule. Uses a large daily guide download.")
-                    .tvSettingsFooter()
+                Text("""
+                Adds programme artwork and details for verified UK broadcasters and US PBS stations in enabled categories. Keeps your provider's schedule. \
+                Country guides download one at a time: UK every 12 hours, US PBS daily.
+                """)
+                .tvSettingsFooter()
                 enrichmentStatus.tvSettingsFooter()
             }
         }

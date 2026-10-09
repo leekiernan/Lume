@@ -1,7 +1,8 @@
 # UK essentials / sports source trial
 
-First paired capture: **2026-10-09 12:50 UTC**. This is an offline trial, not a
-shipping UK mapping change. No server, app build or provider-side changes.
+First paired capture: **2026-10-09 12:50 UTC**. The capture ran outside the app,
+without server or provider-side changes. Its reviewed UK mappings now back the
+opt-in metadata experiment described below.
 
 Local artifacts (ignored):
 `ExampleData/EPGTrial/2026-10-09T125017Z-uk/` contains the fresh 9,938-stream
@@ -79,8 +80,59 @@ python3 Scripts/epg-source-trial.py \
 
 Track current/48-hour gaps, exact metadata matches by channel family, changed
 boundaries, duplicate/conflicting entries, validators and feed publication
-times. Later captures are still outstanding. If essentials remain aligned,
-trial a separate small UK feed using the existing conservative metadata lane,
-eligible categories and independent source cadence. Keep sports rejected until
-event identity is demonstrated. Verify image/feed usage rights before rollout.
+times. Later captures are still outstanding. The app now trials the separate
+UK feed using the existing conservative metadata lane, eligible categories
+and independent source cadence. Strict title/time matches are allowed on the
+reviewed national sports broadcasters, but broader event matching remains
+offline until identity is demonstrated. Verify image/feed usage rights before rollout.
 Full season calendars remain a separate future concern.
+
+## Offline sports field review
+
+The same saved capture was reprocessed with `sports: true` on the named Sky/TNT
+selections; this is **not a second independent snapshot**. The ignored output
+is `sports-review.json` / `sports-review.md` beside the original reports.
+
+EPGShare's six reviewed sports channels have 312 time-aligned title mismatches
+and only one strict title/time match. Of the mismatches, 20 have the external
+fixture subtitle corroborated by provider text; 18 are queued for manual event
+review without detected conflict cues. Eleven mismatches have possible
+live/replay or round/year conflicts (including two of those 20 corroborated
+subtitles). The remaining 283 are unresolved. A subtitle such as “India v West
+Indies” helps explain why generic external titles differ, but does not by
+itself prove which T20, replay or season is airing.
+
+The report retains bounded title/subtitle/description examples, rejects duplicate
+intervals, never corrects times, and accepts **zero** broader event matches.
+Cue detection is deliberately diagnostic and incomplete; descriptions can
+mention previous rounds or highlights. EPG.pw still offers no useful metadata
+in this sample and is not enabled in the app.
+
+## App trial scope
+
+The existing experimental flag enables UK and US PBS, without new source
+configuration or category switches. Only enabled-category/non-hidden reviewed
+stations are selected, and that scope is checked again at publication. UK
+uses a separate 12-hour cache/checkpoint; PBS retains its 24-hour cache. Downloads
+are sequential and temporary country XML is removed before the next download.
+All selected metadata publishes together, preserving provider ownership and
+times. Settings and logs show per-feed results, counts and retry times.
+
+Sports broadcasters are not categorically excluded: their strict title/time
+matches use the same lane as essentials. Provider-created event channels and
+unknown identities stay untouched. Category-level opt-in controls, wider
+station mappings and event-aware matching are later work, not silently enabled
+by this change. Existing popup and rail artwork/subtitles consume additions
+through the shared guide publication/invalidation path.
+
+The shipping Swift parser, reviewed registry and exact matcher were also run
+against the saved capture: **13 verified stations, 864 near-term provider rows,
+407 exact matches**. It added artwork to 405 listings, categories to 404,
+subtitles to 42 and years to six. All 405 enriched rows restored to their
+original provider metadata on disable; titles, IDs and times were unchanged.
+This verifies the implementation against one snapshot, not ongoing reliability.
+
+Verification for this expansion: generic iOS/tvOS builds, 132 focused macOS EPG
+tests, 13 Python comparison tests, strict SwiftLint, SwiftFormat and translation
+checks passed. No simulator was installed or launched. Physical-device testing
+and subsequent independent guide snapshots remain follow-up checks.

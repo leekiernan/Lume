@@ -59,6 +59,19 @@ nonisolated enum EPGProgrammeEnrichment {
         private var entries: [Key: Metadata] = [:]
         private var ambiguous: Set<Key> = []
 
+        init(merging indexes: [Self]) {
+            for index in indexes {
+                ambiguous.formUnion(index.ambiguous)
+                for (key, metadata) in index.entries {
+                    if let previous = entries[key], previous != metadata { ambiguous.insert(key) }
+                    entries[key] = metadata
+                }
+            }
+            for key in ambiguous {
+                entries.removeValue(forKey: key)
+            }
+        }
+
         init(programmes: [ParsedProgramme] = [], aliases: [String: String] = [:]) {
             for programme in programmes {
                 guard let channel = aliases[programme.channelId], programme.end > programme.start else { continue }

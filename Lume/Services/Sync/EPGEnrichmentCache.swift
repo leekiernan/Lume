@@ -12,13 +12,15 @@ nonisolated enum EPGEnrichmentSettings {
     static let refreshInterval: TimeInterval = 24 * 3600
     static let retryInterval: TimeInterval = 3600
 
-    static func isDue(defaults: UserDefaults = .standard, now: Date = Date()) -> Bool {
+    static func isDue(defaults: UserDefaults = .standard, now: Date = Date(), feeds: [EPGEnrichmentFeed.Identifier] = EPGEnrichmentFeed.Identifier.allCases) -> Bool {
         guard defaults.bool(forKey: enabledKey) else { return false }
-        let checked = defaults.double(forKey: checkedKey)
-        let failed = defaults.double(forKey: failedKey)
-        let stale = checked <= 0 || now.timeIntervalSince1970 < checked || now.timeIntervalSince1970 - checked >= refreshInterval
-        let mayAttempt = failed <= 0 || now.timeIntervalSince1970 < failed || now.timeIntervalSince1970 - failed >= retryInterval
-        return (stale || defaults.bool(forKey: publicationPendingKey)) && mayAttempt
+        return feeds.contains { feed in
+            let checked = defaults.double(forKey: feed.checkedKey)
+            let failed = defaults.double(forKey: feed.failedKey)
+            let stale = checked <= 0 || now.timeIntervalSince1970 < checked || now.timeIntervalSince1970 - checked >= feed.refreshInterval
+            let mayAttempt = failed <= 0 || now.timeIntervalSince1970 < failed || now.timeIntervalSince1970 - failed >= retryInterval
+            return (stale || defaults.bool(forKey: publicationPendingKey)) && mayAttempt
+        }
     }
 }
 
@@ -42,9 +44,9 @@ nonisolated struct EPGEnrichmentCache: Codable {
             && !programmes.isEmpty && programmes.count <= Self.maximumProgrammes && programmes.contains { $0.end > now }
     }
 
-    func isFresh(url: String, channelIDs: Set<String>, now: Date) -> Bool {
+    func isFresh(url: String, channelIDs: Set<String>, now: Date, refreshInterval: TimeInterval = EPGEnrichmentSettings.refreshInterval) -> Bool {
         isUsable(url: url, now: now) && channelIDs.isSubset(of: self.channelIDs)
-            && now.timeIntervalSince(checkedAt) < EPGEnrichmentSettings.refreshInterval
+            && now.timeIntervalSince(checkedAt) < refreshInterval
     }
 
     static var defaultURL: URL? {

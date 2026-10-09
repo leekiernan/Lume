@@ -115,6 +115,27 @@ struct EPGProgrammeEnrichmentTests {
         #expect(EPGEnrichmentStations.aliases(for: [.init(name: "US PBS (KERA) Dallas", epgID: "PBSKEDT.us")]).isEmpty)
     }
 
+    @Test func `merging feed indexes rejects conflicting metadata rather than choosing by download order`() throws {
+        var conflicting = programme()
+        conflicting.artworkURL = "https://example.com/different.jpg"
+        let first = EPGProgrammeEnrichment.Index(programmes: [programme()], aliases: ["external": "provider"])
+        let second = EPGProgrammeEnrichment.Index(programmes: [conflicting], aliases: ["external": "provider"])
+        for indexes in [[first, second], [second, first]] {
+            #expect(try !EPGProgrammeEnrichment.apply(.init(merging: indexes), to: listing()))
+        }
+    }
+
+    @Test func `UK aliases require reviewed variants and never guess generic regions or event channels`() {
+        let channels: [EPGEnrichmentStations.Channel] = [
+            .init(name: "BBC TWO FHD", epgID: "BBCTwo.uk"), .init(name: "BBC TWO SD", epgID: "BBCTwo.uk"),
+            .init(name: "BBC ONE", epgID: "BBCOne.uk"), .init(name: "ITV1 FHD", epgID: "itv1.uk"),
+            .init(name: "TNT SPORTS 1 FHD 50FPS", epgID: "TNTSports1.uk"), .init(name: "Arsenal Match", epgID: "arsenal")
+        ]
+        #expect(EPGEnrichmentStations.aliases(for: channels, feed: .britain) == ["BBC.Two.HD.uk": "BBCTwo.uk", "TNT.Sports.1.HD.uk": "TNTSports1.uk"])
+        let conflict = EPGEnrichmentStations.Channel(name: "BBC TWO NORTHERN IRELAND", epgID: "BBCTwo.uk")
+        #expect(EPGEnrichmentStations.aliases(for: channels + [conflict], feed: .britain)["BBC.Two.HD.uk"] == nil)
+    }
+
     @Test func `filtered SAX parsing only emits selected stations`() throws {
         let file = FileManager.default.temporaryDirectory.appendingPathComponent("EPGEnrichmentParser-\(UUID()).xml")
         defer { try? FileManager.default.removeItem(at: file) }

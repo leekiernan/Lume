@@ -32,15 +32,40 @@ nonisolated enum EPGEnrichmentStations {
         ("US PBS (WHYY) Philadelphia", "PBSWHYY.us", "WHYY-DT.us_locals1")
     ]
 
+    private static let ukStations: [(names: [String], providerID: String, externalID: String)] = [
+        (["BBC ONE LONDON FHD"], "bbconelondon.uk", "BBC.One.Lon.HD.uk"),
+        (["BBC ONE SCOTLAND FHD"], "BBCOneScotland.uk", "BBC.One.ScotHD.uk"),
+        (["BBC TWO FHD", "BBC TWO HD", "BBC TWO SD"], "BBCTwo.uk", "BBC.Two.HD.uk"),
+        (["CHANNEL 4 FHD", "CHANNEL 4 HD", "CHANNEL 4 SD"], "Channel4.uk", "Channel.4.HD.uk"),
+        (["CHANNEL 5 FHD", "CHANNEL 5 HD", "CHANNEL 5 SD"], "Channel5.uk", "Channel.5.HD.uk"),
+        (["BBC NEWS FHD", "BBC NEWS HD", "BBC NEWS SD"], "BBCNewsChannel.uk", "BBC.NEWS.HD.uk"),
+        (["SKY NEWS FHD", "SKY NEWS HD", "SKY NEWS SD"], "SkyNews.uk", "Sky.News.HD.uk"),
+        (["Sky Sports Football HD"], "skysportsfootball.uk", "Sky.Sports.Football.HD.uk"),
+        (["Sky Sports NFL FHD", "Sky Sports NFL FHD 50FPS", "Sky Sports NFL SD"], "SkySportsAction.uk", "Sky.Sports.NFL.uk"),
+        (["TNT SPORTS 1 FHD 50FPS", "TNT Sports 1 FHD"], "TNTSports1.uk", "TNT.Sports.1.HD.uk"),
+        (["TNT SPORTS 2 FHD 50FPS", "TNT Sports 2 FHD", "TNT Sports 2 HD"], "TNTSports2.uk", "TNT.Sports.2.HD.uk"),
+        (["TNT SPORTS 3 FHD 50FPS", "TNT Sports 3 FHD", "TNT Sports 3 HD"], "TNTSports3.uk", "TNT.Sports.3.HD.uk"),
+        (["TNT Sports 4 FHD", "TNT Sports 4 FHD 50FPS", "TNT Sports 4 HD"], "TNTSports4.uk", "TNT.Sports.4.HD.uk")
+    ]
+
+    private static func reviewed(_ feed: EPGEnrichmentFeed.Identifier) -> [(names: [String], providerID: String, externalID: String)] {
+        feed == .britain ? ukStations : stations.map { ([$0.name], $0.providerID, $0.externalID) }
+    }
+
+    static func providerIDs(for feed: EPGEnrichmentFeed.Identifier) -> Set<String> {
+        Set(reviewed(feed).map(\.providerID))
+    }
+
     /// External ID -> provider ID, only where every stream referencing that
     /// provider ID has the reviewed identity. Reject shared/ambiguous IDs even
     /// if one of their channel names looks right.
-    static func aliases(for channels: [Channel]) -> [String: String] {
+    static func aliases(for channels: [Channel], feed: EPGEnrichmentFeed.Identifier = .usPBS) -> [String: String] {
         let grouped = Dictionary(grouping: channels, by: \.epgID)
         var aliases: [String: String] = [:]
-        for station in stations {
+        for station in reviewed(feed) {
+            let names = Set(station.names.map(normalizedName))
             guard let references = grouped[station.providerID], !references.isEmpty,
-                  references.allSatisfy({ normalizedName($0.name) == normalizedName(station.name) }) else { continue }
+                  references.allSatisfy({ names.contains(normalizedName($0.name)) }) else { continue }
             aliases[station.externalID] = station.providerID
         }
         return aliases

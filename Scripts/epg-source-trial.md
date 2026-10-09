@@ -33,6 +33,7 @@ later snapshot, create a new dated manifest and use its actual evaluation time.
     {
       "stream_id": 123,
       "status": "explicit affiliate alias",
+      "sports": true,
       "aliases": {"external": "exact-station-id"}
     }
   ]
@@ -46,6 +47,14 @@ Use `status: "explicit affiliate alias"` only for reviewed station/subchannel
 identities; other status strings keep a channel in the detail report but
 exclude it from aggregate metadata/strategy totals. A guide identity does
 not verify which bytes the provider actually streams.
+
+Set `sports: true` on reviewed sports selections to include the offline event
+evidence report. It pairs only unique, exactly aligned intervals, then shows
+title/subtitle/description excerpts, fixture-subtitle corroboration and possible
+live/replay, round/leg or year conflicts. These are **manual review cues, not an
+event matcher**. Absence of a conflict cue is not proof of event identity.
+Unmapped and unreviewed station selections never enter that queue. No broader
+event match is counted as accepted enrichment or published into the app.
 
 Public source URLs can be included as optional provenance. **Omit account
 URLs, usernames and passwords.** Do not commit guides, manifests, reports or
@@ -83,9 +92,12 @@ snapshots are still pending.
 ## Production Swift enrichment trial
 
 The opt-in app experiment is under **Settings → TV Guide → EPGShare metadata
-(experimental)**. It currently supports only the reviewed US PBS mappings in
-`EPGEnrichmentStations`; UK essentials, sports and other station families are
-not guessed. Enabling it does not add a competing timetable source.
+(experimental)**. It supports the reviewed US PBS mappings and 13 UK
+broadcasters in `EPGEnrichmentStations`: explicitly regional BBC One, BBC Two,
+Channel 4/5, BBC/Sky News, Sky Sports Football/NFL and TNT Sports 1–4. Each
+provider ID must have only explicitly reviewed channel-name variants. Generic
+BBC One/ITV regions, unmapped F1 and provider-created team/match/PPV channels
+remain provider-only. Enabling it does not add a competing timetable source.
 
 The metadata pass reuses the production downloader, parser and store-write
 coordinator. It preserves provider row IDs, titles, start/end times and any
@@ -129,10 +141,12 @@ refer to this eligible verified subset. An unsupported/empty subset downloads
 nothing. Eligibility is reapplied on refresh, not by per-card observers.
 
 One country feed is downloaded, decompressed, parsed and cleaned up at a time;
-only the bounded selected-programme cache survives. There is currently only
-one production supplementary feed. Any expansion must retain that sequential
-lifetime, not use parallel country downloads or hold all inflated files until
-the end. Optional enrichment checks ordinary free space before downloading,
+only its bounded selected-programme cache survives before the next starts.
+UK runs first, then US PBS. Both indexes publish together in one transaction:
+refreshing one feed cannot restore another's enriched fields. Each cache keeps
+at most 10,000 selected programmes from two hours ago through four days ahead;
+country XML files are never retained until combined publication. Optional
+enrichment checks ordinary free space before downloading,
 requiring its 768 MiB XML allowance plus a 128 MiB reserve, and refuses an
 inflated/plain document above that allowance. This is a conservative admission
 check, not a reservation against other processes. Failure/cancellation removes
@@ -143,12 +157,21 @@ warning/retry status, with a specific storage reason in logs.
 
 ### Refresh status and interruption
 
-The settings screen exposes the last in-process enrichment result, verified
+The settings screen exposes each feed's last in-process enrichment result, verified
 station/exact-match/change counts, the cache's successful check time (when
 available), and a retry time after a failure. Logs additionally report the
 cached programme count. Results distinguish downloaded, HTTP-unchanged,
 cached, unsupported, unavailable and retry-deferred data. Zero metadata changes
 alone is not evidence that an external feed was checked successfully.
+
+UK checks every 12 hours; US PBS every 24 hours, each with its own validators,
+cache, successful-publication checkpoint and one-hour failure backoff. These
+are conservative trial defaults, not measured feed publication SLAs. Unsupported
+feeds download nothing and are checkpointed to avoid a permanently due loop.
+A failed country does not prevent another country from refreshing; a usable
+recent failed-country cache is retained, otherwise its provider fields are
+restored. Per-feed retry/check times make partial success visible. Disabling
+the experimental flag restores both countries' provider metadata together.
 
 An unavailable or backed-off supplement produces **Sync complete with warnings**
 when the provider guide is healthy; provider success still advances its own
@@ -192,6 +215,8 @@ swiftc -O -swift-version 5 -default-isolation MainActor \
   Lume/Models/EPGListing.swift \
   Lume/Services/Sync/EPGProgrammeEnrichment.swift \
   Lume/Services/Sync/EPGEnrichmentStations.swift \
+  Lume/Services/Sync/EPGEnrichmentCache.swift \
+  Lume/Services/Sync/EPGEnrichmentFeed.swift \
   Scripts/epg-enrichment-trial.swift -o .build/epg-enrichment-trial
 .build/epg-enrichment-trial \
   ExampleData/LiveStreams.json ExampleData/epg.xml \
@@ -210,6 +235,19 @@ KPBS's provider ID is shared by `US PBS (KPBS) San Diego` and
 `US PBS 15 (KPBS) San Diego`. The stricter app policy excludes that ID until
 both identities are verified, rather than assuming the second stream is
 equivalent. This is conservative rejection, not a missing guide match.
+
+The optional final argument selects a reviewed feed (`uk` or `us-locals`,
+defaulting to PBS). To exercise the **shipping** UK registry and matcher against
+the saved UK capture, using the same compiled executable:
+
+```sh
+.build/epg-enrichment-trial \
+  ExampleData/EPGTrial/2026-10-09T125017Z-uk/streams.json \
+  ExampleData/EPGTrial/2026-10-09T125017Z-uk/provider.xml \
+  ExampleData/EPGTrial/2026-10-09T125017Z-uk/epgshare-uk.xml.gz \
+  2026-10-09T12:50:17Z \
+  ExampleData/EPGTrial/2026-10-09T125017Z-uk/swift-enrichment-report.json uk
+```
 
 Still needed before broader rollout: repeat with newer snapshots, verify other
 regional/sports aliases against actual streams, check image/feed usage rights,

@@ -14,9 +14,21 @@ nonisolated struct EPGEnrichmentReport: Equatable {
     var changedProgrammes = 0
     var checkedAt: Date?
     var retryAt: Date?
+    var feedID: EPGEnrichmentFeed.Identifier?
+    var feeds: [EPGEnrichmentReport] = []
 
     var hasWarning: Bool {
-        state == .unavailable || state == .deferred
+        state == .unavailable || state == .deferred || feeds.contains(where: \.hasWarning)
+    }
+
+    static func combining(_ feeds: [Self], enabled: Bool) -> Self {
+        let precedence: [State] = [.unavailable, .deferred, .downloaded, .unchanged, .cached, .unsupported]
+        let state = enabled ? precedence.first(where: { candidate in feeds.contains { $0.state == candidate } }) ?? .unsupported : .disabled
+        return Self(state: state, verifiedStations: feeds.reduce(0) { $0 + $1.verifiedStations },
+                    cachedProgrammes: feeds.reduce(0) { $0 + $1.cachedProgrammes },
+                    matchedProgrammes: feeds.reduce(0) { $0 + $1.matchedProgrammes },
+                    changedProgrammes: feeds.reduce(0) { $0 + $1.changedProgrammes },
+                    checkedAt: feeds.compactMap(\.checkedAt).min(), retryAt: feeds.compactMap(\.retryAt).min(), feeds: feeds)
     }
 
     var message: String {

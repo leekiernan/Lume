@@ -3,19 +3,33 @@ import Foundation
 import Testing
 
 struct EPGEnrichmentCacheTests {
+    @Test func `new country and independent country cadences are checked even with a fresh PBS publication`() throws {
+        let name = "EPGEnrichmentCacheTests-\(UUID())"
+        let defaults = try #require(UserDefaults(suiteName: name))
+        defer { defaults.removePersistentDomain(forName: name) }
+        let now = Date()
+        defaults.set(true, forKey: EPGEnrichmentSettings.enabledKey)
+        defaults.set(now.timeIntervalSince1970, forKey: EPGEnrichmentFeed.Identifier.usPBS.checkedKey)
+        #expect(EPGEnrichmentSettings.isDue(defaults: defaults, now: now))
+        defaults.set(now.timeIntervalSince1970, forKey: EPGEnrichmentFeed.Identifier.britain.checkedKey)
+        #expect(!EPGEnrichmentSettings.isDue(defaults: defaults, now: now.addingTimeInterval(11 * 3600)))
+        #expect(EPGEnrichmentSettings.isDue(defaults: defaults, now: now.addingTimeInterval(12 * 3600)))
+        #expect(!EPGEnrichmentSettings.isDue(defaults: defaults, now: now.addingTimeInterval(12 * 3600), feeds: [.usPBS]))
+    }
+
     @Test func `unpublished fresh metadata stays due until committed`() throws {
         let name = "EPGEnrichmentCacheTests-\(UUID())"
         let defaults = try #require(UserDefaults(suiteName: name))
         defer { defaults.removePersistentDomain(forName: name) }
         defaults.set(true, forKey: EPGEnrichmentSettings.enabledKey)
         defaults.set(Date().timeIntervalSince1970, forKey: "lume.epgEnrichment.checked")
-        #expect(EPGEnrichmentSettings.isDue(defaults: defaults))
+        #expect(EPGEnrichmentSettings.isDue(defaults: defaults, feeds: [.usPBS]))
         defaults.set(Date().timeIntervalSince1970, forKey: EPGEnrichmentSettings.checkedKey)
-        #expect(!EPGEnrichmentSettings.isDue(defaults: defaults))
+        #expect(!EPGEnrichmentSettings.isDue(defaults: defaults, feeds: [.usPBS]))
         defaults.set(true, forKey: EPGEnrichmentSettings.publicationPendingKey)
-        #expect(EPGEnrichmentSettings.isDue(defaults: defaults))
+        #expect(EPGEnrichmentSettings.isDue(defaults: defaults, feeds: [.usPBS]))
         defaults.set(Date().timeIntervalSince1970, forKey: EPGEnrichmentSettings.failedKey)
-        #expect(!EPGEnrichmentSettings.isDue(defaults: defaults))
+        #expect(!EPGEnrichmentSettings.isDue(defaults: defaults, feeds: [.usPBS]))
     }
 
     @Test(arguments: [EPGEnrichmentReport.State.unavailable, .deferred])
@@ -36,16 +50,16 @@ struct EPGEnrichmentCacheTests {
             }
         }
         let now = Date(timeIntervalSince1970: 1_800_000_000)
-        #expect(!EPGEnrichmentSettings.isDue(defaults: defaults, now: now))
+        #expect(!EPGEnrichmentSettings.isDue(defaults: defaults, now: now, feeds: [.usPBS]))
         defaults.set(true, forKey: EPGEnrichmentSettings.enabledKey)
-        #expect(EPGEnrichmentSettings.isDue(defaults: defaults, now: now))
+        #expect(EPGEnrichmentSettings.isDue(defaults: defaults, now: now, feeds: [.usPBS]))
         defaults.set(now.timeIntervalSince1970, forKey: EPGEnrichmentSettings.failedKey)
-        #expect(!EPGEnrichmentSettings.isDue(defaults: defaults, now: now.addingTimeInterval(60)))
-        #expect(EPGEnrichmentSettings.isDue(defaults: defaults, now: now.addingTimeInterval(3600)))
+        #expect(!EPGEnrichmentSettings.isDue(defaults: defaults, now: now.addingTimeInterval(60), feeds: [.usPBS]))
+        #expect(EPGEnrichmentSettings.isDue(defaults: defaults, now: now.addingTimeInterval(3600), feeds: [.usPBS]))
         defaults.set(now.timeIntervalSince1970, forKey: EPGEnrichmentSettings.checkedKey)
-        #expect(!EPGEnrichmentSettings.isDue(defaults: defaults, now: now.addingTimeInterval(23 * 3600)))
-        #expect(EPGEnrichmentSettings.isDue(defaults: defaults, now: now.addingTimeInterval(24 * 3600)))
-        #expect(EPGEnrichmentSettings.isDue(defaults: defaults, now: now.addingTimeInterval(-1)))
+        #expect(!EPGEnrichmentSettings.isDue(defaults: defaults, now: now.addingTimeInterval(23 * 3600), feeds: [.usPBS]))
+        #expect(EPGEnrichmentSettings.isDue(defaults: defaults, now: now.addingTimeInterval(24 * 3600), feeds: [.usPBS]))
+        #expect(EPGEnrichmentSettings.isDue(defaults: defaults, now: now.addingTimeInterval(-1), feeds: [.usPBS]))
     }
 
     @Test func `cache freshness requires matching feed selection schema horizon and age`() {

@@ -20,7 +20,9 @@ struct EPGEnrichmentTrial {
 
     @MainActor static func main() throws {
         let arguments = CommandLine.arguments
-        guard arguments.count == 6, let now = ISO8601DateFormatter().date(from: arguments[4]) else {
+        guard (6 ... 7).contains(arguments.count), let now = ISO8601DateFormatter().date(from: arguments[4]),
+              let feed = EPGEnrichmentFeed.Identifier(rawValue: arguments.count == 7 ? arguments[6] : "us-locals")
+        else {
             throw TrialError.usage
         }
         let streams = try JSONDecoder().decode([EPGTrialStream].self, from: Data(contentsOf: URL(fileURLWithPath: arguments[1])))
@@ -28,7 +30,7 @@ struct EPGEnrichmentTrial {
             guard let id = stream.epgChannelID else { return nil }
             return .init(name: stream.name, epgID: id)
         }
-        let aliases = EPGEnrichmentStations.aliases(for: channels)
+        let aliases = EPGEnrichmentStations.aliases(for: channels, feed: feed)
         let end = now.addingTimeInterval(48 * 3600)
         let provider = try programmes(at: URL(fileURLWithPath: arguments[2]), channelIDs: Set(aliases.values), start: now, end: end)
         let external = try programmes(at: URL(fileURLWithPath: arguments[3]), channelIDs: Set(aliases.keys), start: now, end: end)
@@ -89,7 +91,7 @@ struct EPGEnrichmentTrial {
     }
 
     private enum TrialError: Error {
-        case usage // streams.json provider.xml supplement.xml.gz ISO8601-instant report.json
+        case usage // streams.json provider.xml supplement.xml.gz ISO8601-instant report.json [uk|us-locals]
         case invalidXMLTV
         case changedSchedule
         case changedProviderMetadata

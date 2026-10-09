@@ -5185,54 +5185,54 @@
         }
       }
     },
-    "Adds artwork and programme details for verified US PBS stations without changing your provider's schedule. Uses a large daily guide download." : {
+    "Adds programme artwork and details for verified UK broadcasters and US PBS stations in enabled categories. Keeps your provider's schedule. Country guides download one at a time: UK every 12 hours, US PBS daily." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ergänzt Bilder und Sendungsdetails für überprüfte US-PBS-Sender, ohne den Programmplan deines Anbieters zu ändern. Lädt täglich eine große Programmdatei herunter."
+            "value" : "Ergänzt Sendungsbilder und Details für überprüfte britische Sender und US-PBS-Sender in aktivierten Kategorien. Der Programmplan deines Anbieters bleibt erhalten. Länderprogramme werden nacheinander geladen: Großbritannien alle 12 Stunden, US PBS täglich."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Añade imágenes y detalles de programas de emisoras PBS de EE. UU. verificadas sin cambiar la programación de tu proveedor. Utiliza una descarga diaria de gran tamaño."
+            "value" : "Añade imágenes y detalles de programas de emisoras verificadas del Reino Unido y PBS de EE. UU. en las categorías activadas. Mantiene la programación de tu proveedor. Las guías se descargan de un país a la vez: Reino Unido cada 12 horas y PBS de EE. UU. a diario."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ajoute des images et des détails sur les programmes de stations PBS américaines vérifiées sans modifier la grille de votre fournisseur. Télécharge un guide volumineux chaque jour."
+            "value" : "Ajoute des images et des détails aux programmes de chaînes britanniques et de stations PBS américaines vérifiées dans les catégories activées. Conserve la grille de votre fournisseur. Les guides sont téléchargés un pays à la fois : Royaume-Uni toutes les 12 heures, PBS américain chaque jour."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Aggiunge immagini e dettagli dei programmi delle stazioni PBS statunitensi verificate senza modificare la programmazione del tuo fornitore. Scarica ogni giorno una guida di grandi dimensioni."
+            "value" : "Aggiunge immagini e dettagli dei programmi delle emittenti britanniche e delle stazioni PBS statunitensi verificate nelle categorie abilitate. Mantiene la programmazione del tuo fornitore. Le guide vengono scaricate un paese alla volta: Regno Unito ogni 12 ore, PBS statunitense ogni giorno."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "検証済みの米国PBS局の番組に画像と詳細を追加します。プロバイダの番組表は変更しません。毎日大容量の番組表をダウンロードします。"
+            "value" : "有効なカテゴリ内の検証済み英国放送局と米国PBS局の番組に画像と詳細を追加します。プロバイダの番組表は変更しません。国別の番組表を1つずつダウンロードします。英国は12時間ごと、米国PBSは毎日更新します。"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "제공업체의 편성표를 변경하지 않고 검증된 미국 PBS 방송국의 프로그램에 이미지와 세부 정보를 추가합니다. 매일 용량이 큰 편성표를 다운로드합니다."
+            "value" : "활성화된 카테고리의 검증된 영국 방송사 및 미국 PBS 방송국 프로그램에 이미지와 세부 정보를 추가합니다. 제공업체의 편성표는 유지됩니다. 국가별 편성표를 하나씩 다운로드합니다. 영국은 12시간마다, 미국 PBS는 매일 갱신합니다."
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Adiciona imagens e detalhes dos programas de estações PBS dos EUA verificadas sem alterar a programação do fornecedor. Utiliza uma transferência diária de um guia de grande dimensão."
+            "value" : "Adiciona imagens e detalhes dos programas de emissoras britânicas e estações PBS dos EUA verificadas nas categorias ativadas. Mantém a programação do fornecedor. Os guias são transferidos um país de cada vez: Reino Unido a cada 12 horas, PBS dos EUA diariamente."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "为已验证的美国 PBS 电视台添加节目图片和详情，不更改提供商的节目表。每天需下载较大的节目表文件。"
+            "value" : "为已启用类别中经过验证的英国广播频道和美国 PBS 电视台添加节目图片和详情，保留提供商的节目表。各国节目表依次下载：英国每 12 小时更新，美国 PBS 每天更新。"
           }
         }
       }

@@ -133,6 +133,7 @@ def scan(source, base, selected_ids):
                         desc = text(node, "desc")
                         rows[cid].append({
                             "start": start, "end": end, "title": text(node, "title"), "description_chars": len(desc),
+                            "subtitle": text(node, "sub-title"), "description": desc,
                             "fields": {field: bool(text(node, field)) if field in ("desc", "sub-title", "category", "date", "episode-num") else any(n.get("src") for n in node.findall(field)) if field == "icon" else bool(node.findall(field)) for field in FIELDS},
                         })
             root.clear()
@@ -168,6 +169,61 @@ def fallback(primary, secondary):
     return primary + [r for r in secondary if not any(p["start"] < r["end"] and p["end"] > r["start"] for p in primary)]
 
 
+def sports_evidence(primary, other):
+    """Review cues, NOT an event matcher or permission to enrich a programme.
+
+    A fixture in a subtitle can explain differing titles. It cannot establish
+    competition, round, season or live/replay identity on its own.
+    """
+    combined = lambda r: " ".join(r.get(k, "") for k in ("title", "subtitle", "description"))
+    a, b = combined(primary), combined(other)
+    subtitle = normal_title(other.get("subtitle", ""))
+    fixture_subtitle = bool(re.search(r"\s(?:v\.?|vs\.?|versus|at)\s", other.get("subtitle", ""), re.I))
+    corroborated = fixture_subtitle and len(subtitle) >= 8 and subtitle in normal_title(a)
+    flags = []
+    live = lambda value: bool(re.search(r"\blive\b|ᴸᶦᵛᵉ", value, re.I))
+    replay = lambda value: bool(re.search(r"\b(?:replay|highlights|classic|repeat)\b", value, re.I))
+    if (live(a) and replay(b)) or (live(b) and replay(a)):
+        flags.append("live/replay cues conflict")
+    rounds = lambda value: set(re.findall(r"\b(first|second|third|fourth|fifth|\d+(?:st|nd|rd|th))\s+(?:t20|test|odi|round|leg)\b", value.casefold()))
+    canonical = lambda values: {dict(first="1", second="2", third="3", fourth="4", fifth="5").get(v, re.sub(r"(?:st|nd|rd|th)$", "", v)) for v in values}
+    ra, rb = canonical(rounds(a)), canonical(rounds(b))
+    if ra and rb and ra.isdisjoint(rb):
+        flags.append("round/leg cues conflict")
+    years = lambda value: set(re.findall(r"\b(?:19|20)\d{2}\b", value))
+    ya, yb = years(a), years(b)
+    if ya and yb and ya.isdisjoint(yb):
+        flags.append("year cues conflict")
+    return {"fixture_subtitle_corroborated": corroborated, "conflict_cues": flags,
+            "disposition": "conflicting cues" if flags else "manual event review" if corroborated else "unresolved"}
+
+
+def sports_review(primary, other, start, end):
+    a, b = collections.defaultdict(list), collections.defaultdict(list)
+    for rows, grouped in ((primary, a), (other, b)):
+        for r in rows:
+            if r["end"] > start and r["start"] < end:
+                grouped[(r["start"], r["end"])].append(r)
+    counts, examples = collections.Counter(), []
+    for interval in sorted(a.keys() & b.keys()):
+        if len(a[interval]) != 1 or len(b[interval]) != 1:
+            counts["ambiguous_intervals_rejected"] += 1
+            continue
+        p, q = a[interval][0], b[interval][0]
+        if normal_title(p["title"]) == normal_title(q["title"]):
+            counts["strict_matches"] += 1
+            continue
+        evidence = sports_evidence(p, q)
+        counts["time_aligned_title_mismatches"] += 1
+        counts[evidence["disposition"]] += 1
+        counts["fixture_subtitle_corroborated"] += evidence["fixture_subtitle_corroborated"]
+        if len(examples) < 12:
+            fields = lambda r: {k: r.get(k, "")[:800] for k in ("title", "subtitle", "description")}
+            examples.append({"start": iso(interval[0]), "end": iso(interval[1]), "provider": fields(p), "external": fields(q), **evidence})
+    return {"counts": counts, "examples": examples, "automatic_event_matches": 0,
+            "policy": "Exact intervals and reviewed station aliases only. All broader event evidence requires manual review; no app matching changes."}
+
+
 def render(report):
     lines = ["# Offline EPG source trial", "", f"Evaluation window: {report['now']} to {report['window_end']} (UTC).", "",
              "This is one snapshot per source, not a reliability or refresh-cadence measurement. No app configuration is changed.", "",
@@ -193,6 +249,14 @@ def render(report):
               "| --- | ---: | ---: | --- | ---: | ---: | ---: |"]
     for name, s in report["comparison"].items():
         lines.append(f"| {name} | {s['mapped']} | {s['current']} | {s['same_titles']}/{s['shared_intervals']} shared intervals | {s['provider_first_current']} | {s['external_first_current']} | {s['gap_fallback_current']} |")
+    lines += ["", "## Sports field evidence (offline only)", "",
+              "Exact time intervals are required. Subtitle/description evidence creates a manual review queue, never an automatic event match. Same teams can refer to a different round, replay or season.", "",
+              "| Channel | Source | Strict matches | Title mismatches | Fixture subtitle corroborated | Conflicting cues | Ambiguous intervals rejected |",
+              "| --- | --- | ---: | ---: | ---: | ---: | ---: |"]
+    for channel in report["channels"]:
+        for name, result in channel.get("sports_review", {}).items():
+            c = result["counts"]
+            lines.append(f"| {channel['name']} | {name} | {c.get('strict_matches', 0)} | {c.get('time_aligned_title_mismatches', 0)} | {c.get('fixture_subtitle_corroborated', 0)} | {c.get('conflicting cues', 0)} | {c.get('ambiguous_intervals_rejected', 0)} |")
     lines += ["", "## Longer-range strategy comparison", "", "Mean coverage over seven days, across all trusted sampled channels (including unmapped channels via the provider fallback).", "",
               "| External source | Provider-first coverage | External-first coverage | Whole-programme gap fallback |",
               "| --- | ---: | ---: | ---: |"]
@@ -233,7 +297,7 @@ def run(manifest_path):
         if name != "provider":
             comparison[name] = collections.Counter()
     for selection in selections:
-        result = {**selection, "sources": {}, "agreement": {}, "strategies": {}, "enrichment": {}}
+        result = {**selection, "sources": {}, "agreement": {}, "strategies": {}, "enrichment": {}, "sports_review": {}}
         primary = scans["provider"]["rows"].get(selection["provider_id"], [])
         for name, source in scans.items():
             cid = selection["provider_id"] if name == "provider" else selection.get("aliases", {}).get(name)
@@ -249,6 +313,8 @@ def run(manifest_path):
             if name == "provider":
                 continue
             result["agreement"][name] = agreement(primary, rows, now, end)
+            if selection.get("sports") and selection["status"] == "explicit affiliate alias" and cid:
+                result["sports_review"][name] = sports_review(primary, rows, now, end)
             index = {(r["start"], r["end"], normal_title(r["title"])): r for r in rows}
             added = collections.Counter()
             for p in primary:

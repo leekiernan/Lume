@@ -259,7 +259,7 @@ struct EPGEnrichmentSyncTests {
         #expect(report.state == .cached)
         #expect(report.changedProgrammes == 1)
         #expect(try fixture.row().artworkURL != nil)
-        #expect(!EPGEnrichmentSettings.isDue(defaults: fixture.defaults))
+        #expect(!EPGEnrichmentSettings.isDue(defaults: fixture.defaults, feeds: [.usPBS]))
         #expect(!fixture.defaults.bool(forKey: EPGEnrichmentSettings.publicationPendingKey))
         #expect(downloads.withLock { $0 } == 1)
     }

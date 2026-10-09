@@ -19,6 +19,28 @@ def row(start, end, title="News"):
 
 
 class TrialTests(unittest.TestCase):
+    def test_fixture_subtitle_is_only_manual_evidence(self):
+        p = {**row(0, 60, "International T20 Cricket : 2nd T20: India v West Indies ᴸᶦᵛᵉ"), "description": ""}
+        q = {**row(0, 60, "Live International T20 Cricket"), "subtitle": "India v West Indies", "description": "Coverage of the second T20."}
+        result = trial.sports_review([p], [q], 0, 60)
+        self.assertEqual(result["counts"]["manual event review"], 1)
+        self.assertEqual(result["automatic_event_matches"], 0)
+        self.assertEqual(trial.agreement([p], [q], 0, 60)["identical_titles_and_times"], 0)
+
+    def test_round_replay_and_year_conflicts_are_flagged(self):
+        p = row(0, 60, "Live India v West Indies 2nd T20 2026")
+        for title, flag in (("India v West Indies 1st T20", "round/leg cues conflict"),
+                            ("India v West Indies Highlights", "live/replay cues conflict"),
+                            ("India v West Indies 2024", "year cues conflict")):
+            evidence = trial.sports_evidence(p, {**row(0, 60, title), "subtitle": "India v West Indies"})
+            self.assertIn(flag, evidence["conflict_cues"])
+            self.assertEqual(evidence["disposition"], "conflicting cues")
+
+    def test_sports_review_rejects_duplicate_intervals_and_never_shifts_times(self):
+        p, q = row(0, 60, "Live Football"), {**row(0, 60, "Football"), "subtitle": "A v B"}
+        self.assertEqual(trial.sports_review([p], [q, q], 0, 60)["counts"]["ambiguous_intervals_rejected"], 1)
+        self.assertEqual(trial.sports_review([p], [row(1, 61, "Football")], 0, 60)["counts"], {})
+
     def test_timezone_offsets_are_converted_not_discarded(self):
         self.assertEqual(trial.timestamp("20261009010000 +0100"), trial.timestamp("20261009000000 +0000"))
         self.assertEqual(trial.timestamp("20261008170000 -0700"), trial.timestamp("20261009000000Z"))
@@ -74,6 +96,7 @@ class TrialTests(unittest.TestCase):
             self.assertNotIn("b", result["rows"])
             self.assertEqual(result["rows"]["a"][0]["title"], "News")
             self.assertTrue(result["rows"]["a"][0]["fields"]["sub-title"])
+            self.assertEqual(result["rows"]["a"][0]["subtitle"], "Election")
             self.assertTrue(result["rows"]["a"][0]["fields"]["icon"])
 
     def test_non_xmltv_input_is_rejected(self):
