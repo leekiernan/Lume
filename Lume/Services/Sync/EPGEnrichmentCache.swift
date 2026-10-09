@@ -3,16 +3,18 @@ import Foundation
 nonisolated enum EPGEnrichmentSettings {
     static let enabledKey = "lume.epgEnrichment.enabled"
     static let checkedKey = "lume.epgEnrichment.checked"
-    static let attemptedKey = "lume.epgEnrichment.attempted"
+    // Only actual failures impose backoff. Older builds recorded all attempts,
+    // including cancellations; intentionally do not reuse that preference.
+    static let failedKey = "lume.epgEnrichment.failed"
     static let refreshInterval: TimeInterval = 24 * 3600
     static let retryInterval: TimeInterval = 3600
 
     static func isDue(defaults: UserDefaults = .standard, now: Date = Date()) -> Bool {
         guard defaults.bool(forKey: enabledKey) else { return false }
         let checked = defaults.double(forKey: checkedKey)
-        let attempted = defaults.double(forKey: attemptedKey)
+        let failed = defaults.double(forKey: failedKey)
         let stale = checked <= 0 || now.timeIntervalSince1970 < checked || now.timeIntervalSince1970 - checked >= refreshInterval
-        let mayAttempt = attempted <= 0 || now.timeIntervalSince1970 < attempted || now.timeIntervalSince1970 - attempted >= retryInterval
+        let mayAttempt = failed <= 0 || now.timeIntervalSince1970 < failed || now.timeIntervalSince1970 - failed >= retryInterval
         return stale && mayAttempt
     }
 }

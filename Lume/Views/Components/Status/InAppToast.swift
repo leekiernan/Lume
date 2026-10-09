@@ -46,7 +46,12 @@ private struct InAppToast: View {
 
     private var title: Text {
         switch notice.subject {
-        case .playlist, .guide: Text(notice.outcome == .succeeded ? "Sync complete" : "Sync failed")
+        case .playlist, .guide:
+            if notice.outcome == .succeededWithWarnings {
+                Text("Sync complete with warnings")
+            } else {
+                Text(notice.outcome == .succeeded ? "Sync complete" : "Sync failed")
+            }
         case let .programme(_, title, _), let .message(title, _): Text(verbatim: title)
         }
     }
@@ -54,13 +59,18 @@ private struct InAppToast: View {
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: notice.outcome == nil ? "bell.fill" : notice.outcome == .succeeded ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
-                .foregroundStyle(notice.outcome == .failed ? .orange : Color.lumeAccent)
+                .foregroundStyle(notice.outcome == .failed || notice.outcome == .succeededWithWarnings ? .orange : Color.lumeAccent)
             VStack(alignment: .leading, spacing: 4) {
                 title
                     .font(.headline)
                 switch notice.subject {
                 case let .playlist(_, name): Text(verbatim: name)
-                case .guide: Text("TV Guide")
+                case .guide:
+                    if let detail = notice.detail {
+                        Text(verbatim: detail)
+                    } else {
+                        Text("TV Guide")
+                    }
                 case let .programme(_, _, channel): Text("Starting now on \(channel)")
                 case let .message(_, detail): Text(verbatim: detail)
                 }

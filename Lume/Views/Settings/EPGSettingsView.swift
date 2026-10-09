@@ -31,6 +31,25 @@ struct EPGSettingsView: View {
         )
     }
 
+    /// Both platform layouts expose the same result, including a deferred or
+    /// unavailable supplement beside an otherwise healthy provider guide.
+    @ViewBuilder private var enrichmentStatus: some View {
+        if enrichmentEnabled, let report = epgSync.enrichmentReport {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(verbatim: report.message)
+                if report.verifiedStations > 0 {
+                    Text("\(report.verifiedStations) verified stations · \(report.matchedProgrammes) exact matches · \(report.changedProgrammes) changed")
+                }
+                if let checked = report.checkedAt {
+                    Text("Last metadata check: \(checked.formatted(date: .abbreviated, time: .shortened))")
+                }
+                if let retry = report.retryAt {
+                    Text("Retry after: \(retry.formatted(date: .abbreviated, time: .shortened))")
+                }
+            }
+        }
+    }
+
     var body: some View {
         Group {
             #if os(tvOS)
@@ -169,6 +188,7 @@ struct EPGSettingsView: View {
             Section {
                 Toggle("EPGShare metadata (experimental)", isOn: $enrichmentEnabled)
                     .disabled(epgSync.isSyncing)
+                enrichmentStatus.font(.caption).foregroundStyle(.secondary)
             } footer: {
                 Text("Adds artwork and programme details for verified US PBS stations without changing your provider's schedule. Uses a large daily guide download.")
             }
@@ -429,6 +449,7 @@ struct EPGSettingsView: View {
 
                 Text("Adds artwork and programme details for verified US PBS stations without changing your provider's schedule. Uses a large daily guide download.")
                     .tvSettingsFooter()
+                enrichmentStatus.tvSettingsFooter()
             }
         }
     }

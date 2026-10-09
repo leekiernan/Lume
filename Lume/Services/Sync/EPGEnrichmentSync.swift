@@ -27,60 +27,90 @@ actor EPGEnrichmentSync {
         self.feedURL = feedURL
     }
 
-    func sync(container: ModelContainer, enabled: Bool, fence: Fence, now: Date = Date()) async throws {
+    @discardableResult
+    func sync(container: ModelContainer, enabled: Bool, fence: Fence, now: Date = Date()) async throws -> EPGEnrichmentReport {
         try Task.checkCancellation()
         var snapshot: EPGEnrichmentCache?
+        var report = EPGEnrichmentReport(state: .disabled)
         if enabled {
             let aliases = try Self.aliases(in: ModelContext(container))
             if aliases.isEmpty {
+                report = EPGEnrichmentReport(state: .unsupported)
                 // Unsupported/event-only catalogs never download the feed.
                 defaults.set(now.timeIntervalSince1970, forKey: EPGEnrichmentSettings.checkedKey)
             } else {
-                snapshot = try await load(channelIDs: Set(aliases.keys), now: now)
+                let loaded = try await load(channelIDs: Set(aliases.keys), now: now)
+                snapshot = loaded.snapshot
+                report = loaded.report
             }
         }
-        try await publish(snapshot, container: container, enabled: enabled, fence: fence, now: now)
+        let publication = try await publish(snapshot, container: container, enabled: enabled, fence: fence, now: now)
+        report.verifiedStations = publication.stations
+        report.matchedProgrammes = publication.matched
+        report.changedProgrammes = publication.changed
+        Logger.database.info("""
+        EPG enrichment result: \(report.state.rawValue, privacy: .public); verified stations=\(report.verifiedStations), \
+        cached programmes=\(report.cachedProgrammes), exact matches=\(report.matchedProgrammes), changed programmes=\(report.changedProgrammes)
+        """)
+        return report
     }
 
-    private func load(channelIDs: Set<String>, now: Date) async throws -> EPGEnrichmentCache? {
-        let cached = EPGEnrichmentCache.read(from: cacheURL)
-        if let cached, cached.isFresh(url: feedURL.absoluteString, channelIDs: channelIDs, now: now) { return cached }
-        let lastAttempt = defaults.double(forKey: EPGEnrichmentSettings.attemptedKey)
-        let lastCheck = defaults.double(forKey: EPGEnrichmentSettings.checkedKey)
-        if lastAttempt > lastCheck, now.timeIntervalSince1970 >= lastAttempt,
-           now.timeIntervalSince1970 - lastAttempt < EPGEnrichmentSettings.retryInterval
-        {
-            return cached.flatMap { $0.isUsable(url: feedURL.absoluteString, now: now) ? $0 : nil }
+    private struct LoadResult {
+        let snapshot: EPGEnrichmentCache?
+        let report: EPGEnrichmentReport
+
+        init(snapshot: EPGEnrichmentCache?, state: EPGEnrichmentReport.State, retryAt: Date? = nil) {
+            self.snapshot = snapshot
+            report = EPGEnrichmentReport(state: state, cachedProgrammes: snapshot?.programmes.count ?? 0, checkedAt: snapshot?.checkedAt, retryAt: retryAt)
         }
-        defaults.set(now.timeIntervalSince1970, forKey: EPGEnrichmentSettings.attemptedKey)
+    }
+
+    private func load(channelIDs: Set<String>, now: Date) async throws -> LoadResult {
+        let cached = EPGEnrichmentCache.read(from: cacheURL)
+        if let cached, cached.isFresh(url: feedURL.absoluteString, channelIDs: channelIDs, now: now) { return LoadResult(snapshot: cached, state: .cached) }
+        let usable = cached.flatMap { $0.isUsable(url: feedURL.absoluteString, now: now) ? $0 : nil }
+        let lastFailure = defaults.double(forKey: EPGEnrichmentSettings.failedKey)
+        if lastFailure > 0, now.timeIntervalSince1970 >= lastFailure,
+           now.timeIntervalSince1970 - lastFailure < EPGEnrichmentSettings.retryInterval
+        {
+            return LoadResult(snapshot: usable, state: .deferred, retryAt: Date(timeIntervalSince1970: lastFailure + EPGEnrichmentSettings.retryInterval))
+        }
         do {
             let canValidate = cached?.isUsable(url: feedURL.absoluteString, now: now) == true && channelIDs.isSubset(of: cached?.channelIDs ?? [])
             let result = try await client.downloadGuide(
                 from: feedURL.absoluteString, lastModified: canValidate ? cached?.lastModified : nil, entityTag: canValidate ? cached?.entityTag : nil
             )
             let snapshot: EPGEnrichmentCache
+            let state: EPGEnrichmentReport.State
             switch result {
             case .notModified:
+                state = .unchanged
                 guard var previous = cached, canValidate else { throw EnrichmentError.invalidDocument }
                 previous.checkedAt = now
                 snapshot = previous
             case let .file(file, lastModified, entityTag):
+                state = .downloaded
                 defer { if file != feedURL { try? FileManager.default.removeItem(at: file) } }
                 snapshot = try parse(file: file, channelIDs: channelIDs, now: now, lastModified: lastModified, entityTag: entityTag)
             }
             try Task.checkCancellation()
             try snapshot.write(to: cacheURL)
             defaults.set(now.timeIntervalSince1970, forKey: EPGEnrichmentSettings.checkedKey)
+            defaults.removeObject(forKey: EPGEnrichmentSettings.failedKey)
             Logger.database.info("EPG enrichment cached: \(snapshot.programmes.count) programmes, \(channelIDs.count) verified stations")
-            return snapshot
+            return LoadResult(snapshot: snapshot, state: state)
         } catch is CancellationError {
             throw CancellationError()
         } catch {
+            // Some URLSession cancellations arrive as URLError.cancelled. The
+            // task flag, not just the error type, decides whether to back off.
+            try Task.checkCancellation()
+            defaults.set(now.timeIntervalSince1970, forKey: EPGEnrichmentSettings.failedKey)
             // Optional metadata failure never destroys the provider schedule or
             // advances the successful check timestamp. Retain a recent cache;
             // after 48 hours restore provider-only fields instead.
             Logger.database.warning("EPG enrichment unavailable; keeping provider guide: \(error.localizedDescription, privacy: .public)")
-            return cached.flatMap { $0.isUsable(url: feedURL.absoluteString, now: now) ? $0 : nil }
+            return LoadResult(snapshot: usable, state: .unavailable, retryAt: now.addingTimeInterval(EPGEnrichmentSettings.retryInterval))
         }
     }
 
@@ -116,13 +146,13 @@ actor EPGEnrichmentSync {
         return EPGEnrichmentStations.aliases(for: channels)
     }
 
-    private func publish(_ snapshot: EPGEnrichmentCache?, container: ModelContainer, enabled: Bool, fence: Fence, now: Date) async throws {
+    private func publish(_ snapshot: EPGEnrichmentCache?, container: ModelContainer, enabled: Bool, fence: Fence, now: Date) async throws -> (stations: Int, matched: Int, changed: Int) {
         let expectedURL = feedURL.absoluteString
         let request = LocalStoreWriteCoordinator.Request(
             scope: .maintenance, mode: .exclusive, priority: .background,
             coalescingKey: "epg-enrichment-\(enabled)-\(snapshot?.checkedAt.timeIntervalSince1970 ?? 0)", fence: fence
         )
-        try await writeCoordinator.withLease(request) {
+        return try await writeCoordinator.withLease(request) {
             try Task.checkCancellation()
             guard Fence.live == fence else { throw LocalStoreWriteError.superseded }
             let context = ModelContext(container)
@@ -140,10 +170,12 @@ actor EPGEnrichmentSync {
             let enabledIDs = Set(sources.map(\.id))
             var changedSources: Set<UUID> = []
             var changed = 0
+            var matched = 0
             for row in rows {
                 try Task.checkCancellation()
                 // Disabled/deleted sources never acquire supplementary data.
                 let active = row.sourceID.map { enabledIDs.contains($0) } == true
+                if active, index.metadata(channelID: row.channelId, start: row.start, end: row.end, title: row.title) != nil { matched += 1 }
                 if try EPGProgrammeEnrichment.apply(active ? index : .init(), to: row) {
                     changed += 1
                     if let id = row.sourceID { changedSources.insert(id) }
@@ -161,6 +193,7 @@ actor EPGEnrichmentSync {
                 throw error
             }
             Logger.database.info("EPG enrichment published: \(changed) programme metadata changes; provider times retained")
+            return (aliases.count, matched, changed)
         }
     }
 }

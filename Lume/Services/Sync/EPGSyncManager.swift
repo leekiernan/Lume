@@ -25,6 +25,7 @@ actor EPGSyncManager {
     private let client: M3UClient
     private let writeCoordinator: LocalStoreWriteCoordinator
     private let enrichment: EPGEnrichmentSync?
+    private(set) var enrichmentReport: EPGEnrichmentReport?
 
     init(
         modelContainer: ModelContainer,
@@ -42,6 +43,7 @@ actor EPGSyncManager {
     /// per source. No configured guide/channels is a skip, not a failure toast.
     @discardableResult
     func syncAllSources(allowConditional: Bool = true, enrichProgrammes: Bool = false) async -> SyncRefreshOutcome {
+        enrichmentReport = nil
         guard !Task.isCancelled else { return .cancelled }
         let sources: [SourceInfo]
         let referencedChannelIDs: Set<String>?
@@ -97,14 +99,15 @@ actor EPGSyncManager {
         }
         do {
             let supplement = enrichment ?? EPGEnrichmentSync(client: client, writeCoordinator: writeCoordinator)
-            try await supplement.sync(container: modelContainer, enabled: enrichProgrammes, fence: fence)
+            enrichmentReport = try await supplement.sync(container: modelContainer, enabled: enrichProgrammes, fence: fence)
         } catch is CancellationError {
             return .cancelled
         } catch {
             Logger.database.warning("EPG enrichment publication failed: \(error.localizedDescription, privacy: .public)")
             return .failed
         }
-        return everySourceSynced ? .succeeded : .failed
+        guard everySourceSynced else { return .failed }
+        return enrichmentReport?.hasWarning == true ? .succeededWithWarnings : .succeeded
     }
 
     // MARK: - Per-source sync

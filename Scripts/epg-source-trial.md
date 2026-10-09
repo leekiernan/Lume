@@ -98,6 +98,30 @@ Effective changes increment the existing guide publication generation so all
 hub/guide/player readers share the normal invalidation path. No per-card
 queries or image-fetching lane was introduced.
 
+### Refresh status and interruption
+
+The settings screen exposes the last in-process enrichment result, verified
+station/exact-match/change counts, the cache's successful check time (when
+available), and a retry time after a failure. Logs additionally report the
+cached programme count. Results distinguish downloaded, HTTP-unchanged,
+cached, unsupported, unavailable and retry-deferred data. Zero metadata changes
+alone is not evidence that an external feed was checked successfully.
+
+An unavailable or backed-off supplement produces **Sync complete with warnings**
+when the provider guide is healthy; provider success still advances its own
+schedule. Provider/publication failures remain failures. Deliberate cancellation
+remains silent as a toast, shows an interrupted status in settings, and the
+existing content-sync gate requeues the work after the playlist finishes.
+
+Only actual metadata download/parse/cache failures impose the one-hour retry
+backoff. Cancelling a download or parse does not. The old all-attempt timestamp
+is intentionally ignored so upgrading also removes that accidental suppression.
+Regression tests cancel an in-flight HTTP metadata request, retain the provider
+guide, then immediately retry successfully after a provider HTTP 304.
+
+Automatic checks run while Lume is active, with limited system time to finish
+when backgrounded; this is not a guaranteed closed-app daily background job.
+
 The public US-local feed is checked on its own daily cadence, not on every
 provider refresh. Successful checks use HTTP validators when possible;
 failures back off for an hour and can use a cache checked within the last 48

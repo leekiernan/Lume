@@ -3,10 +3,20 @@ import Foundation
 import Testing
 
 struct EPGEnrichmentCacheTests {
+    @Test(arguments: [EPGEnrichmentReport.State.unavailable, .deferred])
+    func `unavailable and backed off metadata are warnings`(_ state: EPGEnrichmentReport.State) {
+        #expect(EPGEnrichmentReport(state: state).hasWarning)
+    }
+
+    @Test(arguments: [EPGEnrichmentReport.State.disabled, .unsupported, .downloaded, .unchanged, .cached, .interrupted])
+    func `normal results and deliberate interruption are not failures`(_ state: EPGEnrichmentReport.State) {
+        #expect(!EPGEnrichmentReport(state: state).hasWarning)
+    }
+
     @Test func `metadata scheduling is independent and failed attempts back off`() throws {
         let defaults = try #require(UserDefaults(suiteName: "EPGEnrichmentCacheTests-\(UUID())"))
         defer {
-            for key in [EPGEnrichmentSettings.enabledKey, EPGEnrichmentSettings.checkedKey, EPGEnrichmentSettings.attemptedKey] {
+            for key in [EPGEnrichmentSettings.enabledKey, EPGEnrichmentSettings.checkedKey, EPGEnrichmentSettings.failedKey] {
                 defaults.removeObject(forKey: key)
             }
         }
@@ -14,7 +24,7 @@ struct EPGEnrichmentCacheTests {
         #expect(!EPGEnrichmentSettings.isDue(defaults: defaults, now: now))
         defaults.set(true, forKey: EPGEnrichmentSettings.enabledKey)
         #expect(EPGEnrichmentSettings.isDue(defaults: defaults, now: now))
-        defaults.set(now.timeIntervalSince1970, forKey: EPGEnrichmentSettings.attemptedKey)
+        defaults.set(now.timeIntervalSince1970, forKey: EPGEnrichmentSettings.failedKey)
         #expect(!EPGEnrichmentSettings.isDue(defaults: defaults, now: now.addingTimeInterval(60)))
         #expect(EPGEnrichmentSettings.isDue(defaults: defaults, now: now.addingTimeInterval(3600)))
         defaults.set(now.timeIntervalSince1970, forKey: EPGEnrichmentSettings.checkedKey)

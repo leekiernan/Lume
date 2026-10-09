@@ -8,6 +8,7 @@ final nonisolated class GuideHTTPServer: @unchecked Sendable {
         var status = 200
         var headers: [String: String] = [:]
         var body = "<tv></tv>"
+        var delay: TimeInterval = 0
     }
 
     private let listener: NWListener
@@ -61,7 +62,14 @@ final nonisolated class GuideHTTPServer: @unchecked Sendable {
             let body = response.status == 304 ? Data() : Data(response.body.utf8)
             let headers = response.headers.map { "\($0.key): \($0.value)\r\n" }.joined()
             let head = "HTTP/1.1 \(response.status) Response\r\nContent-Length: \(body.count)\r\nConnection: close\r\n\(headers)\r\n"
-            connection.send(content: Data(head.utf8) + body, completion: .contentProcessed { _ in connection.cancel() })
+            let content = Data(head.utf8) + body
+            if response.delay > 0 {
+                DispatchQueue.global().asyncAfter(deadline: .now() + response.delay) {
+                    connection.send(content: content, completion: .contentProcessed { _ in connection.cancel() })
+                }
+            } else {
+                connection.send(content: content, completion: .contentProcessed { _ in connection.cancel() })
+            }
         }
     }
 }

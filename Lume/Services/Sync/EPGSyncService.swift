@@ -78,6 +78,7 @@ final class EPGSyncService {
     static let shared = EPGSyncService()
 
     private(set) var isSyncing = false
+    private(set) var enrichmentReport: EPGEnrichmentReport?
     /// Readers observe this rather than download status. A 304 or failed fetch
     /// does not change the guide; a foreground return reloads local readers.
     private(set) var readRevision: UInt64 = 0
@@ -289,13 +290,14 @@ final class EPGSyncService {
         // profile showed EPG ingest pegging a background thread at 100% in
         // lockstep with a frozen main thread right after a playlist sync.
         task = Task(priority: .utility) {
+            var report: EPGEnrichmentReport?
             let outcome = await BackgroundActivity.perform("Guide refresh") {
                 if metadataOnly {
                     do {
-                        try await EPGEnrichmentSync().sync(
+                        report = try await EPGEnrichmentSync().sync(
                             container: container, enabled: UserDefaults.standard.bool(forKey: EPGEnrichmentSettings.enabledKey), fence: .live
                         )
-                        return SyncRefreshOutcome.succeeded
+                        return report?.hasWarning == true ? SyncRefreshOutcome.succeededWithWarnings : .succeeded
                     } catch is CancellationError {
                         return SyncRefreshOutcome.cancelled
                     } catch {
@@ -303,26 +305,39 @@ final class EPGSyncService {
                         return SyncRefreshOutcome.failed
                     }
                 }
-                return await manager.syncAllSources(
+                let result = await manager.syncAllSources(
                     allowConditional: allowConditional,
                     enrichProgrammes: UserDefaults.standard.bool(forKey: EPGEnrichmentSettings.enabledKey)
                 )
+                report = await manager.enrichmentReport
+                return result
             }
-            if outcome == .succeeded, !Task.isCancelled, !metadataOnly {
+            if outcome.isSuccessful, !Task.isCancelled, !metadataOnly {
                 EPGSyncSchedule.lastSyncDate = Date()
                 EPGSyncSchedule.schemaVersion = SyncFrequency.epgCurrentSchemaVersion
             }
             isSyncing = false
             task = nil
+            recordEnrichment(report, outcome: outcome, profileToken: profileToken)
             updateCommittedRevision()
             InAppNotifications.shared.report(
                 Task.isCancelled ? .cancelled : outcome,
-                subject: .guide, startedUnder: profileToken, currentProfileToken: ActiveProfileStore.current?.uuidString ?? ""
+                subject: .guide, startedUnder: profileToken, currentProfileToken: ActiveProfileStore.current?.uuidString ?? "",
+                detail: report?.state == .disabled ? nil : report?.message
             )
             Logger.database.info("EPG refresh finished (outcome: \(String(describing: outcome), privacy: .public))")
             // A refresh cancelled for a content sync may wind down after that
             // sync already finished and found this task still set.
             runOwedRefresh()
+        }
+    }
+
+    private func recordEnrichment(_ report: EPGEnrichmentReport?, outcome: SyncRefreshOutcome, profileToken: String) {
+        guard profileToken == (ActiveProfileStore.current?.uuidString ?? "") else { return }
+        if outcome == .cancelled, UserDefaults.standard.bool(forKey: EPGEnrichmentSettings.enabledKey) {
+            enrichmentReport = EPGEnrichmentReport(state: .interrupted)
+        } else if let report {
+            enrichmentReport = report
         }
     }
 }

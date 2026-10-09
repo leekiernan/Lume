@@ -33,7 +33,7 @@ struct EPGEnrichmentSyncTests {
         }
 
         func cleanup() {
-            for key in [EPGEnrichmentSettings.enabledKey, EPGEnrichmentSettings.checkedKey, EPGEnrichmentSettings.attemptedKey] {
+            for key in [EPGEnrichmentSettings.enabledKey, EPGEnrichmentSettings.checkedKey, EPGEnrichmentSettings.failedKey, "lume.epgEnrichment.attempted"] {
                 defaults.removeObject(forKey: key)
             }
             try? FileManager.default.removeItem(at: directory)
@@ -87,13 +87,23 @@ struct EPGEnrichmentSyncTests {
         defer { fixture.cleanup() }
         let manager = fixture.manager(externalURL: url.deletingLastPathComponent().appendingPathComponent("metadata"))
         #expect(await manager.syncAllSources(enrichProgrammes: true) == .succeeded)
+        let downloaded = try #require(await manager.enrichmentReport)
+        #expect(downloaded.state == .downloaded)
+        #expect(downloaded.verifiedStations == 1)
+        #expect(downloaded.cachedProgrammes == 1)
+        #expect(downloaded.matchedProgrammes == 1)
+        #expect(downloaded.changedProgrammes == 1)
         let identity = try fixture.row().persistentModelID
         #expect(try fixture.row().artworkURL == "https://example.com/art.jpg")
         #expect(try fixture.generation() == 2)
         #expect(await manager.syncAllSources(enrichProgrammes: true) == .succeeded)
+        #expect(await manager.enrichmentReport?.state == .cached)
+        #expect(await manager.enrichmentReport?.matchedProgrammes == 1)
+        #expect(await manager.enrichmentReport?.changedProgrammes == 0)
         #expect(try fixture.generation() == 2)
         #expect(try fixture.row().persistentModelID == identity)
         #expect(await manager.syncAllSources(enrichProgrammes: false) == .succeeded)
+        #expect(await manager.enrichmentReport?.state == .disabled)
         #expect(try fixture.row().artworkURL == nil)
         #expect(try fixture.row().subtitle == nil)
         #expect(try fixture.row().enrichmentBaseline == nil)
@@ -123,10 +133,11 @@ struct EPGEnrichmentSyncTests {
 
     @Test func `invalid external documents keep the provider usable and persist retry backoff`() async throws {
         let downloads = Mutex(0)
+        let available = Mutex(false)
         let server = try GuideHTTPServer { raw in
             if raw.hasPrefix("GET /metadata") {
                 downloads.withLock { $0 += 1 }
-                return .init(body: "<tv><programme")
+                return .init(body: available.withLock { $0 } ? Fixture.document(channel: "KQED-DT.us_locals1", artwork: "https://example.com/art.jpg") : "<tv><programme")
             }
             return .init(body: Fixture.document(channel: "PBSKQED.us"))
         }
@@ -135,13 +146,27 @@ struct EPGEnrichmentSyncTests {
         let fixture = try Fixture(providerURL: url)
         defer { fixture.cleanup() }
         let external = url.deletingLastPathComponent().appendingPathComponent("metadata")
-        for _ in 0 ..< 2 {
-            #expect(await fixture.manager(externalURL: external).syncAllSources(enrichProgrammes: true) == .succeeded)
+        for state in [EPGEnrichmentReport.State.unavailable, .deferred] {
+            let manager = fixture.manager(externalURL: external)
+            #expect(await manager.syncAllSources(enrichProgrammes: true) == .succeededWithWarnings)
+            let report = try #require(await manager.enrichmentReport)
+            #expect(report.state == state)
+            #expect(report.retryAt != nil)
+            #expect(report.checkedAt == nil)
+            #expect(report.cachedProgrammes == 0)
         }
         #expect(downloads.withLock { $0 } == 1)
         #expect(fixture.defaults.double(forKey: EPGEnrichmentSettings.checkedKey) == 0)
         #expect(try fixture.row().title == "Secrets of the Dead")
         #expect(try fixture.row().artworkURL == nil)
+        available.withLock { $0 = true }
+        fixture.defaults.set(Date().addingTimeInterval(-3601).timeIntervalSince1970, forKey: EPGEnrichmentSettings.failedKey)
+        let recovered = fixture.manager(externalURL: external)
+        #expect(await recovered.syncAllSources(enrichProgrammes: true) == .succeeded)
+        #expect(downloads.withLock { $0 } == 2)
+        #expect(fixture.defaults.double(forKey: EPGEnrichmentSettings.failedKey) == 0)
+        #expect(await recovered.enrichmentReport?.state == .downloaded)
+        #expect(try fixture.row().artworkURL != nil)
     }
 
     @Test func `unsupported catalog never requests external metadata`() async throws {
@@ -154,7 +179,9 @@ struct EPGEnrichmentSyncTests {
         let context = ModelContext(fixture.container)
         try #require(try context.fetch(FetchDescriptor<LiveStream>()).first).name = "Unverified PBS station"
         try context.save()
-        try await fixture.supplement(url: url, coordinator: LocalStoreWriteCoordinator()).sync(container: fixture.container, enabled: true, fence: .live)
+        let report = try await fixture.supplement(url: url, coordinator: LocalStoreWriteCoordinator()).sync(container: fixture.container, enabled: true, fence: .live)
+        #expect(report.state == .unsupported)
+        #expect(!report.hasWarning)
         #expect(requests.withLock { $0 } == 0)
     }
 
@@ -275,11 +302,52 @@ struct EPGEnrichmentSyncTests {
             programmes: cached.programmes + [future], lastModified: cached.lastModified, entityTag: cached.entityTag
         ).write(to: fixture.cacheURL)
         let later = now.addingTimeInterval(25 * 3600)
-        try await sync.sync(container: fixture.container, enabled: true, fence: .live, now: later)
+        let report = try await sync.sync(container: fixture.container, enabled: true, fence: .live, now: later)
+        #expect(report.state == .unchanged)
+        #expect(report.checkedAt == later)
+        #expect(fixture.defaults.double(forKey: EPGEnrichmentSettings.failedKey) == 0)
         let updated = try #require(EPGEnrichmentCache.read(from: fixture.cacheURL))
         #expect(updated.checkedAt == later)
         #expect(updated.programmes.count == cached.programmes.count + 1)
         #expect(requests.withLock { $0.count } == 2)
         #expect(requests.withLock { $0.last?.lowercased().contains("if-modified-since:") } == true)
+    }
+
+    @Test func `cancelling a metadata download retries immediately after a provider 304`() async throws {
+        let downloads = Mutex(0)
+        let server = try GuideHTTPServer { raw in
+            if raw.hasPrefix("GET /metadata") {
+                let attempt = downloads.withLock { $0 += 1; return $0 }
+                return .init(body: Fixture.document(channel: "KQED-DT.us_locals1", artwork: "https://example.com/art.jpg"), delay: attempt == 1 ? 2 : 0)
+            }
+            if raw.lowercased().contains("if-modified-since:") { return .init(status: 304) }
+            return .init(headers: ["Last-Modified": Self.modified], body: Fixture.document(channel: "PBSKQED.us"))
+        }
+        defer { server.stop() }
+        let url = try await server.start()
+        let fixture = try Fixture(providerURL: url)
+        defer { fixture.cleanup() }
+        let manager = fixture.manager(externalURL: url.deletingLastPathComponent().appendingPathComponent("metadata"))
+        #expect(await manager.syncAllSources() == .succeeded)
+        // A failed/cancelled attempt stored by the old build must not preserve
+        // the old one-hour suppression after upgrading either.
+        fixture.defaults.set(Date().timeIntervalSince1970, forKey: "lume.epgEnrichment.attempted")
+        let task = Task { await manager.syncAllSources(enrichProgrammes: true) }
+        defer { task.cancel() }
+        for _ in 0 ..< 200 where downloads.withLock({ $0 }) == 0 {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        try #require(downloads.withLock { $0 } == 1)
+        task.cancel()
+        #expect(await task.value == .cancelled)
+        #expect(fixture.defaults.double(forKey: EPGEnrichmentSettings.failedKey) == 0)
+        #expect(fixture.defaults.double(forKey: EPGEnrichmentSettings.checkedKey) == 0)
+        #expect(EPGEnrichmentSettings.isDue(defaults: fixture.defaults))
+        #expect(EPGEnrichmentCache.read(from: fixture.cacheURL) == nil)
+        #expect(try fixture.row().artworkURL == nil)
+        #expect(await manager.syncAllSources(enrichProgrammes: true) == .succeeded)
+        #expect(downloads.withLock { $0 } == 2)
+        #expect(await manager.enrichmentReport?.state == .downloaded)
+        #expect(try fixture.row().artworkURL != nil)
     }
 }
