@@ -3,6 +3,30 @@ import Foundation
 import Testing
 
 struct EPGEnrichmentCacheTests {
+    @Test func `expanded UK registry becomes due without waiting for the old selection cadence`() throws {
+        let name = "EPGEnrichmentCacheTests-\(UUID())"
+        let defaults = try #require(UserDefaults(suiteName: name))
+        defer { defaults.removePersistentDomain(forName: name) }
+        let now = Date()
+        defaults.set(true, forKey: EPGEnrichmentSettings.enabledKey)
+        defaults.set(now.timeIntervalSince1970, forKey: EPGEnrichmentSettings.checkedKey + ".uk")
+        defaults.set(now.timeIntervalSince1970, forKey: EPGEnrichmentFeed.Identifier.usPBS.checkedKey)
+        #expect(EPGEnrichmentSettings.isDue(defaults: defaults, now: now))
+        defaults.set(now.timeIntervalSince1970, forKey: EPGEnrichmentFeed.Identifier.britain.checkedKey)
+        #expect(!EPGEnrichmentSettings.isDue(defaults: defaults, now: now))
+    }
+
+    @Test func `metadata cache accommodates expanded selections but retains a hard programme limit`() {
+        let now = Date()
+        let programme = ParsedProgramme(channelId: "station", title: "Programme", subtitle: nil, description: "", categories: [], start: now, end: now.addingTimeInterval(3600))
+        let cache = EPGEnrichmentCache(url: "guide", checkedAt: now, channelIDs: ["station"],
+                                       programmes: Array(repeating: programme, count: 14000), lastModified: nil, entityTag: nil)
+        #expect(cache.isUsable(url: cache.url, now: now))
+        let oversized = EPGEnrichmentCache(url: cache.url, checkedAt: now, channelIDs: cache.channelIDs,
+                                           programmes: Array(repeating: programme, count: EPGEnrichmentCache.maximumProgrammes + 1), lastModified: nil, entityTag: nil)
+        #expect(!oversized.isUsable(url: cache.url, now: now))
+    }
+
     @Test func `new country and independent country cadences are checked even with a fresh PBS publication`() throws {
         let name = "EPGEnrichmentCacheTests-\(UUID())"
         let defaults = try #require(UserDefaults(suiteName: name))

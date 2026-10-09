@@ -23,15 +23,16 @@ Sources:
 | EPGShare UK | 2.96 MB | 22.41 MB | 41,981 |
 | EPG.pw GB | 2.58 MB | 20.30 MB | 53,425 |
 
-The sample includes seven essentials/news channels, Sky Sports Football/NFL,
-TNT Sports 1–4, and Sky Sports F1 (unmapped). Generic BBC One and ITV1 entries
+The initial sample includes seven essentials/news channels, Sky Sports Football/NFL,
+TNT Sports 1–4, and Sky Sports F1 (unmapped in that first inventory pass). Generic BBC One and ITV1 entries
 are negative controls: their regional identity is unspecified. BBC One London
 and Scotland use explicitly named regional provider channels instead. XMLTV
 identity does not verify the provider's actual streamed video.
 
 All 14 aggregate sample channels have current provider listings and complete
-48-hour coverage. Both external feeds map 13, missing Sky Sports F1 in these
-inventories. Neither fixes a current coverage gap in this sample.
+48-hour coverage. Both external feeds mapped 13 in the initial inventory pass.
+A subsequent review found EPGShare F1 under `SkySp.F1.HD.uk`; see the expansion
+below. Neither fixes a current coverage gap in the initial sample.
 
 EPGShare has images on **99.8%** of its 825 sampled near-term rows, subtitles
 on 44.6% and categories on 66.9%. Provider rows have descriptions on 99.9%,
@@ -120,9 +121,8 @@ times. Settings and logs show per-feed results, counts and retry times.
 
 Sports broadcasters are not categorically excluded: their strict title/time
 matches use the same lane as essentials. Provider-created event channels and
-unknown identities stay untouched. Category-level opt-in controls, wider
-station mappings and event-aware matching are later work, not silently enabled
-by this change. Existing popup and rail artwork/subtitles consume additions
+unknown identities stay untouched. Category-level opt-in controls and event-aware
+matching remain later work. Existing popup and rail artwork/subtitles consume additions
 through the shared guide publication/invalidation path.
 
 The shipping Swift parser, reviewed registry and exact matcher were also run
@@ -136,3 +136,57 @@ Verification for this expansion: generic iOS/tvOS builds, 132 focused macOS EPG
 tests, 13 Python comparison tests, strict SwiftLint, SwiftFormat and translation
 checks passed. No simulator was installed or launched. Physical-device testing
 and subsequent independent guide snapshots remain follow-up checks.
+
+## Broader reviewed UK registry
+
+After the initial device trial, the same saved guide/catalog was reviewed for
+additional explicit identities. This is **not a later independent snapshot**.
+The registry now contains **119 distinct external schedules / 131 provider IDs**:
+
+- Regional BBC One, BBC Two NI/Wales, BBC Three/Four/Scotland/Alba/Parliament.
+- ITV2–4 and Quiz; E4/Extra, More4, Film4, 4seven; 5STAR/USA/SELECT/Action.
+- Sky entertainment and nine cinema channels; U, Comedy Central and Challenge.
+- Discovery, National Geographic, PBS America and other factual broadcasters.
+- CBBC, CBeebies, Cartoon Network/Boomerang/Cartoonito and Nickelodeon family.
+- Named news stations and Sky Cricket/F1/Golf/PL/Tennis/News/Racing/+, Racing TV,
+  Premier Sports 1/2, MUTV/LFCTV, plus reviewed variants of Football/NFL/TNT1.
+
+Case-distinct provider IDs for quality variants are preserved as a set per
+external schedule. Every ID is independently checked against **all** stream
+references before enabled-category filtering. Hiding an unsafe reference cannot
+make a shared ID eligible. Generic BBC One/ITV1, unspecified ITV regions, +1
+inference and event/UHD-only channels remain excluded. Sky Main Event and Sky
+Sports Mix share provider IDs with fixture/RedZone streams in this catalog;
+they are deliberately excluded rather than claiming every reference is equivalent.
+
+The production Swift parser/matcher replay over 48 hours produced:
+
+| Measure | Result |
+| --- | ---: |
+| Provider rows (distinct provider IDs, not per stream quality duplicate) | 8,112 |
+| Exact title/start/end matches | 5,169 |
+| Changed / successfully restored rows | 5,165 / 5,165 |
+| Added artwork URLs / subtitles | 5,044 / 1,935 |
+| Added categories / release years | 5,038 / 216 |
+| Four-day metadata cache | 9,275 programmes / 3.63 MB JSON |
+
+The ignored report is `swift-expanded-enrichment-report.json` in the capture
+directory. Regional/entertainment/factual channels account for most gains.
+Examples with good exact agreement include ITV3/Quiz, Film4, 4seven and Sky Mix.
+Named sports identities are allowed, but some (Cricket/Tennis/Premier2) have
+zero strict matches in this snapshot. Different fixture naming is **not**
+resolved by this expansion; boundary-only or fuzzy event matching remains off.
+Artwork URLs can return 404, so additions do not guarantee visible images.
+
+The metadata cap rises from 10k to 20k selected programmes per country to
+accommodate variable horizons and high-frequency children's listings. Country
+XML/decompression bounds and sequential cleanup are unchanged. The new UK
+publication key makes the expanded selection due on upgrade; a cached subset
+cannot validate a newly expanded external-ID selection with stale validators.
+
+Expansion verification: generic iOS/tvOS builds, 140 focused macOS EPG tests
+across 17 suites, 13 Python comparison tests, strict SwiftLint, SwiftFormat and
+translation checks passed. New tests cover many-provider-ID enrichment,
+conflicting metadata/identities, per-variant eligibility and restoration,
+selection-expansion refetching, upgrade scheduling and the cache limit. No
+simulator was installed or launched.

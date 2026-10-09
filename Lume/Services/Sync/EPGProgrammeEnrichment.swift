@@ -72,18 +72,20 @@ nonisolated enum EPGProgrammeEnrichment {
             }
         }
 
-        init(programmes: [ParsedProgramme] = [], aliases: [String: String] = [:]) {
+        init(programmes: [ParsedProgramme] = [], aliases: EPGEnrichmentStations.Aliases = [:]) {
             for programme in programmes {
-                guard let channel = aliases[programme.channelId], programme.end > programme.start else { continue }
-                let key = Key(channelID: channel, start: programme.start, end: programme.end, title: programme.title)
-                guard !key.title.isEmpty, !ambiguous.contains(key) else { continue }
-                let metadata = Metadata(programme)
-                if let existing = entries[key], existing != metadata {
-                    // Conflicting duplicates must not win by document order.
-                    entries.removeValue(forKey: key)
-                    ambiguous.insert(key)
-                } else {
-                    entries[key] = metadata
+                guard let channels = aliases[programme.channelId], programme.end > programme.start else { continue }
+                for channel in channels {
+                    let key = Key(channelID: channel, start: programme.start, end: programme.end, title: programme.title)
+                    guard !key.title.isEmpty, !ambiguous.contains(key) else { continue }
+                    let metadata = Metadata(programme)
+                    if let existing = entries[key], existing != metadata {
+                        // Conflicting duplicates must not win by document order.
+                        entries.removeValue(forKey: key)
+                        ambiguous.insert(key)
+                    } else {
+                        entries[key] = metadata
+                    }
                 }
             }
         }

@@ -170,4 +170,72 @@ struct EPGEnrichmentFeedsTests {
         #expect(requests.withLock { $0 } == 1)
         #expect(!EPGEnrichmentSettings.isDue(defaults: fixture.defaults))
     }
+
+    @Test func `expanding the selected stations refetches a fresh cache without old validators`() async throws {
+        let requests = Mutex<[String]>([])
+        let server = try GuideHTTPServer { request in
+            requests.withLock { $0.append(request) }
+            let british = request.hasPrefix("GET /uk")
+            var document = Fixture.document(british: british)
+            if british {
+                let extra = Fixture.document(british: true).replacingOccurrences(of: "BBC.Two.HD.uk", with: "ITV2.HD.uk")
+                document = document.replacingOccurrences(of: "</tv>", with: extra.replacingOccurrences(of: "<tv>", with: ""))
+            }
+            return .init(headers: ["Last-Modified": "Thu, 08 Oct 2026 12:00:00 GMT"], body: document)
+        }
+        defer { server.stop() }
+        let fixture = try await Fixture(url: server.start())
+        defer { fixture.cleanup() }
+        let sync = fixture.sync()
+        try await sync.sync(container: fixture.container, enabled: true, fence: .live)
+        let context = ModelContext(fixture.container)
+        let row = try #require(try context.fetch(FetchDescriptor<EPGListing>()).first)
+        context.insert(LiveStream(id: "ITV2", streamId: 2, name: "ITV 2 FHD", epgChannelId: "ITV2.uk"))
+        context.insert(EPGListing(id: "ITV2", channelId: "ITV2.uk", title: row.title, listingDescription: row.listingDescription,
+                                  start: row.start, end: row.end, sourceID: row.sourceID))
+        try context.save()
+        let report = try await sync.sync(container: fixture.container, enabled: true, fence: .live)
+        #expect(report.feeds.map(\.state) == [.downloaded, .cached])
+        #expect(report.feeds.first?.verifiedStations == 2)
+        #expect(report.changedProgrammes == 1)
+        #expect(requests.withLock { $0.count } == 3)
+        #expect(requests.withLock { $0.last?.lowercased().contains("if-modified-since:") } == false)
+        #expect(try fixture.rows().first { $0.channelId == "ITV2.uk" }?.artworkURL != nil)
+    }
+
+    @Test func `publication enriches multiple provider IDs and hiding one restores only that variant`() async throws {
+        let server = try GuideHTTPServer { request in
+            let document = Fixture.document(british: request.hasPrefix("GET /uk"))
+                .replacingOccurrences(of: "BBC.Two.HD.uk", with: "SkySp.F1.HD.uk")
+            return .init(body: document)
+        }
+        defer { server.stop() }
+        let fixture = try await Fixture(url: server.start())
+        defer { fixture.cleanup() }
+        let context = ModelContext(fixture.container)
+        let original = try #require(try context.fetch(FetchDescriptor<LiveStream>()).first { $0.epgChannelId == "BBCTwo.uk" })
+        original.name = "Sky Sports F1 FHD"
+        original.epgChannelId = "SkySportsF1.uk"
+        let listing = try #require(try context.fetch(FetchDescriptor<EPGListing>()).first { $0.channelId == "BBCTwo.uk" })
+        listing.channelId = "SkySportsF1.uk"
+        context.insert(LiveStream(id: "F1-HD", streamId: 2, name: "Sky Sports F1 HD", epgChannelId: "skysportsf1.uk"))
+        context.insert(EPGListing(id: "F1-HD", channelId: "skysportsf1.uk", title: listing.title, listingDescription: listing.listingDescription,
+                                  start: listing.start, end: listing.end, sourceID: listing.sourceID))
+        try context.save()
+        let sync = fixture.sync()
+        let first = try await sync.sync(container: fixture.container, enabled: true, fence: .live)
+        #expect(first.feeds.first?.verifiedStations == 1)
+        #expect(first.feeds.first?.matchedProgrammes == 2)
+        #expect(first.changedProgrammes == 3)
+        original.isHidden = true
+        try context.save()
+        let second = try await sync.sync(container: fixture.container, enabled: true, fence: .live)
+        #expect(second.feeds.first?.state == .cached)
+        #expect(second.feeds.first?.matchedProgrammes == 1)
+        #expect(second.changedProgrammes == 1)
+        let rows = try fixture.rows()
+        #expect(rows.first { $0.channelId == "SkySportsF1.uk" }?.artworkURL == nil)
+        #expect(rows.first { $0.channelId == "skysportsf1.uk" }?.artworkURL != nil)
+        #expect(rows.first { $0.channelId == "PBSKQED.us" }?.artworkURL != nil)
+    }
 }

@@ -105,7 +105,7 @@ actor EPGEnrichmentSync {
             report = staged.result.report
             report.verifiedStations = aliases.count
             providerIDs = EPGEnrichmentStations.providerIDs(for: staged.feed.id)
-            eligibleIDs = Set(aliases.values)
+            eligibleIDs = Set(aliases.values.flatMap(\.self))
         }
     }
 

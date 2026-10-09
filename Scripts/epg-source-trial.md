@@ -92,12 +92,17 @@ snapshots are still pending.
 ## Production Swift enrichment trial
 
 The opt-in app experiment is under **Settings → TV Guide → EPGShare metadata
-(experimental)**. It supports the reviewed US PBS mappings and 13 UK
-broadcasters in `EPGEnrichmentStations`: explicitly regional BBC One, BBC Two,
-Channel 4/5, BBC/Sky News, Sky Sports Football/NFL and TNT Sports 1–4. Each
-provider ID must have only explicitly reviewed channel-name variants. Generic
-BBC One/ITV regions, unmapped F1 and provider-created team/match/PPV channels
-remain provider-only. Enabling it does not add a competing timetable source.
+(experimental)**. It supports the reviewed US PBS mappings and **119 distinct
+UK broadcast schedules**, with 131 explicitly reviewed provider IDs in
+`EPGEnrichmentStations+UK.swift`. This includes regional BBC, ITV2–4/Quiz,
+Channel 4/5 families, Sky entertainment/cinema, U, documentaries, children's
+TV, news and named sports broadcasters. One external schedule can serve several
+reviewed HD/FHD/SD provider IDs without combining their rows or changing times.
+Each provider ID must have only explicitly reviewed channel-name variants.
+Generic BBC One/ITV regions, timeshift inference, ambiguous/shared sports IDs
+and provider-created event/PPV channels remain provider-only. Enabling it does
+not add a competing timetable source. The expanded registry refreshes once on
+upgrade without waiting for the former UK scope's 12-hour checkpoint.
 
 The metadata pass reuses the production downloader, parser and store-write
 coordinator. It preserves provider row IDs, titles, start/end times and any
@@ -144,7 +149,7 @@ One country feed is downloaded, decompressed, parsed and cleaned up at a time;
 only its bounded selected-programme cache survives before the next starts.
 UK runs first, then US PBS. Both indexes publish together in one transaction:
 refreshing one feed cannot restore another's enriched fields. Each cache keeps
-at most 10,000 selected programmes from two hours ago through four days ahead;
+at most 20,000 selected programmes from two hours ago through four days ahead;
 country XML files are never retained until combined publication. Optional
 enrichment checks ordinary free space before downloading,
 requiring its 768 MiB XML allowance plus a 128 MiB reserve, and refuses an
@@ -203,7 +208,7 @@ failures back off for an hour and can use a cache checked within the last 48
 hours. Unsupported catalogs make no request. Country-guide parsing remains a
 large download/decompression: the existing downloader inflates to a temporary
 disk file, then SAX filters selected stations. Only a bounded four-day slice
-(at most 10,000 programmes) survives in a local evictable cache. Provider
+(at most 20,000 programmes) survives in a local evictable cache. Provider
 credentials/channel names are never sent to EPGShare. No server/dependencies.
 
 The Swift trial uses the actual shipping matcher and parser, outside the app:
@@ -215,6 +220,7 @@ swiftc -O -swift-version 5 -default-isolation MainActor \
   Lume/Models/EPGListing.swift \
   Lume/Services/Sync/EPGProgrammeEnrichment.swift \
   Lume/Services/Sync/EPGEnrichmentStations.swift \
+  Lume/Services/Sync/EPGEnrichmentStations+UK.swift \
   Lume/Services/Sync/EPGEnrichmentCache.swift \
   Lume/Services/Sync/EPGEnrichmentFeed.swift \
   Scripts/epg-enrichment-trial.swift -o .build/epg-enrichment-trial
@@ -253,3 +259,14 @@ Still needed before broader rollout: repeat with newer snapshots, verify other
 regional/sports aliases against actual streams, check image/feed usage rights,
 and measure large-feed refresh cost on devices. This is an enrichment trial,
 not an EPG coverage replacement or a sports-calendar implementation.
+
+Expanded UK replay of that **same** capture accepted 119 schedules / 131
+provider IDs: 5,169 exact matches across 8,112 near-term provider rows, with
+5,165 changed rows (5,044 artwork URLs, 1,935 subtitles, 5,038 categories and
+216 years). Every addition reversed; schedule identity was unchanged. The
+four-day selected cache was 9,275 programmes / 3.63 MB encoded JSON. The 20k
+limit allows headroom for longer feed horizons and frequent children's shows;
+exceeding it rejects the new snapshot rather than unfairly truncating later
+channels. This does not increase temporary XML limits or concurrent downloads.
+Artwork counts mean stored URLs, not successful image delivery: the public
+source can return missing images, which retain the existing channel-logo fallback.

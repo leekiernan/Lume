@@ -29,7 +29,9 @@ nonisolated enum EPGEnrichmentSettings {
 nonisolated struct EPGEnrichmentCache: Codable {
     static let schemaVersion = 1
     static let maximumAge: TimeInterval = 48 * 3600
-    static let maximumProgrammes = 10000
+    /// A full reviewed UK selection can exceed 10k across four days, especially children's TV.
+    /// Keep a hard metadata bound without retaining any additional country XML files.
+    static let maximumProgrammes = 20000
 
     var version = schemaVersion
     let url: String

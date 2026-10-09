@@ -21,7 +21,7 @@ struct EPGProgrammeEnrichmentTests {
 
     @Test func `exact matches fill missing metadata without changing provider identity or times`() throws {
         let row = listing()
-        let index = EPGProgrammeEnrichment.Index(programmes: [programme()], aliases: ["external": "provider"])
+        let index = EPGProgrammeEnrichment.Index(programmes: [programme()], aliases: ["external": ["provider"]])
         #expect(try EPGProgrammeEnrichment.apply(index, to: row))
         #expect(row.title == "Secrets of the Deadᴺᵉʷ")
         #expect(row.channelId == "provider")
@@ -41,7 +41,7 @@ struct EPGProgrammeEnrichmentTests {
         row.category = "Drama"
         row.artworkURL = "https://example.com/provider.jpg"
         row.releaseYear = "1990"
-        let index = EPGProgrammeEnrichment.Index(programmes: [programme()], aliases: ["external": "provider"])
+        let index = EPGProgrammeEnrichment.Index(programmes: [programme()], aliases: ["external": ["provider"]])
         #expect(try !EPGProgrammeEnrichment.apply(index, to: row))
         #expect(row.enrichmentBaseline == nil)
         #expect(row.subtitle == "Provider episode")
@@ -51,18 +51,18 @@ struct EPGProgrammeEnrichmentTests {
     @Test func `title channel and exact interval disagreements do not enrich`() throws {
         for candidate in [programme(title: "A Different Show"), programme(offset: 1), programme(channel: "unmapped")] {
             let row = listing()
-            let index = EPGProgrammeEnrichment.Index(programmes: [candidate], aliases: ["external": "provider"])
+            let index = EPGProgrammeEnrichment.Index(programmes: [candidate], aliases: ["external": ["provider"]])
             #expect(try !EPGProgrammeEnrichment.apply(index, to: row))
             #expect(row.artworkURL == nil)
         }
         let differentEnd = listing()
         differentEnd.end = differentEnd.end.addingTimeInterval(1)
-        #expect(try !EPGProgrammeEnrichment.apply(.init(programmes: [programme()], aliases: ["external": "provider"]), to: differentEnd))
+        #expect(try !EPGProgrammeEnrichment.apply(.init(programmes: [programme()], aliases: ["external": ["provider"]]), to: differentEnd))
     }
 
     @Test func `disabling enrichment or losing an alias restores provider fields`() throws {
         let row = listing()
-        #expect(try EPGProgrammeEnrichment.apply(.init(programmes: [programme()], aliases: ["external": "provider"]), to: row))
+        #expect(try EPGProgrammeEnrichment.apply(.init(programmes: [programme()], aliases: ["external": ["provider"]]), to: row))
         #expect(try EPGProgrammeEnrichment.apply(.init(), to: row))
         #expect(row.enrichmentBaseline == nil)
         #expect(row.artworkURL == nil)
@@ -72,17 +72,17 @@ struct EPGProgrammeEnrichmentTests {
 
     @Test func `a replacement supplement clears fields removed by the external source`() throws {
         let row = listing()
-        #expect(try EPGProgrammeEnrichment.apply(.init(programmes: [programme()], aliases: ["external": "provider"]), to: row))
+        #expect(try EPGProgrammeEnrichment.apply(.init(programmes: [programme()], aliases: ["external": ["provider"]]), to: row))
         var replacement = programme()
         replacement.artworkURL = nil
-        #expect(try EPGProgrammeEnrichment.apply(.init(programmes: [replacement], aliases: ["external": "provider"]), to: row))
+        #expect(try EPGProgrammeEnrichment.apply(.init(programmes: [replacement], aliases: ["external": ["provider"]]), to: row))
         #expect(row.artworkURL == nil)
         #expect(row.subtitle == "Episode")
     }
 
     @Test func `a provider refresh resets the enrichment baseline`() throws {
         let row = listing()
-        #expect(try EPGProgrammeEnrichment.apply(.init(programmes: [programme()], aliases: ["external": "provider"]), to: row))
+        #expect(try EPGProgrammeEnrichment.apply(.init(programmes: [programme()], aliases: ["external": ["provider"]]), to: row))
         row.update(from: programme(channel: "provider", title: "Provider replacement"), category: "Drama")
         #expect(row.enrichmentBaseline == nil)
         #expect(try !EPGProgrammeEnrichment.apply(.init(), to: row))
@@ -96,7 +96,7 @@ struct EPGProgrammeEnrichmentTests {
         conflicting.artworkURL = "https://example.com/different.jpg"
         for candidates in [[programme(), conflicting], [conflicting, programme()], [programme(), programme()]] {
             let row = listing()
-            let changed = try EPGProgrammeEnrichment.apply(.init(programmes: candidates, aliases: ["external": "provider"]), to: row)
+            let changed = try EPGProgrammeEnrichment.apply(.init(programmes: candidates, aliases: ["external": ["provider"]]), to: row)
             #expect(changed == (candidates[0].artworkURL == candidates[1].artworkURL))
         }
     }
@@ -109,7 +109,7 @@ struct EPGProgrammeEnrichmentTests {
 
     @Test func `aliases require both station identity and provider ID and reject collisions`() {
         let verified = EPGEnrichmentStations.Channel(name: "US PBS (KQED) San Francisco", epgID: "PBSKQED.us")
-        #expect(EPGEnrichmentStations.aliases(for: [verified]) == ["KQED-DT.us_locals1": "PBSKQED.us"])
+        #expect(EPGEnrichmentStations.aliases(for: [verified]) == ["KQED-DT.us_locals1": ["PBSKQED.us"]])
         #expect(EPGEnrichmentStations.aliases(for: [verified, .init(name: "PBS Kids", epgID: "PBSKQED.us")]).isEmpty)
         #expect(EPGEnrichmentStations.aliases(for: [.init(name: verified.name, epgID: "unknown")]).isEmpty)
         #expect(EPGEnrichmentStations.aliases(for: [.init(name: "US PBS (KERA) Dallas", epgID: "PBSKEDT.us")]).isEmpty)
@@ -118,8 +118,8 @@ struct EPGProgrammeEnrichmentTests {
     @Test func `merging feed indexes rejects conflicting metadata rather than choosing by download order`() throws {
         var conflicting = programme()
         conflicting.artworkURL = "https://example.com/different.jpg"
-        let first = EPGProgrammeEnrichment.Index(programmes: [programme()], aliases: ["external": "provider"])
-        let second = EPGProgrammeEnrichment.Index(programmes: [conflicting], aliases: ["external": "provider"])
+        let first = EPGProgrammeEnrichment.Index(programmes: [programme()], aliases: ["external": ["provider"]])
+        let second = EPGProgrammeEnrichment.Index(programmes: [conflicting], aliases: ["external": ["provider"]])
         for indexes in [[first, second], [second, first]] {
             #expect(try !EPGProgrammeEnrichment.apply(.init(merging: indexes), to: listing()))
         }
@@ -131,9 +131,59 @@ struct EPGProgrammeEnrichmentTests {
             .init(name: "BBC ONE", epgID: "BBCOne.uk"), .init(name: "ITV1 FHD", epgID: "itv1.uk"),
             .init(name: "TNT SPORTS 1 FHD 50FPS", epgID: "TNTSports1.uk"), .init(name: "Arsenal Match", epgID: "arsenal")
         ]
-        #expect(EPGEnrichmentStations.aliases(for: channels, feed: .britain) == ["BBC.Two.HD.uk": "BBCTwo.uk", "TNT.Sports.1.HD.uk": "TNTSports1.uk"])
+        #expect(EPGEnrichmentStations.aliases(for: channels, feed: .britain) == ["BBC.Two.HD.uk": ["BBCTwo.uk"], "TNT.Sports.1.HD.uk": ["TNTSports1.uk"]])
         let conflict = EPGEnrichmentStations.Channel(name: "BBC TWO NORTHERN IRELAND", epgID: "BBCTwo.uk")
         #expect(EPGEnrichmentStations.aliases(for: channels + [conflict], feed: .britain)["BBC.Two.HD.uk"] == nil)
+    }
+
+    @Test func `one external schedule enriches each quality variant without merging their provider rows`() throws {
+        let index = EPGProgrammeEnrichment.Index(programmes: [programme()], aliases: ["external": ["provider", "providerHD"]])
+        for channel in ["provider", "providerHD"] {
+            let row = listing(channel: channel)
+            #expect(try EPGProgrammeEnrichment.apply(index, to: row))
+            #expect(row.channelId == channel)
+            #expect(row.artworkURL == programme().artworkURL)
+            #expect(try EPGProgrammeEnrichment.apply(.init(), to: row))
+            #expect(row.artworkURL == nil)
+        }
+        #expect(try !EPGProgrammeEnrichment.apply(index, to: listing(channel: "other")))
+    }
+
+    @Test func `conflicting supplements reject every mapped quality variant`() throws {
+        var conflicting = programme()
+        conflicting.artworkURL = "https://example.com/different.jpg"
+        for programmes in [[programme(), conflicting], [conflicting, programme()]] {
+            let index = EPGProgrammeEnrichment.Index(programmes: programmes, aliases: ["external": ["provider", "providerHD"]])
+            for channel in ["provider", "providerHD"] {
+                #expect(try !EPGProgrammeEnrichment.apply(index, to: listing(channel: channel)))
+            }
+        }
+    }
+
+    @Test func `quality variants are verified independently and category scope cannot hide conflicting references`() {
+        let channels: [EPGEnrichmentStations.Channel] = [
+            .init(name: "Sky Sports F1 FHD", epgID: "SkySportsF1.uk"),
+            .init(name: "Sky Sports F1 SD", epgID: "SkySportsF1.uk"),
+            .init(name: "Sky Sports F1 HD", epgID: "skysportsf1.uk")
+        ]
+        let external = "SkySp.F1.HD.uk"
+        #expect(EPGEnrichmentStations.aliases(for: channels, feed: .britain)[external] == ["SkySportsF1.uk", "skysportsf1.uk"])
+        var scope = EPGEnrichmentScope(channels: channels, eligible: ["SkySportsF1.uk"])
+        #expect(scope.aliases(for: .britain)[external] == ["SkySportsF1.uk"])
+        scope.channels.append(.init(name: "Generic F1 Event", epgID: "SkySportsF1.uk"))
+        #expect(scope.aliases(for: .britain).isEmpty)
+        scope.eligible.insert("skysportsf1.uk")
+        #expect(scope.aliases(for: .britain)[external] == ["skysportsf1.uk"])
+    }
+
+    @Test func `expanded UK registry has unique provider IDs and no inferred timeshifts or generic regions`() {
+        let stations = EPGEnrichmentStations.ukStations
+        #expect(Set(stations.map(\.providerID)).count == stations.count)
+        #expect(Set(stations.map(\.externalID)).count == 119)
+        #expect(stations.allSatisfy { !$0.names.isEmpty && !$0.externalID.isEmpty })
+        let excluded = ["BBCOne.uk", "itv1.uk", "SkySportsMainEvent.uk", "SkySportsMix.uk"]
+        #expect(EPGEnrichmentStations.providerIDs(for: .britain).isDisjoint(with: excluded))
+        #expect(stations.allSatisfy { !$0.names.contains(where: { $0.contains("+1") }) })
     }
 
     @Test func `filtered SAX parsing only emits selected stations`() throws {

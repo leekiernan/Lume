@@ -12,7 +12,8 @@ nonisolated struct EPGEnrichmentFeed {
         }
 
         var checkedKey: String {
-            self == .usPBS ? EPGEnrichmentSettings.checkedKey : EPGEnrichmentSettings.checkedKey + ".uk"
+            // A registry expansion needs a publication even if the previous scope was checked recently.
+            self == .usPBS ? EPGEnrichmentSettings.checkedKey : EPGEnrichmentSettings.checkedKey + ".uk.v2"
         }
 
         var failedKey: String {

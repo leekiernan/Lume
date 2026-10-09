@@ -7,6 +7,9 @@ struct EPGEnrichmentTrial {
     private struct Report: Encodable {
         let evaluatedAt: Date
         let verifiedStations: Int
+        let providerIDs: Int
+        let cachedProgrammes: Int
+        let cacheBytes: Int
         let providerRows: Int
         let matchedRows: Int
         let enrichedRows: Int
@@ -31,11 +34,15 @@ struct EPGEnrichmentTrial {
             return .init(name: stream.name, epgID: id)
         }
         let aliases = EPGEnrichmentStations.aliases(for: channels, feed: feed)
+        let providerIDs = Set(aliases.values.flatMap(\.self))
         let end = now.addingTimeInterval(48 * 3600)
-        let provider = try programmes(at: URL(fileURLWithPath: arguments[2]), channelIDs: Set(aliases.values), start: now, end: end)
-        let external = try programmes(at: URL(fileURLWithPath: arguments[3]), channelIDs: Set(aliases.keys), start: now, end: end)
+        let provider = try programmes(at: URL(fileURLWithPath: arguments[2]), channelIDs: providerIDs, start: now, end: end)
+        let external = try programmes(at: URL(fileURLWithPath: arguments[3]), channelIDs: Set(aliases.keys),
+                                      start: now.addingTimeInterval(-2 * 3600), end: now.addingTimeInterval(4 * 86400))
+        let snapshot = EPGEnrichmentCache(url: "offline-trial", checkedAt: now, channelIDs: Set(aliases.keys), programmes: external, lastModified: nil, entityTag: nil)
+        guard snapshot.isUsable(url: snapshot.url, now: now) else { throw TrialError.invalidCache }
         let index = EPGProgrammeEnrichment.Index(programmes: external, aliases: aliases)
-        let report = try evaluate(provider, index: index, now: now, stationCount: aliases.count)
+        let report = try evaluate(provider, index: index, now: now, snapshot: snapshot, providerIDs: providerIDs.count)
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         encoder.dateEncodingStrategy = .iso8601
@@ -44,7 +51,7 @@ struct EPGEnrichmentTrial {
         print(String(data: data, encoding: .utf8) ?? "")
     }
 
-    @MainActor private static func evaluate(_ provider: [ParsedProgramme], index: EPGProgrammeEnrichment.Index, now: Date, stationCount: Int) throws -> Report {
+    @MainActor private static func evaluate(_ provider: [ParsedProgramme], index: EPGProgrammeEnrichment.Index, now: Date, snapshot: EPGEnrichmentCache, providerIDs: Int) throws -> Report {
         var matched = 0
         var enriched = 0
         var restored = 0
@@ -72,8 +79,10 @@ struct EPGEnrichmentTrial {
             if try EPGProgrammeEnrichment.apply(.init(), to: row) { restored += 1 }
             guard EPGProgrammeEnrichment.Metadata(row) == original, row.enrichmentBaseline == nil else { throw TrialError.changedProviderMetadata }
         }
-        return Report(
-            evaluatedAt: now, verifiedStations: stationCount, providerRows: provider.count, matchedRows: matched,
+        return try Report(
+            evaluatedAt: now, verifiedStations: snapshot.channelIDs.count, providerIDs: providerIDs,
+            cachedProgrammes: snapshot.programmes.count, cacheBytes: JSONEncoder().encode(snapshot).count,
+            providerRows: provider.count, matchedRows: matched,
             enrichedRows: enriched, restoredRows: restored, addedArtwork: artwork, addedSubtitles: subtitles,
             addedCategories: categories, addedYears: years, scheduleUnchanged: true
         )
@@ -93,6 +102,7 @@ struct EPGEnrichmentTrial {
     private enum TrialError: Error {
         case usage // streams.json provider.xml supplement.xml.gz ISO8601-instant report.json [uk|us-locals]
         case invalidXMLTV
+        case invalidCache
         case changedSchedule
         case changedProviderMetadata
     }
