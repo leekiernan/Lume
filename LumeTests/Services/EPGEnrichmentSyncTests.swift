@@ -28,7 +28,10 @@ struct EPGEnrichmentSyncTests {
             start = Date(timeIntervalSince1970: floor(Date().timeIntervalSince1970 / 3600) * 3600)
             end = start.addingTimeInterval(3600)
             container.mainContext.insert(EPGSource(name: "Provider", url: providerURL.absoluteString))
-            container.mainContext.insert(LiveStream(id: "pbs", streamId: 1, name: "US PBS (KQED) San Francisco", epgChannelId: "PBSKQED.us"))
+            let category = Category(apiId: "fixture", name: "PBS", parentId: 0, type: .live)
+            category.epgEnrichmentEnabled = true
+            container.mainContext.insert(category)
+            container.mainContext.insert(LiveStream(id: "pbs", streamId: 1, name: "US PBS (KQED) San Francisco", epgChannelId: "PBSKQED.us", categoryId: category.id))
             try container.mainContext.save()
         }
 
@@ -182,6 +185,7 @@ struct EPGEnrichmentSyncTests {
         let context = ModelContext(fixture.container)
         let stream = try #require(try context.fetch(FetchDescriptor<LiveStream>()).first)
         let category = Category(apiId: "pbs", name: "PBS", parentId: 0, type: .live)
+        category.epgEnrichmentEnabled = true
         category.isHidden = !hideChannel
         stream.isHidden = hideChannel
         stream.categoryId = category.id
@@ -369,6 +373,7 @@ extension EPGEnrichmentSyncTests {
         let sourceID = try #require(try context.fetch(FetchDescriptor<EPGSource>()).first).id
         let stream = try #require(try context.fetch(FetchDescriptor<LiveStream>()).first)
         let category = Category(apiId: "pbs", name: "PBS", parentId: 0, type: .live)
+        category.epgEnrichmentEnabled = true
         stream.categoryId = category.id
         context.insert(category)
         context.insert(EPGListing(id: "current", channelId: "PBSKQED.us", title: "Secrets of the Dead", listingDescription: "Provider",

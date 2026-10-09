@@ -26,8 +26,11 @@ struct EPGEnrichmentFeedsTests {
             let context = container.mainContext
             let source = EPGSource(name: "Provider", url: url.absoluteString)
             context.insert(source)
+            let category = Category(apiId: "selected", name: "Selected", parentId: 0, type: .live)
+            category.epgEnrichmentEnabled = true
+            context.insert(category)
             for (id, name) in [("BBCTwo.uk", "BBC TWO FHD"), ("PBSKQED.us", "US PBS (KQED) San Francisco")] {
-                context.insert(LiveStream(id: id, streamId: 1, name: name, epgChannelId: id))
+                context.insert(LiveStream(id: id, streamId: 1, name: name, epgChannelId: id, categoryId: category.id))
                 context.insert(EPGListing(id: id, channelId: id, title: "News", listingDescription: "Provider",
                                           start: Self.start, end: Self.start.addingTimeInterval(3600), sourceID: source.id))
             }
@@ -171,6 +174,33 @@ struct EPGEnrichmentFeedsTests {
         #expect(!EPGEnrichmentSettings.isDue(defaults: fixture.defaults))
     }
 
+    @Test func `turning off category enhancement restores provider metadata without another fetch`() async throws {
+        let requests = Mutex(0)
+        let server = try GuideHTTPServer { request in
+            requests.withLock { $0 += 1 }
+            return .init(body: Fixture.document(british: request.hasPrefix("GET /uk")))
+        }
+        defer { server.stop() }
+        let fixture = try await Fixture(url: server.start())
+        defer { fixture.cleanup() }
+        let sync = fixture.sync()
+        try await sync.sync(container: fixture.container, enabled: true, fence: .live)
+        #expect(try fixture.rows().allSatisfy { $0.artworkURL != nil })
+        let context = ModelContext(fixture.container)
+        let category = try #require(try context.fetch(FetchDescriptor<Lume.Category>()).first)
+        category.epgEnrichmentEnabled = false
+        try context.save()
+        let report = try await sync.sync(container: fixture.container, enabled: true, fence: .live)
+        #expect(report.changedProgrammes == 2)
+        #expect(try fixture.rows().allSatisfy { $0.artworkURL == nil && $0.enrichmentBaseline == nil })
+        #expect(requests.withLock { $0 } == 2)
+        category.epgEnrichmentEnabled = true
+        try context.save()
+        let restored = try await sync.sync(container: fixture.container, enabled: true, fence: .live)
+        #expect(restored.changedProgrammes == 2)
+        #expect(requests.withLock { $0 } == 2)
+    }
+
     @Test func `expanding the selected stations refetches a fresh cache without old validators`() async throws {
         let requests = Mutex<[String]>([])
         let server = try GuideHTTPServer { request in
@@ -190,7 +220,8 @@ struct EPGEnrichmentFeedsTests {
         try await sync.sync(container: fixture.container, enabled: true, fence: .live)
         let context = ModelContext(fixture.container)
         let row = try #require(try context.fetch(FetchDescriptor<EPGListing>()).first)
-        context.insert(LiveStream(id: "ITV2", streamId: 2, name: "ITV 2 FHD", epgChannelId: "ITV2.uk"))
+        let category = try #require(try context.fetch(FetchDescriptor<Lume.Category>()).first)
+        context.insert(LiveStream(id: "ITV2", streamId: 2, name: "ITV 2 FHD", epgChannelId: "ITV2.uk", categoryId: category.id))
         context.insert(EPGListing(id: "ITV2", channelId: "ITV2.uk", title: row.title, listingDescription: row.listingDescription,
                                   start: row.start, end: row.end, sourceID: row.sourceID))
         try context.save()
@@ -218,7 +249,7 @@ struct EPGEnrichmentFeedsTests {
         original.epgChannelId = "SkySportsF1.uk"
         let listing = try #require(try context.fetch(FetchDescriptor<EPGListing>()).first { $0.channelId == "BBCTwo.uk" })
         listing.channelId = "SkySportsF1.uk"
-        context.insert(LiveStream(id: "F1-HD", streamId: 2, name: "Sky Sports F1 HD", epgChannelId: "skysportsf1.uk"))
+        context.insert(LiveStream(id: "F1-HD", streamId: 2, name: "Sky Sports F1 HD", epgChannelId: "skysportsf1.uk", categoryId: original.categoryId))
         context.insert(EPGListing(id: "F1-HD", channelId: "skysportsf1.uk", title: listing.title, listingDescription: listing.listingDescription,
                                   start: listing.start, end: listing.end, sourceID: listing.sourceID))
         try context.save()

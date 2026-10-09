@@ -331,8 +331,13 @@ struct ContentManagementView: View {
                     isReordering: $isReordering,
                     scrollProxy: proxy,
                     isRestricted: { $0.isRestricted },
-                    onToggleRestricted: { ContentOrganizer.toggleRestricted($0) }
+                    onToggleRestricted: { ContentOrganizer.toggleRestricted($0) },
+                    actions: selectedType == .live ? { AnyView(CategoryEPGEnhancementControl(category: $0)) } : nil
                 )
+            }
+            if selectedType == .live {
+                CategoryEPGEnhancementHelp()
+                    .padding(.horizontal, TVSettingsMetrics.rowHPadding)
             }
         }
     #else
@@ -400,6 +405,7 @@ struct ContentManagementView: View {
                                 onToggleHidden: { ContentOrganizer.toggleHidden(category) },
                                 onToggleRestricted: { ContentOrganizer.toggleRestricted(category) },
                                 onDrillIn: { selectedCategory = $0 },
+                                actions: selectedType == .live ? AnyView(CategoryEPGEnhancementControl(category: category)) : nil,
                                 icon: { EmptyView() }
                             )
                         }
@@ -409,6 +415,7 @@ struct ContentManagementView: View {
                     Text("Categories")
                 } footer: {
                     Text(footerText)
+                    if selectedType == .live { CategoryEPGEnhancementHelp() }
                 }
             }
             #if os(macOS)
@@ -461,6 +468,8 @@ struct ContentManagementView: View {
         /// nil where child-profile restriction doesn't apply: no lock.
         var onToggleRestricted: (() -> Void)?
         var onDrillIn: (Category) -> Void = { _ in }
+        /// Feature actions reuse the same row structure as the TV reorder list.
+        var actions: AnyView?
         /// Drawn before the name — a crest, for a sports follow.
         @ViewBuilder var icon: () -> Icon
 
@@ -488,6 +497,8 @@ struct ContentManagementView: View {
                 .foregroundStyle(isHidden ? Color.lumeTextTertiary : Color.primary)
 
                 Spacer()
+
+                actions
 
                 if let onToggleRestricted {
                     Button(action: onToggleRestricted) {

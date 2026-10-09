@@ -179,7 +179,7 @@ struct EPGProgrammeEnrichmentTests {
     @Test func `expanded UK registry has unique provider IDs and no inferred timeshifts or generic regions`() {
         let stations = EPGEnrichmentStations.ukStations
         #expect(Set(stations.map(\.providerID)).count == stations.count)
-        #expect(Set(stations.map(\.externalID)).count == 119)
+        #expect(Set(stations.map(\.externalID)).count == 143)
         #expect(stations.allSatisfy { !$0.names.isEmpty && !$0.externalID.isEmpty })
         let excluded = ["BBCOne.uk", "itv1.uk", "SkySportsMainEvent.uk", "SkySportsMix.uk"]
         #expect(EPGEnrichmentStations.providerIDs(for: .britain).isDisjoint(with: excluded))

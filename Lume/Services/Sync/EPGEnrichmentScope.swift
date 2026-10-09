@@ -23,11 +23,13 @@ nonisolated struct EPGEnrichmentScope {
             return .init(name: stream.name, epgID: id)
         }
         let live = "live"
-        var categories = FetchDescriptor<Category>(predicate: #Predicate { $0.typeRaw == live && $0.isHidden })
-        categories.propertiesToFetch = [\.id]
-        let hidden = try Set(context.fetch(categories).map(\.id))
+        var categories = FetchDescriptor<Category>(predicate: #Predicate { $0.typeRaw == live })
+        categories.propertiesToFetch = [\.id, \.name, \.typeRaw, \.isHidden, \.epgEnrichmentEnabled]
+        let selected = try Set(context.fetch(categories).filter {
+            EPGEnrichmentCategories.isEligible(name: $0.name, type: $0.typeRaw, hidden: $0.isHidden, override: $0.epgEnrichmentEnabled)
+        }.map(\.id))
         let eligible = Set(streams.compactMap { stream -> String? in
-            guard !stream.isHidden, !hidden.contains(stream.categoryId ?? "") else { return nil }
+            guard !stream.isHidden, let category = stream.categoryId, selected.contains(category) else { return nil }
             return stream.epgChannelId
         })
         return Self(channels: channels, eligible: eligible)

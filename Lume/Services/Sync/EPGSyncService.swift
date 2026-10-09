@@ -93,6 +93,8 @@ final class EPGSyncService {
     /// cancels — rather than a manual "Sync Now", which the viewer asked for.
     @ObservationIgnored private var isBackgroundRefresh = false
     @ObservationIgnored private var gate = EPGRefreshGate()
+    @ObservationIgnored private var enrichmentRefreshOwed = false
+    @ObservationIgnored private var selectionMonitor: EPGEnrichmentSelectionMonitor?
 
     /// Whether the app is in the foreground, set from the scene phase. The
     /// periodic check only runs then.
@@ -113,7 +115,12 @@ final class EPGSyncService {
     private init() {}
 
     func configure(container: ModelContainer) {
-        if self.container !== container { coverageChecks = [:] }
+        if self.container !== container {
+            coverageChecks = [:]
+            selectionMonitor = EPGEnrichmentSelectionMonitor(container: container) { [weak self] in
+                self?.refreshEnrichment()
+            }
+        }
         self.container = container
         updateCommittedRevision()
     }
@@ -127,8 +134,8 @@ final class EPGSyncService {
     /// A metadata setting change must not force another full provider download.
     /// Uses the same task lifetime, admission gate and committed-reader reload.
     func refreshEnrichment() {
-        guard !ContentIndexingService.shared.isPlaybackActive, gate.request() else { return }
-        kick(background: true, metadataOnly: true)
+        enrichmentRefreshOwed = true
+        runOwedRefresh()
     }
 
     /// Background trigger: refreshes only if the guide is stale per the EPG
@@ -141,12 +148,14 @@ final class EPGSyncService {
     /// launch, so the guide ran out of listings and went empty — and a launch
     /// under a profile with Live TV off skipped it with nothing to try again.
     func syncIfDue(reason: String) {
+        if selectionMonitor?.check(notify: false) == true { enrichmentRefreshOwed = true }
         let providerDue = isDue
-        guard providerDue || EPGEnrichmentSettings.isDue() else {
+        guard providerDue || enrichmentRefreshOwed || EPGEnrichmentSettings.isDue() else {
             Logger.database.debug("EPG refresh not due (\(reason, privacy: .public))")
             ensureCoverage(reason: reason)
             return
         }
+        guard !ContentIndexingService.shared.isPlaybackActive else { return }
         guard gate.request() else {
             Logger.database.info("EPG refresh due (\(reason, privacy: .public)) — waiting for a playlist sync")
             return
@@ -171,6 +180,7 @@ final class EPGSyncService {
                 guard let self, !Task.isCancelled else { return }
                 guard isForeground else { continue }
                 clockMinute = Int(Date().timeIntervalSince1970 / 60)
+                if !ContentIndexingService.shared.isPlaybackActive { runOwedRefresh() }
                 if !ContentIndexingService.shared.isPlaybackActive,
                    tickCount % 30 == 0
                 {
@@ -256,8 +266,16 @@ final class EPGSyncService {
 
     private func runOwedRefresh() {
         // `container` first: taking the debt before `configure` would drop it.
-        guard container != nil, task == nil, gate.takeOwedRefresh() else { return }
-        kick(background: true)
+        guard container != nil, task == nil, AppAreaSettings.isEnabled(.liveTV),
+              !ContentIndexingService.shared.isPlaybackActive, !gate.isContentSyncPending
+        else { return }
+        if gate.takeOwedRefresh() {
+            enrichmentRefreshOwed = false
+            kick(background: true)
+        } else if enrichmentRefreshOwed {
+            enrichmentRefreshOwed = false
+            kick(background: true, metadataOnly: true)
+        }
     }
 
     private var isDue: Bool {
@@ -285,6 +303,11 @@ final class EPGSyncService {
         let manager = EPGSyncManager(modelContainer: container)
         let profileToken = ActiveProfileStore.current?.uuidString ?? ""
         let fence = Fence.live
+        selectionMonitor?.check(notify: false)
+        let selectionFingerprint = selectionMonitor?.fingerprint
+        // This pass consumes earlier changes; changes during the await below
+        // remain owed and run once afterward, never alongside this pass.
+        enrichmentRefreshOwed = false
         // Background guide refresh: run below the UI so an in-flight sync (which
         // saves into the shared catalog container, churning browse `@Query`s)
         // yields CPU to the main thread instead of competing with it. The
@@ -301,6 +324,9 @@ final class EPGSyncService {
             if outcome.isSuccessful, !Task.isCancelled, !metadataOnly {
                 EPGSyncSchedule.lastSyncDate = Date()
                 EPGSyncSchedule.schemaVersion = SyncFrequency.epgCurrentSchemaVersion
+            }
+            if outcome.isSuccessful, !Task.isCancelled {
+                selectionMonitor?.published(selectionFingerprint)
             }
             isSyncing = false
             task = nil

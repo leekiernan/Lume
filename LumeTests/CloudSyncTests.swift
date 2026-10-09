@@ -174,6 +174,7 @@ struct CloudSyncConflictPolicyTests {
         #expect(decoded.isFavorite)
         #expect(decoded.isHidden == false)
         #expect(decoded.customOrder == nil)
+        #expect(decoded.epgEnrichmentEnabled == nil)
     }
 }
 

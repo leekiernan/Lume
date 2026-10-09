@@ -23,8 +23,8 @@ struct EPGEnrichmentTrial {
 
     @MainActor static func main() throws {
         let arguments = CommandLine.arguments
-        guard (6 ... 7).contains(arguments.count), let now = ISO8601DateFormatter().date(from: arguments[4]),
-              let feed = EPGEnrichmentFeed.Identifier(rawValue: arguments.count == 7 ? arguments[6] : "us-locals")
+        guard (6 ... 8).contains(arguments.count), let now = ISO8601DateFormatter().date(from: arguments[4]),
+              let feed = EPGEnrichmentFeed.Identifier(rawValue: arguments.count >= 7 ? arguments[6] : "us-locals")
         else {
             throw TrialError.usage
         }
@@ -33,7 +33,22 @@ struct EPGEnrichmentTrial {
             guard let id = stream.epgChannelID else { return nil }
             return .init(name: stream.name, epgID: id)
         }
-        let aliases = EPGEnrichmentStations.aliases(for: channels, feed: feed)
+        var aliases = EPGEnrichmentStations.aliases(for: channels, feed: feed)
+        if arguments.count == 8 {
+            let categories = Set(arguments[7].split(separator: ",").map(String.init))
+            let selected = Set(streams.compactMap { stream -> String? in
+                guard let category = stream.categoryID, categories.contains(category) else { return nil }
+                return stream.epgChannelID
+            })
+            aliases = aliases.compactMapValues {
+                let ids = $0.intersection(selected)
+                return ids.isEmpty ? nil : ids
+            }
+            let mapped = Set(aliases.values.flatMap(\.self))
+            let selection = streams.filter { $0.categoryID.map(categories.contains) == true }
+            print("Category selection: \(selection.count) streams, \(selection.count(where: { $0.epgChannelID.map(mapped.contains) == true })) safely mapped")
+            print("Unmapped: " + selection.filter { $0.epgChannelID.map(mapped.contains) != true }.map(\.name).joined(separator: ", "))
+        }
         let providerIDs = Set(aliases.values.flatMap(\.self))
         let end = now.addingTimeInterval(48 * 3600)
         let provider = try programmes(at: URL(fileURLWithPath: arguments[2]), channelIDs: providerIDs, start: now, end: end)
@@ -100,7 +115,7 @@ struct EPGEnrichmentTrial {
     }
 
     private enum TrialError: Error {
-        case usage // streams.json provider.xml supplement.xml.gz ISO8601-instant report.json [uk|us-locals]
+        case usage // streams.json provider.xml supplement.xml.gz ISO8601-instant report.json [uk|us-locals] [categoryIDs,comma-separated]
         case invalidXMLTV
         case invalidCache
         case changedSchedule
@@ -111,9 +126,11 @@ struct EPGEnrichmentTrial {
 private struct EPGTrialStream: Decodable {
     let name: String
     let epgChannelID: String?
+    let categoryID: String?
 
     enum CodingKeys: String, CodingKey {
         case name
         case epgChannelID = "epg_channel_id"
+        case categoryID = "category_id"
     }
 }

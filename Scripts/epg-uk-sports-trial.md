@@ -1,5 +1,9 @@
 # UK essentials / sports source trial
 
+The later whole-category expansion/control pass is recorded in
+[`_NOTES/epg-category-enhancement.md`](../_NOTES/epg-category-enhancement.md).
+Its measurements replay this capture; they are not additional snapshots.
+
 First paired capture: **2026-10-09 12:50 UTC**. The capture ran outside the app,
 without server or provider-side changes. Its reviewed UK mappings now back the
 opt-in metadata experiment described below.
