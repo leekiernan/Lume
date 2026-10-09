@@ -20,6 +20,7 @@ struct EPGEnrichmentTrial {
         let addedYears: Int
         let addedSynopses: Int
         let onAir: [OnAir]
+        var sports: EPGSportsProgrammeTrial.Report?
         let scheduleUnchanged: Bool
     }
 
@@ -35,7 +36,7 @@ struct EPGEnrichmentTrial {
 
     @MainActor static func main() throws {
         let arguments = CommandLine.arguments
-        guard (6 ... 8).contains(arguments.count), let now = ISO8601DateFormatter().date(from: arguments[4]),
+        guard (6 ... 9).contains(arguments.count), let now = ISO8601DateFormatter().date(from: arguments[4]),
               let feed = EPGEnrichmentFeed.Identifier(rawValue: arguments.count >= 7 ? arguments[6] : "us-locals")
         else {
             throw TrialError.usage
@@ -46,7 +47,7 @@ struct EPGEnrichmentTrial {
             return .init(name: stream.name, epgID: id)
         }
         var aliases = EPGEnrichmentStations.aliases(for: channels, feed: feed)
-        if arguments.count == 8 {
+        if arguments.count >= 8 {
             let categories = Set(arguments[7].split(separator: ",").map(String.init))
             let selected = Set(streams.compactMap { stream -> String? in
                 guard let category = stream.categoryID, categories.contains(category) else { return nil }
@@ -71,7 +72,12 @@ struct EPGEnrichmentTrial {
         let names = streams.reduce(into: [String: Set<String>]()) { result, stream in
             if let id = stream.epgChannelID { result[id, default: []].insert(stream.name) }
         }.mapValues { $0.sorted() }
-        let report = try evaluate(provider, aliases: aliases, now: now, snapshot: snapshot, names: names)
+        var report = try evaluate(provider, aliases: aliases, now: now, snapshot: snapshot, names: names)
+        if arguments.count == 9, feed == .britain {
+            let rawAliases = try JSONDecoder().decode([String: [String]].self, from: Data(contentsOf: URL(fileURLWithPath: arguments[8])))
+            report.sports = EPGSportsProgrammeTrial.evaluate(provider: provider, external: external, aliases: aliases,
+                                                             names: names, teamAliases: SportsTeamAliases(rawEntries: rawAliases))
+        }
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         encoder.dateEncodingStrategy = .iso8601
@@ -146,7 +152,7 @@ struct EPGEnrichmentTrial {
     }
 
     private enum TrialError: Error {
-        case usage // streams.json provider.xml supplement.xml.gz ISO8601-instant report.json [uk|us-locals] [categoryIDs,comma-separated]
+        case usage // streams.json provider.xml supplement.xml.gz ISO8601-instant report.json [uk|us-locals] [categoryIDs,comma-separated] [team-aliases.json]
         case invalidXMLTV
         case invalidCache
         case changedSchedule

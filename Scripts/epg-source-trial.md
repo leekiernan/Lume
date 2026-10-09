@@ -223,16 +223,7 @@ credentials/channel names are never sent to EPGShare. No server/dependencies.
 The Swift trial uses the actual shipping matcher and parser, outside the app:
 
 ```sh
-swiftc -O -swift-version 5 -default-isolation MainActor \
-  Lume/Services/Network/XMLTVDate.swift \
-  Lume/Services/Network/XMLTVParser.swift Lume/Utils/GzipFile.swift \
-  Lume/Models/EPGListing.swift \
-  Lume/Services/Sync/EPGProgrammeEnrichment.swift \
-  Lume/Services/Sync/EPGEnrichmentStations.swift \
-  Lume/Services/Sync/EPGEnrichmentStations+UK.swift \
-  Lume/Services/Sync/EPGEnrichmentCache.swift \
-  Lume/Services/Sync/EPGEnrichmentFeed.swift \
-  Scripts/epg-enrichment-trial.swift -o .build/epg-enrichment-trial
+bash Scripts/build-epg-trial.sh
 .build/epg-enrichment-trial \
   ExampleData/LiveStreams.json ExampleData/epg.xml \
   ExampleData/EPGTrial/2026-10-09/epgshare-us-locals.xml.gz \
@@ -251,8 +242,12 @@ KPBS's provider ID is shared by `US PBS (KPBS) San Diego` and
 both identities are verified, rather than assuming the second stream is
 equivalent. This is conservative rejection, not a missing guide match.
 
-The optional final argument selects a reviewed feed (`uk` or `us-locals`,
-defaulting to PBS). To exercise the **shipping** UK registry and matcher against
+The first optional argument selects a reviewed feed (`uk` or `us-locals`,
+defaulting to PBS); the next optionally limits category IDs. Passing a final
+team-alias JSON path enables an additional **offline-only** sports candidate
+report. See [sports identity trial](epg-sports-identity-trial.md) for its rules,
+regression command and limitations. It never changes publication rules.
+To exercise the **shipping** UK registry and matcher against
 the saved UK capture, using the same compiled executable:
 
 ```sh

@@ -3,6 +3,8 @@
 The later whole-category expansion/control pass is recorded in
 [`_NOTES/epg-category-enhancement.md`](../_NOTES/epg-category-enhancement.md).
 Its measurements replay this capture; they are not additional snapshots.
+The subsequent [sports identity trial](epg-sports-identity-trial.md) evaluates
+deterministic candidate rules separately; none are enabled in the app yet.
 
 First paired capture: **2026-10-09 12:50 UTC**. The capture ran outside the app,
 without server or provider-side changes. Its reviewed UK mappings now back the
