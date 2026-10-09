@@ -136,6 +136,8 @@ nonisolated struct EPGProgramCell: Identifiable, Equatable {
     let listingID: String?
     let isGap: Bool
     let width: CGFloat
+    var artworkURL: String?
+    var subtitle: String?
 
     func isLive(at now: Date) -> Bool {
         !isGap && start <= now && now < end
@@ -278,7 +280,9 @@ enum EPGGridBuilder {
                 end: clampedEnd,
                 listingID: listing.id,
                 isGap: false,
-                width: timeline.width(from: clampedStart, to: clampedEnd)
+                width: timeline.width(from: clampedStart, to: clampedEnd),
+                artworkURL: listing.artworkURL,
+                subtitle: listing.subtitle
             ))
             cursor = clampedEnd
         }

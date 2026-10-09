@@ -161,8 +161,8 @@ struct LiveTVHubView: View {
                 ForEach(programmes) { programme in
                     Button { selectedProgramme = programme } label: {
                         LiveTVHubCard(channel: programme.channel,
-                                      slot: EPGSlot(title: programme.title, start: programme.start, end: programme.end, artworkURL: programme.artworkURL),
-                                      now: now, programmeArtwork: true)
+                                      slot: EPGSlot(title: programme.title, start: programme.start, end: programme.end, artworkURL: programme.artworkURL, subtitle: programme.subtitle),
+                                      now: now)
                     }
                     .liveTVHubCardStyle()
                 }
@@ -179,7 +179,7 @@ struct LiveTVHubView: View {
             guard seen.insert(channel.id).inserted, let slot = slot(for: channel, now: now) else { return nil }
             return LiveTVHubProgramme(id: "\(channel.id)-\(slot.start.timeIntervalSince1970)", channel: channel,
                                       title: slot.title, start: slot.start, end: slot.end, artworkURL: slot.artworkURL,
-                                      overview: "", candidateID: nil, rank: 0)
+                                      overview: "", candidateID: nil, rank: 0, subtitle: slot.subtitle)
         }.prefix(5))
     }
 
@@ -225,7 +225,8 @@ struct LiveTVHubView: View {
             EPGProgramDetailView(stream: stream,
                                  cell: EPGProgramCell(id: programme.id, title: programme.title, detail: programme.overview,
                                                       start: programme.start, end: programme.end,
-                                                      listingID: programme.id, isGap: false, width: 0),
+                                                      listingID: programme.id, isGap: false, width: 0,
+                                                      artworkURL: programme.artworkURL, subtitle: programme.subtitle),
                                  now: .now, onPlay: { onPlay(programme.channel.id, heroScope(for: programme)) }, onPlayCatchup: {
                                      onWatchFromStart(programme.channel.id, EPGSlot(title: programme.title, start: programme.start, end: programme.end))
                                  })

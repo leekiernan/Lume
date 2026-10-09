@@ -20,6 +20,7 @@ nonisolated struct LiveTVHubProgramme: Identifiable, Hashable {
     let overview: String
     let candidateID: String?
     let rank: Int
+    var subtitle: String?
 
     func isLive(at now: Date) -> Bool {
         start <= now && now < end
