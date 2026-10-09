@@ -24,21 +24,24 @@ actor EPGSyncManager {
     let modelContainer: ModelContainer
     private let client: M3UClient
     private let writeCoordinator: LocalStoreWriteCoordinator
+    private let enrichment: EPGEnrichmentSync?
 
     init(
         modelContainer: ModelContainer,
         client: M3UClient = M3UClient(),
-        writeCoordinator: LocalStoreWriteCoordinator = .shared
+        writeCoordinator: LocalStoreWriteCoordinator = .shared,
+        enrichment: EPGEnrichmentSync? = nil
     ) {
         self.modelContainer = modelContainer
         self.client = client
         self.writeCoordinator = writeCoordinator
+        self.enrichment = enrichment
     }
 
     /// One aggregate outcome, including partial failure, rather than a message
     /// per source. No configured guide/channels is a skip, not a failure toast.
     @discardableResult
-    func syncAllSources(allowConditional: Bool = true) async -> SyncRefreshOutcome {
+    func syncAllSources(allowConditional: Bool = true, enrichProgrammes: Bool = false) async -> SyncRefreshOutcome {
         guard !Task.isCancelled else { return .cancelled }
         let sources: [SourceInfo]
         let referencedChannelIDs: Set<String>?
@@ -70,6 +73,10 @@ actor EPGSyncManager {
             unclaimedChannelIDs.subtract(result.claimedChannelIDs)
             everySourceSynced = everySourceSynced && result.didSync
         }
+        return await finishSync(everySourceSynced: everySourceSynced, enrichProgrammes: enrichProgrammes, fence: fence)
+    }
+
+    private func finishSync(everySourceSynced: Bool, enrichProgrammes: Bool, fence: Fence) async -> SyncRefreshOutcome {
         guard !Task.isCancelled else { return .cancelled }
         // Listings created before source-scoped publication have no ownership
         // metadata. Keep that aggregate snapshot whenever any source failed,
@@ -87,6 +94,15 @@ actor EPGSyncManager {
                 Logger.database.warning("EPG legacy snapshot retirement failed: \(error.localizedDescription, privacy: .public)")
                 return .failed
             }
+        }
+        do {
+            let supplement = enrichment ?? EPGEnrichmentSync(client: client, writeCoordinator: writeCoordinator)
+            try await supplement.sync(container: modelContainer, enabled: enrichProgrammes, fence: fence)
+        } catch is CancellationError {
+            return .cancelled
+        } catch {
+            Logger.database.warning("EPG enrichment publication failed: \(error.localizedDescription, privacy: .public)")
+            return .failed
         }
         return everySourceSynced ? .succeeded : .failed
     }

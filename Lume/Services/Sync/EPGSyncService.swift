@@ -123,6 +123,13 @@ final class EPGSyncService {
         kick(allowConditional: false)
     }
 
+    /// A metadata setting change must not force another full provider download.
+    /// Uses the same task lifetime, admission gate and committed-reader reload.
+    func refreshEnrichment() {
+        guard !ContentIndexingService.shared.isPlaybackActive, gate.request() else { return }
+        kick(background: true, metadataOnly: true)
+    }
+
     /// Background trigger: refreshes only if the guide is stale per the EPG
     /// frequency setting — and never alongside a pending playlist sync (see
     /// `EPGRefreshGate`). A deferred refresh runs once the sync is done.
@@ -133,7 +140,8 @@ final class EPGSyncService {
     /// launch, so the guide ran out of listings and went empty — and a launch
     /// under a profile with Live TV off skipped it with nothing to try again.
     func syncIfDue(reason: String) {
-        guard isDue else {
+        let providerDue = isDue
+        guard providerDue || EPGEnrichmentSettings.isDue() else {
             Logger.database.debug("EPG refresh not due (\(reason, privacy: .public))")
             ensureCoverage(reason: reason)
             return
@@ -143,7 +151,9 @@ final class EPGSyncService {
             return
         }
         Logger.database.info("EPG refresh due (\(reason, privacy: .public))")
-        kick(background: true)
+        // Daily metadata does not shorten a weekly provider schedule or stamp
+        // its last-success date without actually checking that provider.
+        kick(background: true, metadataOnly: !providerDue)
     }
 
     /// Ticks the local clock every minute and re-checks the network schedule
@@ -262,7 +272,7 @@ final class EPGSyncService {
         return frequency.isDue(lastSyncDate: EPGSyncSchedule.lastSyncDate)
     }
 
-    private func kick(background: Bool = false, allowConditional: Bool = true) {
+    private func kick(background: Bool = false, allowConditional: Bool = true, metadataOnly: Bool = false) {
         // Sports availability follows the Live TV switch too.
         guard AppAreaSettings.isEnabled(.liveTV) else {
             Logger.database.info("EPG refresh skipped: guide-consuming areas are switched off")
@@ -280,9 +290,25 @@ final class EPGSyncService {
         // lockstep with a frozen main thread right after a playlist sync.
         task = Task(priority: .utility) {
             let outcome = await BackgroundActivity.perform("Guide refresh") {
-                await manager.syncAllSources(allowConditional: allowConditional)
+                if metadataOnly {
+                    do {
+                        try await EPGEnrichmentSync().sync(
+                            container: container, enabled: UserDefaults.standard.bool(forKey: EPGEnrichmentSettings.enabledKey), fence: .live
+                        )
+                        return SyncRefreshOutcome.succeeded
+                    } catch is CancellationError {
+                        return SyncRefreshOutcome.cancelled
+                    } catch {
+                        Logger.database.warning("EPG enrichment publication failed: \(error.localizedDescription, privacy: .public)")
+                        return SyncRefreshOutcome.failed
+                    }
+                }
+                return await manager.syncAllSources(
+                    allowConditional: allowConditional,
+                    enrichProgrammes: UserDefaults.standard.bool(forKey: EPGEnrichmentSettings.enabledKey)
+                )
             }
-            if outcome == .succeeded, !Task.isCancelled {
+            if outcome == .succeeded, !Task.isCancelled, !metadataOnly {
                 EPGSyncSchedule.lastSyncDate = Date()
                 EPGSyncSchedule.schemaVersion = SyncFrequency.epgCurrentSchemaVersion
             }

@@ -5133,6 +5133,58 @@
         }
       }
     },
+    "Adds artwork and programme details for verified US PBS stations without changing your provider's schedule. Uses a large daily guide download." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ergänzt Bilder und Sendungsdetails für überprüfte US-PBS-Sender, ohne den Programmplan deines Anbieters zu ändern. Lädt täglich eine große Programmdatei herunter."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Añade imágenes y detalles de programas de emisoras PBS de EE. UU. verificadas sin cambiar la programación de tu proveedor. Utiliza una descarga diaria de gran tamaño."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajoute des images et des détails sur les programmes de stations PBS américaines vérifiées sans modifier la grille de votre fournisseur. Télécharge un guide volumineux chaque jour."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aggiunge immagini e dettagli dei programmi delle stazioni PBS statunitensi verificate senza modificare la programmazione del tuo fornitore. Scarica ogni giorno una guida di grandi dimensioni."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "検証済みの米国PBS局の番組に画像と詳細を追加します。プロバイダの番組表は変更しません。毎日大容量の番組表をダウンロードします。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "제공업체의 편성표를 변경하지 않고 검증된 미국 PBS 방송국의 프로그램에 이미지와 세부 정보를 추가합니다. 매일 용량이 큰 편성표를 다운로드합니다."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Adiciona imagens e detalhes dos programas de estações PBS dos EUA verificadas sem alterar a programação do fornecedor. Utiliza uma transferência diária de um guia de grande dimensão."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "为已验证的美国 PBS 电视台添加节目图片和详情，不更改提供商的节目表。每天需下载较大的节目表文件。"
+          }
+        }
+      }
+    },
     "Adds the technical readout: quality, codec, frame rate, and playback engine." : {
       "comment" : "Description of the Advanced stream-information detail level.",
       "localizations" : {
@@ -19298,6 +19350,58 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "电视指南URL（可选）"
+          }
+        }
+      }
+    },
+    "EPGShare metadata (experimental)" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "EPGShare-Metadaten (experimentell)"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Metadatos de EPGShare (experimental)"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Métadonnées EPGShare (expérimental)"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Metadati EPGShare (sperimentale)"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "EPGShareのメタデータ（試験運用）"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "EPGShare 메타데이터 (실험적 기능)"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Metadados EPGShare (experimental)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "EPGShare 元数据（实验性）"
           }
         }
       }
