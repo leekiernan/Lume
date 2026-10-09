@@ -165,9 +165,9 @@ nonisolated enum ProfileScopedPreferences {
         for (base, value) in snapshot.strings where supported.contains(base) && !booleanKeys.contains(base) {
             if base == AppAreaSettings.baseDisabledAreasKey {
                 // The cloud snapshot deliberately excludes the device-local
-                // generation. Applying its area value must still invalidate
-                // local work captured before this import.
-                AppAreaSettings.persist(disabledRaw: value, profileID: profileID, defaults: defaults)
+                // generation. Invalidate work for a changed area value, not a
+                // replay of the same cloud snapshot during a long download.
+                AppAreaSettings.persist(disabledRaw: value, profileID: profileID, defaults: defaults, onlyIfChanged: true)
             } else {
                 defaults.set(value, forKey: key(base, profileID: profileID))
             }

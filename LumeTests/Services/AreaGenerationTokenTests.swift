@@ -115,6 +115,19 @@ struct AreaGenerationTokenTests {
         #expect(AppAreaSettings.areaGenerationKey(profileID: nil) == "nav.areaGeneration.v1")
     }
 
+    @Test func `replaying a cloud snapshot does not supersede current work`() {
+        withDefaults { defaults in
+            let snapshot = ProfilePreferencesSnapshot(strings: [AppAreaSettings.baseDisabledAreasKey: "movies"], booleans: [:])
+            ProfileScopedPreferences.apply(snapshot, profileID: Self.profile, defaults: defaults)
+            let captured = AppAreaSettings.areaState(profileID: Self.profile, defaults: defaults)
+            ProfileScopedPreferences.apply(snapshot, profileID: Self.profile, defaults: defaults)
+            #expect(AppAreaSettings.areaState(profileID: Self.profile, defaults: defaults) == captured)
+            let changed = ProfilePreferencesSnapshot(strings: [AppAreaSettings.baseDisabledAreasKey: "liveTV"], booleans: [:])
+            ProfileScopedPreferences.apply(changed, profileID: Self.profile, defaults: defaults)
+            #expect(AppAreaSettings.areaState(profileID: Self.profile, defaults: defaults).generation == captured.generation.bumped())
+        }
+    }
+
     /// A stored value larger than `Int64.max` has to survive the round trip —
     /// which is why the generation is stored as a string rather than going
     /// through `UserDefaults`' integer accessors.

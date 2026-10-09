@@ -273,7 +273,7 @@ final class EPGSyncService {
         return frequency.isDue(lastSyncDate: EPGSyncSchedule.lastSyncDate)
     }
 
-    private func kick(background: Bool = false, allowConditional: Bool = true, metadataOnly: Bool = false) {
+    private func kick(background: Bool = false, allowConditional: Bool = true, metadataOnly: Bool = false, retrySuperseded: Bool = true) {
         // Sports availability follows the Live TV switch too.
         guard AppAreaSettings.isEnabled(.liveTV) else {
             Logger.database.info("EPG refresh skipped: guide-consuming areas are switched off")
@@ -284,34 +284,20 @@ final class EPGSyncService {
         isBackgroundRefresh = background
         let manager = EPGSyncManager(modelContainer: container)
         let profileToken = ActiveProfileStore.current?.uuidString ?? ""
+        let fence = Fence.live
         // Background guide refresh: run below the UI so an in-flight sync (which
         // saves into the shared catalog container, churning browse `@Query`s)
         // yields CPU to the main thread instead of competing with it. The
         // profile showed EPG ingest pegging a background thread at 100% in
         // lockstep with a frozen main thread right after a playlist sync.
         task = Task(priority: .utility) {
-            var report: EPGEnrichmentReport?
-            let outcome = await BackgroundActivity.perform("Guide refresh") {
-                if metadataOnly {
-                    do {
-                        report = try await EPGEnrichmentSync().sync(
-                            container: container, enabled: UserDefaults.standard.bool(forKey: EPGEnrichmentSettings.enabledKey), fence: .live
-                        )
-                        return report?.hasWarning == true ? SyncRefreshOutcome.succeededWithWarnings : .succeeded
-                    } catch is CancellationError {
-                        return SyncRefreshOutcome.cancelled
-                    } catch {
-                        Logger.database.warning("EPG enrichment publication failed: \(error.localizedDescription, privacy: .public)")
-                        return SyncRefreshOutcome.failed
-                    }
-                }
-                let result = await manager.syncAllSources(
-                    allowConditional: allowConditional,
-                    enrichProgrammes: UserDefaults.standard.bool(forKey: EPGEnrichmentSettings.enabledKey)
-                )
-                report = await manager.enrichmentReport
-                return result
+            let result = await BackgroundActivity.perform("Guide refresh") {
+                await refresh(container: container, manager: manager, metadataOnly: metadataOnly, allowConditional: allowConditional, fence: fence)
             }
+            let report = result.report
+            let superseded = result.superseded || fence != Fence.live
+            var outcome = result.outcome
+            if superseded { outcome = .cancelled }
             if outcome.isSuccessful, !Task.isCancelled, !metadataOnly {
                 EPGSyncSchedule.lastSyncDate = Date()
                 EPGSyncSchedule.schemaVersion = SyncFrequency.epgCurrentSchemaVersion
@@ -326,9 +312,43 @@ final class EPGSyncService {
                 detail: report?.state == .disabled ? nil : report?.message
             )
             Logger.database.info("EPG refresh finished (outcome: \(String(describing: outcome), privacy: .public))")
+            if superseded {
+                Logger.database.info("EPG publication superseded by profile/area changes; cached metadata retained for retry")
+                // Start new work under the current profile, never relax the old
+                // job's fence. One immediate retry avoids an invalidation loop;
+                // persistent publication debt covers later scheduled attempts.
+                if retrySuperseded, !Task.isCancelled, !ContentIndexingService.shared.isPlaybackActive, gate.request() {
+                    kick(background: true, allowConditional: allowConditional, metadataOnly: metadataOnly, retrySuperseded: false)
+                }
+            }
             // A refresh cancelled for a content sync may wind down after that
             // sync already finished and found this task still set.
             runOwedRefresh()
+        }
+    }
+
+    private struct RefreshResult {
+        var outcome: SyncRefreshOutcome
+        var report: EPGEnrichmentReport?
+        var superseded = false
+    }
+
+    private func refresh(container: ModelContainer, manager: EPGSyncManager, metadataOnly: Bool, allowConditional: Bool, fence: Fence) async -> RefreshResult {
+        let enabled = UserDefaults.standard.bool(forKey: EPGEnrichmentSettings.enabledKey)
+        guard metadataOnly else {
+            let outcome = await manager.syncAllSources(allowConditional: allowConditional, enrichProgrammes: enabled)
+            return await RefreshResult(outcome: outcome, report: manager.enrichmentReport)
+        }
+        do {
+            let report = try await EPGEnrichmentSync().sync(container: container, enabled: enabled, fence: fence)
+            return RefreshResult(outcome: report.hasWarning ? .succeededWithWarnings : .succeeded, report: report)
+        } catch is CancellationError {
+            return RefreshResult(outcome: .cancelled)
+        } catch LocalStoreWriteError.superseded {
+            return RefreshResult(outcome: .cancelled, superseded: true)
+        } catch {
+            Logger.database.warning("EPG enrichment publication failed: \(error.localizedDescription, privacy: .public)")
+            return RefreshResult(outcome: .failed)
         }
     }
 

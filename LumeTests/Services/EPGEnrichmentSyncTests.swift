@@ -33,7 +33,10 @@ struct EPGEnrichmentSyncTests {
         }
 
         func cleanup() {
-            for key in [EPGEnrichmentSettings.enabledKey, EPGEnrichmentSettings.checkedKey, EPGEnrichmentSettings.failedKey, "lume.epgEnrichment.attempted"] {
+            for key in [
+                EPGEnrichmentSettings.enabledKey, EPGEnrichmentSettings.checkedKey, EPGEnrichmentSettings.failedKey,
+                EPGEnrichmentSettings.publicationPendingKey, "lume.epgEnrichment.attempted"
+            ] {
                 defaults.removeObject(forKey: key)
             }
             try? FileManager.default.removeItem(at: directory)
@@ -183,6 +186,45 @@ struct EPGEnrichmentSyncTests {
         #expect(report.state == .unsupported)
         #expect(!report.hasWarning)
         #expect(requests.withLock { $0 } == 0)
+    }
+
+    @Test func `superseded publication retries from cache without another download`() async throws {
+        let downloads = Mutex(0)
+        let server = try GuideHTTPServer { _ in
+            downloads.withLock { $0 += 1 }
+            return .init(body: Fixture.document(channel: "KQED-DT.us_locals1", artwork: "https://example.com/art.jpg"))
+        }
+        defer { server.stop() }
+        let url = try await server.start()
+        let fixture = try Fixture(providerURL: url)
+        defer { fixture.cleanup() }
+        let context = ModelContext(fixture.container)
+        let sourceID = try #require(try context.fetch(FetchDescriptor<EPGSource>()).first).id
+        context.insert(EPGListing(id: "current", channelId: "PBSKQED.us", title: "Secrets of the Dead", listingDescription: "Provider", start: fixture.start, end: fixture.end, sourceID: sourceID))
+        try context.save()
+        let reject = Mutex(true)
+        let live = Fence.live
+        var changed = live
+        changed.profile = UUID()
+        let stale = changed
+        let coordinator = LocalStoreWriteCoordinator(currentFence: { reject.withLock { $0 } ? stale : live })
+        let sync = fixture.supplement(url: url, coordinator: coordinator)
+        await #expect(throws: LocalStoreWriteError.superseded) {
+            try await sync.sync(container: fixture.container, enabled: true, fence: live)
+        }
+        #expect(EPGEnrichmentCache.read(from: fixture.cacheURL) != nil)
+        #expect(fixture.defaults.double(forKey: EPGEnrichmentSettings.checkedKey) == 0)
+        #expect(fixture.defaults.double(forKey: EPGEnrichmentSettings.failedKey) == 0)
+        #expect(EPGEnrichmentSettings.isDue(defaults: fixture.defaults))
+        #expect(try fixture.row().artworkURL == nil)
+        reject.withLock { $0 = false }
+        let report = try await sync.sync(container: fixture.container, enabled: true, fence: live)
+        #expect(report.state == .cached)
+        #expect(report.changedProgrammes == 1)
+        #expect(try fixture.row().artworkURL != nil)
+        #expect(!EPGEnrichmentSettings.isDue(defaults: fixture.defaults))
+        #expect(!fixture.defaults.bool(forKey: EPGEnrichmentSettings.publicationPendingKey))
+        #expect(downloads.withLock { $0 } == 1)
     }
 
     @Test func `new cache metadata is applied on a provider 304 without changing its schedule`() async throws {

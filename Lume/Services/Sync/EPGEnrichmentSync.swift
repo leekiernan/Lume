@@ -37,14 +37,20 @@ actor EPGEnrichmentSync {
             if aliases.isEmpty {
                 report = EPGEnrichmentReport(state: .unsupported)
                 // Unsupported/event-only catalogs never download the feed.
-                defaults.set(now.timeIntervalSince1970, forKey: EPGEnrichmentSettings.checkedKey)
             } else {
                 let loaded = try await load(channelIDs: Set(aliases.keys), now: now)
                 snapshot = loaded.snapshot
                 report = loaded.report
             }
         }
+        // Download freshness is not publication success. Keep this debt across
+        // a stale fence, cancellation or relaunch, even with a fresh cache.
+        if enabled { defaults.set(true, forKey: EPGEnrichmentSettings.publicationPendingKey) }
         let publication = try await publish(snapshot, container: container, enabled: enabled, fence: fence, now: now)
+        defaults.removeObject(forKey: EPGEnrichmentSettings.publicationPendingKey)
+        if enabled, !report.hasWarning {
+            defaults.set((snapshot?.checkedAt ?? now).timeIntervalSince1970, forKey: EPGEnrichmentSettings.checkedKey)
+        }
         report.verifiedStations = publication.stations
         report.matchedProgrammes = publication.matched
         report.changedProgrammes = publication.changed
@@ -95,7 +101,6 @@ actor EPGEnrichmentSync {
             }
             try Task.checkCancellation()
             try snapshot.write(to: cacheURL)
-            defaults.set(now.timeIntervalSince1970, forKey: EPGEnrichmentSettings.checkedKey)
             defaults.removeObject(forKey: EPGEnrichmentSettings.failedKey)
             Logger.database.info("EPG enrichment cached: \(snapshot.programmes.count) programmes, \(channelIDs.count) verified stations")
             return LoadResult(snapshot: snapshot, state: state)

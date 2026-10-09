@@ -119,6 +119,15 @@ is intentionally ignored so upgrading also removes that accidental suppression.
 Regression tests cancel an in-flight HTTP metadata request, retain the provider
 guide, then immediately retry successfully after a provider HTTP 304.
 
+Cache download and catalog publication are separate checkpoints. Only a
+successful publication advances the scheduling check; unpublished metadata
+remains due across relaunches and reuses the fresh cache. The earlier pre-save
+check preference is ignored on upgrade, so an already downloaded but rejected
+snapshot gets another publication attempt without another country-guide fetch.
+Unchanged cloud area imports no longer invalidate work. Real profile/area
+changes still reject the old write; the service makes at most one immediate
+retry under a new fence, subject to the normal playback/content-sync gates.
+
 Automatic checks run while Lume is active, with limited system time to finish
 when backgrounded; this is not a guaranteed closed-app daily background job.
 

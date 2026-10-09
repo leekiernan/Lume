@@ -92,6 +92,8 @@ actor EPGSyncManager {
                 try await retireLegacySnapshot(fence: fence)
             } catch is CancellationError {
                 return .cancelled
+            } catch LocalStoreWriteError.superseded {
+                return .cancelled
             } catch {
                 Logger.database.warning("EPG legacy snapshot retirement failed: \(error.localizedDescription, privacy: .public)")
                 return .failed
@@ -101,6 +103,8 @@ actor EPGSyncManager {
             let supplement = enrichment ?? EPGEnrichmentSync(client: client, writeCoordinator: writeCoordinator)
             enrichmentReport = try await supplement.sync(container: modelContainer, enabled: enrichProgrammes, fence: fence)
         } catch is CancellationError {
+            return .cancelled
+        } catch LocalStoreWriteError.superseded {
             return .cancelled
         } catch {
             Logger.database.warning("EPG enrichment publication failed: \(error.localizedDescription, privacy: .public)")

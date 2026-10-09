@@ -2,7 +2,10 @@ import Foundation
 
 nonisolated enum EPGEnrichmentSettings {
     static let enabledKey = "lume.epgEnrichment.enabled"
-    static let checkedKey = "lume.epgEnrichment.checked"
+    // Earlier builds stamped `checked` before publication. A new key makes
+    // those installs publish their existing fresh cache once, without a fetch.
+    static let checkedKey = "lume.epgEnrichment.publishedCheck"
+    static let publicationPendingKey = "lume.epgEnrichment.publicationPending"
     // Only actual failures impose backoff. Older builds recorded all attempts,
     // including cancellations; intentionally do not reuse that preference.
     static let failedKey = "lume.epgEnrichment.failed"
@@ -15,7 +18,7 @@ nonisolated enum EPGEnrichmentSettings {
         let failed = defaults.double(forKey: failedKey)
         let stale = checked <= 0 || now.timeIntervalSince1970 < checked || now.timeIntervalSince1970 - checked >= refreshInterval
         let mayAttempt = failed <= 0 || now.timeIntervalSince1970 < failed || now.timeIntervalSince1970 - failed >= retryInterval
-        return stale && mayAttempt
+        return (stale || defaults.bool(forKey: publicationPendingKey)) && mayAttempt
     }
 }
 

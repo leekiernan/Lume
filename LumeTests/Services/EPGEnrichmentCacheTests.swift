@@ -3,6 +3,21 @@ import Foundation
 import Testing
 
 struct EPGEnrichmentCacheTests {
+    @Test func `unpublished fresh metadata stays due until committed`() throws {
+        let name = "EPGEnrichmentCacheTests-\(UUID())"
+        let defaults = try #require(UserDefaults(suiteName: name))
+        defer { defaults.removePersistentDomain(forName: name) }
+        defaults.set(true, forKey: EPGEnrichmentSettings.enabledKey)
+        defaults.set(Date().timeIntervalSince1970, forKey: "lume.epgEnrichment.checked")
+        #expect(EPGEnrichmentSettings.isDue(defaults: defaults))
+        defaults.set(Date().timeIntervalSince1970, forKey: EPGEnrichmentSettings.checkedKey)
+        #expect(!EPGEnrichmentSettings.isDue(defaults: defaults))
+        defaults.set(true, forKey: EPGEnrichmentSettings.publicationPendingKey)
+        #expect(EPGEnrichmentSettings.isDue(defaults: defaults))
+        defaults.set(Date().timeIntervalSince1970, forKey: EPGEnrichmentSettings.failedKey)
+        #expect(!EPGEnrichmentSettings.isDue(defaults: defaults))
+    }
+
     @Test(arguments: [EPGEnrichmentReport.State.unavailable, .deferred])
     func `unavailable and backed off metadata are warnings`(_ state: EPGEnrichmentReport.State) {
         #expect(EPGEnrichmentReport(state: state).hasWarning)
