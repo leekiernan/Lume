@@ -72,16 +72,37 @@ nonisolated struct EPGEnrichmentFeedLoader {
         var programmes: [ParsedProgramme] = []
         let end = now.addingTimeInterval(4 * 24 * 3600)
         let start = now.addingTimeInterval(-2 * 3600)
-        var exceededLimit = false
+        var trimmed = false
         let outcome = XMLTVParser.parse(fileURL: file, channelIDs: channelIDs) { batch in
             for programme in batch where programme.end > start && programme.start < end && programme.end > programme.start {
-                guard programmes.count < EPGEnrichmentCache.maximumProgrammes else { exceededLimit = true; continue }
                 programmes.append(programme)
+                // Bound memory while parsing; the nearest programmes always survive.
+                if programmes.count >= 2 * EPGEnrichmentCache.maximumProgrammes {
+                    Self.keepNearest(&programmes)
+                    trimmed = true
+                }
             }
         }
         try Task.checkCancellation()
-        guard outcome.succeeded, !exceededLimit, programmes.contains(where: { $0.end > now }) else { throw LoadError.invalidDocument }
+        if programmes.count > EPGEnrichmentCache.maximumProgrammes {
+            Self.keepNearest(&programmes)
+            trimmed = true
+        }
+        if trimmed {
+            // A large selection is a valid document, not a failure: rejecting it
+            // would re-download the whole feed on every hourly retry.
+            Logger.database.notice("EPG enrichment [\(feed.id.rawValue, privacy: .public)] kept the nearest \(programmes.count) programmes of a larger selection")
+        }
+        guard outcome.succeeded, programmes.contains(where: { $0.end > now }) else { throw LoadError.invalidDocument }
         return EPGEnrichmentCache(url: feed.url.absoluteString, checkedAt: now, channelIDs: channelIDs, programmes: programmes, lastModified: lastModified, entityTag: entityTag)
+    }
+
+    /// Keeps the cache's bound of programmes starting soonest: the window
+    /// begins two hours back, so these are the ones a guide shows first.
+    static func keepNearest(_ programmes: inout [ParsedProgramme]) {
+        guard programmes.count > EPGEnrichmentCache.maximumProgrammes else { return }
+        programmes.sort { $0.start < $1.start }
+        programmes.removeSubrange(EPGEnrichmentCache.maximumProgrammes...)
     }
 
     private enum LoadError: Error { case invalidDocument, insufficientStorage }

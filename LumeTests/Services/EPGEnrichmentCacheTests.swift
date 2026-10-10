@@ -27,6 +27,21 @@ struct EPGEnrichmentCacheTests {
         #expect(!oversized.isUsable(url: cache.url, now: now))
     }
 
+    @Test func `an oversized selection keeps the nearest programmes rather than failing`() {
+        let now = Date()
+        let maximum = EPGEnrichmentCache.maximumProgrammes
+        // Parse order is by channel, not time: the latest programmes come first.
+        var programmes = (0 ..< maximum + 500).reversed().map { offset in
+            ParsedProgramme(channelId: "station", title: "P\(offset)", subtitle: nil, description: "", categories: [],
+                            start: now.addingTimeInterval(Double(offset) * 60), end: now.addingTimeInterval(Double(offset) * 60 + 60))
+        }
+        EPGEnrichmentFeedLoader.keepNearest(&programmes)
+        #expect(programmes.count == maximum)
+        #expect(programmes.first?.title == "P0" && programmes.last?.title == "P\(maximum - 1)")
+        let cache = EPGEnrichmentCache(url: "guide", checkedAt: now, channelIDs: ["station"], programmes: programmes, lastModified: nil, entityTag: nil)
+        #expect(cache.isUsable(url: cache.url, now: now))
+    }
+
     @Test func `new country and independent country cadences are checked even with a fresh PBS publication`() throws {
         let name = "EPGEnrichmentCacheTests-\(UUID())"
         let defaults = try #require(UserDefaults(suiteName: name))
