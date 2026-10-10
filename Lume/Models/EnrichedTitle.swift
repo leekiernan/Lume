@@ -4,6 +4,9 @@ import SwiftData
 /// Common scalar/BLOB metadata only. Full-detail cast replacement and
 /// provider-specific ratings, runtime and collection fields remain explicit.
 nonisolated protocol EnrichedTitle: PersistentModel {
+    var id: String { get }
+    var tmdbId: Int? { get set }
+    var proxyMetadataData: Data? { get set }
     var backdropPath: String? { get set }
     var posterPath: String? { get set }
     var posterCheckedAt: Date? { get set }
@@ -56,7 +59,7 @@ nonisolated extension EnrichedTitle {
     func applyCommonArtwork(_ details: TMDBTitleDetails) {
         backdropPath = details.backdropPath ?? backdropPath
         posterPath = details.posterPath ?? posterPath
-        posterCheckedAt = Date()
+        posterCheckedAt = details.proxyReceipt?.artworkAt ?? Date()
         logoPath = details.logoPath ?? logoPath
         tagline = details.tagline ?? tagline
         contentRating = details.contentRating ?? contentRating
@@ -65,7 +68,8 @@ nonisolated extension EnrichedTitle {
         trailers = details.videos
         if (plot ?? "").isEmpty, let overview = details.overview { plot = overview }
         if !details.genreNames.isEmpty { genre = details.genreNames.joined(separator: ", ") }
-        tmdbArtworkEnrichedAt = Date()
+        tmdbArtworkEnrichedAt = details.proxyReceipt?.artworkAt ?? Date()
+        recordProxyReceipt(details.proxyReceipt, fullDetails: false)
     }
 
     /// Keep the existing storage-clear contract: posters/provider fields stay;
@@ -85,5 +89,6 @@ nonisolated extension EnrichedTitle {
         imdbId = nil
         externalRatingsData = nil
         ratingsEnrichedAt = nil
+        proxyMetadataData = nil
     }
 }

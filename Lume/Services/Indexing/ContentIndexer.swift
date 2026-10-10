@@ -215,7 +215,7 @@ actor ContentIndexer {
     ///
     /// `indexedAt` is cleared alongside `embeddingData` because it is the "this
     /// title is done" marker `fetchPending` reads; `tmdbId` and the enrichment
-    /// stamp are deliberately left in place, so the rebuild costs no TMDB
+    /// stamp are deliberately left in place, so fresh metadata costs no TMDB
     /// traffic — `resolve` short-circuits on both and the items flow straight
     /// through to `write`.
     private func dropStaleEmbeddings() throws {
@@ -257,33 +257,6 @@ actor ContentIndexer {
 
     // MARK: - Chunk processing
 
-    /// What a title is, and the few fields the TMDB lookup needs — copied out of
-    /// SwiftData as plain values so the network phase never touches a managed
-    /// object. `title`/`year` are the cleaned search query; they also seed the
-    /// embedding document.
-    private enum ItemKind { case movie, series }
-
-    private struct PendingItem {
-        let kind: ItemKind
-        let id: String
-        let title: String
-        let year: Int?
-        let existingTMDBId: Int?
-        let needsEnrichment: Bool
-    }
-
-    /// The TMDB data resolved for a pending item, ready to write back.
-    private struct IndexResult {
-        let item: PendingItem
-        let resolvedTMDBId: Int?
-        let details: TMDBTitleDetails?
-        /// Whether resolving actually issued a TMDB request. False when the id
-        /// and enrichment were already stored, which is the whole of a re-embed
-        /// pass (see `resetEmbeddingsIfSpaceChanged`) — `itemPause` exists to
-        /// rate-limit TMDB, so an item that never touched it shouldn't wait.
-        let usedNetwork: Bool
-    }
-
     /// Indexes up to `chunkSize` pending titles (movies first, then series).
     /// Returns the number processed; 0 means the index is complete.
     ///
@@ -304,10 +277,11 @@ actor ContentIndexer {
         // fault against the store across a suspension point.
         var resolved: [IndexResult] = []
         var failure: Error?
+        let prefetched = try await prefetchMetadata(pending)
         for item in pending {
             do {
                 try Task.checkCancellation()
-                let result = try await resolve(item)
+                let result = try await resolve(item, prefetched: prefetched[item.id])
                 resolved.append(result)
                 if result.usedNetwork {
                     try await Task.sleep(for: itemPause)
@@ -376,7 +350,8 @@ actor ContentIndexer {
                 title: query.title,
                 year: ContentIndexText.year(fromReleaseDate: movie.releaseDate) ?? query.year,
                 existingTMDBId: movie.tmdbId,
-                needsEnrichment: movie.tmdbEnrichedAt == nil
+                needsEnrichment: !movie.hasFreshTMDBArtwork(in: context, language: tmdbClient.language),
+                source: LumeProxySource.snapshot(contentID: movie.id, in: context)
             )
         }
 
@@ -392,49 +367,13 @@ actor ContentIndexer {
                     title: query.title,
                     year: ContentIndexText.year(fromReleaseDate: item.releaseDate) ?? query.year,
                     existingTMDBId: item.tmdbId,
-                    needsEnrichment: item.tmdbEnrichedAt == nil
+                    needsEnrichment: !item.hasFreshTMDBArtwork(in: context, language: tmdbClient.language),
+                    source: LumeProxySource.snapshot(contentID: item.id, in: context)
                 )
             }
         }
 
         return items
-    }
-
-    /// Resolves an item's TMDB id (searching when absent) and detail payload
-    /// (when not yet enriched) over the network, working only on values.
-    private func resolve(_ item: PendingItem) async throws -> IndexResult {
-        guard tmdbClient.isConfigured else {
-            return IndexResult(
-                item: item, resolvedTMDBId: item.existingTMDBId, details: nil, usedNetwork: false
-            )
-        }
-
-        var usedNetwork = false
-        var tmdbId = item.existingTMDBId
-        if tmdbId == nil {
-            usedNetwork = true
-            tmdbId = try await skippingPermanentFailures {
-                switch item.kind {
-                case .movie: try await self.searchMovieID(query: item.title, year: item.year)
-                case .series: try await self.searchTVID(query: item.title, year: item.year)
-                }
-            }
-        }
-
-        var details: TMDBTitleDetails?
-        if item.needsEnrichment, let tmdbId {
-            usedNetwork = true
-            details = try await skippingPermanentFailures {
-                switch item.kind {
-                case .movie: try await self.tmdbClient.movieDetails(tmdbId)
-                case .series: try await self.tmdbClient.tvDetails(tmdbId)
-                }
-            }
-        }
-
-        return IndexResult(
-            item: item, resolvedTMDBId: tmdbId, details: details, usedNetwork: usedNetwork
-        )
     }
 
     /// Re-fetches the title on the write context and applies the resolved TMDB
@@ -467,6 +406,7 @@ actor ContentIndexer {
         var descriptor = FetchDescriptor<Movie>(predicate: #Predicate { $0.id == id })
         descriptor.fetchLimit = 1
         guard let movie = try? context.fetch(descriptor).first else { return }
+        guard canApply(result, to: movie, in: context) else { return }
         if let categoryId = movie.categoryId, hiddenCategoryIDs.contains(categoryId) {
             return
         }
@@ -504,6 +444,7 @@ actor ContentIndexer {
         var descriptor = FetchDescriptor<Series>(predicate: #Predicate { $0.id == id })
         descriptor.fetchLimit = 1
         guard let series = try? context.fetch(descriptor).first else { return }
+        guard canApply(result, to: series, in: context) else { return }
         if let categoryId = series.categoryId, hiddenCategoryIDs.contains(categoryId) {
             return
         }

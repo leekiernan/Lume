@@ -1,6 +1,7 @@
 import CryptoKit
 import Foundation
 import OSLog
+import SwiftData
 
 /// Availability only. Even a supported metadata endpoint cannot certify that
 /// a title's details/artwork/ratings have been applied to the local catalogue.
@@ -30,31 +31,52 @@ nonisolated struct LumeProxyCapabilities: Decodable, Equatable {
 nonisolated struct LumeProxyMetadataCapability: Decodable, Equatable {
     let version: Int
     let maxBatchSize: Int
+    let languages: [String]?
 
     enum CodingKeys: String, CodingKey {
         case version = "v"
         case maxBatchSize = "max_batch_size"
+        case languages
     }
 }
 
 /// A value snapshot: no managed Playlist crosses a capability request's await.
 /// The hash scopes the account/path/query without storing secrets in cache keys.
-nonisolated struct LumeProxySource {
+nonisolated struct LumeProxySource: Hashable {
     let playlistID: UUID
     let capabilitiesURL: URL
     let identity: String
 
     init?(playlist: Playlist) {
-        guard let url = XtreamClient.lumeCapabilitiesURL(for: playlist),
+        guard playlist.sourceType == .xtream, let url = XtreamClient.lumeCapabilitiesURL(for: playlist),
               ["http", "https"].contains(url.scheme?.lowercased() ?? ""), url.host != nil else { return nil }
         playlistID = playlist.id
         capabilitiesURL = url
         identity = SHA256.hash(data: Data(url.absoluteString.utf8)).map { String(format: "%02x", $0) }.joined()
     }
+
+    static func snapshot(contentID: String, in context: ModelContext) -> Self? {
+        guard let playlist = PlaylistOwner.playlist(forPrefixedID: contentID, in: context) else { return nil }
+        return Self(playlist: playlist)
+    }
+
+    func metadataURL(type: LumeMetadataKind, ids: [Int], language: String) -> URL? {
+        guard var components = URLComponents(url: capabilitiesURL, resolvingAgainstBaseURL: false),
+              components.percentEncodedPath.hasSuffix("/capabilities") else { return nil }
+        components.percentEncodedPath.removeLast("capabilities".count)
+        components.percentEncodedPath += "metadata"
+        let existing = components.queryItems ?? []
+        components.queryItems = existing + [
+            URLQueryItem(name: "type", value: type.rawValue),
+            URLQueryItem(name: "ids", value: ids.map(String.init).joined(separator: ",")),
+            URLQueryItem(name: "language", value: language)
+        ]
+        return components.url
+    }
 }
 
 /// Small, process-local negotiation cache shared by sync and future metadata
-/// readers. Only this probe is wired up yet; no device lookup is suppressed.
+/// readers. A capability never substitutes for a complete metadata payload.
 actor LumeProxyCapabilityStore {
     static let shared = LumeProxyCapabilityStore()
 

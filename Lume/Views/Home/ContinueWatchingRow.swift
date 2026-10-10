@@ -152,12 +152,12 @@ struct ContinueWatchingArtworkRequest {
         switch item {
         case let .movie(movie):
             guard let tmdbId = movie.tmdbId,
-                  Self.needsArtwork(movie.backdropPath, movie.logoPath, enrichedAt: movie.tmdbArtworkEnrichedAt ?? movie.tmdbEnrichedAt)
+                  Self.needsArtwork(movie.backdropPath, movie.logoPath, enrichedAt: movie.effectiveTMDBArtworkDate)
             else { return nil }
             self.init(id: item.id, modelID: movie.id, tmdbId: tmdbId, kind: .movie)
         case let .series(show):
             guard let tmdbId = show.tmdbId,
-                  Self.needsArtwork(show.backdropPath, show.logoPath, enrichedAt: show.tmdbArtworkEnrichedAt ?? show.tmdbEnrichedAt)
+                  Self.needsArtwork(show.backdropPath, show.logoPath, enrichedAt: show.effectiveTMDBArtworkDate)
             else { return nil }
             self.init(id: item.id, modelID: show.id, tmdbId: tmdbId, kind: .series)
         case .live:

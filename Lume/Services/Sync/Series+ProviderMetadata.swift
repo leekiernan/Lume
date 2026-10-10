@@ -22,6 +22,10 @@ nonisolated extension Series {
     /// Neither response may erase metadata through absent/blank fields. Names,
     /// ordering, categories and episode-cache invalidation remain catalogue-owned.
     func applyProviderMetadata(_ metadata: some XtreamSeriesMetadata, fillMissing: Bool) {
+        let covered = proxyMetadataData == nil ? nil : proxyCoveredFields
+        defer {
+            if let covered, covered != proxyCoveredFields { invalidateProxyMetadata() }
+        }
         applyProviderField(metadata.cover, to: \.cover, fillMissing: fillMissing)
         applyProviderField(metadata.plot, to: \.plot, fillMissing: fillMissing)
         applyProviderField(metadata.cast, to: \.cast, fillMissing: fillMissing)

@@ -7,17 +7,20 @@ extension ContentSyncManager {
     /// Fetches TMDB movie details without persisting. The caller applies
     /// the data directly to its own context to avoid cross-context merge
     /// timing issues.
-    func fetchTMDBMovieDetails(tmdbId: Int) async throws -> TMDBTitleDetails? {
-        let client = TMDBClient.shared
-        guard client.isConfigured else { return nil }
-        return try await client.movieDetails(tmdbId)
+    func fetchTMDBMovieDetails(tmdbId: Int, contentID: String? = nil) async throws -> TMDBTitleDetails? {
+        let source = metadataSource(contentID: contentID)
+        return try await LumeTitleMetadataRouter().details(id: tmdbId, type: .movie, source: source)
     }
 
     /// Fetches TMDB TV series details without persisting.
-    func fetchTMDBTVDetails(tmdbId: Int) async throws -> TMDBTitleDetails? {
-        let client = TMDBClient.shared
-        guard client.isConfigured else { return nil }
-        return try await client.tvDetails(tmdbId)
+    func fetchTMDBTVDetails(tmdbId: Int, contentID: String? = nil) async throws -> TMDBTitleDetails? {
+        let source = metadataSource(contentID: contentID)
+        return try await LumeTitleMetadataRouter().details(id: tmdbId, type: .series, source: source)
+    }
+
+    private func metadataSource(contentID: String?) -> LumeProxySource? {
+        guard let contentID else { return nil }
+        return LumeProxySource.snapshot(contentID: contentID, in: ModelContext(modelContainer))
     }
 
     /// Background scalar enrichment for heroes/rails. Cast relationships remain
@@ -25,29 +28,33 @@ extension ContentSyncManager {
     /// even when the view context has not merged the background save yet.
     @discardableResult
     func enrichMovieArtwork(id: String, tmdbId: Int) async -> TMDBTitleDetails? {
-        guard let details = try? await fetchTMDBMovieDetails(tmdbId: tmdbId), !Task.isCancelled else { return nil }
-        return persistArtwork(details, descriptor: FetchDescriptor<Movie>(predicate: #Predicate { $0.id == id }), apply: applyMovieArtwork)
+        guard let details = try? await fetchTMDBMovieDetails(tmdbId: tmdbId, contentID: id), !Task.isCancelled else { return nil }
+        return persistArtwork(details, tmdbID: tmdbId, descriptor: FetchDescriptor<Movie>(predicate: #Predicate { $0.id == id }), apply: applyMovieArtwork)
     }
 
     /// Series counterpart of ``enrichMovieArtwork(id:tmdbId:)``.
     @discardableResult
     func enrichSeriesArtwork(id: String, tmdbId: Int) async -> TMDBTitleDetails? {
-        guard let details = try? await fetchTMDBTVDetails(tmdbId: tmdbId), !Task.isCancelled else { return nil }
-        return persistArtwork(details, descriptor: FetchDescriptor<Series>(predicate: #Predicate { $0.id == id }), apply: applySeriesArtwork)
+        guard let details = try? await fetchTMDBTVDetails(tmdbId: tmdbId, contentID: id), !Task.isCancelled else { return nil }
+        return persistArtwork(details, tmdbID: tmdbId, descriptor: FetchDescriptor<Series>(predicate: #Predicate { $0.id == id }), apply: applySeriesArtwork)
     }
 
     /// The network await is over before creating this context. Scalar appliers
     /// are explicit; no generic path can accidentally replace cast relationships.
-    private func persistArtwork<Row: PersistentModel>(
-        _ details: TMDBTitleDetails, descriptor: FetchDescriptor<Row>, apply: (TMDBTitleDetails, Row) -> Void
+    private func persistArtwork<Row: EnrichedTitle>(
+        _ details: TMDBTitleDetails, tmdbID: Int, descriptor: FetchDescriptor<Row>, apply: (TMDBTitleDetails, Row) -> Void
     ) -> TMDBTitleDetails? {
         let context = ModelContext(modelContainer)
         context.autosaveEnabled = false
         var descriptor = descriptor
         descriptor.fetchLimit = 1
-        guard let row = try? context.fetch(descriptor).first else { return nil }
+        guard let row = try? context.fetch(descriptor).first, row.tmdbId == tmdbID else { return nil }
+        if let receipt = details.proxyReceipt {
+            guard receipt.matches(source: LumeProxySource.snapshot(contentID: row.id, in: context), tmdbID: row.tmdbId,
+                                  language: TMDBClient.preferredLanguageCode()) else { return nil }
+        }
         apply(details, row)
-        try? context.save()
+        do { try context.save() } catch { return nil }
         return details
     }
 
@@ -88,7 +95,8 @@ nonisolated func applyMovieDetails(_ details: TMDBTitleDetails, to movie: Movie,
     replaceCast(of: movie.castMembers, with: details.cast, ownerId: movie.id, context: context) { castMember in
         castMember.movie = movie
     }
-    movie.tmdbEnrichedAt = Date()
+    movie.tmdbEnrichedAt = details.proxyReceipt?.tmdbAt ?? Date()
+    movie.recordProxyReceipt(details.proxyReceipt, fullDetails: true)
 }
 
 /// Scalar metadata/artwork only: safe for background enrichment while a
@@ -112,7 +120,8 @@ nonisolated func applySeriesDetails(_ details: TMDBTitleDetails, to series: Seri
     replaceCast(of: series.castMembers, with: details.cast, ownerId: series.id, context: context) { castMember in
         castMember.series = series
     }
-    series.tmdbEnrichedAt = Date()
+    series.tmdbEnrichedAt = details.proxyReceipt?.tmdbAt ?? Date()
+    series.recordProxyReceipt(details.proxyReceipt, fullDetails: true)
 }
 
 // MARK: - Cast helpers

@@ -65,6 +65,8 @@ final class Series {
     /// Scalar artwork metadata was fetched, without replacing the cast. Optional
     /// so existing catalogs backfill once without claiming full-detail freshness.
     var tmdbArtworkEnrichedAt: Date?
+    /// Optional, device-local proof for proxy-applied groups; never availability.
+    var proxyMetadataData: Data?
     /// TMDB ids of similar titles, in TMDB's order, for "You May Also Like".
     ///
     /// Optional on purpose: a non-optional `[Int] = []` is not free — SwiftData
