@@ -88,10 +88,12 @@ nonisolated struct LumeMetadataBatch: Decodable {
             else { continue }
             applied.proxyReceipt = LumeMetadataReceipt(sourceIdentity: source.identity, tmdbID: item.id, language: language,
                                                        tmdbAt: tmdbAt, artworkAt: artworkAt)
-            if capabilities.offersRatings, let ratings = item.ratings,
+            if capabilities.offersRatings, let ratings = item.ratings?.ratings,
                let ratingsAt = item.availability?.availableAt(for: .ratings, capabilities: capabilities, now: now)
             {
-                applied.proxyRatings = LumeTitleRatings(ratings: MDBListClient.mapRatings(ratings.ratings ?? []), fetchedAt: ratingsAt)
+                // Only an explicit array certifies ratings, including a known
+                // empty result. Missing/null is a miss, not fresh empty data.
+                applied.proxyRatings = LumeTitleRatings(ratings: MDBListClient.mapRatings(ratings), fetchedAt: ratingsAt)
             }
             result[item.id] = applied
         }

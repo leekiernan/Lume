@@ -33,7 +33,7 @@ struct RatingsFreshnessTests {
 struct LumeProxyRatingsTests {
     private final class ResourceAnchor {}
 
-    private func movieFixture(ratingsAt: Date?, detailAt: Date) throws -> String {
+    private func movieFixture(ratingsAt: Date?, detailAt: Date, ratingsBlock: [String: Any]? = nil) throws -> String {
         let name = "lume-metadata-batch-movie"
         let bundle = Bundle(for: ResourceAnchor.self)
         let sourceURL = URL(fileURLWithPath: #filePath).resolvingSymlinksInPath()
@@ -51,7 +51,7 @@ struct LumeProxyRatingsTests {
             meta["artwork"] = stamp
             if items[index]["tmdb_id"] as? Int == 603, let ratingsAt {
                 meta["ratings"] = ISO8601DateFormatter().string(from: ratingsAt)
-                items[index]["mdblist"] = ["ratings": [
+                items[index]["mdblist"] = ratingsBlock ?? ["ratings": [
                     ["source": "imdb", "value": 8.7, "score": 87, "votes": 2_000_000],
                     ["source": "tomatoes", "value": 83],
                     ["source": "rogerebert", "value": 4],
@@ -145,5 +145,38 @@ struct LumeProxyRatingsTests {
         let ratings = try await keyless.ratings(id: 603, type: .movie, releaseDate: "1999-03-31", source: harness.source, now: now)
         #expect(ratings?.ratings.first?.value == "8.7/10")
         #expect(abs((ratings?.fetchedAt.timeIntervalSince(older)) ?? 99) < 1) // Old stamp kept, so the next open asks again.
+    }
+
+    @Test(arguments: ["missing", "null", "malformed"])
+    func `an uncertified ratings array keeps details and device fallback`(_ shape: String) async throws {
+        let block: [String: Any] = switch shape {
+        case "null": ["ratings": NSNull()]
+        case "malformed": ["ratings": "invalid"]
+        default: [:]
+        }
+        let now = Date()
+        let fetched = now.addingTimeInterval(-3600)
+        let harness = try harness(groups: #"["tmdb","artwork","ratings"]"#,
+                                  body: movieFixture(ratingsAt: fetched, detailAt: fetched, ratingsBlock: block))
+        defer { harness.sessions.forEach { $0.invalidateAndCancel() } }
+        let details = try #require(try await harness.router.details(id: 603, type: .movie, source: harness.source))
+        #expect(details.proxyReceipt != nil && details.proxyRatings == nil)
+        let ratings = try await harness.router.ratings(id: 603, type: .movie, releaseDate: "1999-03-31", source: harness.source, now: now)
+        #expect(ratings?.ratings.first?.value == "6.1/10" && harness.mdbListRequests() == 1)
+
+        let keyless = LumeTitleMetadataRouter(tmdb: harness.router.tmdb, proxy: harness.router.proxy,
+                                              mdbList: MDBListClient(session: harness.sessions[0], key: nil))
+        #expect(try await keyless.ratings(id: 603, type: .movie, releaseDate: "1999-03-31", source: harness.source, now: now) == nil)
+    }
+
+    @Test func `an explicit empty ratings array is a fresh known empty result`() async throws {
+        let now = Date()
+        let fetched = now.addingTimeInterval(-3600)
+        let harness = try harness(groups: #"["tmdb","artwork","ratings"]"#,
+                                  body: movieFixture(ratingsAt: fetched, detailAt: fetched, ratingsBlock: ["ratings": []]))
+        defer { harness.sessions.forEach { $0.invalidateAndCancel() } }
+        let ratings = try #require(try await harness.router.ratings(id: 603, type: .movie, releaseDate: "1999-03-31", source: harness.source, now: now))
+        #expect(ratings.ratings.isEmpty && abs(ratings.fetchedAt.timeIntervalSince(fetched)) < 1)
+        #expect(harness.mdbListRequests() == 0)
     }
 }
