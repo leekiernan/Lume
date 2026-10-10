@@ -100,7 +100,18 @@ extension Series {
 extension Episode {
     /// Partial provider responses are patches, not deletions. Keep playback
     /// identity, downloads and watch/tracker state on the existing instance.
+    /// Playback inputs are the provider's, though: a remux changes the
+    /// container extension (Xtream builds the stream URL from it) and a
+    /// Stalker `cmd` goes stale, so supplied values replace cached ones. A
+    /// completed download keeps its own stored file path.
     func applyProviderMetadata(_ parsed: ParsedEpisode) {
+        for (keyPath, value) in [(\Episode.containerExtension, parsed.containerExtension), (\Episode.title, parsed.title)] {
+            guard !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, self[keyPath: keyPath] != value else { continue }
+            self[keyPath: keyPath] = value
+        }
+        if let value = parsed.directSource, !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, directSource != value { directSource = value }
+        if parsed.seasonNum > 0, seasonNum != parsed.seasonNum { seasonNum = parsed.seasonNum }
+        if parsed.episodeNum > 0, episodeNum != parsed.episodeNum { episodeNum = parsed.episodeNum }
         if let value = parsed.durationSecs, value > 0, durationSecs != value { durationSecs = value }
         if let value = parsed.rating, value.isFinite, value > 0, rating != value { rating = value }
         for (keyPath, value) in [

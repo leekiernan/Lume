@@ -35,9 +35,17 @@ nonisolated extension Series {
         // Genre keeps the existing TMDB-first/provider-fallback policy.
         let genre = GenreParser.providerFallback(current: genre, provider: metadata.genre)
         applyProviderField(genre, to: \.genre, fillMissing: true)
-        if let raw = metadata.tmdb, let identifier = Int(raw), identifier > 0 {
+        // Never withdrawn: `get_series_info` fills the same field, and the stored
+        // value doesn't say which response set it, so an absent catalogue ID
+        // can't tell a withdrawal from a sparse row. A corrected ID replaces the
+        // old one and re-enriches (movies, catalogue-only, also withdraw).
+        if let raw = metadata.tmdb, let identifier = Self.catalogueTMDB(raw) {
             applyProviderField(raw, to: \.tmdb, fillMissing: fillMissing)
-            if !fillMissing || tmdbId == nil, tmdbId != identifier { tmdbId = identifier }
+            if !fillMissing {
+                applyCatalogueTMDB(raw, previous: nil)
+            } else if tmdbId == nil {
+                tmdbId = identifier
+            }
         }
     }
 

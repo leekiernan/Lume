@@ -116,6 +116,7 @@ extension ContentSyncManager {
         if movie.rating5Based != rating5Based { movie.rating5Based = rating5Based }
         if movie.added != dto.added { movie.added = dto.added }
         if movie.containerExtension != dto.containerExtension { movie.containerExtension = dto.containerExtension }
+        let previousTMDB = movie.tmdb
         if movie.tmdb != dto.tmdb { movie.tmdb = dto.tmdb }
         let num = dto.num ?? 0
         if movie.num != num { movie.num = num }
@@ -126,9 +127,7 @@ extension ContentSyncManager {
             let categoryId = playlistPrefix + catIdStr
             if movie.categoryId != categoryId { movie.categoryId = categoryId }
         }
-        if let tmdbString = dto.tmdb, let tmdbInt = Int(tmdbString), movie.tmdbId != tmdbInt {
-            movie.tmdbId = tmdbInt
-        }
+        movie.applyCatalogueTMDB(dto.tmdb, previous: previousTMDB)
     }
 
     /// Copies the provider-owned fields from a series DTO onto an existing or
