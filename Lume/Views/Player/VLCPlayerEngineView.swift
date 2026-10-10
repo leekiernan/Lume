@@ -193,6 +193,11 @@ struct VLCPlayerEngineView: View {
             coordinator.onDuration = { catchup.report(duration: $0, to: clock) }
             catchup.onSeek = onCatchupSeek
             coordinator.onPlaybackFailure = { reportFailure() }
+            #if os(iOS)
+                coordinator.onPictureInPictureStop = {
+                    PlayerBackgrounding.pictureInPictureDidStop { closePlayer() }
+                }
+            #endif
             coordinator.startupTimeout = PlaybackPolicy.startupTimeout(quick: usesQuickStartupTimeout)
             coordinator.retriesStartupErrors = PlaybackPolicy.retriesStartupError(canFallBack: reportsStartupFailure)
             coordinator.configure(media: media)
@@ -216,7 +221,7 @@ struct VLCPlayerEngineView: View {
         .onChange(of: scenePhase) { _, phase in
             // The Home button backgrounds the app without calling onDisappear,
             // so pause here to stop audio when the player loses focus.
-            if phase != .active { coordinator.pauseForBackground() }
+            if PlayerBackgrounding.shouldPause(for: phase) { coordinator.pauseForBackground() }
         }
         .onChange(of: media) { oldMedia, newMedia in
             // The host swapped the stream (e.g. a new episode). Reset local

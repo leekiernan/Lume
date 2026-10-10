@@ -44,6 +44,10 @@ final class VLCPlayerCoordinator: NSObject, ObservableObject {
     /// either falls back to the next engine or raises the failure overlay.
     var onPlaybackFailure: (() -> Void)?
 
+    /// Invoked when the PiP window goes away, so the host can end the session
+    /// if the user closed it rather than restoring the player.
+    var onPictureInPictureStop: (() -> Void)?
+
     /// How long to wait for the first frame before declaring the stream dead.
     /// Set by the host before `configure` — shorter when a fallback engine is
     /// available so the hand-off is prompt.
@@ -529,7 +533,7 @@ extension VLCPlayerCoordinator: VLCMediaPlayerDelegate {
 
 // MARK: - VLCDrawable + Picture in Picture
 
-extension VLCPlayerCoordinator: VLCDrawable, VLCPictureInPictureDrawable, VLCPictureInPictureMediaControlling {
+extension VLCPlayerCoordinator: VLCDrawable, VLCPictureInPictureDrawable {
     /// VLCDrawable — VLC inserts its output surface into our host view.
     func addSubview(_ view: VLCHostView) {
         guard let hostView else { return }
@@ -558,42 +562,14 @@ extension VLCPlayerCoordinator: VLCDrawable, VLCPictureInPictureDrawable, VLCPic
             guard let self else { return }
             pipController = controller
             controller?.stateChangeEventHandler = { [weak self] isStarted in
-                DispatchQueue.main.async { self?.isPipActive = isStarted }
+                DispatchQueue.main.async { [weak self] in
+                    guard let self else { return }
+                    let wasActive = isPipActive
+                    isPipActive = isStarted
+                    if wasActive, !isStarted { onPictureInPictureStop?() }
+                }
             }
             DispatchQueue.main.async { self.isPipSupported = controller != nil }
         }
-    }
-
-    /// VLCPictureInPictureMediaControlling — VLC drives playback from the PiP UI.
-    func play() {
-        mediaPlayer.play()
-    }
-
-    func pause() {
-        mediaPlayer.pause()
-    }
-
-    func seek(by offset: Int64, completion: @escaping () -> Void) {
-        if catchup.route(.by(Double(offset) / 1000)) {
-            completion()
-            return
-        }
-        mediaPlayer.jump(withOffset: Int32(offset), completion: completion)
-    }
-
-    func mediaLength() -> Int64 {
-        mediaPlayer.media?.length.value?.int64Value ?? 0
-    }
-
-    func mediaTime() -> Int64 {
-        mediaPlayer.time.value?.int64Value ?? 0
-    }
-
-    func isMediaSeekable() -> Bool {
-        mediaPlayer.isSeekable
-    }
-
-    func isMediaPlaying() -> Bool {
-        mediaPlayer.isPlaying
     }
 }

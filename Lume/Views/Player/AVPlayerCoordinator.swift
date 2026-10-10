@@ -29,7 +29,8 @@ final class AVPlayerCoordinator: NSObject, ObservableObject {
     /// True while the player intends to play but is waiting on the buffer, so
     /// the host can raise a loading indicator (parity with KSPlayer/VLCKit).
     @Published private(set) var isBuffering = true
-    @Published private(set) var isPipActive = false
+    /// Set by the PiP delegate (`AVPlayerCoordinator+PictureInPicture.swift`).
+    @Published var isPipActive = false
     @Published private(set) var isPipSupported = false
 
     /// True once the stream has actually started playing. The host uses this to
@@ -44,6 +45,10 @@ final class AVPlayerCoordinator: NSObject, ObservableObject {
     /// no frame plays within `startupTimeout`. The engine view either falls back
     /// to the next engine or raises the failure overlay.
     var onPlaybackFailure: (() -> Void)?
+
+    /// Invoked when the PiP window goes away, so the host can end the session
+    /// if the user closed it rather than restoring the player.
+    var onPictureInPictureStop: (() -> Void)?
 
     /// How long to wait for playback to start before declaring the stream dead.
     /// Set by the host before `configure` — shorter when a fallback engine is
@@ -565,25 +570,5 @@ final class AVPlayerCoordinator: NSObject, ObservableObject {
         }
         let info = PlayerVideoInfo(width: width, height: height, fps: 0, codec: nil)
         if info != videoInfo { videoInfo = info }
-    }
-}
-
-// MARK: - AVPictureInPictureControllerDelegate
-
-extension AVPlayerCoordinator: AVPictureInPictureControllerDelegate {
-    func pictureInPictureControllerDidStartPictureInPicture(_: AVPictureInPictureController) {
-        isPipActive = true
-    }
-
-    func pictureInPictureControllerDidStopPictureInPicture(_: AVPictureInPictureController) {
-        isPipActive = false
-    }
-
-    func pictureInPictureController(
-        _: AVPictureInPictureController,
-        failedToStartPictureInPictureWithError error: Error
-    ) {
-        isPipActive = false
-        Logger.player.error("AVPlayer PiP failed to start: \(error.localizedDescription, privacy: .public)")
     }
 }
