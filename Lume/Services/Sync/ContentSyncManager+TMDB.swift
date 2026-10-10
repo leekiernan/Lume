@@ -97,6 +97,7 @@ nonisolated func applyMovieDetails(_ details: TMDBTitleDetails, to movie: Movie,
     replaceCast(of: movie.castMembers, with: details.cast, ownerId: movie.id, context: context) { castMember in
         castMember.movie = movie
     }
+    movie.tmdbCastInvalidated = false
     movie.tmdbEnrichedAt = details.proxyReceipt?.tmdbAt ?? Date()
     movie.recordProxyReceipt(details.proxyReceipt, fullDetails: true)
 }
@@ -126,6 +127,7 @@ nonisolated func applySeriesDetails(_ details: TMDBTitleDetails, to series: Seri
     replaceCast(of: series.castMembers, with: details.cast, ownerId: series.id, context: context) { castMember in
         castMember.series = series
     }
+    series.tmdbCastInvalidated = false
     series.tmdbEnrichedAt = details.proxyReceipt?.tmdbAt ?? Date()
     series.recordProxyReceipt(details.proxyReceipt, fullDetails: true)
 }

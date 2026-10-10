@@ -107,6 +107,9 @@ extension ContentSyncManager {
         defer {
             if let covered, covered != movie.proxyCoveredFields { movie.invalidateProxyMetadata() }
         }
+        // Withdraw old identity-owned values before applying this response's
+        // provider fields, so even an identical provider rating wins.
+        movie.applyCatalogueTMDB(dto.tmdb, previous: movie.tmdb)
         let name = dto.name ?? ""
         if movie.name != name { movie.name = name }
         if movie.streamIcon != dto.streamIcon { movie.streamIcon = dto.streamIcon }
@@ -116,7 +119,6 @@ extension ContentSyncManager {
         if movie.rating5Based != rating5Based { movie.rating5Based = rating5Based }
         if movie.added != dto.added { movie.added = dto.added }
         if movie.containerExtension != dto.containerExtension { movie.containerExtension = dto.containerExtension }
-        let previousTMDB = movie.tmdb
         if movie.tmdb != dto.tmdb { movie.tmdb = dto.tmdb }
         let num = dto.num ?? 0
         if movie.num != num { movie.num = num }
@@ -127,7 +129,6 @@ extension ContentSyncManager {
             let categoryId = playlistPrefix + catIdStr
             if movie.categoryId != categoryId { movie.categoryId = categoryId }
         }
-        movie.applyCatalogueTMDB(dto.tmdb, previous: previousTMDB)
     }
 
     /// Copies the provider-owned fields from a series DTO onto an existing or

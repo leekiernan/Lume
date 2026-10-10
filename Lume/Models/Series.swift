@@ -69,6 +69,8 @@ final class Series {
     var proxyMetadataData: Data?
     /// Values overwritten or filled by TMDB, for source-aware identity changes.
     var tmdbFallbackData: Data?
+    /// Hide the previous identity's cast until the detail context replaces it.
+    var tmdbCastInvalidated: Bool = false
     /// TMDB ids of similar titles, in TMDB's order, for "You May Also Like".
     ///
     /// Optional on purpose: a non-optional `[Int] = []` is not free — SwiftData

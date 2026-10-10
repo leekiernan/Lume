@@ -26,6 +26,9 @@ nonisolated extension Series {
         defer {
             if let covered, covered != proxyCoveredFields { invalidateProxyMetadata() }
         }
+        if !fillMissing, Self.catalogueTMDB(metadata.tmdb) != nil {
+            applyCatalogueTMDB(metadata.tmdb, previous: nil)
+        }
         applyProviderField(metadata.cover, to: \.cover, fillMissing: fillMissing)
         applyProviderField(metadata.plot, to: \.plot, fillMissing: fillMissing)
         applyProviderField(metadata.cast, to: \.cast, fillMissing: fillMissing)
@@ -41,9 +44,7 @@ nonisolated extension Series {
         // old one and re-enriches (movies, catalogue-only, also withdraw).
         if let raw = metadata.tmdb, let identifier = Self.catalogueTMDB(raw) {
             applyProviderField(raw, to: \.tmdb, fillMissing: fillMissing)
-            if !fillMissing {
-                applyCatalogueTMDB(raw, previous: nil)
-            } else if tmdbId == nil {
+            if tmdbId == nil {
                 tmdbId = identifier
             }
         }

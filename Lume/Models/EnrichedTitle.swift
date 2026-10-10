@@ -8,6 +8,9 @@ nonisolated protocol EnrichedTitle: PersistentModel {
     var tmdbId: Int? { get set }
     var proxyMetadataData: Data? { get set }
     var tmdbFallbackData: Data? { get set }
+    var tmdbCastInvalidated: Bool { get set }
+    var indexedAt: Date? { get set }
+    var embeddingData: Data? { get set }
     var backdropPath: String? { get set }
     var posterPath: String? { get set }
     var posterCheckedAt: Date? { get set }
@@ -53,7 +56,7 @@ nonisolated extension EnrichedTitle {
     }
 
     var orderedCast: [CastMember] {
-        castMembers.sorted { $0.order < $1.order }
+        tmdbCastInvalidated ? [] : castMembers.sorted { $0.order < $1.order }
     }
 
     /// Never touches cast relationships or claims full-detail freshness.

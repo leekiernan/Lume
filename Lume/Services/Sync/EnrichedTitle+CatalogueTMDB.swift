@@ -5,8 +5,8 @@ nonisolated extension EnrichedTitle {
     /// the previous catalogue import stored (`previous`).
     ///
     /// - A valid ID replaces the current one. When that changes an ID the
-    ///   title was already enriched under, its enrichment stops counting as
-    ///   fresh, so the new title's details replace the old one's.
+    ///   title was already enriched under, discard identity-owned metadata
+    ///   and re-queue indexing, without erasing provider or user state.
     /// - A catalogue that stops sending the ID it supplied before withdraws it
     ///   (a corrected or withdrawn match, which an enriching proxy can do).
     /// - An ID the device resolved itself, where the catalogue never sent
@@ -31,9 +31,32 @@ nonisolated extension EnrichedTitle {
     }
 
     private func forgetTMDBEnrichment() {
-        invalidateProxyMetadata()
+        restoreTMDBFallbacks()
+        proxyMetadataData = nil
         tmdbEnrichedAt = nil
         tmdbArtworkEnrichedAt = nil
         ratingsEnrichedAt = nil
+        backdropPath = nil
+        posterPath = nil
+        posterCheckedAt = nil
+        logoPath = nil
+        tagline = nil
+        contentRating = nil
+        imdbId = nil
+        similarTMDBIds = nil
+        trailersData = nil
+        externalRatingsData = nil
+        indexedAt = nil
+        embeddingData = nil
+        // Background catalogue sync must not delete cast faults held by an
+        // open detail screen. Hide them now; the detail-owned apply replaces
+        // and deletes the old rows safely, including when the new cast is empty.
+        tmdbCastInvalidated = true
+        if let movie = self as? Movie {
+            movie.collectionId = nil
+            movie.collectionName = nil
+            movie.collectionPosterPath = nil
+            movie.collectionBackdropPath = nil
+        }
     }
 }
