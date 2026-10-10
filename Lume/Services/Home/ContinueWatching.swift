@@ -200,8 +200,17 @@ enum ContinueWatchingEpisodes {
                   ),
                   !Task.isCancelled
             else { continue }
+            guard !parsed.episodes.isEmpty else {
+                // An empty answer may be a provider hiccup. Stamping the episode
+                // cache here would suppress the detail screen's own fetch.
+                if let info = parsed.seriesInfo {
+                    show.applyProviderMetadata(info, fillMissing: true)
+                    try? context.save()
+                }
+                continue
+            }
             show.applyFetchedEpisodes(parsed, into: context)
-            added = added || !parsed.episodes.isEmpty
+            added = true
         }
         return added
     }
