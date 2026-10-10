@@ -1,5 +1,6 @@
 import Foundation
 @testable import Lume
+import SwiftData
 import Testing
 
 /// Catalogue-owned values a refresh must keep current: the TMDB ID a
@@ -73,7 +74,30 @@ struct CatalogueRefreshTests {
         #expect(episode.directSource == "cmd-new" && episode.seasonNum == 1 && episode.episodeNum == 2)
     }
 
-    private func parsed(title: String, containerExtension: String, seasonNum: Int, episodeNum: Int, directSource: String?) -> ParsedEpisode {
+    @MainActor @Test func `missing episode extensions preserve existing playback but default new episodes`() throws {
+        let container = try FieldFixtures.makeContainer()
+        let context = container.mainContext
+        let series = Series(id: "p-series", seriesId: 1, name: "Show")
+        context.insert(series)
+        let episode = Episode(id: "p-ep-1", episodeId: "1", title: "Pilot", containerExtension: "mp4", seasonNum: 1, episodeNum: 1)
+        context.insert(episode)
+        series.episodes.append(episode)
+
+        let sparse = parsed(title: "Pilot", containerExtension: nil, seasonNum: 1, episodeNum: 1, directSource: nil)
+        series.insertEpisodes([sparse], into: context)
+        #expect(series.episodes.count == 1 && episode.containerExtension == "mp4")
+
+        let fresh = Series(id: "p-fresh-series", seriesId: 2, name: "New show")
+        context.insert(fresh)
+        // The same absent provider field uses the legacy default only on insert.
+        let newEpisode = ParsedEpisode(id: "p-ep-2", episodeId: "2", title: "Pilot", containerExtension: nil,
+                                       seasonNum: 1, episodeNum: 1, added: nil, directSource: nil,
+                                       durationSecs: nil, movieImage: nil, rating: nil, airDate: nil, plot: nil)
+        fresh.insertEpisodes([newEpisode], into: context)
+        #expect(fresh.episodes.first?.containerExtension == "mkv")
+    }
+
+    private func parsed(title: String, containerExtension: String?, seasonNum: Int, episodeNum: Int, directSource: String?) -> ParsedEpisode {
         ParsedEpisode(id: "p-ep-1", episodeId: "1", title: title, containerExtension: containerExtension, seasonNum: seasonNum,
                       episodeNum: episodeNum, added: nil, directSource: directSource, durationSecs: nil, movieImage: nil,
                       rating: nil, airDate: nil, plot: nil)

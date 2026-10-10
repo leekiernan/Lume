@@ -20,7 +20,8 @@ nonisolated struct ParsedEpisode {
     let id: String
     let episodeId: String
     let title: String
-    let containerExtension: String
+    /// Nil means the provider omitted it, not that an existing episode is MKV.
+    let containerExtension: String?
     let seasonNum: Int
     let episodeNum: Int
     let added: String?
@@ -68,7 +69,7 @@ extension Series {
                 id: parsed.id,
                 episodeId: parsed.episodeId,
                 title: parsed.title,
-                containerExtension: parsed.containerExtension,
+                containerExtension: parsed.containerExtension.flatMap { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : $0 } ?? "mkv",
                 seasonNum: parsed.seasonNum,
                 episodeNum: parsed.episodeNum,
                 added: parsed.added,
@@ -105,8 +106,8 @@ extension Episode {
     /// Stalker `cmd` goes stale, so supplied values replace cached ones. A
     /// completed download keeps its own stored file path.
     func applyProviderMetadata(_ parsed: ParsedEpisode) {
-        for (keyPath, value) in [(\Episode.containerExtension, parsed.containerExtension), (\Episode.title, parsed.title)] {
-            guard !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, self[keyPath: keyPath] != value else { continue }
+        for (keyPath, value) in [(\Episode.containerExtension, parsed.containerExtension), (\Episode.title, Optional(parsed.title))] {
+            guard let value, !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, self[keyPath: keyPath] != value else { continue }
             self[keyPath: keyPath] = value
         }
         if let value = parsed.directSource, !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, directSource != value { directSource = value }

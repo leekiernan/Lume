@@ -272,7 +272,7 @@ actor ContentSyncManager {
                     id: CatalogID.episode(ownerID: seriesElementId, key: episodeIdString),
                     episodeId: episodeIdString,
                     title: Self.cleanEpisodeTitle(episodeDTO.title),
-                    containerExtension: episodeDTO.containerExtension ?? "mkv",
+                    containerExtension: episodeDTO.containerExtension,
                     seasonNum: seasonNum,
                     episodeNum: episodeDTO.episodeNum ?? 0,
                     added: episodeDTO.added,
