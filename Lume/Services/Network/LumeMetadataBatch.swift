@@ -88,6 +88,11 @@ nonisolated struct LumeMetadataBatch: Decodable {
             else { continue }
             applied.proxyReceipt = LumeMetadataReceipt(sourceIdentity: source.identity, tmdbID: item.id, language: language,
                                                        tmdbAt: tmdbAt, artworkAt: artworkAt)
+            if capabilities.offersRatings, let ratings = item.ratings,
+               let ratingsAt = item.availability?.availableAt(for: .ratings, capabilities: capabilities, now: now)
+            {
+                applied.proxyRatings = LumeTitleRatings(ratings: MDBListClient.mapRatings(ratings.ratings ?? []), fetchedAt: ratingsAt)
+            }
             result[item.id] = applied
         }
         return result
@@ -99,11 +104,15 @@ private nonisolated struct LumeMetadataBatchItem {
     let status: LumeMetadataItemStatus
     let availability: LumeMetadataAvailability?
     let details: TMDBTitleDetails?
+    /// MDBList's own shape. Optional and independent: a malformed block drops
+    /// the ratings, never the title's details.
+    let ratings: MDBListResponse?
     enum CodingKeys: String, CodingKey {
         case id = "tmdb_id"
         case status
         case availability = "lume_meta"
         case payload = "tmdb"
+        case ratings = "mdblist"
     }
 
     init(from decoder: Decoder, type: LumeMetadataKind, language: String) throws {
@@ -116,6 +125,7 @@ private nonisolated struct LumeMetadataBatchItem {
         guard status == .complete else {
             availability = nil
             details = nil
+            ratings = nil
             return
         }
         availability = try container.decode(LumeMetadataAvailability.self, forKey: .availability)
@@ -125,6 +135,7 @@ private nonisolated struct LumeMetadataBatchItem {
         // Normalization is shared with direct TMDB; do not introduce a
         // second mapping with subtly different cast/video/logo semantics.
         details = try TMDBClient.proxyDetails(from: payloadDecoder, type: type, language: language)
+        ratings = try? container.decodeIfPresent(MDBListResponse.self, forKey: .ratings)
     }
 
     private enum PayloadKey: String, CodingKey { case id }

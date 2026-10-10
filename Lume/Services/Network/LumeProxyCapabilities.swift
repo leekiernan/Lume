@@ -26,17 +26,24 @@ nonisolated struct LumeProxyCapabilities: Decodable, Equatable {
         guard version == 1, let metadata, metadata.version == 1, metadata.maxBatchSize > 0 else { return nil }
         return min(metadata.maxBatchSize, 50)
     }
+
+    /// Whether batch items may carry MDBList ratings. Only an advertised group
+    /// is read; a stray `mdblist` block from another producer is ignored.
+    var offersRatings: Bool {
+        metadataBatchSize != nil && metadata?.groups?.contains("ratings") == true
+    }
 }
 
 nonisolated struct LumeProxyMetadataCapability: Decodable, Equatable {
     let version: Int
     let maxBatchSize: Int
     let languages: [String]?
+    let groups: [String]?
 
     enum CodingKeys: String, CodingKey {
         case version = "v"
         case maxBatchSize = "max_batch_size"
-        case languages
+        case languages, groups
     }
 }
 

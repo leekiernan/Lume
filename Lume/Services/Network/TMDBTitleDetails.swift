@@ -26,6 +26,9 @@ nonisolated struct TMDBTitleDetails {
     var collectionName: String?
     var collectionPosterPath: String?
     var collectionBackdropPath: String?
+    /// MDBList ratings carried by a proxy batch item, when advertised. Never
+    /// set by device TMDB; consumers check freshness against the title's age.
+    var proxyRatings: LumeTitleRatings?
 }
 
 nonisolated struct TMDBCastMember: Hashable {
