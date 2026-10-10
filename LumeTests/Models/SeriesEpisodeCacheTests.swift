@@ -25,7 +25,9 @@ struct SeriesEpisodeCacheTests {
         return try ModelContainer(for: schema, configurations: [config])
     }
 
-    private func parsed(season: Int, number: Int) -> ParsedEpisode {
+    private func parsed(season: Int, number: Int, duration: Int? = nil, image: String? = nil,
+                        rating: Double? = nil, airDate: String? = nil, plot: String? = nil) -> ParsedEpisode
+    {
         ParsedEpisode(
             id: "s\(season)e\(number)",
             episodeId: "\(season)-\(number)",
@@ -35,11 +37,11 @@ struct SeriesEpisodeCacheTests {
             episodeNum: number,
             added: nil,
             directSource: nil,
-            durationSecs: nil,
-            movieImage: nil,
-            rating: nil,
-            airDate: nil,
-            plot: nil
+            durationSecs: duration,
+            movieImage: image,
+            rating: rating,
+            airDate: airDate,
+            plot: plot
         )
     }
 
@@ -122,6 +124,68 @@ struct SeriesEpisodeCacheTests {
         series.insertEpisodes([parsed(season: 1, number: 1)], into: context)
 
         #expect(series.episodes.count == 5)
+    }
+
+    @Test func `refresh updates metadata on the same episode without changing user state`() throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        let series = Series(id: "p-series-1", seriesId: 1, name: "Show")
+        context.insert(series)
+        series.insertEpisodes([parsed(season: 1, number: 1, duration: 100, image: "old.jpg", rating: 5, airDate: "2020-01-01", plot: "Old")], into: context)
+        let episode = try #require(series.episodes.first)
+        episode.watchProgress = 42
+        episode.isWatched = true
+        let watchedAt = Date(timeIntervalSince1970: 1234)
+        episode.lastWatchedDate = watchedAt
+        episode.localFileURL = "file:///download.mkv"
+        episode.downloadStatus = .completed
+        series.insertEpisodes([parsed(season: 1, number: 1, duration: 200, image: "new.jpg", rating: 8, airDate: "2026-01-01", plot: "New")], into: context)
+
+        #expect(series.episodes.count == 1)
+        #expect(series.episodes.first === episode)
+        #expect(episode.durationSecs == 200 && episode.rating == 8)
+        #expect(episode.movieImage == "new.jpg" && episode.airDate == "2026-01-01" && episode.plot == "New")
+        #expect(episode.watchProgress == 42 && episode.isWatched && episode.lastWatchedDate == watchedAt)
+        #expect(episode.localFileURL == "file:///download.mkv" && episode.downloadStatus == .completed)
+    }
+
+    @Test func `partial or empty metadata never erases good values`() throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        let series = Series(id: "p-series-1", seriesId: 1, name: "Show")
+        context.insert(series)
+        series.insertEpisodes([parsed(season: 1, number: 1, duration: 100, image: "old.jpg", rating: 5, airDate: "2020-01-01", plot: "Old")], into: context)
+        series.insertEpisodes([parsed(season: 1, number: 1)], into: context)
+        series.insertEpisodes([parsed(season: 1, number: 1, duration: 0, image: "", rating: 0, airDate: "  ", plot: "\n")], into: context)
+        series.insertEpisodes([parsed(season: 1, number: 1, duration: -1, rating: .nan)], into: context)
+        let episode = try #require(series.episodes.first)
+
+        #expect(episode.durationSecs == 100 && episode.rating == 5)
+        #expect(episode.movieImage == "old.jpg" && episode.airDate == "2020-01-01" && episode.plot == "Old")
+    }
+
+    @Test func `duplicate episodes update supplied metadata without inserting twice`() throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        let series = Series(id: "p-series-1", seriesId: 1, name: "Show")
+        context.insert(series)
+        series.insertEpisodes([parsed(season: 1, number: 1, plot: "First"), parsed(season: 1, number: 1, plot: "Last")], into: context)
+
+        #expect(series.episodes.count == 1)
+        #expect(series.episodes.first?.plot == "Last")
+    }
+
+    @Test func `identical metadata does not dirty an episode`() throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        let episode = Episode(id: "e1", episodeId: "1", title: "Episode", containerExtension: "mkv", seasonNum: 1, episodeNum: 1)
+        let metadata = parsed(season: 1, number: 1, duration: 100, image: "still.jpg", rating: 5, airDate: "2020-01-01", plot: "Plot")
+        context.insert(episode)
+        episode.applyProviderMetadata(metadata)
+        try context.save()
+        episode.applyProviderMetadata(metadata)
+
+        #expect(!context.hasChanges)
     }
 
     /// Cloud watched state waits as pending until its episode exists; adding

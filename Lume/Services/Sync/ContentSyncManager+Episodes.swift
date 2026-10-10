@@ -38,15 +38,19 @@ extension Series {
     /// `episodes` relationship directly updates any observing SwiftUI view, so the
     /// caller must run this on the same context the view renders from.
     ///
-    /// Additive on purpose: a refresh merges in episodes the provider has added
-    /// since the last fetch and never deletes, so a provider hiccup (a short or
+    /// Non-destructive on purpose: a refresh updates supplied metadata and merges
+    /// in new episodes, but never deletes, so a provider hiccup (a short or
     /// empty `get_series_info` response) can't wipe rows that carry watch
     /// progress. Call only after a *successful* fetch — it stamps the episode
     /// cache, which suppresses further refreshes until it goes stale again.
     func insertEpisodes(_ parsed: [ParsedEpisode], into context: ModelContext) {
-        var existingIds = Set(episodes.map(\.id))
+        var existing = episodes.reduce(into: [String: Episode]()) { $0[$1.id] = $1 }
         var inserted = false
-        for parsed in parsed where existingIds.insert(parsed.id).inserted {
+        for parsed in parsed {
+            if let episode = existing[parsed.id] {
+                episode.applyProviderMetadata(parsed)
+                continue
+            }
             inserted = true
             let episode = Episode(
                 id: parsed.id,
@@ -58,13 +62,10 @@ extension Series {
                 added: parsed.added,
                 directSource: parsed.directSource
             )
-            episode.durationSecs = parsed.durationSecs
-            episode.movieImage = parsed.movieImage
-            episode.rating = parsed.rating
-            episode.airDate = parsed.airDate
-            episode.plot = parsed.plot
+            episode.applyProviderMetadata(parsed)
             context.insert(episode)
             episodes.append(episode)
+            existing[parsed.id] = episode
         }
         // A tracker import can only mark episodes that exist, so anything
         // parked for this series is applied here — the one place episodes ever
@@ -80,6 +81,24 @@ extension Series {
         // next launch.
         if inserted {
             NotificationCenter.default.post(name: .lumeEpisodesDidMaterialize, object: self)
+        }
+    }
+}
+
+extension Episode {
+    /// Partial provider responses are patches, not deletions. Keep playback
+    /// identity, downloads and watch/tracker state on the existing instance.
+    func applyProviderMetadata(_ parsed: ParsedEpisode) {
+        if let value = parsed.durationSecs, value > 0, durationSecs != value { durationSecs = value }
+        if let value = parsed.rating, value.isFinite, value > 0, rating != value { rating = value }
+        for (keyPath, value) in [
+            (\Episode.movieImage, parsed.movieImage),
+            (\Episode.airDate, parsed.airDate),
+            (\Episode.plot, parsed.plot)
+        ] {
+            guard let value, !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                  self[keyPath: keyPath] != value else { continue }
+            self[keyPath: keyPath] = value
         }
     }
 }
