@@ -133,7 +133,7 @@ extension SectionFeed {
                 posterPath: movie.posterPath,
                 posterCheckedAt: movie.posterCheckedAt,
                 logoPath: movie.logoPath,
-                enrichedAt: movie.tmdbArtworkEnrichedAt ?? movie.tmdbEnrichedAt
+                enrichedAt: movie.effectiveTMDBArtworkDate
             ), let tmdbId = movie.tmdbId else { return nil }
             return HeroArtworkRequest(
                 id: movie.id,
@@ -148,7 +148,7 @@ extension SectionFeed {
                 posterPath: series.posterPath,
                 posterCheckedAt: series.posterCheckedAt,
                 logoPath: series.logoPath,
-                enrichedAt: series.tmdbArtworkEnrichedAt ?? series.tmdbEnrichedAt
+                enrichedAt: series.effectiveTMDBArtworkDate
             ), let tmdbId = series.tmdbId else { return nil }
             return HeroArtworkRequest(
                 id: series.id,

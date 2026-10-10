@@ -9,6 +9,8 @@
 //  catch-up alongside (or instead of) joining live; anything else is live only.
 //
 
+import OSLog
+import SwiftData
 import SwiftUI
 
 struct EPGProgramDetailView: View {
@@ -19,6 +21,22 @@ struct EPGProgramDetailView: View {
     var onPlayCatchup: () -> Void = {}
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
+    @State private var details: EPGProgrammeDetails?
+    @State private var epgSync = EPGSyncService.shared
+
+    private var synopsis: String {
+        guard let value = details?.synopsis, !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return cell.detail }
+        return value
+    }
+
+    private var artworkURL: String? {
+        details?.artworkURL ?? cell.artworkURL
+    }
+
+    private var subtitle: String? {
+        details?.subtitle ?? cell.subtitle
+    }
 
     private var isLive: Bool {
         cell.isLive(at: now)
@@ -30,11 +48,30 @@ struct EPGProgramDetailView: View {
     }
 
     var body: some View {
-        #if os(tvOS)
-            tvBody
-        #else
-            standardBody
-        #endif
+        Group {
+            #if os(tvOS)
+                tvBody
+            #else
+                standardBody
+            #endif
+        }
+        .task(id: EPGProgrammeDetails.ReadKey(programmeID: cell.id, channelID: stream.epgChannelId, guideRevision: epgSync.readRevision)) {
+            details = nil
+            let container = modelContext.container
+            let channelID = stream.epgChannelId ?? ""
+            let selected = cell
+            do {
+                let resolved = try await Task.detached(priority: .utility) {
+                    try EPGProgrammeDetails.load(container: container, channelID: channelID, cell: selected)
+                }.value
+                try Task.checkCancellation()
+                details = resolved
+            } catch is CancellationError {
+                // The sheet was dismissed or its programme changed.
+            } catch {
+                Logger.database.warning("EPG programme detail read failed: \(error.localizedDescription, privacy: .public)")
+            }
+        }
     }
 
     #if !os(tvOS)
@@ -43,6 +80,13 @@ struct EPGProgramDetailView: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 20) {
                         channelHeader
+
+                        if artworkURL != nil {
+                            programmeArtwork
+                                .frame(maxWidth: 560)
+                                .aspectRatio(16 / 9, contentMode: .fit)
+                                .clipShape(RoundedRectangle(cornerRadius: PosterCardMetrics.cornerRadius))
+                        }
 
                         VStack(alignment: .leading, spacing: 8) {
                             if isLive {
@@ -56,6 +100,8 @@ struct EPGProgramDetailView: View {
                             Text(cell.title)
                                 .font(.title2.weight(.bold))
 
+                            programmeSubtitle
+
                             timeRow
 
                             if isLive {
@@ -64,8 +110,8 @@ struct EPGProgramDetailView: View {
                             }
                         }
 
-                        if !cell.detail.isEmpty {
-                            Text(cell.detail)
+                        if !synopsis.isEmpty {
+                            Text(synopsis)
                                 .font(.body)
                                 .foregroundStyle(.secondary)
                                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -110,7 +156,10 @@ struct EPGProgramDetailView: View {
         /// blown-up dynamic sizes.
         private var tvBody: some View {
             HStack(alignment: .top, spacing: 56) {
-                tvArtwork
+                programmeArtwork
+                    .frame(width: 280, height: 280 * 9 / 16)
+                    .clipped()
+                    .clipShape(RoundedRectangle(cornerRadius: PosterCardMetrics.cornerRadius))
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 24) {
@@ -119,6 +168,8 @@ struct EPGProgramDetailView: View {
                         Text(cell.title)
                             .font(.system(size: 56, weight: .bold))
                             .lineLimit(3)
+
+                        programmeSubtitle
 
                         Text(stream.name)
                             .font(.system(size: 30, weight: .semibold))
@@ -164,8 +215,8 @@ struct EPGProgramDetailView: View {
                         .frame(maxWidth: 460)
                         .padding(.top, 16)
 
-                        if !cell.detail.isEmpty {
-                            Text(cell.detail)
+                        if !synopsis.isEmpty {
+                            Text(synopsis)
                                 .font(.system(size: 28))
                                 .foregroundStyle(.secondary)
                                 .lineSpacing(6)
@@ -178,25 +229,6 @@ struct EPGProgramDetailView: View {
             }
             .padding(80)
             .frame(width: 1280, height: 840)
-        }
-
-        private var tvArtwork: some View {
-            CachedAsyncImage(url: URL(string: stream.streamIcon ?? ""), maxPixelSize: 480) { phase in
-                switch phase {
-                case let .success(image):
-                    image.resizable().aspectRatio(contentMode: .fit)
-                default:
-                    RoundedRectangle(cornerRadius: 24, style: .continuous)
-                        .fill(.white.opacity(0.08))
-                        .overlay {
-                            Image(systemName: "antenna.radiowaves.left.and.right")
-                                .font(.system(size: 80))
-                                .foregroundStyle(.secondary)
-                        }
-                }
-            }
-            .frame(width: 280, height: 280)
-            .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
         }
 
         private var tvStatusBadge: some View {
@@ -234,6 +266,24 @@ struct EPGProgramDetailView: View {
         }
     #endif
 
+    private var programmeArtwork: some View {
+        LiveTVProgrammeArtwork(title: cell.title, artworkURL: artworkURL, logoURL: stream.streamIcon, maxPixelSize: 1120)
+    }
+
+    @ViewBuilder private var programmeSubtitle: some View {
+        if let subtitle = subtitle?.trimmingCharacters(in: .whitespacesAndNewlines), !subtitle.isEmpty,
+           subtitle.caseInsensitiveCompare(cell.title) != .orderedSame
+        {
+            Text(subtitle)
+            #if os(tvOS)
+                .font(.system(size: 30, weight: .medium))
+            #else
+                .font(.headline)
+            #endif
+                .foregroundStyle(.secondary)
+        }
+    }
+
     private var channelHeader: some View {
         HStack(spacing: 14) {
             CachedAsyncImage(url: URL(string: stream.streamIcon ?? ""), maxPixelSize: 120) { phase in
@@ -264,7 +314,7 @@ struct EPGProgramDetailView: View {
         LiveTVProgrammeReminderButton(programme: LiveTVHubProgramme(
             id: cell.id, channel: LiveTVHubChannel(id: stream.id, name: stream.name, logoURL: stream.streamIcon,
                                                    epgID: stream.epgChannelId, isFavorite: stream.isFavorite),
-            title: cell.title, start: cell.start, end: cell.end, artworkURL: nil, overview: cell.detail, candidateID: nil, rank: 0
+            title: cell.title, start: cell.start, end: cell.end, artworkURL: artworkURL, overview: synopsis, candidateID: nil, rank: 0, subtitle: subtitle
         ))
     }
 

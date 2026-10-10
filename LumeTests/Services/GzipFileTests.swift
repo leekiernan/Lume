@@ -50,6 +50,15 @@ struct GzipFileTests {
         #expect(try Data(contentsOf: decompressed) == payload)
     }
 
+    @Test func `optional guide size budget rejects oversized decompression`() throws {
+        let source = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".gz")
+        try gzip(Data(repeating: 65, count: 300_000)).write(to: source)
+        defer { try? FileManager.default.removeItem(at: source) }
+        #expect(throws: GzipFile.GzipError.sizeLimitExceeded) {
+            _ = try GzipFile.decompress(source, maximumBytes: 1024)
+        }
+    }
+
     @Test func `plain files are not gzip`() throws {
         let source = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString + ".xml")

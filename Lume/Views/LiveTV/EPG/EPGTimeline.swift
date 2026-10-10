@@ -33,6 +33,12 @@ nonisolated struct EPGTimeline: Equatable {
         totalMinutes * pointsPerMinute
     }
 
+    /// Resume a long-lived guide without leaving "now" outside its loaded
+    /// window. Keep a useful future reach, but don't shift it on every tick.
+    func needsReanchor(at now: Date) -> Bool {
+        now < start || end.timeIntervalSince(now) < 12 * 3600
+    }
+
     /// The x offset (from `start`) at which `date` sits, clamped to the window.
     func x(for date: Date) -> CGFloat {
         let clamped = min(max(date, start), end)
@@ -130,6 +136,8 @@ nonisolated struct EPGProgramCell: Identifiable, Equatable {
     let listingID: String?
     let isGap: Bool
     let width: CGFloat
+    var artworkURL: String?
+    var subtitle: String?
 
     func isLive(at now: Date) -> Bool {
         !isGap && start <= now && now < end
@@ -272,7 +280,9 @@ enum EPGGridBuilder {
                 end: clampedEnd,
                 listingID: listing.id,
                 isGap: false,
-                width: timeline.width(from: clampedStart, to: clampedEnd)
+                width: timeline.width(from: clampedStart, to: clampedEnd),
+                artworkURL: listing.artworkURL,
+                subtitle: listing.subtitle
             ))
             cursor = clampedEnd
         }

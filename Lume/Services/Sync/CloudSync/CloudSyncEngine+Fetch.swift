@@ -206,7 +206,7 @@ extension CloudSyncEngine {
     /// non-profile-scoped channel — see `CloudSyncEngine+Parental`.
     func categoryEntries() throws -> [(String, LocalContentEntry)] {
         let categories = try catalogContext.fetch(FetchDescriptor<Category>(
-            predicate: #Predicate { $0.isHidden || $0.customOrder != nil }
+            predicate: #Predicate { $0.isHidden || $0.customOrder != nil || $0.epgEnrichmentEnabled != nil }
         ))
         return categories.map { category in
             (category.id, LocalContentEntry(
@@ -218,7 +218,8 @@ extension CloudSyncEngine {
                     addedToWatchlistDate: nil,
                     favoriteOrder: nil,
                     isHidden: category.isHidden,
-                    customOrder: category.customOrder
+                    customOrder: category.customOrder,
+                    epgEnrichmentEnabled: category.epgEnrichmentEnabled
                 ),
                 kind: .category,
                 model: category

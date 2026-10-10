@@ -496,6 +496,7 @@ nonisolated struct ContentStateValues: Codable, Equatable {
     /// within-category order is intentionally device-local (it would write one
     /// record per channel), so live entries always leave this nil.
     var customOrder: Int?
+    var epgEnrichmentEnabled: Bool?
 
     /// Whether every field is at its default — such an item carries no user
     /// state and is represented as *absent* (nil) so it never gets a cloud
@@ -504,7 +505,7 @@ nonisolated struct ContentStateValues: Codable, Equatable {
         watchProgress == 0 && !isWatched && lastWatchedDate == nil
             && !isFavorite && addedToWatchlistDate == nil && favoriteOrder == nil
             && recommendationVoteRaw == 0
-            && !isHidden && customOrder == nil
+            && !isHidden && customOrder == nil && epgEnrichmentEnabled == nil
     }
 
     /// Conflict policy (both devices changed this item since the last sync):
@@ -529,7 +530,10 @@ nonisolated struct ContentStateValues: Codable, Equatable {
             isHidden: local.isHidden || cloud.isHidden,
             // Prefer a concrete order; only one device realistically reorders a
             // given group between syncs, so a non-nil value is the intended one.
-            customOrder: local.customOrder ?? cloud.customOrder
+            customOrder: local.customOrder ?? cloud.customOrder,
+            // In a genuine simultaneous conflict, respect the lower-resource choice.
+            epgEnrichmentEnabled: local.epgEnrichmentEnabled == false || cloud.epgEnrichmentEnabled == false
+                ? false : local.epgEnrichmentEnabled ?? cloud.epgEnrichmentEnabled
         )
     }
 
@@ -562,7 +566,7 @@ extension ContentStateValues {
     enum CodingKeys: String, CodingKey {
         case watchProgress, isWatched, lastWatchedDate, isFavorite
         case addedToWatchlistDate, favoriteOrder, recommendationVoteRaw
-        case isHidden, customOrder
+        case isHidden, customOrder, epgEnrichmentEnabled
     }
 
     /// Hand-rolled decode so a shadow baseline persisted before a field existed
@@ -581,5 +585,6 @@ extension ContentStateValues {
         recommendationVoteRaw = try container.decodeIfPresent(Int.self, forKey: .recommendationVoteRaw) ?? 0
         isHidden = try container.decodeIfPresent(Bool.self, forKey: .isHidden) ?? false
         customOrder = try container.decodeIfPresent(Int.self, forKey: .customOrder)
+        epgEnrichmentEnabled = try container.decodeIfPresent(Bool.self, forKey: .epgEnrichmentEnabled)
     }
 }

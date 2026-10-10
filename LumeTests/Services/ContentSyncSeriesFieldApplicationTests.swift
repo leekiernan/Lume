@@ -132,7 +132,7 @@ struct ContentSyncSeriesFieldTests {
         #expect(!reSync.hasChanges)
     }
 
-    @Test func `series nil and empty string transitions are written`() async throws {
+    @Test func `absent and empty series metadata leave unset fields clean`() async throws {
         let container = try FieldFixtures.makeContainer()
         let manager = ContentSyncManager(modelContainer: container)
         let playlistId = UUID()
@@ -153,7 +153,8 @@ struct ContentSyncSeriesFieldTests {
         #expect(inserted.cast == nil)
         #expect(inserted.tmdbId == nil, "An absent provider tmdb must leave the resolved id alone")
 
-        // Most rows in a real payload carry "" here, not null.
+        // Most rows in a real payload carry "" here, not null. Neither is
+        // meaningful metadata, so switching between them must not dirty rows.
         let toEmpty = ModelContext(container)
         toEmpty.autosaveEnabled = false
         let stored = try #require(try toEmpty.fetch(
@@ -164,10 +165,10 @@ struct ContentSyncSeriesFieldTests {
             to: stored,
             playlistPrefix: prefix
         )
-        #expect(toEmpty.hasChanges, "nil → \"\" is a real change and must be written")
-        #expect(stored.cast == "")
-        #expect(stored.director == "")
-        #expect(stored.tmdb == "")
+        #expect(!toEmpty.hasChanges)
+        #expect(stored.cast == nil)
+        #expect(stored.director == nil)
+        #expect(stored.tmdb == nil)
         try toEmpty.save()
 
         let toNil = ModelContext(container)
@@ -180,7 +181,7 @@ struct ContentSyncSeriesFieldTests {
             to: reFetched,
             playlistPrefix: prefix
         )
-        #expect(toNil.hasChanges, "\"\" → nil is a real change and must be written")
+        #expect(!toNil.hasChanges)
         #expect(reFetched.cast == nil)
         #expect(reFetched.director == nil)
         #expect(reFetched.tmdb == nil)

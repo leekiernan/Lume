@@ -36,7 +36,8 @@ struct EPGGuideView: View {
     @Environment(\.contentRestriction) private var restriction
     @Query private var streams: [LiveStream]
 
-    private let timeline: EPGTimeline
+    @State private var timeline: EPGTimeline
+    @State private var loadedScope: ChannelEPGLoadMachine.Scope?
 
     /// The guide window's programme cells, grouped by channel. Fetched *and*
     /// tiled in one off-main pass scoped to *this category's* channels (see
@@ -78,7 +79,7 @@ struct EPGGuideView: View {
         let timeline = EPGTimeline.live(
             now: Date(), pointsPerMinute: EPGMetrics.current.pointsPerMinute, hoursBehind: 12
         )
-        self.timeline = timeline
+        _timeline = State(initialValue: timeline)
 
         _streams = Query(LiveChannelQuery.descriptor(for: scope, sort: .playlist))
     }
@@ -89,6 +90,10 @@ struct EPGGuideView: View {
 
     var body: some View {
         let channels = scopedStreams
+        let readScope = ChannelEPGLoadMachine.Scope(playlistPrefix: playlistPrefix, visibilityToken: restriction.visibilityToken, channelScope: scope)
+        let readKey = EPGGuideReadKey(scope: readScope, channelIDs: Set(channels.compactMap(\.epgChannelId)),
+                                      channelOrder: channels.map(\.id),
+                                      revision: epgSync.readRevision, hour: epgSync.clockMinute / 60)
         let focusScope = TVContentFocusRequest.Scope(playlistPrefix: playlistPrefix, channelScope: scope, visibilityToken: restriction.visibilityToken)
         Group {
             if channels.isEmpty {
@@ -99,9 +104,9 @@ struct EPGGuideView: View {
                 )
             } else {
                 EPGGridScroller(
-                    rows: buildRows(for: channels),
+                    rows: buildRows(for: channels, scope: readScope),
                     timeline: timeline,
-                    dataVersion: dataVersion,
+                    dataVersion: loadedScope == readScope ? dataVersion : -1,
                     onPlay: onPlay,
                     onPlayCatchup: onPlayCatchup,
                     onStartMultiView: onStartMultiView,
@@ -112,11 +117,17 @@ struct EPGGuideView: View {
             }
         }
         .completingEmptyTVFocus(focusRequest, scope: focusScope, hasChannels: !channels.isEmpty, onComplete: onDidClaimFocus)
-        // Reload when the channel set changes or a guide import settles. Keyed on
-        // `isSyncing` (which flips twice per sync) rather than observing the store,
-        // so the grid rebuilds a handful of times — not on every batch write.
-        .task(id: "\(channels.count)-\(epgSync.isSyncing)") {
-            await loadListings(for: channels)
+        // Local reloads need no network sync, and a download starting does not
+        // invalidate the last committed snapshot or reset native focus.
+        .task(id: readKey) {
+            guard !Task.isCancelled else { return }
+            epgSync.ensureCoverage(channelIDs: readKey.channelIDs)
+            if timeline.needsReanchor(at: Date()) {
+                loadedScope = nil
+                dataVersion += 1
+                timeline = EPGTimeline.live(now: Date(), pointsPerMinute: EPGMetrics.current.pointsPerMinute, hoursBehind: 12)
+            }
+            await loadListings(for: channels, scope: readScope)
         }
     }
 
@@ -128,10 +139,10 @@ struct EPGGuideView: View {
     /// the frozen channel column only redraws when its rows change shape, so a
     /// late arrival would never show. Both collections are small, so this is
     /// one short fetch.
-    private func buildRows(for channels: [LiveStream]) -> [EPGChannelRow] {
-        let categoryNames = scope.showsCategoryLabels ? LiveCategoryNames.names(for: channels, in: modelContext) : [:]
+    private func buildRows(for channels: [LiveStream], scope: ChannelEPGLoadMachine.Scope) -> [EPGChannelRow] {
+        let categoryNames = self.scope.showsCategoryLabels ? LiveCategoryNames.names(for: channels, in: modelContext) : [:]
         return EPGGridBuilder.rows(
-            streams: channels, cellsByChannel: cellsByChannel, timeline: timeline, categoryNames: categoryNames
+            streams: channels, cellsByChannel: loadedScope == scope ? cellsByChannel : [:], timeline: timeline, categoryNames: categoryNames
         )
     }
 
@@ -139,10 +150,11 @@ struct EPGGuideView: View {
     /// first, so a large category paints its opening viewport immediately,
     /// then the full window in the background. Each phase fetches *and* tiles
     /// off-main and lands as one `dataVersion` bump.
-    private func loadListings(for channels: [LiveStream]) async {
+    private func loadListings(for channels: [LiveStream], scope: ChannelEPGLoadMachine.Scope) async {
         let channelIds = Array(Set(channels.compactMap(\.epgChannelId).filter { !$0.isEmpty }))
         guard !channelIds.isEmpty else {
             cellsByChannel = [:]
+            loadedScope = scope
             dataVersion += 1
             return
         }
@@ -167,6 +179,7 @@ struct EPGGuideView: View {
         let quick = await loadChunk(from: quickStart, to: quickEnd)
         guard !Task.isCancelled else { return }
         cellsByChannel = quick
+        loadedScope = scope
         dataVersion += 1
 
         let full = await loadChunk(from: timeline.start, to: timeline.end)

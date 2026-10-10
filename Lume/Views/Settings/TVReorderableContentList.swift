@@ -392,26 +392,30 @@
         }
     }
 
-    /// Compact square icon button used for the per-row hide toggle.
+    /// Compact square icon button for per-row controls, optionally highlighted
+    /// for a persistent selection independently of remote focus.
     struct TVContentIconButtonStyle: ButtonStyle {
+        var isSelected = false
+
         func makeBody(configuration: Configuration) -> some View {
-            StyleBody(configuration: configuration)
+            StyleBody(configuration: configuration, isSelected: isSelected)
         }
 
         struct StyleBody: View {
             let configuration: ButtonStyleConfiguration
+            let isSelected: Bool
             @Environment(\.isFocused) private var isFocused
             @Environment(\.isEnabled) private var isEnabled
 
             var body: some View {
                 configuration.label
                     .font(.system(size: 24, weight: .semibold))
-                    .foregroundStyle(isFocused ? .lumeNight : .white)
+                    .foregroundStyle(isFocused ? .lumeNight : (isSelected ? .lumeAccent : .white))
                     .opacity(isEnabled ? 1 : 0.25)
                     .frame(width: TVSettingsMetrics.rowMinHeight, height: TVSettingsMetrics.rowMinHeight)
                     .background(
                         RoundedRectangle(cornerRadius: TVSettingsMetrics.rowCornerRadius, style: .continuous)
-                            .fill(isFocused ? .white : TVSettingsMetrics.rowFill)
+                            .fill(isFocused ? .white : (isSelected ? Color.lumeAccent.opacity(0.16) : TVSettingsMetrics.rowFill))
                     )
                     .animation(.easeOut(duration: 0.15), value: isFocused)
             }

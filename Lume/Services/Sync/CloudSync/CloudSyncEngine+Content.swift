@@ -65,6 +65,7 @@ extension CloudSyncEngine {
             mirror.recommendationVoteRaw = value.recommendationVoteRaw
             mirror.isHidden = value.isHidden
             mirror.customOrder = value.customOrder
+            mirror.epgEnrichmentEnabled = value.epgEnrichmentEnabled
             mirror.updatedAt = Date()
         } else {
             cloudContext.insert(UserContentState(
@@ -79,7 +80,8 @@ extension CloudSyncEngine {
                 favoriteOrder: value.favoriteOrder,
                 recommendationVoteRaw: value.recommendationVoteRaw,
                 isHidden: value.isHidden,
-                customOrder: value.customOrder
+                customOrder: value.customOrder,
+                epgEnrichmentEnabled: value.epgEnrichmentEnabled
             ))
         }
     }
@@ -146,6 +148,7 @@ extension CloudSyncEngine {
         guard let category = try (loaded as? Category) ?? fetchCategory(id) else { return false }
         category.isHidden = values.isHidden
         category.customOrder = values.customOrder
+        category.epgEnrichmentEnabled = values.epgEnrichmentEnabled
         return true
     }
 
@@ -182,6 +185,7 @@ extension CloudSyncEngine {
             // survive a profile switch — leave it untouched.
             category.isHidden = false
             category.customOrder = nil
+            category.epgEnrichmentEnabled = nil
         default:
             break
         }

@@ -78,6 +78,14 @@ final class EPGSyncService {
     static let shared = EPGSyncService()
 
     private(set) var isSyncing = false
+    private(set) var enrichmentReport: EPGEnrichmentReport?
+    /// Readers observe this rather than download status. A 304 or failed fetch
+    /// does not change the guide; a foreground return reloads local readers.
+    private(set) var readRevision: UInt64 = 0
+    private(set) var clockMinute = Int(Date().timeIntervalSince1970 / 60)
+    @ObservationIgnored private var committedSources: [UUID: UInt64] = [:]
+    @ObservationIgnored private var coverageTask: Task<Void, Never>?
+    @ObservationIgnored private var coverageChecks: [Set<String>: Date] = [:]
 
     private var container: ModelContainer?
     private var task: Task<Void, Never>?
@@ -85,25 +93,49 @@ final class EPGSyncService {
     /// cancels — rather than a manual "Sync Now", which the viewer asked for.
     @ObservationIgnored private var isBackgroundRefresh = false
     @ObservationIgnored private var gate = EPGRefreshGate()
+    @ObservationIgnored private var enrichmentRefreshOwed = false
+    @ObservationIgnored private var selectionMonitor: EPGEnrichmentSelectionMonitor?
 
     /// Whether the app is in the foreground, set from the scene phase. The
     /// periodic check only runs then.
-    @ObservationIgnored var isForeground = true
+    @ObservationIgnored var isForeground = true {
+        didSet {
+            if isForeground, !oldValue {
+                coverageChecks = [:]
+                clockMinute = Int(Date().timeIntervalSince1970 / 60)
+                readRevision &+= 1
+            }
+        }
+    }
+
     @ObservationIgnored private var periodicTask: Task<Void, Never>?
-    /// How often the schedule is re-checked while the app stays open. Cheap —
-    /// a date comparison — and only an actual due refresh does any work.
-    static let periodicCheckInterval: Duration = .seconds(30 * 60)
+    /// Minute ticks refresh now/next locally; network scheduling remains half-hourly.
+    static let periodicCheckInterval: Duration = .seconds(60)
 
     private init() {}
 
     func configure(container: ModelContainer) {
+        if self.container !== container {
+            coverageChecks = [:]
+            selectionMonitor = EPGEnrichmentSelectionMonitor(container: container) { [weak self] in
+                self?.refreshEnrichment()
+            }
+        }
         self.container = container
+        updateCommittedRevision()
     }
 
     /// Manual trigger (settings "Sync Now"): refreshes now regardless of the
     /// schedule or any in-flight content sync.
     func syncNow() {
-        kick()
+        kick(allowConditional: false)
+    }
+
+    /// A metadata setting change must not force another full provider download.
+    /// Uses the same task lifetime, admission gate and committed-reader reload.
+    func refreshEnrichment() {
+        enrichmentRefreshOwed = true
+        runOwedRefresh()
     }
 
     /// Background trigger: refreshes only if the guide is stale per the EPG
@@ -116,33 +148,92 @@ final class EPGSyncService {
     /// launch, so the guide ran out of listings and went empty — and a launch
     /// under a profile with Live TV off skipped it with nothing to try again.
     func syncIfDue(reason: String) {
-        guard isDue else {
+        if selectionMonitor?.check(notify: false) == true { enrichmentRefreshOwed = true }
+        let providerDue = isDue
+        guard providerDue || enrichmentRefreshOwed || EPGEnrichmentSettings.isDue() else {
             Logger.database.debug("EPG refresh not due (\(reason, privacy: .public))")
+            ensureCoverage(reason: reason)
             return
         }
+        guard !ContentIndexingService.shared.isPlaybackActive else { return }
         guard gate.request() else {
             Logger.database.info("EPG refresh due (\(reason, privacy: .public)) — waiting for a playlist sync")
             return
         }
         Logger.database.info("EPG refresh due (\(reason, privacy: .public))")
-        kick(background: true)
+        // Daily metadata does not shorten a weekly provider schedule or stamp
+        // its last-success date without actually checking that provider.
+        kick(background: true, metadataOnly: !providerDue)
     }
 
-    /// Re-checks the schedule every `periodicCheckInterval` while the app is
-    /// open in the foreground — for a TV left on Lume for hours. Never during
-    /// playback: a guide import's saves merge into the main context and
+    /// Ticks the local clock every minute and re-checks the network schedule
+    /// every half-hour while foregrounded — for a TV left on Lume for hours.
+    /// Never imports during playback: saves merge into the main context and
     /// hitch the player, which is why indexing pauses then too. The next
     /// check after playback catches up. Idempotent.
     func startPeriodicChecks() {
         guard periodicTask == nil else { return }
         periodicTask = Task(priority: .utility) { [weak self] in
+            var tickCount = 0
             while !Task.isCancelled {
                 try? await Task.sleep(for: Self.periodicCheckInterval)
                 guard let self, !Task.isCancelled else { return }
-                if isForeground, !ContentIndexingService.shared.isPlaybackActive {
+                guard isForeground else { continue }
+                clockMinute = Int(Date().timeIntervalSince1970 / 60)
+                if !ContentIndexingService.shared.isPlaybackActive { runOwedRefresh() }
+                if !ContentIndexingService.shared.isPlaybackActive,
+                   tickCount % 30 == 0
+                {
                     syncIfDue(reason: "periodic")
                 }
+                tickCount += 1
             }
+        }
+    }
+
+    /// One off-main coverage check at a time. Per-source attempt timestamps
+    /// provide backoff even across launches; event channels never trigger it
+    /// unless that source previously supplied programmes for them.
+    func ensureCoverage(channelIDs: Set<String>? = nil, reason: String = "visible guide") {
+        guard let container, coverageTask == nil, task == nil, isForeground,
+              !ContentIndexingService.shared.isPlaybackActive,
+              AppAreaSettings.isEnabled(.liveTV)
+        else { return }
+        let scope = channelIDs ?? []
+        let now = Date()
+        if let previous = coverageChecks[scope], now.timeIntervalSince(previous) >= 0,
+           now.timeIntervalSince(previous) < 5 * 60 { return }
+        if coverageChecks.count >= 64 { coverageChecks = [:] }
+        coverageChecks[scope] = now
+        coverageTask = Task(priority: .utility) {
+            defer { coverageTask = nil }
+            let check = Task.detached(priority: .utility) {
+                try EPGCoverage.needsRecovery(container: container, channelIDs: channelIDs)
+            }
+            do {
+                let repair = try await withTaskCancellationHandler { try await check.value } onCancel: { check.cancel() }
+                guard repair, !Task.isCancelled, isForeground, task == nil else { return }
+                guard gate.request() else { return }
+                Logger.database.info("EPG coverage repair (\(reason, privacy: .public))")
+                kick(background: true, allowConditional: false)
+            } catch {
+                Logger.database.warning("EPG coverage check failed: \(error.localizedDescription, privacy: .public)")
+            }
+        }
+    }
+
+    private func updateCommittedRevision() {
+        guard let container else { return }
+        do {
+            let sources = try ModelContext(container).fetch(FetchDescriptor<EPGSource>(predicate: #Predicate { $0.isEnabled }))
+            let generations = Dictionary(uniqueKeysWithValues: sources.map { ($0.id, $0.committedGeneration) })
+            if generations != committedSources {
+                coverageChecks = [:]
+                committedSources = generations
+                readRevision &+= 1
+            }
+        } catch {
+            Logger.database.warning("EPG revision read failed: \(error.localizedDescription, privacy: .public)")
         }
     }
 
@@ -175,8 +266,16 @@ final class EPGSyncService {
 
     private func runOwedRefresh() {
         // `container` first: taking the debt before `configure` would drop it.
-        guard container != nil, task == nil, gate.takeOwedRefresh() else { return }
-        kick(background: true)
+        guard container != nil, task == nil, AppAreaSettings.isEnabled(.liveTV),
+              !ContentIndexingService.shared.isPlaybackActive, !gate.isContentSyncPending
+        else { return }
+        if gate.takeOwedRefresh() {
+            enrichmentRefreshOwed = false
+            kick(background: true)
+        } else if enrichmentRefreshOwed {
+            enrichmentRefreshOwed = false
+            kick(background: true, metadataOnly: true)
+        }
     }
 
     private var isDue: Bool {
@@ -192,11 +291,10 @@ final class EPGSyncService {
         return frequency.isDue(lastSyncDate: EPGSyncSchedule.lastSyncDate)
     }
 
-    private func kick(background: Bool = false) {
-        // The guide only feeds Live TV, so it follows that area's switch — the
-        // single funnel for every trigger, manual included.
+    private func kick(background: Bool = false, allowConditional: Bool = true, metadataOnly: Bool = false, retrySuperseded: Bool = true) {
+        // Sports availability follows the Live TV switch too.
         guard AppAreaSettings.isEnabled(.liveTV) else {
-            Logger.database.info("EPG refresh skipped: Live TV is switched off")
+            Logger.database.info("EPG refresh skipped: guide-consuming areas are switched off")
             return
         }
         guard let container, task == nil else { return }
@@ -204,29 +302,88 @@ final class EPGSyncService {
         isBackgroundRefresh = background
         let manager = EPGSyncManager(modelContainer: container)
         let profileToken = ActiveProfileStore.current?.uuidString ?? ""
+        let fence = Fence.live
+        selectionMonitor?.check(notify: false)
+        let selectionFingerprint = selectionMonitor?.fingerprint
+        // This pass consumes earlier changes; changes during the await below
+        // remain owed and run once afterward, never alongside this pass.
+        enrichmentRefreshOwed = false
         // Background guide refresh: run below the UI so an in-flight sync (which
         // saves into the shared catalog container, churning browse `@Query`s)
         // yields CPU to the main thread instead of competing with it. The
         // profile showed EPG ingest pegging a background thread at 100% in
         // lockstep with a frozen main thread right after a playlist sync.
         task = Task(priority: .utility) {
-            let outcome = await BackgroundActivity.perform("Guide refresh") {
-                await manager.syncAllSources()
+            let result = await BackgroundActivity.perform("Guide refresh") {
+                await refresh(container: container, manager: manager, metadataOnly: metadataOnly, allowConditional: allowConditional, fence: fence)
             }
-            if outcome == .succeeded, !Task.isCancelled {
+            let report = result.report
+            let superseded = result.superseded || fence != Fence.live
+            var outcome = result.outcome
+            if superseded { outcome = .cancelled }
+            if outcome.isSuccessful, !Task.isCancelled, !metadataOnly {
                 EPGSyncSchedule.lastSyncDate = Date()
                 EPGSyncSchedule.schemaVersion = SyncFrequency.epgCurrentSchemaVersion
             }
+            if outcome.isSuccessful, !Task.isCancelled {
+                selectionMonitor?.published(selectionFingerprint)
+            }
             isSyncing = false
             task = nil
+            recordEnrichment(report, outcome: outcome, profileToken: profileToken)
+            updateCommittedRevision()
             InAppNotifications.shared.report(
                 Task.isCancelled ? .cancelled : outcome,
-                subject: .guide, startedUnder: profileToken, currentProfileToken: ActiveProfileStore.current?.uuidString ?? ""
+                subject: .guide, startedUnder: profileToken, currentProfileToken: ActiveProfileStore.current?.uuidString ?? "",
+                detail: report?.state == .disabled ? nil : report?.message
             )
             Logger.database.info("EPG refresh finished (outcome: \(String(describing: outcome), privacy: .public))")
+            if superseded {
+                Logger.database.info("EPG publication superseded by profile/area changes; cached metadata retained for retry")
+                // Start new work under the current profile, never relax the old
+                // job's fence. One immediate retry avoids an invalidation loop;
+                // persistent publication debt covers later scheduled attempts.
+                if retrySuperseded, !Task.isCancelled, !ContentIndexingService.shared.isPlaybackActive, gate.request() {
+                    kick(background: true, allowConditional: allowConditional, metadataOnly: metadataOnly, retrySuperseded: false)
+                }
+            }
             // A refresh cancelled for a content sync may wind down after that
             // sync already finished and found this task still set.
             runOwedRefresh()
+        }
+    }
+
+    private struct RefreshResult {
+        var outcome: SyncRefreshOutcome
+        var report: EPGEnrichmentReport?
+        var superseded = false
+    }
+
+    private func refresh(container: ModelContainer, manager: EPGSyncManager, metadataOnly: Bool, allowConditional: Bool, fence: Fence) async -> RefreshResult {
+        let enabled = UserDefaults.standard.bool(forKey: EPGEnrichmentSettings.enabledKey)
+        guard metadataOnly else {
+            let outcome = await manager.syncAllSources(allowConditional: allowConditional, enrichProgrammes: enabled)
+            return await RefreshResult(outcome: outcome, report: manager.enrichmentReport)
+        }
+        do {
+            let report = try await EPGEnrichmentSync().sync(container: container, enabled: enabled, fence: fence)
+            return RefreshResult(outcome: report.hasWarning ? .succeededWithWarnings : .succeeded, report: report)
+        } catch is CancellationError {
+            return RefreshResult(outcome: .cancelled)
+        } catch LocalStoreWriteError.superseded {
+            return RefreshResult(outcome: .cancelled, superseded: true)
+        } catch {
+            Logger.database.warning("EPG enrichment publication failed: \(error.localizedDescription, privacy: .public)")
+            return RefreshResult(outcome: .failed)
+        }
+    }
+
+    private func recordEnrichment(_ report: EPGEnrichmentReport?, outcome: SyncRefreshOutcome, profileToken: String) {
+        guard profileToken == (ActiveProfileStore.current?.uuidString ?? "") else { return }
+        if outcome == .cancelled, UserDefaults.standard.bool(forKey: EPGEnrichmentSettings.enabledKey) {
+            enrichmentReport = EPGEnrichmentReport(state: .interrupted)
+        } else if let report {
+            enrichmentReport = report
         }
     }
 }

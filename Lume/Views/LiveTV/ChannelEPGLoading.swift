@@ -6,6 +6,7 @@ import SwiftUI
 /// superseded completion even if SQLite finished after the view task changed.
 enum ChannelEPGLoading {
     static func run(key: ChannelEPGLoadMachine.Key, machine: Binding<ChannelEPGLoadMachine>, container: ModelContainer) async {
+        EPGSyncService.shared.ensureCoverage(channelIDs: key.visibleChannelIDs)
         let now = Date()
         guard !Task.isCancelled, let request = machine.wrappedValue.begin(key, now: now) else { return }
         let answer = await Task.detached(priority: .userInitiated) {

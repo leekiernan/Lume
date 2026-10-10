@@ -13,7 +13,7 @@
 //
 //  A cached answer is reused only while nothing it depends on has moved: the
 //  viewer's category restriction and remembered picks, each playlist's last
-//  sync, each guide source's last sync, and the number of hidden channels. The
+//  sync, each guide source's committed generation, and the number of hidden channels. The
 //  entry also expires after `lifetime`, for what that key can't see (a channel
 //  renamed between syncs).
 //
@@ -68,7 +68,7 @@ nonisolated extension SportsChannelResolver {
         let excludedCategoryIDs: Set<String>
         let picks: [String: String]
         let playlistSyncs: [UUID: Date]
-        let guideSyncs: [UUID: Date]
+        let guideSyncs: [UUID: UInt64]
         let hiddenChannels: Int
 
         /// Read from the store: a few playlist and guide-source rows, and one
@@ -82,7 +82,7 @@ nonisolated extension SportsChannelResolver {
             let playlists = (try? context.fetch(FetchDescriptor<Playlist>())) ?? []
             playlistSyncs = Dictionary(uniqueKeysWithValues: playlists.map { ($0.id, $0.lastSyncDate ?? .distantPast) })
             let sources = (try? context.fetch(FetchDescriptor<EPGSource>())) ?? []
-            guideSyncs = Dictionary(uniqueKeysWithValues: sources.map { ($0.id, $0.lastSyncDate ?? .distantPast) })
+            guideSyncs = Dictionary(uniqueKeysWithValues: sources.map { ($0.id, $0.committedGeneration) })
             hiddenChannels = (try? context.fetchCount(FetchDescriptor<LiveStream>(predicate: #Predicate { $0.isHidden }))) ?? 0
         }
     }

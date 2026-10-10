@@ -114,4 +114,22 @@ struct SportsResolveCacheTests {
         let afterHiding = await SportsChannelResolver.resolve(container: container, fixtures: [game])
         #expect((afterHiding[game.id] ?? []).isEmpty)
     }
+
+    @Test func `unchanged guide checks retain cache generation but published snapshots invalidate it`() throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        let source = EPGSource(name: "Guide", url: "https://example.com/guide.xml")
+        source.committedGeneration = 1
+        context.insert(source)
+        try context.save()
+        let first = SportsChannelResolver.CacheGeneration(container: container, context: context, restriction: ContentRestriction(), picks: [:])
+        source.lastSyncDate = Date()
+        try context.save()
+        let unchanged = SportsChannelResolver.CacheGeneration(container: container, context: context, restriction: ContentRestriction(), picks: [:])
+        #expect(first == unchanged)
+        source.committedGeneration += 1
+        try context.save()
+        let published = SportsChannelResolver.CacheGeneration(container: container, context: context, restriction: ContentRestriction(), picks: [:])
+        #expect(first != published)
+    }
 }

@@ -4,6 +4,82 @@ import SwiftData
 import Testing
 
 struct EPGProgrammeArtworkTests {
+    @Test func `open programme details invalidate on metadata publication or channel changes`() {
+        let original = EPGProgrammeDetails.ReadKey(programmeID: "stable", channelID: "one", guideRevision: 1)
+        #expect(original == EPGProgrammeDetails.ReadKey(programmeID: "stable", channelID: "one", guideRevision: 1))
+        #expect(original != EPGProgrammeDetails.ReadKey(programmeID: "stable", channelID: "one", guideRevision: 2))
+        #expect(original != EPGProgrammeDetails.ReadKey(programmeID: "stable", channelID: "other", guideRevision: 1))
+        #expect(original != EPGProgrammeDetails.ReadKey(programmeID: "next", channelID: "one", guideRevision: 1))
+    }
+
+    @Test func `programme detail reload reads newly published metadata for the same guide cell`() throws {
+        let container = try ModelContainer(for: EPGListing.self, configurations: ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none))
+        let context = ModelContext(container)
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        let row = EPGListing(id: "stable", channelId: "one", title: "Film", listingDescription: "Provider synopsis", start: start, end: start.addingTimeInterval(3600))
+        context.insert(row)
+        try context.save()
+        let cell = EPGProgramCell(id: "grid-stable", title: row.title, detail: "", start: row.start, end: row.end, listingID: row.id, isGap: false, width: 100)
+        #expect(try EPGProgrammeDetails.load(container: container, channelID: "one", cell: cell)?.artworkURL == nil)
+
+        let writer = ModelContext(container)
+        let published = try #require(try writer.fetch(FetchDescriptor<EPGListing>()).first)
+        published.artworkURL = "https://example.com/enhanced.jpg"
+        published.subtitle = "Episode title"
+        try writer.save()
+
+        let reloaded = try #require(try EPGProgrammeDetails.load(container: container, channelID: "one", cell: cell))
+        #expect(reloaded.artworkURL == "https://example.com/enhanced.jpg")
+        #expect(reloaded.subtitle == "Episode title")
+        #expect(reloaded.synopsis == "Provider synopsis")
+
+        published.artworkURL = nil
+        published.subtitle = nil
+        try writer.save()
+        let restored = try #require(try EPGProgrammeDetails.load(container: container, channelID: "one", cell: cell))
+        #expect(restored.artworkURL == nil)
+        #expect(restored.subtitle == nil)
+        #expect(restored.synopsis == "Provider synopsis")
+    }
+
+    @Test func `guide cells and now next snapshots retain programme artwork subtitles and synopsis`() throws {
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        let row = EPGListing(id: "stable", channelId: "one", title: "Film", listingDescription: "Programme synopsis", start: start,
+                             end: start.addingTimeInterval(3600), subtitle: "Episode title", artworkURL: "https://example.com/film.jpg")
+        let window = EPGWindowListing(row)
+        let timeline = EPGTimeline(start: start.addingTimeInterval(60), end: start.addingTimeInterval(7200), pointsPerMinute: 6)
+        let cells = EPGGridBuilder.cells(for: [window], timeline: timeline)
+        let cell = try #require(cells.first)
+        #expect(cell.start == timeline.start)
+        #expect(cell.detail == "Programme synopsis")
+        #expect(cell.artworkURL == row.artworkURL)
+        #expect(cell.subtitle == "Episode title")
+        #expect(EPGSlot(cell).artworkURL == row.artworkURL)
+        #expect(EPGSlot(window).subtitle == "Episode title")
+        #expect(EPGSlot(row).subtitle == "Episode title")
+        #expect(cells.last?.isGap == true)
+        #expect(cells.last?.artworkURL == nil)
+    }
+
+    @MainActor @Test func `selected programme lookup accepts clipped guide cells and exact hub fallbacks only`() throws {
+        let container = try ModelContainer(for: EPGListing.self, configurations: ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none))
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        let row = EPGListing(id: "stable", channelId: "one", title: "Film", listingDescription: "Synopsis", start: start,
+                             end: start.addingTimeInterval(3600), subtitle: "Episode", artworkURL: "https://example.com/film.jpg")
+        container.mainContext.insert(row)
+        try container.mainContext.save()
+        let cell = EPGProgramCell(id: "grid-stable", title: "Film", detail: "", start: start.addingTimeInterval(60), end: row.end, listingID: "stable", isGap: false, width: 100)
+        let details = try #require(try EPGProgrammeDetails.load(container: container, channelID: "one", cell: cell))
+        #expect(details.synopsis == "Synopsis")
+        #expect(details.artworkURL == row.artworkURL)
+        #expect(details.subtitle == "Episode")
+        #expect(try EPGProgrammeDetails.load(container: container, channelID: "other", cell: cell) == nil)
+        let fallback = EPGProgramCell(id: "synthetic", title: "Film", detail: "", start: row.start, end: row.end, listingID: nil, isGap: false, width: 100)
+        #expect(try EPGProgrammeDetails.load(container: container, channelID: "one", cell: fallback)?.synopsis == "Synopsis")
+        let wrongTime = EPGProgramCell(id: "synthetic", title: "Film", detail: "", start: cell.start, end: row.end, listingID: nil, isGap: false, width: 100)
+        #expect(try EPGProgrammeDetails.load(container: container, channelID: "one", cell: wrongTime) == nil)
+    }
+
     @Test func `programme metadata persists without changing listing identity`() throws {
         let container = try ModelContainer(for: EPGListing.self, configurations: ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none))
         let context = ModelContext(container)

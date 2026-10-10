@@ -4,6 +4,13 @@ import SwiftData
 /// Common scalar/BLOB metadata only. Full-detail cast replacement and
 /// provider-specific ratings, runtime and collection fields remain explicit.
 nonisolated protocol EnrichedTitle: PersistentModel {
+    var id: String { get }
+    var tmdbId: Int? { get set }
+    var proxyMetadataData: Data? { get set }
+    var tmdbFallbackData: Data? { get set }
+    var tmdbCastInvalidated: Bool { get set }
+    var indexedAt: Date? { get set }
+    var embeddingData: Data? { get set }
     var backdropPath: String? { get set }
     var posterPath: String? { get set }
     var posterCheckedAt: Date? { get set }
@@ -49,23 +56,31 @@ nonisolated extension EnrichedTitle {
     }
 
     var orderedCast: [CastMember] {
-        castMembers.sorted { $0.order < $1.order }
+        tmdbCastInvalidated ? [] : castMembers.sorted { $0.order < $1.order }
     }
 
     /// Never touches cast relationships or claims full-detail freshness.
     func applyCommonArtwork(_ details: TMDBTitleDetails) {
         backdropPath = details.backdropPath ?? backdropPath
         posterPath = details.posterPath ?? posterPath
-        posterCheckedAt = Date()
+        posterCheckedAt = details.proxyReceipt?.artworkAt ?? Date()
         logoPath = details.logoPath ?? logoPath
         tagline = details.tagline ?? tagline
         contentRating = details.contentRating ?? contentRating
         imdbId = details.imdbId ?? imdbId
         similarTitleIds = details.similarIDs
         trailers = details.videos
-        if (plot ?? "").isEmpty, let overview = details.overview { plot = overview }
-        if !details.genreNames.isEmpty { genre = details.genreNames.joined(separator: ", ") }
-        tmdbArtworkEnrichedAt = Date()
+        if (plot ?? "").isEmpty, let overview = details.overview {
+            recordTMDBFallback(.plot, previous: plot, applied: overview)
+            plot = overview
+        }
+        if !details.genreNames.isEmpty {
+            let value = details.genreNames.joined(separator: ", ")
+            recordTMDBFallback(.genre, previous: genre, applied: value)
+            genre = value
+        }
+        tmdbArtworkEnrichedAt = details.proxyReceipt?.artworkAt ?? Date()
+        recordProxyReceipt(details.proxyReceipt, fullDetails: false)
     }
 
     /// Keep the existing storage-clear contract: posters/provider fields stay;
@@ -85,5 +100,6 @@ nonisolated extension EnrichedTitle {
         imdbId = nil
         externalRatingsData = nil
         ratingsEnrichedAt = nil
+        proxyMetadataData = nil
     }
 }

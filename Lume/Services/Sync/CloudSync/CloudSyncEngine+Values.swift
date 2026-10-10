@@ -54,7 +54,8 @@ extension CloudSyncEngine {
             favoriteOrder: mirror.favoriteOrder,
             recommendationVoteRaw: mirror.recommendationVoteRaw,
             isHidden: mirror.isHidden,
-            customOrder: mirror.customOrder
+            customOrder: mirror.customOrder,
+            epgEnrichmentEnabled: mirror.epgEnrichmentEnabled
         )
     }
 }

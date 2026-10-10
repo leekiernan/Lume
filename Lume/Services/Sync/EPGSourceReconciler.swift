@@ -51,6 +51,14 @@ nonisolated enum EPGSourceReconciler {
             // Preserve the user's enabled choice; only refresh the derived fields.
             guard existing.name != sourceName(for: playlist) || existing.url != desiredURL else { return false }
             existing.name = sourceName(for: playlist)
+            if existing.url != desiredURL {
+                existing.lastSyncDate = nil
+                existing.lastAttemptDate = nil
+                existing.validatorURL = nil
+                existing.lastModified = nil
+                existing.entityTag = nil
+                existing.committedGeneration = 0
+            }
             existing.url = desiredURL
         } else {
             context.insert(EPGSource(name: sourceName(for: playlist), url: desiredURL, playlistID: playlistID))

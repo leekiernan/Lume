@@ -4,7 +4,11 @@ import Observation
 /// A skipped or cancelled refresh is not a failed refresh. Shared by the
 /// playlist runner and guide service, not by their individual provider stages.
 nonisolated enum SyncRefreshOutcome: Equatable {
-    case succeeded, failed, skipped, cancelled
+    case succeeded, succeededWithWarnings, failed, skipped, cancelled
+
+    var isSuccessful: Bool {
+        self == .succeeded || self == .succeededWithWarnings
+    }
 }
 
 /// In-app sync completions and programme reminders: no system notifications, persistence or
@@ -18,6 +22,7 @@ final class InAppNotifications {
         let subject: Subject
         let outcome: SyncRefreshOutcome?
         let profileToken: String
+        var detail: String?
     }
 
     enum Subject: Equatable {
@@ -62,14 +67,15 @@ final class InAppNotifications {
         _ outcome: SyncRefreshOutcome,
         subject: Subject,
         startedUnder profileToken: String,
-        currentProfileToken: String
+        currentProfileToken: String,
+        detail: String? = nil
     ) {
-        guard outcome == .succeeded || outcome == .failed,
+        guard outcome.isSuccessful || outcome == .failed,
               profileToken == currentProfileToken else { return }
         // While the app is suspended, retain the latest result per source rather
         // than replaying hours of repeated scheduled refreshes on return.
         pending.removeAll { $0.subject == subject && $0.profileToken == profileToken }
-        pending.append(Notice(subject: subject, outcome: outcome, profileToken: profileToken))
+        pending.append(Notice(subject: subject, outcome: outcome, profileToken: profileToken, detail: detail))
     }
 
     func retainProfile(_ token: String) {

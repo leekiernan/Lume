@@ -89,7 +89,7 @@
             )
             let epgKey = ChannelEPGLoadMachine.Key(
                 scope: epgScope,
-                refresh: .init(channelIDs: Set(channels.compactMap(\.epgChannelId)), guideIsSyncing: epgSync.isSyncing),
+                refresh: .init(channelIDs: Set(channels.compactMap(\.epgChannelId)), revision: epgSync.readRevision, minute: epgSync.clockMinute),
                 visibleChannelIDs: Set(visible.compactMap(\.epgChannelId))
             )
             let epgByChannel = epgLoad.snapshot(for: epgScope)

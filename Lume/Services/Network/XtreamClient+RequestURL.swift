@@ -17,6 +17,13 @@ nonisolated extension XtreamClient {
         return endpointURL(serverURL: playlist.serverURL, path: "xmltv.php", queryItems: credentials(for: playlist))
     }
 
+    /// Optional Lume extensions use the same base path, account and provider
+    /// query as Xtream, but are never inferred from an ordinary catalogue row.
+    static func lumeCapabilitiesURL(for playlist: Playlist) -> URL? {
+        guard !playlist.serverURL.isEmpty else { return nil }
+        return endpointURL(serverURL: playlist.serverURL, path: "lume/v1/capabilities", queryItems: credentials(for: playlist))
+    }
+
     private static func credentials(for playlist: Playlist) -> [URLQueryItem] {
         [
             URLQueryItem(name: "username", value: playlist.username),

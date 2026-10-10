@@ -182,7 +182,7 @@ import SwiftUI
         /// the same key as the phone rail's; it never waits for a sync to end.
         private var resolveKey: String {
             guard premium.isPremium else { return "idle" }
-            return SportsFixtureResolutionMachine.requestKey(for: railFixtures, visibilityToken: restriction.visibilityToken, refreshingOn: [epg.isSyncing, isSyncBusy])
+            return SportsFixtureResolutionMachine.requestKey(for: railFixtures, visibilityToken: restriction.visibilityToken, refreshingOn: [isSyncBusy], guideRevision: epg.readRevision)
         }
 
         private func runResolve() async {

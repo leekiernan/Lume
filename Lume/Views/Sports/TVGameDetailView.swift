@@ -38,11 +38,7 @@
         @State private var tab: GameDetailTab = .timeline
         @State private var resolution = SportsFixtureResolutionMachine()
         @State private var playingMedia: PlayableMedia?
-        private enum FocusTarget: Hashable {
-            case channel(String)
-            case follow(String)
-            case tab(GameDetailTab)
-        }
+        private typealias FocusTarget = SportsDetailFocusTarget<GameDetailTab>
 
         @FocusState private var focus: FocusTarget?
         @AppStorage(SportsSyncService.hideScoresKey) private var hideScoresSetting = false
@@ -57,13 +53,12 @@
         }
 
         private var defaultFocus: FocusTarget {
-            if fixture.status.state != .final, let channel = channels.first {
-                return .channel(channel.id)
-            }
-            if let team = fixture.home?.team ?? fixture.away?.team {
-                return .follow(team.id)
-            }
-            return .tab(tab)
+            .preferred(
+                channelID: fixture.status.state == .final ? nil : channels.first?.id,
+                teamID: (fixture.home?.team ?? fixture.away?.team)?.id,
+                availableTabs: detailLoad.detail?.availableTabs(hidingScores: hidesScores) ?? [],
+                selectedTab: tab
+            )
         }
 
         /// Hide Scores, unless this one game has been revealed.
@@ -131,6 +126,17 @@
                     eventHeader
                 }
             }
+            // A UFC/racing event without channels or tabs is still a pushed
+            // detail screen. Keep a real landing here so focus (and native Back)
+            // stays inside its NavigationStack instead of falling to the app tab.
+            .background {
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .fill(.white.opacity(focus == .summary ? 0.14 : 0))
+                    .padding(-24)
+            }
+            .focusable(!fixture.hasTeams)
+            .focused($focus, equals: .summary)
+            .animation(.easeOut(duration: 0.15), value: focus == .summary)
         }
 
         private var leagueLine: some View {

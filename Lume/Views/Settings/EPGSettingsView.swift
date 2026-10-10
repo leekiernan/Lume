@@ -16,6 +16,7 @@ struct EPGSettingsView: View {
     @Query(sort: \EPGSource.addedAt) private var sources: [EPGSource]
     @State private var epgSync = EPGSyncService.shared
     @AppStorage(SyncFrequency.epgStorageKey) private var freqRaw = SyncFrequency.epgDefaultValue.rawValue
+    @AppStorage(EPGEnrichmentSettings.enabledKey) private var enrichmentEnabled = false
 
     @State private var showingAdd = false
     #if os(tvOS)
@@ -30,12 +31,47 @@ struct EPGSettingsView: View {
         )
     }
 
+    /// Both platform layouts expose the same result, including a deferred or
+    /// unavailable supplement beside an otherwise healthy provider guide.
+    @ViewBuilder private var enrichmentStatus: some View {
+        if enrichmentEnabled, let report = epgSync.enrichmentReport {
+            VStack(alignment: .leading, spacing: 4) {
+                if report.feeds.isEmpty {
+                    enrichmentResult(report)
+                } else {
+                    ForEach(report.feeds, id: \.feedID) { feed in
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(verbatim: feed.feedID?.label ?? "EPGShare")
+                            enrichmentResult(feed)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder private func enrichmentResult(_ report: EPGEnrichmentReport) -> some View {
+        Text(verbatim: report.message)
+        if report.verifiedStations > 0 {
+            Text("\(report.verifiedStations) verified stations · \(report.matchedProgrammes) exact matches · \(report.changedProgrammes) changed")
+        }
+        if let checked = report.checkedAt {
+            Text("Last metadata check: \(checked.formatted(date: .abbreviated, time: .shortened))")
+        }
+        if let retry = report.retryAt {
+            Text("Retry after: \(retry.formatted(date: .abbreviated, time: .shortened))")
+        }
+    }
+
     var body: some View {
-        #if os(tvOS)
-            tvBody
-        #else
-            formBody
-        #endif
+        Group {
+            #if os(tvOS)
+                tvBody
+            #else
+                formBody
+            #endif
+        }
+        .onChange(of: enrichmentEnabled) { _, _ in epgSync.refreshEnrichment() }
     }
 
     // MARK: - Actions
@@ -66,6 +102,7 @@ struct EPGSettingsView: View {
         var formBody: some View {
             Form {
                 sourcesSection
+                enrichmentSection
                 refreshSection
             }
             #if os(macOS)
@@ -157,6 +194,19 @@ struct EPGSettingsView: View {
                 Text("Automatic Refresh")
             } footer: {
                 Text("The TV guide refreshes automatically in the background at this interval.")
+            }
+        }
+
+        var enrichmentSection: some View {
+            Section {
+                Toggle("EPGShare metadata (experimental)", isOn: $enrichmentEnabled)
+                    .disabled(epgSync.isSyncing)
+                enrichmentStatus.font(.caption).foregroundStyle(.secondary)
+            } footer: {
+                Text("""
+                Adds programme artwork and details for verified UK broadcasters and US PBS stations in enabled categories. Keeps your provider's schedule. \
+                Country guides download one at a time: UK every 12 hours, US PBS daily.
+                """)
             }
         }
     }
@@ -263,6 +313,7 @@ struct EPGSettingsView: View {
             VStack(alignment: .leading, spacing: 36) {
                 tvSourcesSection
                 tvAddSection
+                tvEnrichmentSection
                 tvRefreshSection
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -396,6 +447,28 @@ struct EPGSettingsView: View {
                 Text("The TV guide refreshes automatically in the background at this interval.")
                     .tvSettingsFooter()
                     .padding(.top, 6)
+            }
+        }
+
+        var tvEnrichmentSection: some View {
+            VStack(alignment: .leading, spacing: 8) {
+                Button {
+                    enrichmentEnabled.toggle()
+                } label: {
+                    TVSettingsToggleLabel(isOn: enrichmentEnabled) {
+                        Text("EPGShare metadata (experimental)")
+                    }
+                }
+                .buttonStyle(TVSettingsRowButtonStyle())
+                .accessibilityValue(enrichmentEnabled ? Text("On") : Text("Off"))
+                .disabled(epgSync.isSyncing)
+
+                Text("""
+                Adds programme artwork and details for verified UK broadcasters and US PBS stations in enabled categories. Keeps your provider's schedule. \
+                Country guides download one at a time: UK every 12 hours, US PBS daily.
+                """)
+                .tvSettingsFooter()
+                enrichmentStatus.tvSettingsFooter()
             }
         }
     }

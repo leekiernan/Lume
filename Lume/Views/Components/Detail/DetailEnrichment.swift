@@ -19,8 +19,7 @@ nonisolated enum TMDBFreshness {
     /// Whether a title stamped at `enrichedAt` is still inside the window.
     /// A never-enriched title (`nil`) is stale.
     static func isFresh(_ enrichedAt: Date?, now: Date = Date()) -> Bool {
-        guard let enrichedAt else { return false }
-        return now.timeIntervalSince(enrichedAt) < window
+        LumeMetadataReceipt.isFresh(enrichedAt, now: now)
     }
 }
 
@@ -39,21 +38,41 @@ func detailNeedsTMDBFetch(tmdbId: Int?, enrichedAt: Date?) -> Bool {
 /// - Returns: whether details were applied (callers bump their refresh token).
 @discardableResult
 func enrichMovieDetailsIfNeeded(_ movie: Movie, context: ModelContext) async -> Bool {
-    guard let tmdbId = movie.tmdbId, !TMDBFreshness.isFresh(movie.tmdbEnrichedAt) else { return false }
+    guard let tmdbId = movie.tmdbId, !movie.hasFreshTMDBDetails(in: context) else { return false }
     let manager = ContentSyncManager(modelContainer: context.container)
-    guard let details = try? await manager.fetchTMDBMovieDetails(tmdbId: tmdbId), !Task.isCancelled else { return false }
+    guard let details = try? await manager.fetchTMDBMovieDetails(tmdbId: tmdbId, contentID: movie.id), !Task.isCancelled,
+          movie.modelContext != nil, movie.tmdbId == tmdbId, validProxyReceipt(details, for: movie, context: context) else { return false }
     applyMovieDetails(details, to: movie, context: context)
-    try? context.save()
+    do { try context.save() } catch {
+        movie.tmdbEnrichedAt = nil
+        movie.tmdbArtworkEnrichedAt = nil
+        movie.posterCheckedAt = nil
+        movie.invalidateProxyMetadata()
+        return false
+    }
     return true
 }
 
 /// Series counterpart of ``enrichMovieDetailsIfNeeded(_:context:)``.
 @discardableResult
 func enrichSeriesDetailsIfNeeded(_ series: Series, context: ModelContext) async -> Bool {
-    guard let tmdbId = series.tmdbId, !TMDBFreshness.isFresh(series.tmdbEnrichedAt) else { return false }
+    guard let tmdbId = series.tmdbId, !series.hasFreshTMDBDetails(in: context) else { return false }
     let manager = ContentSyncManager(modelContainer: context.container)
-    guard let details = try? await manager.fetchTMDBTVDetails(tmdbId: tmdbId), !Task.isCancelled else { return false }
+    guard let details = try? await manager.fetchTMDBTVDetails(tmdbId: tmdbId, contentID: series.id), !Task.isCancelled,
+          series.modelContext != nil, series.tmdbId == tmdbId, validProxyReceipt(details, for: series, context: context) else { return false }
     applySeriesDetails(details, to: series, context: context)
-    try? context.save()
+    do { try context.save() } catch {
+        series.tmdbEnrichedAt = nil
+        series.tmdbArtworkEnrichedAt = nil
+        series.posterCheckedAt = nil
+        series.invalidateProxyMetadata()
+        return false
+    }
     return true
+}
+
+private func validProxyReceipt(_ details: TMDBTitleDetails, for title: some EnrichedTitle, context: ModelContext) -> Bool {
+    guard let receipt = details.proxyReceipt else { return true }
+    return receipt.matches(source: LumeProxySource.snapshot(contentID: title.id, in: context), tmdbID: title.tmdbId,
+                           language: TMDBClient.preferredLanguageCode())
 }

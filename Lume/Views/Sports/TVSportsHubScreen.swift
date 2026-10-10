@@ -364,7 +364,7 @@
     /// resolution owner; neither starts a competing request on the other's page.
     extension TVSportsHubScreen {
         func resolveKey(_ fixtures: [SportsFixture]) -> String {
-            SportsFixtureResolutionMachine.requestKey(for: fixtures, visibilityToken: restriction.visibilityToken, refreshingOn: [epg.isSyncing])
+            SportsFixtureResolutionMachine.requestKey(for: fixtures, visibilityToken: restriction.visibilityToken, guideRevision: epg.readRevision)
         }
 
         func runResolve(_ fixtures: [SportsFixture]) async {

@@ -43,7 +43,7 @@ nonisolated struct TMDBClient {
     /// override in iOS Settings — there is deliberately no in-app language
     /// picker. Every request localises text, and the title-detail requests also
     /// localise videos and logo artwork.
-    private let language: String
+    let language: String
 
     /// The ISO 639-1 portion of `language` (e.g. `de` from `de-DE`). Used for
     /// the `include_image_language` / `include_video_language` parameters and
@@ -211,6 +211,26 @@ nonisolated struct TMDBClient {
         return response.normalized(isMovie: false, preferredLanguage: languageCode)
     }
 
+    /// The proxy must deliver the same appended groups as the device request.
+    /// Explicit null scalar fields are valid; omitted groups are not complete.
+    static func proxyDetails(from decoder: Decoder, type: LumeMetadataKind, language: String) throws -> TMDBTitleDetails {
+        let container = try decoder.container(keyedBy: TitleDetailsResponse.CodingKeys.self)
+        let common: [TitleDetailsResponse.CodingKeys] = [
+            .posterPath, .backdropPath, .tagline, .overview, .voteAverage, .genres,
+            .credits, .similar, .videos, .images, .externalIds
+        ]
+        let specific: [TitleDetailsResponse.CodingKeys] = type == .movie
+            ? [.runtime, .releaseDates, .belongsToCollection] : [.episodeRunTime, .contentRatings]
+        guard (common + specific).allSatisfy(container.contains) else { throw LumeMetadataError.incomplete }
+        let response = try TitleDetailsResponse(from: decoder)
+        guard response.genres != nil, response.credits?.cast != nil,
+              response.similar != nil, response.videos != nil, response.images?.logos != nil,
+              response.externalIds != nil,
+              type == .movie ? response.releaseDates != nil : response.contentRatings != nil
+        else { throw LumeMetadataError.incomplete }
+        return response.normalized(isMovie: type == .movie, preferredLanguage: String(language.prefix { $0 != "-" }))
+    }
+
     /// Widens the appended `images`/`videos` to the user's language, English,
     /// and (for images) language-neutral artwork — otherwise TMDB filters them
     /// to the `language` value alone, which often returns nothing.
@@ -298,43 +318,6 @@ nonisolated struct TrendingTitle: Identifiable, Hashable {
     let title: String
     let overview: String
     let backdropPath: String?
-}
-
-/// Normalized TMDB detail payload shared by movies and series. Empty/absent
-/// fields are represented as nil / empty arrays so callers can fill gaps in
-/// provider metadata without special-casing the media type.
-nonisolated struct TMDBTitleDetails {
-    var posterPath: String?
-    var backdropPath: String?
-    var tagline: String?
-    var overview: String?
-    var voteAverage: Double?
-    var runtimeMinutes: Int?
-    var genreNames: [String]
-    var contentRating: String?
-    var cast: [TMDBCastMember]
-    var similarIDs: [Int]
-    /// YouTube videos (trailers, teasers, clips) in display order.
-    var videos: [TitleVideo]
-    /// Relative path to the title's wordmark logo (transparent PNG), if any.
-    var logoPath: String?
-    /// IMDb id (e.g. `tt3896198`), used for IntroDB intro/recap-skip lookups.
-    var imdbId: String?
-
-    /// Collection this movie belongs to (only for movies, nil for series).
-    var collectionId: Int?
-    var collectionName: String?
-    var collectionPosterPath: String?
-    var collectionBackdropPath: String?
-}
-
-/// One billed performer from TMDB credits.
-nonisolated struct TMDBCastMember: Hashable {
-    let tmdbPersonId: Int
-    let name: String
-    let character: String?
-    let profilePath: String?
-    let order: Int
 }
 
 // MARK: - DTOs

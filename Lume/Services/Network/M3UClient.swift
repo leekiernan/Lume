@@ -174,23 +174,19 @@ nonisolated class M3UClient {
     /// guides (`guide.xml.gz` — the common way public EPGs are hosted) are
     /// decompressed to a fresh temp file first.
     func downloadEPG(from urlString: String) async throws -> URL {
-        guard let url = URL(string: urlString) else { throw M3UError.invalidURL }
-
-        if url.isFileURL {
-            guard FileManager.default.fileExists(atPath: url.path) else {
-                throw M3UError.fileNotFound
-            }
-            return try gunzipIfNeeded(url, deleteOriginal: false)
+        switch try await downloadGuide(from: urlString) {
+        case let .file(url, _, _): return url
+        case .notModified: throw M3UError.serverError(304)
         }
-
-        let downloaded = try await download(url, suffix: ".xmltv")
-        return try gunzipIfNeeded(downloaded, deleteOriginal: true)
     }
 
-    private func gunzipIfNeeded(_ fileURL: URL, deleteOriginal: Bool) throws -> URL {
-        guard GzipFile.isGzip(fileURL) else { return fileURL }
+    func gunzipIfNeeded(_ fileURL: URL, deleteOriginal: Bool, maximumBytes: Int? = nil) throws -> URL {
+        guard GzipFile.isGzip(fileURL) else {
+            if let maximumBytes, try fileURL.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0 > maximumBytes { throw GzipFile.GzipError.sizeLimitExceeded }
+            return fileURL
+        }
         Logger.network.info("EPG file is gzipped, decompressing")
-        let decompressed = try GzipFile.decompress(fileURL)
+        let decompressed = try GzipFile.decompress(fileURL, maximumBytes: maximumBytes)
         if deleteOriginal {
             try? FileManager.default.removeItem(at: fileURL)
         }

@@ -103,6 +103,13 @@ extension ContentSyncManager {
     /// field copy with one independent guard per provider field, not branching
     /// logic.
     func applyMovieFields(from dto: XtreamVODStream, to movie: Movie, playlistPrefix: String) { // swiftlint:disable:this cyclomatic_complexity
+        let covered = movie.proxyMetadataData == nil ? nil : movie.proxyCoveredFields
+        defer {
+            if let covered, covered != movie.proxyCoveredFields { movie.invalidateProxyMetadata() }
+        }
+        // Withdraw old identity-owned values before applying this response's
+        // provider fields, so even an identical provider rating wins.
+        movie.applyCatalogueTMDB(dto.tmdb, previous: movie.tmdb)
         let name = dto.name ?? ""
         if movie.name != name { movie.name = name }
         if movie.streamIcon != dto.streamIcon { movie.streamIcon = dto.streamIcon }
@@ -122,47 +129,33 @@ extension ContentSyncManager {
             let categoryId = playlistPrefix + catIdStr
             if movie.categoryId != categoryId { movie.categoryId = categoryId }
         }
-        if let tmdbString = dto.tmdb, let tmdbInt = Int(tmdbString), movie.tmdbId != tmdbInt {
-            movie.tmdbId = tmdbInt
-        }
     }
 
     /// Copies the provider-owned fields from a series DTO onto an existing or
     /// freshly-inserted `Series`, leaving user state and TMDB enrichment intact.
     ///
-    /// Dirty-checked for the same reason, and under the same exactness rules, as
-    /// `applyMovieFields`, including the complexity opt-out. `rating` and
+    /// Dirty-checked for the same reason as `applyMovieFields`. Metadata uses
+    /// the shared non-erasing detail/catalogue policy; catalogue bookkeeping
+    /// still mirrors supplied values exactly. `rating` and
     /// `rating5Based` are stored as the provider's own strings here, so no
     /// numeric normalisation applies — `"7"` and `"7.0"` are different values
     /// and must stay so.
-    func applySeriesFields(from dto: XtreamSeries, to series: Series, playlistPrefix: String) { // swiftlint:disable:this cyclomatic_complexity
+    func applySeriesFields(from dto: XtreamSeries, to series: Series, playlistPrefix: String) {
+        let covered = series.proxyMetadataData == nil ? nil : series.proxyCoveredFields
+        defer {
+            if let covered, covered != series.proxyCoveredFields { series.invalidateProxyMetadata() }
+        }
         let name = dto.name ?? ""
         if series.name != name { series.name = name }
-        if series.cover != dto.cover { series.cover = dto.cover }
-        if series.plot != dto.plot { series.plot = dto.plot }
-        if series.cast != dto.cast { series.cast = dto.cast }
-        if series.director != dto.director { series.director = dto.director }
-        // Provider genre is the fallback only: it seeds an unset genre but never
-        // overwrites one TMDB has supplied — TMDB is the primary source (see
-        // `GenreParser.providerFallback`). The guard therefore compares the
-        // computed result; comparing `dto.genre` would rewrite every
-        // TMDB-enriched row on every sync and never settle.
-        let genre = GenreParser.providerFallback(current: series.genre, provider: dto.genre)
-        if series.genre != genre { series.genre = genre }
-        if series.releaseDate != dto.releaseDate { series.releaseDate = dto.releaseDate }
+        series.applyProviderMetadata(dto, fillMissing: false)
         if series.lastModified != dto.lastModified { series.lastModified = dto.lastModified }
-        if series.rating != dto.rating { series.rating = dto.rating }
         if series.rating5Based != dto.rating5Based { series.rating5Based = dto.rating5Based }
-        if series.tmdb != dto.tmdb { series.tmdb = dto.tmdb }
         let num = dto.num ?? 0
         if series.num != num { series.num = num }
 
         if let catIdStr = dto.categoryId {
             let categoryId = playlistPrefix + catIdStr
             if series.categoryId != categoryId { series.categoryId = categoryId }
-        }
-        if let tmdbString = dto.tmdb, let tmdbInt = Int(tmdbString), series.tmdbId != tmdbInt {
-            series.tmdbId = tmdbInt
         }
     }
 

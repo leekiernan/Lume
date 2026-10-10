@@ -241,6 +241,7 @@ private extension CloudSyncEngine {
             mirror.recommendationVoteRaw = values.recommendationVoteRaw
             mirror.isHidden = values.isHidden
             mirror.customOrder = values.customOrder
+            mirror.epgEnrichmentEnabled = values.epgEnrichmentEnabled
             mirror.updatedAt = Date()
         } else {
             let mirror = UserContentState(
@@ -255,7 +256,8 @@ private extension CloudSyncEngine {
                 favoriteOrder: values.favoriteOrder,
                 recommendationVoteRaw: values.recommendationVoteRaw,
                 isHidden: values.isHidden,
-                customOrder: values.customOrder
+                customOrder: values.customOrder,
+                epgEnrichmentEnabled: values.epgEnrichmentEnabled
             )
             cloudContext.insert(mirror)
             map[id] = mirror

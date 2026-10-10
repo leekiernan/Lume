@@ -26,7 +26,7 @@ struct InAppNotificationsTests {
         notifications.report(outcome, subject: subject, startedUnder: started, currentProfileToken: current)
     }
 
-    @Test(arguments: [SyncRefreshOutcome.succeeded, .failed])
+    @Test(arguments: [SyncRefreshOutcome.succeeded, .succeededWithWarnings, .failed])
     func `success and failure each queue a single completion`(_ outcome: SyncRefreshOutcome) throws {
         let notifications = InAppNotifications()
         report(outcome, to: notifications)
@@ -34,6 +34,18 @@ struct InAppNotificationsTests {
         #expect(notice.outcome == outcome)
         #expect(notice.subject == .guide)
         #expect(notifications.pending.count == 1)
+    }
+
+    @Test func `supplementary warnings retain their explanation without failing the provider`() throws {
+        let notifications = InAppNotifications()
+        notifications.report(.succeededWithWarnings, subject: .guide, startedUnder: "profile-a", currentProfileToken: "profile-a", detail: "EPGShare unavailable")
+        let notice = try #require(notifications.pending.first)
+        #expect(notice.outcome?.isSuccessful == true)
+        #expect(notice.outcome == .succeededWithWarnings)
+        #expect(notice.detail == "EPGShare unavailable")
+        report(.succeeded, to: notifications)
+        #expect(notifications.pending.count == 1)
+        #expect(notifications.pending.first?.detail == nil)
     }
 
     @Test(arguments: [SyncRefreshOutcome.skipped, .cancelled])

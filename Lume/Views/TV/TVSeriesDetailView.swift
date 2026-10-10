@@ -54,6 +54,7 @@
 
         private enum FocusTarget: Hashable {
             case play
+            case favorite
             case season(Int)
             case episode(String)
         }
@@ -66,41 +67,37 @@
         }
 
         var body: some View {
-            Group {
-                if isLoadingTMDB {
-                    TVDetailLoadingView(title: series.name)
-                        .transition(.opacity)
-                } else {
-                    content
-                        .transition(.opacity)
+            // Episode/TMDB requests must not remove every focus target from
+            // the destination. Favorite remains available before Play is ready.
+            content
+                .background(Color.lumeNight)
+                .ignoresSafeArea()
+                .fullScreenCover(item: $playingMedia) { media in
+                    FullScreenPlayerView(media: media)
                 }
-            }
-            .background(Color.lumeNight)
-            .ignoresSafeArea()
-            .fullScreenCover(item: $playingMedia) { media in
-                FullScreenPlayerView(media: media)
-            }
-            .alert("YouTube Unavailable", isPresented: $showYouTubeUnavailable) {
-                Button("OK", role: .cancel) {}
-            } message: {
-                Text("Install the YouTube app on your Apple TV to watch trailers.")
-            }
-            .task(id: series.id) {
-                await loader.load(series, playlist: seriesPlaylist, in: modelContext)
-            }
-            .task(id: series.id) {
-                await loader.refreshEpisodesIfStale(series, playlist: seriesPlaylist, in: modelContext)
-            }
-            .onChange(of: series.episodes.count) { loader.recomputeSeasons(series) }
-            .onChange(of: series.similarTMDBIds) { loader.resolveSimilar(series, in: modelContext) }
-            .onDisappear { loader.invalidate() }
-            .animation(.easeInOut(duration: 0.3), value: isLoadingTMDB)
+                .alert("YouTube Unavailable", isPresented: $showYouTubeUnavailable) {
+                    Button("OK", role: .cancel) {}
+                } message: {
+                    Text("Install the YouTube app on your Apple TV to watch trailers.")
+                }
+                .task(id: series.id) {
+                    await loader.load(series, playlist: seriesPlaylist, in: modelContext)
+                }
+                .task(id: series.id) {
+                    await loader.refreshEpisodesIfStale(series, playlist: seriesPlaylist, in: modelContext)
+                }
+                .onChange(of: series.episodes.count) { loader.recomputeSeasons(series) }
+                .onChange(of: series.similarTMDBIds) { loader.resolveSimilar(series, in: modelContext) }
+                .onDisappear { loader.invalidate() }
+                .animation(.easeInOut(duration: 0.3), value: isLoadingTMDB)
         }
 
         private var content: some View {
             ScrollView {
                 VStack(alignment: .leading, spacing: TVDetailMetrics.sectionSpacing) {
                     hero
+
+                    if isLoadingTMDB { TVDetailLoadingStatus() }
 
                     episodesSection
 
@@ -139,7 +136,7 @@
                 .padding(.bottom, 100)
             }
             .scrollClipDisabled()
-            .tvDetailDefaultFocus($focus, .play)
+            .tvDetailDefaultFocus($focus, nextEpisode != nil && seriesPlaylist != nil ? .play : .favorite)
         }
 
         // MARK: - Hero
@@ -166,6 +163,7 @@
 
                 HStack(spacing: 18) {
                     MediaFavoriteButton(model: series)
+                        .focused($focus, equals: .favorite)
                     Spacer(minLength: 0)
                 }
             }

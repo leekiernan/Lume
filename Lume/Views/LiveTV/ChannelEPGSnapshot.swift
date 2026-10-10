@@ -11,6 +11,7 @@
 //
 
 import Foundation
+import OSLog
 import SwiftData
 
 /// A point-in-time programme entry for a channel card — plain values so it can
@@ -20,20 +21,21 @@ nonisolated struct EPGSlot: Equatable {
     let start: Date
     let end: Date
     var artworkURL: String?
+    var subtitle: String?
 }
 
 nonisolated extension EPGSlot {
     init(_ listing: EPGListing) {
-        self.init(title: listing.title, start: listing.start, end: listing.end, artworkURL: listing.artworkURL)
+        self.init(title: listing.title, start: listing.start, end: listing.end, artworkURL: listing.artworkURL, subtitle: listing.subtitle)
     }
 
     init(_ listing: EPGWindowListing) {
-        self.init(title: listing.title, start: listing.start, end: listing.end)
+        self.init(title: listing.title, start: listing.start, end: listing.end, artworkURL: listing.artworkURL, subtitle: listing.subtitle)
     }
 
     /// A guide cell as the programme catch-up plays.
     init(_ cell: EPGProgramCell) {
-        self.init(title: cell.title, start: cell.start, end: cell.end)
+        self.init(title: cell.title, start: cell.start, end: cell.end, artworkURL: cell.artworkURL, subtitle: cell.subtitle)
     }
 }
 
@@ -89,8 +91,14 @@ enum ChannelEPGLoader {
         // The narrow fields a `ChannelEPG` is built from. `listingDescription` is
         // the widest column in the table and nothing here reads it, so a partial
         // fetch keeps it out of the rows entirely.
-        descriptor.propertiesToFetch = [\.channelId, \.title, \.start, \.end, \.artworkURL]
-        guard let listings = try? context.fetch(descriptor) else { return [:] }
+        descriptor.propertiesToFetch = [\.channelId, \.title, \.start, \.end, \.artworkURL, \.subtitle]
+        let listings: [EPGListing]
+        do {
+            listings = try context.fetch(descriptor)
+        } catch {
+            Logger.database.warning("EPG now/next read failed: \(error.localizedDescription, privacy: .public)")
+            return [:]
+        }
 
         var grouped: [String: [EPGListing]] = [:]
         for listing in listings {
@@ -122,6 +130,8 @@ nonisolated struct EPGWindowListing: Equatable {
     let detail: String
     let start: Date
     let end: Date
+    var artworkURL: String?
+    var subtitle: String?
 }
 
 nonisolated extension EPGWindowListing {
@@ -131,7 +141,9 @@ nonisolated extension EPGWindowListing {
             title: listing.title,
             detail: listing.listingDescription,
             start: listing.start,
-            end: listing.end
+            end: listing.end,
+            artworkURL: listing.artworkURL,
+            subtitle: listing.subtitle
         )
     }
 }
@@ -165,7 +177,13 @@ enum EPGGuideLoader {
             },
             sortBy: [SortDescriptor(\.channelId), SortDescriptor(\.start)]
         )
-        guard let listings = try? context.fetch(descriptor) else { return [:] }
+        let listings: [EPGListing]
+        do {
+            listings = try context.fetch(descriptor)
+        } catch {
+            Logger.database.warning("EPG guide-window read failed: \(error.localizedDescription, privacy: .public)")
+            return [:]
+        }
 
         var grouped: [String: [EPGWindowListing]] = [:]
         for listing in listings {

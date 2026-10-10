@@ -198,9 +198,18 @@ enum ContinueWatchingEpisodes {
                   let parsed = try? await manager.fetchEpisodes(
                       seriesId: show.seriesId, seriesElementId: show.id, playlist: playlist
                   ),
-                  !parsed.isEmpty
+                  !Task.isCancelled
             else { continue }
-            show.insertEpisodes(parsed, into: context)
+            guard !parsed.episodes.isEmpty else {
+                // An empty answer may be a provider hiccup. Stamping the episode
+                // cache here would suppress the detail screen's own fetch.
+                if let info = parsed.seriesInfo {
+                    show.applyProviderMetadata(info, fillMissing: true)
+                    try? context.save()
+                }
+                continue
+            }
+            show.applyFetchedEpisodes(parsed, into: context)
             added = true
         }
         return added

@@ -45,7 +45,7 @@ nonisolated enum LiveTVHubLoader {
         var descriptor = FetchDescriptor<EPGListing>(predicate: #Predicate {
             $0.start >= lower && $0.start < upper && $0.end > now
         })
-        descriptor.propertiesToFetch = [\.id, \.channelId, \.title, \.start, \.end, \.category, \.releaseYear, \.artworkURL]
+        descriptor.propertiesToFetch = [\.id, \.channelId, \.title, \.start, \.end, \.category, \.releaseYear, \.artworkURL, \.subtitle]
         let context = ModelContext(container)
         var selection = LiveTVHubAiringSelection()
         var checked = 0
@@ -58,7 +58,8 @@ nonisolated enum LiveTVHubLoader {
             let programme = LiveTVHubProgramme(
                 id: listing.id, channel: channel, title: listing.title, start: listing.start, end: listing.end,
                 artworkURL: listing.artworkURL ?? TMDBClient.backdropURL(match.title.backdropPath)?.absoluteString,
-                overview: match.title.overview ?? "", candidateID: candidate, rank: match.rank
+                overview: match.title.overview ?? "",
+                candidateID: candidate, rank: match.rank, subtitle: listing.subtitle
             )
             selection.offer(programme, now: now)
         }
@@ -75,7 +76,7 @@ final class LiveTVHubFeed {
         let visibility: String
         let profile: String
         let syncedAt: Date?
-        let guideIsSyncing: Bool
+        let guideRevision: UInt64
         let isActive: Bool
         let hour: Int
         let personalIDs: [String]
@@ -110,7 +111,6 @@ final class LiveTVHubFeed {
         let scope = "\(key.prefix)-\(key.visibility)-\(key.profile)"
         if self.scope != scope { snapshot = LiveTVHubSnapshot() }
         self.scope = scope
-        guard !key.guideIsSyncing else { return }
         isLoading = true
         defer { if request == token { isLoading = false } }
         do {

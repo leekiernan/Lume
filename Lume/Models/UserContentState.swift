@@ -10,7 +10,8 @@ enum SyncedContentKind: String, Codable, CaseIterable {
     case episode
     case live
     /// A `Category` row. Carries its Content Management visibility (`isHidden`)
-    /// and ordering (`customOrder`) so those customizations sync across devices.
+    /// ordering (`customOrder`) and guide metadata preference, so those
+    /// customizations sync across devices.
     case category
 }
 
@@ -64,6 +65,8 @@ final class UserContentState {
     /// synced — it would write one record per channel in a reordered category —
     /// so only category order rides here.
     var customOrder: Int?
+    /// Live category metadata opt-in. Nil keeps the category's trial default.
+    var epgEnrichmentEnabled: Bool?
 
     /// The user's "For You" vote (`0` none, `1` up, `-1` down). Defaulted for
     /// CloudKit and additive, so records written before recommendations existed
@@ -90,6 +93,7 @@ final class UserContentState {
         recommendationVoteRaw: Int = 0,
         isHidden: Bool = false,
         customOrder: Int? = nil,
+        epgEnrichmentEnabled: Bool? = nil,
         updatedAt: Date = Date()
     ) {
         self.contentId = contentId
@@ -104,6 +108,7 @@ final class UserContentState {
         self.recommendationVoteRaw = recommendationVoteRaw
         self.isHidden = isHidden
         self.customOrder = customOrder
+        self.epgEnrichmentEnabled = epgEnrichmentEnabled
         self.updatedAt = updatedAt
     }
 }

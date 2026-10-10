@@ -47,6 +47,9 @@ final class EPGListing {
     /// Programme artwork, not the channel logo. Optional for existing guides.
     var artworkURL: String?
     var releaseYear: String?
+    /// Original provider metadata for reversibly applied supplements. Stored
+    /// with the effective fields in the same publication, never in a sidecar.
+    var enrichmentBaseline: Data?
 
     init(
         id: String,
@@ -79,6 +82,9 @@ final class EPGListing {
     /// rows across a refresh instead of deleting and reinserting them (see its
     /// own comment), so an unmoved field should cost nothing.
     func update(from programme: ParsedProgramme, category: String?) {
+        // A provider publication is authoritative, including removed metadata.
+        // The supplementary pass starts from these new raw fields afterwards.
+        if enrichmentBaseline != nil { enrichmentBaseline = nil }
         if channelId != programme.channelId { channelId = programme.channelId }
         if title != programme.title { title = programme.title }
         if listingDescription != programme.description { listingDescription = programme.description }

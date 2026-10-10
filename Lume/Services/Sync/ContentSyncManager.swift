@@ -237,30 +237,30 @@ actor ContentSyncManager {
     /// `episodes` relationship stale until a later cross-context merge — which
     /// races the UI refresh and, on tvOS, loses (episodes only appear after
     /// navigating away and back). Returning value types sidesteps that entirely.
-    func fetchEpisodes(seriesId: Int, seriesElementId: String, playlist: Playlist) async throws -> [ParsedEpisode] {
+    func fetchEpisodes(seriesId: Int, seriesElementId: String, playlist: Playlist) async throws -> FetchedEpisodes {
         switch playlist.sourceType {
         case .xtream:
             try await fetchXtreamEpisodes(seriesId: seriesId, seriesElementId: seriesElementId, playlist: playlist)
         case .stalker:
-            try await fetchStalkerEpisodes(seriesId: seriesId, seriesElementId: seriesElementId, playlist: playlist)
+            try await FetchedEpisodes(episodes: fetchStalkerEpisodes(seriesId: seriesId, seriesElementId: seriesElementId, playlist: playlist))
         case .m3u:
             // m3u episodes are imported alongside the rest of the catalog during
             // sync, so there is nothing to fetch lazily here.
-            []
+            FetchedEpisodes(episodes: [])
         case .webdav:
             // WebDAV episodes are imported alongside the rest of the catalog
             // during sync, so there is nothing to fetch lazily here.
-            []
+            FetchedEpisodes(episodes: [])
         case .jellyfin, .emby, .plex:
             // Media-server episodes are imported alongside the rest of the
             // catalog during sync, so there is nothing to fetch lazily here.
-            []
+            FetchedEpisodes(episodes: [])
         }
     }
 
-    private func fetchXtreamEpisodes(seriesId: Int, seriesElementId: String, playlist: Playlist) async throws -> [ParsedEpisode] {
+    private func fetchXtreamEpisodes(seriesId: Int, seriesElementId: String, playlist: Playlist) async throws -> FetchedEpisodes {
         let seriesInfo = try await xtreamRequest { try await $0.getSeriesInfo(playlist: playlist, seriesId: seriesId) }
-        guard let episodesDict = seriesInfo.episodes else { return [] }
+        let episodesDict = seriesInfo.episodes ?? [:]
 
         var result: [ParsedEpisode] = []
         for (seasonKey, episodes) in episodesDict {
@@ -272,7 +272,7 @@ actor ContentSyncManager {
                     id: CatalogID.episode(ownerID: seriesElementId, key: episodeIdString),
                     episodeId: episodeIdString,
                     title: Self.cleanEpisodeTitle(episodeDTO.title),
-                    containerExtension: episodeDTO.containerExtension ?? "mkv",
+                    containerExtension: episodeDTO.containerExtension,
                     seasonNum: seasonNum,
                     episodeNum: episodeDTO.episodeNum ?? 0,
                     added: episodeDTO.added,
@@ -285,7 +285,7 @@ actor ContentSyncManager {
                 ))
             }
         }
-        return result
+        return FetchedEpisodes(episodes: result, seriesInfo: seriesInfo.info)
     }
 
     /// Reduces a raw Xtream episode title to just the episode name.

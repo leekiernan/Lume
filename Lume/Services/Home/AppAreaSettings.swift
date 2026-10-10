@@ -156,8 +156,9 @@ nonisolated extension AppAreaSettings {
         return unlockedAreaState(profileID: profileID, defaults: defaults)
     }
 
-    /// The only way the enabled-area set reaches storage. It always bumps the
-    /// generation, so the split write — a new area set stamped with the old
+    /// The only way the enabled-area set reaches storage. Writes bump the
+    /// generation; passive imports may skip an identical value. The split
+    /// write — a new area set stamped with the old
     /// generation, which a stale job would sail straight past — is not
     /// something a caller can express.
     ///
@@ -171,11 +172,16 @@ nonisolated extension AppAreaSettings {
     static func persist(
         disabledRaw: String,
         profileID: UUID? = ActiveProfileStore.current,
-        defaults: UserDefaults = .standard
+        defaults: UserDefaults = .standard,
+        onlyIfChanged: Bool = false
     ) -> AreaState {
         pairLock.lock()
         defer { pairLock.unlock() }
-        let generation = unlockedAreaState(profileID: profileID, defaults: defaults).generation.bumped()
+        let current = unlockedAreaState(profileID: profileID, defaults: defaults)
+        // Passive cloud imports can replay the same snapshot repeatedly. They
+        // must not invalidate work unless the effective area value changed.
+        if onlyIfChanged, current.disabledRaw == disabledRaw { return current }
+        let generation = current.generation.bumped()
         defaults.set(String(generation.rawValue), forKey: areaGenerationKey(profileID: profileID))
         defaults.set(disabledRaw, forKey: disabledAreasKey(profileID: profileID))
         return AreaState(disabledRaw: disabledRaw, generation: generation)

@@ -1,0 +1,274 @@
+{
+  "items": [
+    {
+      "tmdb_id": 1429,
+      "status": "ok",
+      "lume_meta": {
+        "v": 1,
+        "tmdb": "2026-10-10T03:00:00Z",
+        "artwork": "2026-10-10T03:00:00Z"
+      },
+      "tmdb": {
+        "id": 1429,
+        "poster_path": "/hTP1DtLGFamjfu8WqjnuQdP1n4i.jpg",
+        "backdrop_path": "/rqbCbjB19amtOtFQbb3K2lgm2zv.jpg",
+        "tagline": "Home was a pen. Humanity, cattle.",
+        "overview": "100 years ago, the last remnants of humanity were forced to retreat behind the towering walls of a fortified city to escape the massive, man-eating Titans that roamed the land outside their fortress. Only the members of the Scouting Legion dared to stray beyond the safety of the walls – but even those brave warriors seldom returned alive. Those within the city clung to the illusion of a peaceful existence until the day that dream was shattered, and their slim chance at survival was reduced to one horrifying choice: kill – or be devoured!",
+        "vote_average": 8.7,
+        "genres": [
+          {
+            "name": "Animation"
+          },
+          {
+            "name": "Sci-Fi \u0026 Fantasy"
+          },
+          {
+            "name": "Action \u0026 Adventure"
+          }
+        ],
+        "credits": {
+          "cast": [
+            {
+              "id": 90135,
+              "name": "Marina Inoue",
+              "character": "Armin Arlert (voice)",
+              "profile_path": "/f7PuEx1h2g4FLgMzk9wCrWuS9Eu.jpg",
+              "order": 0
+            },
+            {
+              "id": 119145,
+              "name": "Hiro Shimono",
+              "character": "Connie Springer (voice)",
+              "profile_path": "/yrSDcgFefHtWkFmLnTrcw2t0MV.jpg",
+              "order": 1
+            },
+            {
+              "id": 149894,
+              "name": "Yuki Kaji",
+              "character": "Eren Yeager (voice)",
+              "profile_path": "/8wKdPV11IwowfwoqGqMMNt9hmp6.jpg",
+              "order": 3
+            },
+            {
+              "id": 1256603,
+              "name": "Natsuki Hanae",
+              "character": "Falco Grice (voice)",
+              "profile_path": "/alTb0DlcPIbcwM08WSmxFai58sd.jpg",
+              "order": 3
+            },
+            {
+              "id": 992869,
+              "name": "Ayane Sakura",
+              "character": "Gabi Braun (voice)",
+              "profile_path": "/yPbTmntASE9psPIMhNGU5oo6vIH.jpg",
+              "order": 4
+            },
+            {
+              "id": 553959,
+              "name": "Kisho Taniyama",
+              "character": "Jean Kirstein (voice)",
+              "profile_path": "/9lOnUF6C6xEhZ0FQmYNzNZhcUpd.jpg",
+              "order": 5
+            },
+            {
+              "id": 1224288,
+              "name": "Yui Ishikawa",
+              "character": "Mikasa Ackerman (voice)",
+              "profile_path": "/zptGIN1iklKJL1xrfHKOpxR2qJ9.jpg",
+              "order": 7
+            },
+            {
+              "id": 1253008,
+              "name": "Yoshimasa Hosoya",
+              "character": "Reiner Braun (voice)",
+              "profile_path": "/lUR5oN1LrqGgp25IOcI1qOH1Ud5.jpg",
+              "order": 9
+            },
+            {
+              "id": 84508,
+              "name": "Takehito Koyasu",
+              "character": "Zeke (voice)",
+              "profile_path": "/8uBkNDKPNmp9JWgMUI02NVyfhi1.jpg",
+              "order": 10
+            }
+          ]
+        },
+        "similar": {
+          "results": [
+            {
+              "id": 241148
+            },
+            {
+              "id": 209061
+            },
+            {
+              "id": 241138
+            },
+            {
+              "id": 126273
+            },
+            {
+              "id": 126278
+            },
+            {
+              "id": 126323
+            },
+            {
+              "id": 93241
+            },
+            {
+              "id": 889
+            },
+            {
+              "id": 890
+            },
+            {
+              "id": 899
+            },
+            {
+              "id": 209198
+            },
+            {
+              "id": 126437
+            },
+            {
+              "id": 93256
+            },
+            {
+              "id": 93289
+            },
+            {
+              "id": 93319
+            },
+            {
+              "id": 29152
+            },
+            {
+              "id": 29153
+            },
+            {
+              "id": 29156
+            },
+            {
+              "id": 814
+            },
+            {
+              "id": 668
+            }
+          ]
+        },
+        "videos": {
+          "results": [
+            {
+              "key": "v5_10A9lyXQ",
+              "name": "Curious About Attack on Titan? Start Here!",
+              "site": "YouTube",
+              "type": "Featurette",
+              "official": true
+            },
+            {
+              "key": "HJaUvV9Hwgs",
+              "name": "Official Trailer w/ Intro from Voice of Eren",
+              "site": "YouTube",
+              "type": "Trailer",
+              "official": true
+            },
+            {
+              "key": "luYOt2-c2TI",
+              "name": "Official English Subtitled Trailer 3",
+              "site": "YouTube",
+              "type": "Trailer",
+              "official": true
+            },
+            {
+              "key": "8OkpRK2_gVs",
+              "name": "Opening 1 - Feuerroter Pfeil und Bogen [Subtitled]",
+              "site": "YouTube",
+              "type": "Opening Credits",
+              "official": true
+            }
+          ]
+        },
+        "images": {
+          "logos": [
+            {
+              "file_path": "/eHMfVTIwen9anB4HuvQlFRGZFms.png",
+              "iso_639_1": "en",
+              "vote_average": 3.334
+            },
+            {
+              "file_path": "/7q79Pv7aDjEsqy3fXZ4T1bkifJo.png",
+              "iso_639_1": "en",
+              "vote_average": 2.278
+            },
+            {
+              "file_path": "/csy774JSTIoo4KUkrFWtU9SHA8j.png",
+              "iso_639_1": "en",
+              "vote_average": 1.75
+            },
+            {
+              "file_path": "/tB5ucGkYJ5uPLlUiyMsEaazly2E.png",
+              "iso_639_1": "en",
+              "vote_average": 0.166
+            },
+            {
+              "file_path": "/tcQTVzxw3V5VRWQjJGsRGIFKyUt.png",
+              "iso_639_1": null,
+              "vote_average": 0.166
+            },
+            {
+              "file_path": "/atRrX51XtBtaXhOToJYwn3enxS1.svg",
+              "iso_639_1": "en",
+              "vote_average": 0
+            },
+            {
+              "file_path": "/g0SKeKICWZhW7cDlaGZcQy0slAB.png",
+              "iso_639_1": "en",
+              "vote_average": 0
+            },
+            {
+              "file_path": "/lqLj2IXfCTz2Bt0AxIZ9VBrfFp5.png",
+              "iso_639_1": "en",
+              "vote_average": 0
+            },
+            {
+              "file_path": "/55a40apXvCRrYKFZtRfWBdZfLIN.png",
+              "iso_639_1": "en",
+              "vote_average": 0
+            }
+          ]
+        },
+        "external_ids": {
+          "imdb_id": "tt2560140"
+        },
+        "name": "Attack on Titan",
+        "original_language": "ja",
+        "lume_text_language": "en-GB",
+        "episode_run_time": [],
+        "content_ratings": {
+          "results": [
+            {
+              "iso_3166_1": "DE",
+              "rating": "16"
+            },
+            {
+              "iso_3166_1": "US",
+              "rating": "TV-MA"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "tmdb_id": 999999999,
+      "status": "not_found"
+    },
+    {
+      "tmdb_id": 999999998,
+      "status": "pending"
+    }
+  ],
+  "language": "en-GB",
+  "type": "series",
+  "v": 1
+}

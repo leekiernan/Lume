@@ -27,6 +27,16 @@ final class EPGSource {
     /// Written with the source snapshot in one save. A crash can therefore
     /// expose only a committed generation, never a partial stage.
     var committedGeneration: UInt64 = 0
+    /// Validators belong to the published snapshot, never merely a download.
+    var validatorURL: String?
+    var lastModified: String?
+    var entityTag: String?
+    var snapshotReferenceIDs: [String] = []
+    var snapshotChannelIDs: [String] = []
+    var snapshotProgrammeCount: Int = 0
+    var snapshotSchemaVersion: Int = 0
+    var snapshotEnd: Date?
+    var lastAttemptDate: Date?
 
     var addedAt: Date = Date()
 

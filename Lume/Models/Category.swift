@@ -34,10 +34,11 @@ final class Category {
     // (i.e. every sync) to build the child-profile restriction set; index
     // `isRestricted` so that query seeks instead of scanning all categories.
     // The iCloud reconciler exports customized categories (`isHidden ||
-    // customOrder != nil`) on every pass; index both so it seeks the handful
+    // customOrder != nil || epgEnrichmentEnabled != nil`) on every pass; index
+    // each field so it seeks the handful
     // of customized rows (SQLite's OR optimization needs each disjunct
     // independently indexed).
-    #Index<Category>([\.isRestricted], [\.isHidden], [\.customOrder])
+    #Index<Category>([\.isRestricted], [\.isHidden], [\.customOrder], [\.epgEnrichmentEnabled])
 
     @Attribute(.unique) var id: String
     var apiId: String
@@ -47,6 +48,9 @@ final class Category {
     var playlist: Playlist?
 
     var isHidden: Bool = false
+    /// Optional override for Live TV metadata. Nil follows the limited trial defaults;
+    /// explicit choices travel with the category's existing per-profile user state.
+    var epgEnrichmentEnabled: Bool?
     /// Restricted from child profiles: while a child profile is active this
     /// category, and every title in it, is hidden from browsing and search.
     /// Toggling it is gated behind the parental-control PIN.

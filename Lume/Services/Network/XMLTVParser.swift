@@ -8,7 +8,7 @@
 import Foundation
 
 /// A parsed XMLTV programme ready for direct insertion.
-struct ParsedProgramme {
+nonisolated struct ParsedProgramme: Codable {
     let channelId: String
     let title: String
     let subtitle: String?
@@ -50,6 +50,8 @@ final nonisolated class XMLTVParser: NSObject, XMLParserDelegate {
     private var currentLang: String?
     /// The language code (`de`, `en`, …) a repeated element should prefer.
     private let preferredLanguage: String?
+    private let channelIDs: Set<String>?
+    private var acceptsProgramme = true
 
     /// The user's first preferred language, as a bare language code.
     static var defaultPreferredLanguage: String? {
@@ -59,10 +61,12 @@ final nonisolated class XMLTVParser: NSObject, XMLParserDelegate {
     init(
         batchSize: Int = 2000,
         preferredLanguage: String? = XMLTVParser.defaultPreferredLanguage,
+        channelIDs: Set<String>? = nil,
         onBatch: @escaping ([ParsedProgramme]) -> Void
     ) {
         self.batchSize = batchSize
         self.preferredLanguage = preferredLanguage.map(Self.languageCode)
+        self.channelIDs = channelIDs
         self.onBatch = onBatch
     }
 
@@ -98,12 +102,13 @@ final nonisolated class XMLTVParser: NSObject, XMLParserDelegate {
         fileURL: URL,
         batchSize: Int = 2000,
         preferredLanguage: String? = XMLTVParser.defaultPreferredLanguage,
+        channelIDs: Set<String>? = nil,
         onBatch: @escaping ([ParsedProgramme]) -> Void
     ) -> ParseOutcome {
         guard let xmlParser = XMLParser(contentsOf: fileURL) else {
             return ParseOutcome(programmeCount: 0, encounteredProgrammeCount: 0, succeeded: false)
         }
-        let delegate = XMLTVParser(batchSize: batchSize, preferredLanguage: preferredLanguage, onBatch: onBatch)
+        let delegate = XMLTVParser(batchSize: batchSize, preferredLanguage: preferredLanguage, channelIDs: channelIDs, onBatch: onBatch)
         xmlParser.delegate = delegate
         let succeeded = xmlParser.parse() && delegate.rootElement == "tv"
         // Flush remaining, unless a cancellation stopped the parse partway.
@@ -128,6 +133,7 @@ final nonisolated class XMLTVParser: NSObject, XMLParserDelegate {
             currentStart = attributeDict["start"]
             currentStop = attributeDict["stop"]
             currentChannel = attributeDict["channel"]
+            acceptsProgramme = channelIDs == nil || channelIDs?.contains(currentChannel ?? "") == true
             currentTitle = LocalizedText()
             currentSubtitle = LocalizedText()
             currentDesc = LocalizedText()
@@ -140,46 +146,22 @@ final nonisolated class XMLTVParser: NSObject, XMLParserDelegate {
     }
 
     func parser(_: XMLParser, foundCharacters string: String) {
+        guard acceptsProgramme else { return }
         currentText += string
     }
 
     func parser(_ parser: XMLParser, didEndElement elementName: String, namespaceURI _: String?, qualifiedName _: String?) {
         defer { elements.removeLast() }
         let parent = elements.dropLast().last
+        // Filter before constructing text/DTOs, but keep scanning the document
+        // and checking cancellation even when no selected station is present.
+        if elementName == "programme", Task.isCancelled {
+            parser.abortParsing()
+            return
+        }
+        guard acceptsProgramme else { return }
         if elementName == "programme" {
-            if let startDate = XMLTVDate.parse(currentStart),
-               let endDate = XMLTVDate.parse(currentStop),
-               let channel = currentChannel,
-               let title = currentTitle.value
-            {
-                batch.append(ParsedProgramme(
-                    channelId: channel,
-                    title: title,
-                    subtitle: currentSubtitle.value,
-                    description: currentDesc.value ?? "",
-                    categories: currentCategories,
-                    start: startDate,
-                    end: endDate,
-                    artworkURL: currentArtwork,
-                    releaseYear: currentReleaseYear
-                ))
-                totalCount += 1
-
-                if batch.count >= batchSize {
-                    onBatch(batch)
-                    batch.removeAll(keepingCapacity: true)
-                    // A cancelled refresh (a content sync starting) stops here
-                    // instead of parsing the rest of the file at full CPU.
-                    if Task.isCancelled { parser.abortParsing() }
-                }
-            }
-            currentStart = nil
-            currentStop = nil
-            currentChannel = nil
-            currentTitle = LocalizedText()
-            currentSubtitle = LocalizedText()
-            currentDesc = LocalizedText()
-            currentCategories = []
+            emitProgramme(parser)
         } else if elementName == "title" {
             currentTitle.offer(currentText, lang: currentLang, preferred: preferredLanguage)
         } else if elementName == "sub-title" {
@@ -194,6 +176,32 @@ final nonisolated class XMLTVParser: NSObject, XMLParserDelegate {
         } else {
             captureProgrammeMetadata(element: elementName, parent: parent)
         }
+    }
+
+    private func emitProgramme(_ parser: XMLParser) {
+        if let startDate = XMLTVDate.parse(currentStart),
+           let endDate = XMLTVDate.parse(currentStop),
+           let channel = currentChannel,
+           let title = currentTitle.value
+        {
+            batch.append(ParsedProgramme(
+                channelId: channel, title: title, subtitle: currentSubtitle.value, description: currentDesc.value ?? "",
+                categories: currentCategories, start: startDate, end: endDate, artworkURL: currentArtwork, releaseYear: currentReleaseYear
+            ))
+            totalCount += 1
+            if batch.count >= batchSize {
+                onBatch(batch)
+                batch.removeAll(keepingCapacity: true)
+                if Task.isCancelled { parser.abortParsing() }
+            }
+        }
+        currentStart = nil
+        currentStop = nil
+        currentChannel = nil
+        currentTitle = LocalizedText()
+        currentSubtitle = LocalizedText()
+        currentDesc = LocalizedText()
+        currentCategories = []
     }
 
     private func captureProgrammeMetadata(element: String, parent: String?) {

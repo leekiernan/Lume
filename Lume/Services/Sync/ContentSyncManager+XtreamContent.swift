@@ -6,7 +6,9 @@ extension ContentSyncManager {
     func syncMovies(for playlist: Playlist, playlistId: UUID, progress: SyncProgress? = nil, reuseUnchanged: Bool = false) async throws {
         let prefix = CatalogID.prefix(playlistId, infix: CategoryType.vod.rawValue)
         try await runXtreamContentPhase(.movies, playlistId: playlistId, progress: progress, reuseUnchanged: reuseUnchanged,
-                                        fetch: { known in try await xtreamRequest { try await $0.getVODStreamsIfChanged(playlist: playlist, knownDigest: known) } },
+                                        fetch: { known in try await xtreamRequest {
+                                            try await $0.getVODStreamsIfChanged(playlist: playlist, knownDigest: known?.digest, knownValidator: known?.validator)
+                                        } },
                                         upsert: { batch, context in
                                             try CatalogUpsert.batch(batch, context: context,
                                                                     identity: { $0.streamId.map { CatalogID.content(playlistId, kind: .movie, key: $0) } },
@@ -18,7 +20,9 @@ extension ContentSyncManager {
     func syncSeries(for playlist: Playlist, playlistId: UUID, progress: SyncProgress? = nil, reuseUnchanged: Bool = false) async throws {
         let prefix = CatalogID.prefix(playlistId, infix: CategoryType.series.rawValue)
         try await runXtreamContentPhase(.series, playlistId: playlistId, progress: progress, reuseUnchanged: reuseUnchanged,
-                                        fetch: { known in try await xtreamRequest { try await $0.getSeriesIfChanged(playlist: playlist, knownDigest: known) } },
+                                        fetch: { known in try await xtreamRequest {
+                                            try await $0.getSeriesIfChanged(playlist: playlist, knownDigest: known?.digest, knownValidator: known?.validator)
+                                        } },
                                         upsert: { batch, context in
                                             try CatalogUpsert.batch(batch, context: context,
                                                                     identity: { $0.seriesId.map { CatalogID.content(playlistId, kind: .series, key: $0) } },
@@ -30,7 +34,9 @@ extension ContentSyncManager {
     func syncLiveStreams(for playlist: Playlist, playlistId: UUID, progress: SyncProgress? = nil, reuseUnchanged: Bool = false) async throws {
         let prefix = CatalogID.prefix(playlistId, infix: CategoryType.live.rawValue)
         try await runXtreamContentPhase(.live, playlistId: playlistId, progress: progress, reuseUnchanged: reuseUnchanged,
-                                        fetch: { known in try await xtreamRequest { try await $0.getLiveStreamsIfChanged(playlist: playlist, knownDigest: known) } },
+                                        fetch: { known in try await xtreamRequest {
+                                            try await $0.getLiveStreamsIfChanged(playlist: playlist, knownDigest: known?.digest, knownValidator: known?.validator)
+                                        } },
                                         upsert: { batch, context in
                                             try CatalogUpsert.batch(batch, context: context,
                                                                     identity: { $0.streamId.map { CatalogID.content(playlistId, kind: .live, key: $0) } },
@@ -45,12 +51,12 @@ extension ContentSyncManager {
     func runXtreamContentPhase<Element: Sendable>( // swiftlint:disable:this function_parameter_count
         _ endpoint: XtreamDigestStore.Endpoint, playlistId: UUID,
         progress: SyncProgress?, reuseUnchanged: Bool,
-        fetch: (String?) async throws -> XtreamFetch<[Element]>,
+        fetch: (XtreamDigestStore.Entry?) async throws -> XtreamFetch<[Element]>,
         upsert: (ArraySlice<Element>, ModelContext) throws -> [String]
     ) async throws {
         let interval = Perf.begin(endpoint.syncSignpost)
         defer { Perf.end(interval) }
-        guard case .fetched(var items, let digest) = try await beginXtreamPhase(
+        guard case .fetched(var items, let digest, let validator) = try await beginXtreamPhase(
             endpoint, playlistId: playlistId, reuseUnchanged: reuseUnchanged, progress: progress, fetch: fetch
         ) else { return }
         let count = items.count
@@ -75,7 +81,7 @@ extension ContentSyncManager {
         items = []
         // Cancellation after the final batch must not certify a digest.
         try Task.checkCancellation()
-        await finishXtreamPhase(endpoint, payload: (digest, count), playlistId: playlistId, progress: progress) {
+        await finishXtreamPhase(endpoint, payload: (digest, count, seen.count, validator), playlistId: playlistId, progress: progress) {
             switch endpoint {
             case .movies: pruneMovies(playlistId: playlistId, seenIds: seen, fetchedCount: count)
             case .series: pruneSeries(playlistId: playlistId, seenIds: seen, fetchedCount: count)

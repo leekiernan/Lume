@@ -283,6 +283,24 @@ struct CloudSyncEngineTests {
 
     // MARK: - Content Management (hidden categories / channels, category order)
 
+    @Test(arguments: [true, false]) func `category metadata choice exports without hiding or reordering`(enabled: Bool) async throws {
+        let container = try makeProfileTestContainer()
+        let ctx = container.mainContext
+        let playlist = Playlist(name: "My IPTV", serverURL: "http://x", username: "u", password: "p")
+        ctx.insert(playlist)
+        let category = Lume.Category(apiId: "105", name: "UK | Entertainment", parentId: 0, type: .live, playlist: playlist)
+        category.epgEnrichmentEnabled = enabled
+        ctx.insert(category)
+        try ctx.save()
+        let engine = CloudSyncEngine(container: container, shadow: freshShadow())
+        let result = await engine.reconcile()
+        #expect(result.contentPushed == 1)
+        let mirror = try #require(try ctx.fetch(FetchDescriptor<UserContentState>()).first { $0.kind == .category })
+        #expect(mirror.epgEnrichmentEnabled == enabled)
+        #expect(!mirror.isHidden)
+        #expect(mirror.customOrder == nil)
+    }
+
     @Test func `a hidden category exports to a cloud mirror`() async throws {
         let container = try makeProfileTestContainer()
         let ctx = container.mainContext
@@ -293,6 +311,7 @@ struct CloudSyncEngineTests {
         let category = Lume.Category(apiId: "12", name: "Sports", parentId: 0, type: .live, playlist: playlist)
         category.isHidden = true
         category.customOrder = 2
+        category.epgEnrichmentEnabled = false
         ctx.insert(category)
         try ctx.save()
 
@@ -305,6 +324,7 @@ struct CloudSyncEngineTests {
         #expect(mirror.contentId == category.id)
         #expect(mirror.isHidden == true)
         #expect(mirror.customOrder == 2)
+        #expect(mirror.epgEnrichmentEnabled == false)
     }
 
     @Test func `a cloud category state hides the matching local category`() async throws {
@@ -319,7 +339,7 @@ struct CloudSyncEngineTests {
         ctx.insert(category)
 
         // The cloud mirror says it should be hidden and reordered.
-        ctx.insert(UserContentState(contentId: category.id, kind: .category, isHidden: true, customOrder: 4))
+        ctx.insert(UserContentState(contentId: category.id, kind: .category, isHidden: true, customOrder: 4, epgEnrichmentEnabled: true))
         try ctx.save()
 
         let engine = CloudSyncEngine(container: container, shadow: freshShadow())
@@ -329,6 +349,7 @@ struct CloudSyncEngineTests {
         let updated = try #require(try ctx.fetch(FetchDescriptor<Lume.Category>()).first)
         #expect(updated.isHidden == true)
         #expect(updated.customOrder == 4)
+        #expect(updated.epgEnrichmentEnabled == true)
     }
 
     @Test func `a hidden channel syncs but its per-category order does not`() async throws {
