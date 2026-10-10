@@ -144,6 +144,11 @@ struct KSPlayerEngineView: View {
     /// PiP observation in `KSPlayerEngineView+Playback.swift` can drive them.
     @State var isPipActive = false
     @State var pipObservationTask: Task<Void, Never>?
+    #if os(iOS)
+        /// Whether the stream was playing as the app left the foreground, so
+        /// automatic PiP can resume it if the handoff paused it.
+        @State var resumesWhenPipStarts = false
+    #endif
     #if os(macOS)
         /// Drives PiP on macOS in place of the layer's `isPipActive`, whose
         /// delegate leaves the PiP window's buttons dead there.
@@ -489,28 +494,33 @@ struct KSPlayerEngineView: View {
                 coordinator.resetPlayer()
             }
             .onChange(of: isPlaying) { _, _ in scheduleHide() }
-            .onChange(of: media.id) { _, _ in
-                // Same reset as tvOS: re-arms the startup watchdog and raises
-                // the spinner until the new stream's first frame.
-                resetForNewStream(media)
-                resetVideoInfo()
-                // An in-player swap reuses the KSPlayerLayer but re-prepares it;
-                // re-arm the observation so the task can never be left awaiting a
-                // publisher the swap has finished with (it holds the layer — and
-                // its decoder session — strongly for as long as it runs).
-                observePipState()
-            }
+            #if os(iOS)
+                .onChange(of: scenePhase) { oldPhase, phase in
+                    trackScenePhaseForPip(from: oldPhase, to: phase)
+                }
+            #endif
+                .onChange(of: media.id) { _, _ in
+                    // Same reset as tvOS: re-arms the startup watchdog and raises
+                    // the spinner until the new stream's first frame.
+                    resetForNewStream(media)
+                    resetVideoInfo()
+                    // An in-player swap reuses the KSPlayerLayer but re-prepares it;
+                    // re-arm the observation so the task can never be left awaiting a
+                    // publisher the swap has finished with (it holds the layer — and
+                    // its decoder session — strongly for as long as it runs).
+                    observePipState()
+                }
             #if os(macOS)
-            .onChange(of: macPip.isActive) { _, active in isPipActive = active }
-            .playerPointerChrome(chrome, mayHide: { canAutoHideControls })
-            .onKeyPress(.leftArrow) { skip(by: -media.skipInterval(default: 15)); scheduleHide(); return .handled }
-            .onKeyPress(.rightArrow) { skip(by: media.skipInterval(default: 15)); scheduleHide(); return .handled }
-            .liveChannelKeyNavigation(
-                neighbours: itemNeighbours, swapper: mediaSwapper,
-                onSelect: { selectMedia($0) }, onResetHideTimer: scheduleHide
-            )
-            .onKeyPress(.space) { togglePlay(); return .handled }
-            .onKeyPress(.escape) { closePlayer(); return .handled }
+                .onChange(of: macPip.isActive) { _, active in isPipActive = active }
+                .playerPointerChrome(chrome, mayHide: { canAutoHideControls })
+                .onKeyPress(.leftArrow) { skip(by: -media.skipInterval(default: 15)); scheduleHide(); return .handled }
+                .onKeyPress(.rightArrow) { skip(by: media.skipInterval(default: 15)); scheduleHide(); return .handled }
+                .liveChannelKeyNavigation(
+                    neighbours: itemNeighbours, swapper: mediaSwapper,
+                    onSelect: { selectMedia($0) }, onResetHideTimer: scheduleHide
+                )
+                .onKeyPress(.space) { togglePlay(); return .handled }
+                .onKeyPress(.escape) { closePlayer(); return .handled }
             #endif
         }
 
