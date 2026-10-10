@@ -16,8 +16,12 @@ nonisolated struct LumeTitleMetadataRouter {
         try Task.checkCancellation()
         if let source {
             let result = try await proxy.fetch(source: source, type: type, ids: [id], language: tmdb.language)
-            if case let .available(items) = result, let details = items[id] { return details }
+            if case let .available(items, _) = result {
+                if let details = items[id] { return details }
+            }
         }
+        // Foreground enrichment keeps main's device path for every proxy
+        // miss/status. Only the background indexer briefly defers pending work.
         return try await deviceDetails(id: id, type: type)
     }
 

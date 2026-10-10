@@ -24,35 +24,67 @@ extension ContentIndexer {
         let kind: LumeMetadataKind
     }
 
+    enum PrefetchedMetadata {
+        case details(TMDBTitleDetails)
+        case pending
+    }
+
+    struct PendingMetadataKey: Hashable {
+        let sourceIdentity: String
+        let kind: LumeMetadataKind
+        let language: String
+        let tmdbID: Int
+    }
+
     /// One bounded read per source/kind, split further only for an advertised
-    /// smaller limit. Whole-batch outages defer the chunk, not fifty device
-    /// lookups. Successful partial responses retain per-title paced fallback.
-    func prefetchMetadata(_ items: [PendingItem], client: LumeMetadataClient = .background) async throws -> [String: TMDBTitleDetails] {
+    /// smaller limit. The proxy is optional: outages and misses retain main's
+    /// paced device path. Pending work gets at most one minute to finish first.
+    func prefetchMetadata(_ items: [PendingItem], client: LumeMetadataClient = .background, now: Date = Date()) async throws -> [String: PrefetchedMetadata] {
+        pendingMetadataSince = pendingMetadataSince.filter { now >= $0.value && now.timeIntervalSince($0.value) < 300 }
         var groups: [BatchKey: [PendingItem]] = [:]
         for item in items where item.needsEnrichment && item.existingTMDBId != nil {
             if let source = item.source { groups[BatchKey(source: source, kind: item.kind), default: []].append(item) }
         }
-        var prefetched: [String: TMDBTitleDetails] = [:]
+        var prefetched: [String: PrefetchedMetadata] = [:]
         for (key, items) in groups {
             try Task.checkCancellation()
-            let result = try await client.fetch(source: key.source, type: key.kind, ids: items.compactMap(\.existingTMDBId), language: tmdbClient.language)
+            let result = try await client.fetch(source: key.source, type: key.kind, ids: items.compactMap(\.existingTMDBId), language: tmdbClient.language, now: now)
             switch result {
-            case .unsupported: continue
-            case .unavailable: throw LumeMetadataError.unavailable
-            case let .available(details):
+            case .unsupported, .unavailable: continue
+            case let .available(details, statuses):
                 for item in items {
-                    if let id = item.existingTMDBId, let value = details[id] { prefetched[item.id] = value }
+                    if let id = item.existingTMDBId,
+                       let value = prefetchedMetadata(id: id, details: details, status: statuses[id], batch: key, now: now)
+                    {
+                        prefetched[item.id] = value
+                    }
                 }
             }
         }
         return prefetched
     }
 
+    private func prefetchedMetadata(id: Int, details: [Int: TMDBTitleDetails], status: LumeMetadataItemStatus?,
+                                    batch: BatchKey, now: Date) -> PrefetchedMetadata?
+    {
+        let key = PendingMetadataKey(sourceIdentity: batch.source.identity, kind: batch.kind, language: tmdbClient.language, tmdbID: id)
+        guard status == .pending else {
+            pendingMetadataSince.removeValue(forKey: key)
+            return details[id].map(PrefetchedMetadata.details)
+        }
+        let started = pendingMetadataSince[key] ?? now
+        pendingMetadataSince[key] = started
+        return now.timeIntervalSince(started) < 60 ? .pending : nil
+    }
+
     /// Network phase works solely on snapshots. Proxy data works without a
     /// device token, while unresolved IDs retain the existing search policy.
-    func resolve(_ item: PendingItem, prefetched: TMDBTitleDetails?) async throws -> IndexResult {
-        if let prefetched {
-            return IndexResult(item: item, resolvedTMDBId: item.existingTMDBId, details: prefetched, usedNetwork: false)
+    func resolve(_ item: PendingItem, prefetched: PrefetchedMetadata?) async throws -> IndexResult {
+        switch prefetched {
+        case let .details(details):
+            return IndexResult(item: item, resolvedTMDBId: item.existingTMDBId, details: details, usedNetwork: false)
+        case .pending: throw LumeMetadataError.pending
+        case nil: break
         }
         guard tmdbClient.isConfigured else {
             return IndexResult(item: item, resolvedTMDBId: item.existingTMDBId, details: nil, usedNetwork: false)

@@ -8,7 +8,7 @@ actor LumeMetadataClient {
     static let background = LumeMetadataClient(background: true)
 
     enum Result {
-        case available([Int: TMDBTitleDetails])
+        case available([Int: TMDBTitleDetails], statuses: [Int: LumeMetadataItemStatus])
         case unsupported
         case unavailable
     }
@@ -17,6 +17,7 @@ actor LumeMetadataClient {
         let data: Data
         let etag: String?
         let fetchedAt: Date
+        let reuseDuration: TimeInterval
     }
 
     private struct Failure {
@@ -81,19 +82,22 @@ actor LumeMetadataClient {
             let sortedIDs = Set(ids.filter { $0 > 0 }).sorted()
             guard sortedIDs.count <= 50 else { throw LumeMetadataError.incomplete }
             var values: [Int: TMDBTitleDetails] = [:]
+            var statuses: [Int: LumeMetadataItemStatus] = [:]
             for offset in stride(from: 0, to: sortedIDs.count, by: limit) {
                 let chunk = Array(sortedIDs[offset ..< min(offset + limit, sortedIDs.count)])
                 let read = Read(source: source, type: type, ids: chunk, language: language, capabilities: capability, now: now)
                 let result = try await coalescedBatch(read)
                 try Task.checkCancellation()
                 switch result {
-                case let .available(details): values.merge(details) { _, new in new }
+                case let .available(details, states):
+                    values.merge(details) { _, new in new }
+                    statuses.merge(states) { _, new in new }
                 case .unsupported, .unavailable:
                     failures[identity] = Failure(until: now.addingTimeInterval(result.isUnsupported ? 6 * 3600 : 60), result: result)
                     return result
                 }
             }
-            return .available(values)
+            return .available(values, statuses: statuses)
         }
     }
 
@@ -120,7 +124,7 @@ actor LumeMetadataClient {
         guard let url = read.url else { return .unsupported }
         let now = read.now
         let cached = cache[url]
-        if let cached, now.timeIntervalSince(cached.fetchedAt) < 300 {
+        if let cached, now >= cached.fetchedAt, now.timeIntervalSince(cached.fetchedAt) < cached.reuseDuration {
             return decode(cached.data, read: read)
         }
         do {
@@ -140,12 +144,17 @@ actor LumeMetadataClient {
             guard response.statusCode == 200 || (response.statusCode == 304 && cached != nil),
                   !data.isEmpty, data.count <= 8 * 1024 * 1024 else { return .unavailable }
             let result = decode(data, read: read)
-            if case let .available(items) = result {
+            if case let .available(items, statuses) = result {
                 let etag = response.value(forHTTPHeaderField: "ETag") ?? (response.statusCode == 304 ? cached?.etag : nil)
-                retain(Cached(data: data, etag: etag, fetchedAt: now), for: url)
+                // Keep retained bytes/ETags, but don't hide newly ready data
+                // behind the five-minute complete-response cache.
+                let reuseDuration: TimeInterval = statuses.values.contains(.pending) ? 10
+                    : (items.count + statuses.values.count(where: { $0 == .notFound }) < read.ids.count ? 60 : 300)
+                retain(Cached(data: data, etag: etag, fetchedAt: now, reuseDuration: reuseDuration), for: url)
                 let kind = read.type.rawValue
                 let requested = read.ids.count
-                Logger.network.info("Proxy metadata [\(kind, privacy: .public)]: \(items.count) of \(requested) complete; HTTP \(response.statusCode)")
+                let pending = statuses.values.count(where: { $0 == .pending })
+                Logger.network.info("Proxy metadata [\(kind, privacy: .public)]: \(items.count) of \(requested) complete, \(pending) pending; HTTP \(response.statusCode)")
             }
             return result
         } catch {
@@ -158,7 +167,9 @@ actor LumeMetadataClient {
     private func decode(_ data: Data, read: Read) -> Result {
         guard let batch = try? JSONDecoder().decode(LumeMetadataBatch.self, from: data),
               batch.version == 1, batch.type == read.type, batch.language == read.language else { return .unavailable }
-        return .available(batch.details(source: read.source, requestedIDs: Set(read.ids), capabilities: read.capabilities, now: read.now))
+        let requestedIDs = Set(read.ids)
+        return .available(batch.details(source: read.source, requestedIDs: requestedIDs, capabilities: read.capabilities, now: read.now),
+                          statuses: batch.statuses(requestedIDs: requestedIDs))
     }
 
     private func retain(_ value: Cached, for url: URL) {

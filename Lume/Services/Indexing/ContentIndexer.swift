@@ -46,6 +46,9 @@ actor ContentIndexer {
     /// Pause before re-checking when a sync, playback or browsing blocks
     /// indexing.
     private let busyPause: Duration = .seconds(20)
+    /// Bounded delay only: a stalled proxy must never become a prerequisite
+    /// for indexing through the existing device TMDB path.
+    var pendingMetadataSince: [PendingMetadataKey: Date] = [:]
     /// First wait before retrying a failed embedding-asset download; doubles
     /// each attempt up to `assetRetryMaxPause`. The OTA asset request times out
     /// on slow connections, so we back off and retry in-pass instead of ending
@@ -127,7 +130,16 @@ actor ContentIndexer {
             counts = try currentCounts()
             await status.update(indexed: counts.indexed, total: counts.total)
 
-            let processed = try await indexNextChunk(embedder: embedder, status: status)
+            let processed: Int
+            do {
+                processed = try await indexNextChunk(embedder: embedder, status: status)
+            } catch LumeMetadataError.pending {
+                // The proxy is already fetching these titles. Keep them
+                // unindexed and retry in-pass, behind the usual idle gate.
+                await status.setWaiting()
+                try await Task.sleep(for: busyPause)
+                continue
+            }
             if processed == 0 {
                 break
             }
@@ -290,6 +302,10 @@ actor ContentIndexer {
                 // what's resolved once it ends (below). Only the service's
                 // flags, not the sync fetch, so the per-item check is free.
                 if await status.isBusyForIndexing { break }
+            } catch LumeMetadataError.pending {
+                // Save ready siblings, never stamp a pending title or fan
+                // it out to device TMDB. Retry pending rows after the save.
+                failure = failure ?? LumeMetadataError.pending
             } catch {
                 // Transient failure or cancellation: stop fetching, but still
                 // write the items already resolved so progress isn't lost.
@@ -311,23 +327,32 @@ actor ContentIndexer {
         // realised while the store is open, and one save per chunk keeps
         // main-context merges (which re-run every @Query) infrequent.
         if !resolved.isEmpty {
-            let context = ModelContext(modelContainer)
-            context.autosaveEnabled = false
-            let hidden = (try? Self.hiddenCategoryIDs(in: context)) ?? []
-            for result in resolved {
-                write(result, context: context, embedder: embedder, hiddenCategoryIDs: hidden)
-            }
-            do {
-                try context.save()
-            } catch {
-                failure = failure ?? error
-            }
+            failure = writeResolved(resolved, embedder: embedder, priorFailure: failure)
         }
 
         if let failure {
             throw failure
         }
         return resolved.count
+    }
+
+    /// No suspension between refetching, applying and saving managed rows.
+    private func writeResolved(_ resolved: [IndexResult], embedder: TextEmbedder, priorFailure: Error?) -> Error? {
+        do {
+            let context = ModelContext(modelContainer)
+            context.autosaveEnabled = false
+            let hidden = (try? Self.hiddenCategoryIDs(in: context)) ?? []
+            for result in resolved {
+                write(result, context: context, embedder: embedder, hiddenCategoryIDs: hidden)
+            }
+            try context.save()
+            return priorFailure
+        } catch {
+            if case LumeMetadataError.pending? = priorFailure {
+                return error // Pending must not hide a failed save.
+            }
+            return priorFailure ?? error
+        }
     }
 
     /// Snapshots the next chunk of unindexed titles into plain values.

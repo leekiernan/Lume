@@ -5,9 +5,9 @@ import Testing
 
 @MainActor
 struct LumeMetadataDeliveryTests {
-    private let now = Date()
+    let now = Date()
 
-    private func item(id: Int = 603, type: LumeMetadataKind = .movie, age: TimeInterval = 3600) -> String {
+    func item(id: Int = 603, type: LumeMetadataKind = .movie, age: TimeInterval = 3600) -> String {
         let date = ISO8601DateFormatter().string(from: now.addingTimeInterval(-age))
         let specific = type == .movie ? #""runtime":90,"release_dates":{"results":[]},"belongs_to_collection":null"#
             : #""episode_run_time":[45],"content_ratings":{"results":[]}"#
@@ -22,13 +22,13 @@ struct LumeMetadataDeliveryTests {
         """
     }
 
-    private func envelope(_ items: [String], type: LumeMetadataKind = .movie, language: String = "en-GB", version: Int = 1) -> String {
+    func envelope(_ items: [String], type: LumeMetadataKind = .movie, language: String = "en-GB", version: Int = 1) -> String {
         """
         {"v":\(version),"type":"\(type.rawValue)","language":"\(language)","items":[\(items.joined(separator: ","))]}
         """
     }
 
-    private func fixture(body: String, status: Int = 200, limit: Int = 50, languages: [String] = ["en-GB"]) throws
+    func fixture(body: String, status: Int = 200, limit: Int = 50, languages: [String] = ["en-GB"]) throws
         -> (Playlist, LumeProxySource, LumeMetadataClient, String)
     {
         let host = UUID().uuidString.lowercased() + ".example.com"
@@ -43,11 +43,11 @@ struct LumeMetadataDeliveryTests {
         return (playlist, source, LumeMetadataClient(session: session, capabilities: LumeProxyCapabilityStore(session: session)), host)
     }
 
-    private func fetch(_ client: LumeMetadataClient, _ source: LumeProxySource, ids: [Int] = [603], language: String = "en-GB", time: Date? = nil) async throws
+    func fetch(_ client: LumeMetadataClient, _ source: LumeProxySource, ids: [Int] = [603], language: String = "en-GB", time: Date? = nil) async throws
         -> [Int: TMDBTitleDetails]
     {
         let result = try await client.fetch(source: source, type: .movie, ids: ids, language: language, now: time ?? now)
-        guard case let .available(items) = result else {
+        guard case let .available(items, _) = result else {
             Issue.record("Expected a valid batch")
             return [:]
         }
@@ -153,7 +153,7 @@ struct LumeMetadataDeliveryTests {
 
     @Test func `series use TV runtime and complete content rating group`() async throws {
         let (_, source, client, _) = try fixture(body: envelope([item(type: .series)], type: .series))
-        guard case let .available(items) = try await client.fetch(source: source, type: .series, ids: [603], language: "en-GB", now: now) else {
+        guard case let .available(items, _) = try await client.fetch(source: source, type: .series, ids: [603], language: "en-GB", now: now) else {
             Issue.record("Expected series batch")
             return
         }
@@ -250,7 +250,7 @@ struct LumeMetadataDeliveryTests {
         #expect(StubURLProtocol.requests(forHost: host).count == 2)
     }
 
-    @Test func `whole batch outage defers indexer instead of requesting every title`() async throws {
+    @Test func `whole batch outage preserves paced device indexing and cools down proxy requests`() async throws {
         let (_, source, client, host) = try fixture(body: "", status: 503)
         let container = try FieldFixtures.makeContainer()
         let indexer = ContentIndexer(modelContainer: container, tmdbClient: TMDBClient(token: "test", language: "en-GB"))
@@ -258,7 +258,8 @@ struct LumeMetadataDeliveryTests {
             ContentIndexer.PendingItem(kind: .movie, id: "content-\(id)", title: "Title", year: nil,
                                        existingTMDBId: id, needsEnrichment: true, source: source)
         }
-        await #expect(throws: LumeMetadataError.self) { try await indexer.prefetchMetadata(pending, client: client) }
+        #expect(try await indexer.prefetchMetadata(pending, client: client).isEmpty)
+        #expect(try await indexer.prefetchMetadata(pending, client: client).isEmpty)
         #expect(StubURLProtocol.requests(forHost: host).count == 2)
     }
 

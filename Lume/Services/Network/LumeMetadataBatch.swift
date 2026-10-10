@@ -5,7 +5,14 @@ nonisolated enum LumeMetadataKind: String, Decodable {
 }
 
 nonisolated enum LumeMetadataError: Error {
-    case incomplete, unavailable
+    case incomplete, unavailable, pending
+}
+
+nonisolated enum LumeMetadataItemStatus: String, Decodable {
+    case complete = "ok"
+    case pending, unavailable
+    case notFound = "not_found"
+    case unsupportedLanguage = "unsupported_language"
 }
 
 /// Local proof, never decoded from a catalogue row. No URLs or credentials are
@@ -38,6 +45,14 @@ nonisolated struct LumeMetadataBatch: Decodable {
     private let items: [LumeMetadataBatchItem]
     private let duplicateIDs: Set<Int>
 
+    func statuses(requestedIDs: Set<Int>) -> [Int: LumeMetadataItemStatus] {
+        var result: [Int: LumeMetadataItemStatus] = [:]
+        for item in items where requestedIDs.contains(item.id) && !duplicateIDs.contains(item.id) {
+            result[item.id] = item.status
+        }
+        return result
+    }
+
     enum CodingKeys: String, CodingKey {
         case version = "v"
         case type, language, items
@@ -66,11 +81,11 @@ nonisolated struct LumeMetadataBatch: Decodable {
     func details(source: LumeProxySource, requestedIDs: Set<Int>, capabilities: LumeProxyCapabilities, now: Date) -> [Int: TMDBTitleDetails] {
         var result: [Int: TMDBTitleDetails] = [:]
         for item in items where requestedIDs.contains(item.id) && !duplicateIDs.contains(item.id) {
-            guard let tmdbAt = item.availability.availableAt(for: .tmdb, capabilities: capabilities, now: now),
-                  let artworkAt = item.availability.availableAt(for: .artwork, capabilities: capabilities, now: now),
+            guard item.status == .complete, var applied = item.details,
+                  let tmdbAt = item.availability?.availableAt(for: .tmdb, capabilities: capabilities, now: now),
+                  let artworkAt = item.availability?.availableAt(for: .artwork, capabilities: capabilities, now: now),
                   LumeMetadataReceipt.isFresh(tmdbAt, now: now), LumeMetadataReceipt.isFresh(artworkAt, now: now)
             else { continue }
-            var applied = item.details
             applied.proxyReceipt = LumeMetadataReceipt(sourceIdentity: source.identity, tmdbID: item.id, language: language,
                                                        tmdbAt: tmdbAt, artworkAt: artworkAt)
             result[item.id] = applied
@@ -81,10 +96,12 @@ nonisolated struct LumeMetadataBatch: Decodable {
 
 private nonisolated struct LumeMetadataBatchItem {
     let id: Int
-    let availability: LumeMetadataAvailability
-    let details: TMDBTitleDetails
+    let status: LumeMetadataItemStatus
+    let availability: LumeMetadataAvailability?
+    let details: TMDBTitleDetails?
     enum CodingKeys: String, CodingKey {
         case id = "tmdb_id"
+        case status
         case availability = "lume_meta"
         case payload = "tmdb"
     }
@@ -92,6 +109,15 @@ private nonisolated struct LumeMetadataBatchItem {
     init(from decoder: Decoder, type: LumeMetadataKind, language: String) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(Int.self, forKey: .id)
+        guard id > 0 else { throw LumeMetadataError.incomplete }
+        // Older v1 producers omitted status; a payload still has to pass all
+        // completeness checks. An explicit unknown/null status is not "ok".
+        status = container.contains(.status) ? try container.decode(LumeMetadataItemStatus.self, forKey: .status) : .complete
+        guard status == .complete else {
+            availability = nil
+            details = nil
+            return
+        }
         availability = try container.decode(LumeMetadataAvailability.self, forKey: .availability)
         let payloadDecoder = try container.superDecoder(forKey: .payload)
         let identity = try payloadDecoder.container(keyedBy: PayloadKey.self).decode(Int.self, forKey: .id)
