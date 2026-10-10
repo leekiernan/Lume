@@ -67,6 +67,8 @@ final class Series {
     var tmdbArtworkEnrichedAt: Date?
     /// Optional, device-local proof for proxy-applied groups; never availability.
     var proxyMetadataData: Data?
+    /// Values overwritten or filled by TMDB, for source-aware identity changes.
+    var tmdbFallbackData: Data?
     /// TMDB ids of similar titles, in TMDB's order, for "You May Also Like".
     ///
     /// Optional on purpose: a non-optional `[Int] = []` is not free — SwiftData

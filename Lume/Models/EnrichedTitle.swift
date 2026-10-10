@@ -7,6 +7,7 @@ nonisolated protocol EnrichedTitle: PersistentModel {
     var id: String { get }
     var tmdbId: Int? { get set }
     var proxyMetadataData: Data? { get set }
+    var tmdbFallbackData: Data? { get set }
     var backdropPath: String? { get set }
     var posterPath: String? { get set }
     var posterCheckedAt: Date? { get set }
@@ -66,8 +67,15 @@ nonisolated extension EnrichedTitle {
         imdbId = details.imdbId ?? imdbId
         similarTitleIds = details.similarIDs
         trailers = details.videos
-        if (plot ?? "").isEmpty, let overview = details.overview { plot = overview }
-        if !details.genreNames.isEmpty { genre = details.genreNames.joined(separator: ", ") }
+        if (plot ?? "").isEmpty, let overview = details.overview {
+            recordTMDBFallback(.plot, previous: plot, applied: overview)
+            plot = overview
+        }
+        if !details.genreNames.isEmpty {
+            let value = details.genreNames.joined(separator: ", ")
+            recordTMDBFallback(.genre, previous: genre, applied: value)
+            genre = value
+        }
         tmdbArtworkEnrichedAt = details.proxyReceipt?.artworkAt ?? Date()
         recordProxyReceipt(details.proxyReceipt, fullDetails: false)
     }
