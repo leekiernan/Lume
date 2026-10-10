@@ -104,12 +104,13 @@
 
     // MARK: - Read-only value row
 
-    /// A non-interactive label/value row for read-only information. Not
-    /// focusable, so the focus engine skips it and moves between the actual
-    /// controls — matching the Apple TV Settings information rows.
+    /// A read-only label/value row. Focus lets the remote scroll through long
+    /// information sections without escaping to the sidebar. It deliberately
+    /// has no button action; the quiet highlight only marks the reading position.
     struct TVSettingsValueRow<Value: View>: View {
         private let label: LocalizedStringKey
         private let value: Value
+        @FocusState private var isFocused: Bool
 
         init(_ label: LocalizedStringKey, @ViewBuilder value: () -> Value) {
             self.label = label
@@ -129,8 +130,12 @@
             .frame(maxWidth: .infinity, minHeight: TVSettingsMetrics.rowMinHeight, alignment: .leading)
             .background(
                 RoundedRectangle(cornerRadius: TVSettingsMetrics.rowCornerRadius, style: .continuous)
-                    .fill(TVSettingsMetrics.rowFill)
+                    .fill(isFocused ? .white.opacity(0.14) : TVSettingsMetrics.rowFill)
             )
+            .accessibilityElement(children: .combine)
+            .focusable()
+            .focused($isFocused)
+            .animation(.easeOut(duration: 0.15), value: isFocused)
         }
     }
 
