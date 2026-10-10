@@ -123,11 +123,17 @@ final nonisolated class XtreamClient: Sendable {
     /// wrapped into `XtreamError.networkError` so callers see a consistent
     /// error type.
     func fetchValidated(_ url: URL, action: String, phases: RequestPhases?) async throws -> (Data, URLResponse) {
+        try await fetchValidated(URLRequest(url: url), action: action, phases: phases)
+    }
+
+    /// Conditional bulk reads opt into 304 handling; ordinary JSON requests
+    /// still reject it. The caller owns the committed representation validator.
+    func fetchValidated(_ request: URLRequest, action: String, phases: RequestPhases?, allowNotModified: Bool = false) async throws -> (Data, URLResponse) {
         let data: Data
         let response: URLResponse
         let fetchInterval = phases.map { Perf.begin($0.fetch) }
         do {
-            (data, response) = try await session.data(from: url)
+            (data, response) = try await session.data(for: request)
         } catch {
             if let fetchInterval { Perf.end(fetchInterval) }
             throw XtreamError.networkError(error)
@@ -143,7 +149,7 @@ final nonisolated class XtreamClient: Sendable {
             throw XtreamError.invalidResponse
         }
 
-        guard (200 ... 299).contains(httpResponse.statusCode) else {
+        guard (200 ... 299).contains(httpResponse.statusCode) || (allowNotModified && httpResponse.statusCode == 304) else {
             let fingerprint = NetworkDiagnostics.fingerprint(response: response, data: data)
             Logger.network.error("Xtream \(action) rejected: \(fingerprint)")
             if httpResponse.statusCode == 401 || httpResponse.statusCode == 403 {

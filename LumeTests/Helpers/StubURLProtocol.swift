@@ -16,10 +16,12 @@ final nonisolated class StubURLProtocol: URLProtocol {
     struct Response {
         var status: Int
         var body: String
+        var headers: [String: String]
 
-        init(status: Int = 200, body: String = "") {
+        init(status: Int = 200, body: String = "", headers: [String: String] = [:]) {
             self.status = status
             self.body = body
+            self.headers = headers
         }
     }
 
@@ -44,6 +46,11 @@ final nonisolated class StubURLProtocol: URLProtocol {
     private static let lock = NSLock()
     private nonisolated(unsafe) static var routes: [RouteKey: Response] = [:]
     private nonisolated(unsafe) static var pathRoutes: [PathKey: Response] = [:]
+    private nonisolated(unsafe) static var receivedRequests: [String: [URLRequest]] = [:]
+
+    static func requests(forHost host: String) -> [URLRequest] {
+        lock.withLock { receivedRequests[host] ?? [] }
+    }
 
     /// Registers `response` for requests to `host` carrying `query`, which is
     /// how tests sharing a host stay isolated from each other.
@@ -94,7 +101,8 @@ final nonisolated class StubURLProtocol: URLProtocol {
         let items = components.queryItems ?? []
 
         let match = Self.lock.withLock {
-            Self.routes.first { key, _ in
+            Self.receivedRequests[host, default: []].append(request)
+            return Self.routes.first { key, _ in
                 guard key.host == host else { return false }
                 if let suffix = key.pathSuffix { return components.path.hasSuffix(suffix) }
                 return items.contains { $0.name == key.queryName && $0.value == key.queryValue }
@@ -102,7 +110,7 @@ final nonisolated class StubURLProtocol: URLProtocol {
         }
 
         guard let match, let response = HTTPURLResponse(
-            url: url, statusCode: match.status, httpVersion: nil, headerFields: nil
+            url: url, statusCode: match.status, httpVersion: nil, headerFields: match.headers
         ) else {
             client?.urlProtocol(self, didFailWithError: URLError(.unsupportedURL))
             return

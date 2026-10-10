@@ -25,36 +25,46 @@ extension ContentSyncManager {
         playlistId: UUID,
         reuseUnchanged: Bool,
         progress: SyncProgress?,
-        fetch: (_ knownDigest: String?) async throws -> XtreamFetch<[Element]>
+        fetch: (_ known: XtreamDigestStore.Entry?) async throws -> XtreamFetch<[Element]>
     ) async throws -> XtreamFetch<[Element]> {
         await progress?.start(endpoint.step)
-        let known = trustedXtreamDigest(endpoint, playlistId: playlistId, reuseUnchanged: reuseUnchanged)
-        guard case let .fetched(items, digest) = try await fetch(known) else {
+        let known = trustedXtreamEntry(endpoint, playlistId: playlistId, reuseUnchanged: reuseUnchanged)
+        var result = try await fetch(known)
+        // A store can lose rows while the network request is suspended. A 304
+        // (or matching body) must not leave that damage unrepaired.
+        if case .unchanged = result,
+           known == nil || trustedXtreamEntry(endpoint, playlistId: playlistId, reuseUnchanged: reuseUnchanged) != known
+        {
+            result = try await fetch(nil)
+        }
+        guard case let .fetched(items, digest, validator) = result else {
+            guard let known, case let .unchanged(validator) = result else { throw XtreamError.invalidResponse }
+            XtreamDigestStore.store(.init(digest: known.digest, rowCount: known.rowCount, validator: validator), playlistId: playlistId, endpoint: endpoint)
             noteUnchangedXtreamPayload(endpoint, playlistId: playlistId)
             await progress?.complete(endpoint.step)
-            return .unchanged
+            return result
         }
         XtreamDigestStore.remove(playlistId: playlistId, endpoint: endpoint)
         let label = endpoint.label
         // swiftformat:disable:next redundantSelf
         Logger.database.info("Fetched \(items.count) \(label), syncing in batches of \(self.batchSize)")
         await progress?.update(detail: "0 of \(items.count)", fraction: 0)
-        return .fetched(items, digest: digest)
+        return .fetched(items, digest: digest, validator: validator)
     }
 
     /// Ends a bulk phase that imported: runs its sweep, records the payload's
     /// digest, and completes the step.
     func finishXtreamPhase(
         _ endpoint: XtreamDigestStore.Endpoint,
-        payload: (digest: String, count: Int),
+        payload: (digest: String, count: Int, uniqueCount: Int, validator: XtreamDigestStore.Validator?),
         playlistId: UUID,
         progress: SyncProgress?,
         prune: () -> Void
     ) async {
-        let (digest, count) = payload
+        let (digest, count, uniqueCount, validator) = payload
         let pruneInterval = Perf.begin(endpoint.pruneSignpost)
         prune()
-        recordXtreamDigest(digest, endpoint, playlistId: playlistId, fetchedCount: count)
+        recordXtreamDigest(digest, endpoint, playlistId: playlistId, fetchedCount: count, expectedRowCount: uniqueCount, validator: validator)
         Perf.end(pruneInterval)
 
         let label = endpoint.label
@@ -68,6 +78,10 @@ extension ContentSyncManager {
     /// left: anything else (a recreated store, a partly deleted playlist) means
     /// the bytes may match while the catalog does not.
     func trustedXtreamDigest(_ endpoint: XtreamDigestStore.Endpoint, playlistId: UUID, reuseUnchanged: Bool) -> String? {
+        trustedXtreamEntry(endpoint, playlistId: playlistId, reuseUnchanged: reuseUnchanged)?.digest
+    }
+
+    private func trustedXtreamEntry(_ endpoint: XtreamDigestStore.Endpoint, playlistId: UUID, reuseUnchanged: Bool) -> XtreamDigestStore.Entry? {
         guard reuseUnchanged,
               !SweepSkipDefaults.isHoldingBack(playlistId: playlistId, kind: endpoint.sweepKind),
               let entry = XtreamDigestStore.entry(playlistId: playlistId, endpoint: endpoint)
@@ -78,7 +92,7 @@ extension ContentSyncManager {
             XtreamDigestStore.remove(playlistId: playlistId, endpoint: endpoint)
             return nil
         }
-        return entry.digest
+        return entry
     }
 
     /// Notes a phase skipped because its payload matched the last import.
@@ -102,12 +116,18 @@ extension ContentSyncManager {
         _ digest: String,
         _ endpoint: XtreamDigestStore.Endpoint,
         playlistId: UUID,
-        fetchedCount: Int
+        fetchedCount: Int,
+        expectedRowCount: Int? = nil,
+        validator: XtreamDigestStore.Validator? = nil
     ) {
         guard fetchedCount > 0, !SweepSkipDefaults.isHoldingBack(playlistId: playlistId, kind: endpoint.sweepKind) else {
             return
         }
-        let entry = XtreamDigestStore.Entry(digest: digest, rowCount: storedRowCount(endpoint, playlistId: playlistId))
+        let rowCount = storedRowCount(endpoint, playlistId: playlistId)
+        // Sweeps are best-effort today. Certify neither a digest nor an ETag if
+        // failed reads/deletes/saves left more (or fewer) rows than we imported.
+        guard rowCount > 0, expectedRowCount == nil || rowCount == expectedRowCount else { return }
+        let entry = XtreamDigestStore.Entry(digest: digest, rowCount: rowCount, validator: validator)
         XtreamDigestStore.store(entry, playlistId: playlistId, endpoint: endpoint)
     }
 

@@ -20,7 +20,8 @@ struct XtreamPhaseBoundaryTests {
         let manager = ContentSyncManager(modelContainer: container)
         let task = Task {
             try await manager.runXtreamContentPhase(.movies, playlistId: playlistId, progress: nil, reuseUnchanged: false,
-                                                    fetch: { _ in .fetched(Array(0 ... 2000), digest: "test-digest") },
+                                                    fetch: { _ in .fetched(Array(0 ... 2000), digest: "test-digest",
+                                                                           validator: .init(etag: "new-etag", requestIdentity: "request")) },
                                                     upsert: { batch, context in
                                                         if batch.startIndex == 2000 {
                                                             if cancel { withUnsafeCurrentTask { $0?.cancel() } } else { throw Failure.rejectedBatch }

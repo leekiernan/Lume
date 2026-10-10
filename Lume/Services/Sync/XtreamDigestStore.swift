@@ -23,9 +23,16 @@ nonisolated enum XtreamDigestStore {
         case live
     }
 
-    struct Entry: Equatable {
+    /// The request hash scopes an opaque ETag without persisting credentials.
+    struct Validator: Codable, Equatable {
+        let etag: String
+        let requestIdentity: String
+    }
+
+    struct Entry: Codable, Equatable {
         let digest: String
         let rowCount: Int
+        var validator: Validator?
     }
 
     static func key(playlistId: UUID, endpoint: Endpoint) -> String {
@@ -33,7 +40,12 @@ nonisolated enum XtreamDigestStore {
     }
 
     static func entry(playlistId: UUID, endpoint: Endpoint) -> Entry? {
-        guard let stored = UserDefaults.standard.string(forKey: key(playlistId: playlistId, endpoint: endpoint)),
+        let key = key(playlistId: playlistId, endpoint: endpoint)
+        if let data = UserDefaults.standard.data(forKey: key) {
+            return try? JSONDecoder().decode(Entry.self, from: data)
+        }
+        // Keep pre-ETag imports usable; they acquire a validator on a later 200.
+        guard let stored = UserDefaults.standard.string(forKey: key),
               let separator = stored.firstIndex(of: ":"),
               let rowCount = Int(stored[..<separator])
         else { return nil }
@@ -41,7 +53,8 @@ nonisolated enum XtreamDigestStore {
     }
 
     static func store(_ entry: Entry, playlistId: UUID, endpoint: Endpoint) {
-        UserDefaults.standard.set("\(entry.rowCount):\(entry.digest)", forKey: key(playlistId: playlistId, endpoint: endpoint))
+        guard let data = try? JSONEncoder().encode(entry) else { return }
+        UserDefaults.standard.set(data, forKey: key(playlistId: playlistId, endpoint: endpoint))
     }
 
     static func remove(playlistId: UUID, endpoint: Endpoint) {
