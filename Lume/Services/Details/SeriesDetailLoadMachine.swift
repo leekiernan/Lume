@@ -87,7 +87,7 @@ final class SeriesDetailLoadMachine {
             seriesId: series.seriesId, seriesElementId: series.id, playlist: playlist
         ), !Task.isCancelled, episodeLoad.owns(request) else { return }
         // A failed or cancelled fetch must not stamp the cache as fresh.
-        series.insertEpisodes(parsed, into: context)
+        series.applyFetchedEpisodes(parsed, into: context)
         recomputeSeasons(series)
     }
 

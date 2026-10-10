@@ -16,7 +16,7 @@ import SwiftData
 /// A provider episode parsed off the main actor, ready to be turned into an
 /// `Episode` model by the caller on its own context. Value type so it can cross
 /// the actor boundary safely.
-struct ParsedEpisode {
+nonisolated struct ParsedEpisode {
     let id: String
     let episodeId: String
     let title: String
@@ -32,7 +32,19 @@ struct ParsedEpisode {
     let plot: String?
 }
 
+/// Metadata and episodes travel together without carrying a context across the
+/// fetch boundary. The owning view applies both before the episode-cache save.
+nonisolated struct FetchedEpisodes {
+    let episodes: [ParsedEpisode]
+    var seriesInfo: XtreamSeriesInfo?
+}
+
 extension Series {
+    func applyFetchedEpisodes(_ fetched: FetchedEpisodes, into context: ModelContext) {
+        if let info = fetched.seriesInfo { applyProviderMetadata(info, fillMissing: true) }
+        insertEpisodes(fetched.episodes, into: context)
+    }
+
     /// Materializes fetched episodes on `context` and links them to this series,
     /// de-duping against any already present (Episode.id is unique). Mutating the
     /// `episodes` relationship directly updates any observing SwiftUI view, so the

@@ -198,10 +198,10 @@ enum ContinueWatchingEpisodes {
                   let parsed = try? await manager.fetchEpisodes(
                       seriesId: show.seriesId, seriesElementId: show.id, playlist: playlist
                   ),
-                  !parsed.isEmpty
+                  !Task.isCancelled
             else { continue }
-            show.insertEpisodes(parsed, into: context)
-            added = true
+            show.applyFetchedEpisodes(parsed, into: context)
+            added = added || !parsed.episodes.isEmpty
         }
         return added
     }

@@ -3,8 +3,9 @@
 //  LumeTests
 //
 //  Guards the dirty-checked provider-field application: an unchanged re-sync
-//  must leave the context clean, while every real provider change — including
-//  nil ⇄ "" — must still be written and every user-state field must survive.
+//  must leave the context clean, while real provider changes must be written
+//  and user state must survive. Movie/live fields retain exact nil ⇄ ""
+//  semantics; sparse series metadata must not erase detail repairs.
 //
 
 import Foundation
