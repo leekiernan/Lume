@@ -95,9 +95,15 @@ nonisolated enum EPGProgrammeEnrichment {
         }
     }
 
+    /// Trailing `ᴺᵉʷ`/`ᴸᶦᵛᵉ` badges (in any order) are presentation, not title:
+    /// modifier letters pass `isLetter`, so left in they'd defeat every match.
+    /// Mirrors the proxy's and the sports trial's `unbadge`.
     static func normalizedTitle(_ title: String) -> String {
         var value = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        if value.hasSuffix("ᴺᵉʷ") { value.removeLast(3) }
+        while let badge = ["ᴺᵉʷ", "ᴸᶦᵛᵉ"].first(where: { value.hasSuffix($0) }) {
+            value.removeLast(badge.count)
+            value = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
         return value.lowercased().filter { $0.isLetter || $0.isNumber || $0 == "_" }
     }
 

@@ -105,6 +105,10 @@ struct EPGProgrammeEnrichmentTests {
         #expect(EPGProgrammeEnrichment.normalizedTitle("Secrets of the Deadᴺᵉʷ ") == "secretsofthedead")
         #expect(EPGProgrammeEnrichment.normalizedTitle("New Tricks") == "newtricks")
         #expect(EPGProgrammeEnrichment.normalizedTitle("Live: News") != EPGProgrammeEnrichment.normalizedTitle("News"))
+        // Provider event titles carry ᴸᶦᵛᵉ as well, sometimes both badges.
+        #expect(EPGProgrammeEnrichment.normalizedTitle("Premier League: Arsenal v Leeds ᴸᶦᵛᵉ") == "premierleaguearsenalvleeds")
+        #expect(EPGProgrammeEnrichment.normalizedTitle("Match of the Day ᴺᵉʷ ᴸᶦᵛᵉ") == "matchoftheday")
+        #expect(EPGProgrammeEnrichment.normalizedTitle("ᴸᶦᵛᵉ Coverage") == "ᴸᶦᵛᵉcoverage".lowercased())
     }
 
     @Test func `aliases require both station identity and provider ID and reject collisions`() {
