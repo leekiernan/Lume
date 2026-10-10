@@ -20,8 +20,12 @@ import SwiftUI
 
         func body(content: Content) -> some View {
             content
-                .defaultFocus(focus, target)
+                // Prefer the action on user-driven entry as well as initial
+                // presentation. This declares a landing, never grabs focus
+                // after enrichment or while the viewer moves across tabs.
+                .defaultFocus(focus, target, priority: .userInitiated)
                 .focusScope(scope)
+                .focusSection()
         }
     }
 #endif

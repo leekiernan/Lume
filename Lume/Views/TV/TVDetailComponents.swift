@@ -482,29 +482,18 @@
 
     // MARK: - Loading
 
-    /// Full-screen placeholder shown while TMDB enrichment is fetched on first
-    /// visit, mirroring the loading gate the iOS / macOS detail screens use.
-    /// Tuned for the 10-foot UI with a large spinner and title.
-    struct TVDetailLoadingView: View {
-        let title: String
-
+    /// Enrichment status beneath the already-usable hero. Loading must not
+    /// replace the destination's actions and leave tvOS with no focus target.
+    struct TVDetailLoadingStatus: View {
         var body: some View {
-            VStack(spacing: 36) {
+            HStack(spacing: 16) {
                 ProgressView()
-                    .controlSize(.large)
-                    .scaleEffect(1.6)
-
-                Text(title)
-                    .font(.system(size: 44, weight: .semibold))
-                    .multilineTextAlignment(.center)
-                    .foregroundStyle(.white)
 
                 Text("Loading details…")
                     .font(.system(size: 28))
                     .foregroundStyle(.white.opacity(0.6))
             }
             .padding(.horizontal, TVDetailMetrics.horizontalInset)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 

@@ -40,7 +40,7 @@
 
         @State private var showYouTubeUnavailable = false
 
-        private enum FocusTarget: Hashable { case play }
+        private enum FocusTarget: Hashable { case play, favorite }
         @FocusState private var focus: FocusTarget?
 
         init(movie: Movie) {
@@ -49,40 +49,36 @@
         }
 
         var body: some View {
-            Group {
-                if isLoadingTMDB {
-                    TVDetailLoadingView(title: movie.name)
-                        .transition(.opacity)
-                } else {
-                    content
-                        .transition(.opacity)
+            // Keep the hero/actions mounted while enrichment arrives. A
+            // focusless loading page hands a pushed screen to the tab bar.
+            content
+                .background(Color.lumeNight)
+                .ignoresSafeArea()
+                .fullScreenCover(item: $playingMedia) { media in
+                    FullScreenPlayerView(media: media)
                 }
-            }
-            .background(Color.lumeNight)
-            .ignoresSafeArea()
-            .fullScreenCover(item: $playingMedia) { media in
-                FullScreenPlayerView(media: media)
-            }
-            .alert("YouTube Unavailable", isPresented: $showYouTubeUnavailable) {
-                Button("OK", role: .cancel) {}
-            } message: {
-                Text("Install the YouTube app on your Apple TV to watch trailers.")
-            }
-            .task(id: movie.id) {
-                await loader.load(movie, in: modelContext)
-            }
-            .task(id: [movie.id, String(movie.collectionId ?? -1)]) {
-                await loader.loadCollection(movie, in: modelContext)
-            }
-            .onChange(of: movie.similarTMDBIds) { loader.resolveSimilar(movie, in: modelContext) }
-            .onDisappear { loader.invalidate() }
-            .animation(.easeInOut(duration: 0.3), value: isLoadingTMDB)
+                .alert("YouTube Unavailable", isPresented: $showYouTubeUnavailable) {
+                    Button("OK", role: .cancel) {}
+                } message: {
+                    Text("Install the YouTube app on your Apple TV to watch trailers.")
+                }
+                .task(id: movie.id) {
+                    await loader.load(movie, in: modelContext)
+                }
+                .task(id: [movie.id, String(movie.collectionId ?? -1)]) {
+                    await loader.loadCollection(movie, in: modelContext)
+                }
+                .onChange(of: movie.similarTMDBIds) { loader.resolveSimilar(movie, in: modelContext) }
+                .onDisappear { loader.invalidate() }
+                .animation(.easeInOut(duration: 0.3), value: isLoadingTMDB)
         }
 
         private var content: some View {
             ScrollView {
                 VStack(alignment: .leading, spacing: TVDetailMetrics.sectionSpacing) {
                     hero
+
+                    if isLoadingTMDB { TVDetailLoadingStatus() }
 
                     aboutSection
 
@@ -126,7 +122,7 @@
                 .padding(.bottom, 100)
             }
             .scrollClipDisabled()
-            .tvDetailDefaultFocus($focus, .play)
+            .tvDetailDefaultFocus($focus, moviePlaylist != nil ? .play : .favorite)
         }
 
         // MARK: - Hero
@@ -152,6 +148,7 @@
 
                 HStack(spacing: 18) {
                     MediaFavoriteButton(model: movie)
+                        .focused($focus, equals: .favorite)
 
                     TVSecondaryActionButton(
                         title: movie.isWatched ? "Mark as Unwatched" : "Mark as Watched",
