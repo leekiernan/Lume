@@ -281,5 +281,21 @@ struct LumeMetadataDeliveryTests {
         playlist.password = "test?pass"
         movie.tmdbId = 604
         #expect(await !(indexer.canApply(result, to: movie, in: context)))
+        movie.tmdbId = nil
+        #expect(await !(indexer.canApply(result, to: movie, in: context)))
+    }
+
+    @Test func `indexer can resolve a missing ID but cannot overwrite a concurrent resolution`() async throws {
+        let container = try FieldFixtures.makeContainer()
+        let context = container.mainContext
+        let movie = Movie(id: "unresolved-movie", streamId: 1, name: "Movie")
+        context.insert(movie)
+        let indexer = ContentIndexer(modelContainer: container)
+        let item = ContentIndexer.PendingItem(kind: .movie, id: movie.id, title: movie.name, year: nil,
+                                              existingTMDBId: nil, needsEnrichment: true, source: nil)
+        let result = ContentIndexer.IndexResult(item: item, resolvedTMDBId: 603, details: nil, usedNetwork: true)
+        #expect(await indexer.canApply(result, to: movie, in: context))
+        movie.tmdbId = 604
+        #expect(await !(indexer.canApply(result, to: movie, in: context)))
     }
 }

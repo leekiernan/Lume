@@ -113,7 +113,10 @@ extension ContentIndexer {
     /// Revalidate after network/busy waits. A changed account or identity must
     /// not acquire the old request's data or completion marker.
     func canApply(_ result: IndexResult, to title: some EnrichedTitle, in context: ModelContext) -> Bool {
-        if let current = title.tmdbId, current != result.resolvedTMDBId { return false }
+        // Compare with the snapshot, not the resolved result. In particular,
+        // nil now may mean the catalogue withdrew an ID during the await;
+        // accepting that result would silently restore the withdrawn match.
+        guard title.tmdbId == result.item.existingTMDBId else { return false }
         guard let source = result.item.source else { return true }
         return LumeProxySource.snapshot(contentID: title.id, in: context)?.identity == source.identity
     }
