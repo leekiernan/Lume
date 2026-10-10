@@ -246,6 +246,7 @@ nonisolated struct XtreamVODStream: Decodable {
     let categoryId: String?
     let containerExtension: String?
     let tmdb: String?
+    let lumeMeta: LumeMetadataAvailability?
 
     enum CodingKeys: String, CodingKey {
         case num, name
@@ -260,6 +261,7 @@ nonisolated struct XtreamVODStream: Decodable {
         case containerExtension = "container_extension"
         case tmdb
         case tmdbId = "tmdb_id"
+        case lumeMeta = "lume_meta"
     }
 
     init(from decoder: Decoder) throws {
@@ -277,6 +279,7 @@ nonisolated struct XtreamVODStream: Decodable {
         containerExtension = container.lenientString(forKey: .containerExtension)
         // Some playlists use "tmdb", others "tmdb_id".
         tmdb = container.lenientString(forKey: .tmdb) ?? container.lenientString(forKey: .tmdbId)
+        lumeMeta = try? container.decode(LumeMetadataAvailability.self, forKey: .lumeMeta)
     }
 }
 
@@ -297,6 +300,7 @@ nonisolated struct XtreamSeries: Decodable {
     let rating5Based: String?
     let categoryId: String?
     let tmdb: String?
+    let lumeMeta: LumeMetadataAvailability?
 
     enum CodingKeys: String, CodingKey {
         case num, name
@@ -309,6 +313,7 @@ nonisolated struct XtreamSeries: Decodable {
         case categoryId = "category_id"
         case tmdb
         case tmdbId = "tmdb_id"
+        case lumeMeta = "lume_meta"
     }
 
     init(from decoder: Decoder) throws {
@@ -328,6 +333,7 @@ nonisolated struct XtreamSeries: Decodable {
         categoryId = container.lenientString(forKey: .categoryId)
         // Some playlists use "tmdb", others "tmdb_id".
         tmdb = container.lenientString(forKey: .tmdb) ?? container.lenientString(forKey: .tmdbId)
+        lumeMeta = try? container.decode(LumeMetadataAvailability.self, forKey: .lumeMeta)
     }
 }
 

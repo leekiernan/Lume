@@ -68,6 +68,12 @@ extension ContentSyncManager {
         updatePlaylistInfo(playlistId, with: authResponse)
         await progress?.complete(.authenticating)
 
+        // Optional negotiation after authentication, once per sync (cached).
+        // A normal provider's 404 or a proxy outage never fails catalogue sync.
+        if let source = LumeProxySource(playlist: playlist) {
+            _ = try await LumeProxyCapabilityStore.shared.capabilities(for: source, refresh: full)
+        }
+
         try await syncCategories(for: playlist, playlistId: playlistId, progress: progress, areas: areas)
         return try await syncEnabledContent(
             for: playlist, playlistId: playlistId, progress: progress, areas: areas, full: full
