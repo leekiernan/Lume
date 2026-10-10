@@ -9,6 +9,7 @@ import Testing
 struct EPGEnrichmentSyncTests {
     private nonisolated static let modified = "Thu, 08 Oct 2026 12:00:00 GMT"
 
+    @MainActor
     private final class Fixture {
         let container: ModelContainer
         let defaults: UserDefaults

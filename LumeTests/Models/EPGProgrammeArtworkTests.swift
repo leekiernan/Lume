@@ -61,7 +61,7 @@ struct EPGProgrammeArtworkTests {
         #expect(cells.last?.artworkURL == nil)
     }
 
-    @Test func `selected programme lookup accepts clipped guide cells and exact hub fallbacks only`() throws {
+    @MainActor @Test func `selected programme lookup accepts clipped guide cells and exact hub fallbacks only`() throws {
         let container = try ModelContainer(for: EPGListing.self, configurations: ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none))
         let start = Date(timeIntervalSince1970: 1_700_000_000)
         let row = EPGListing(id: "stable", channelId: "one", title: "Film", listingDescription: "Synopsis", start: start,

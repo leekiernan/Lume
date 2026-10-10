@@ -7,6 +7,7 @@ import Testing
 @Suite(.readsGlobalState)
 @MainActor
 struct EPGEnrichmentFeedsTests {
+    @MainActor
     private final class Fixture {
         let container: ModelContainer
         let defaults: UserDefaults
