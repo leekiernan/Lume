@@ -101,9 +101,7 @@ nonisolated enum TraktPendingWatchedStore {
     /// The directory the parked state is kept in. The unit tests run inside
     /// the installed app, so the test bundle points this at a temporary
     /// directory before any test runs (`PendingStoreIsolation`).
-    nonisolated(unsafe) static var directory: URL? = FileManager.default.urls(
-        for: .applicationSupportDirectory, in: .userDomainMask
-    ).first
+    nonisolated(unsafe) static var directory: URL? = TrackerPendingStorage.directory
 
     /// Where the parked state lives. Excluded from backup — the next import
     /// rebuilds it from Trakt.
@@ -148,8 +146,8 @@ nonisolated enum TraktPendingWatchedStore {
                 return
             }
             do {
-                // Resolving Application Support does not create it on a fresh
-                // install. Ensure it exists before the atomic file write.
+                // Resolving the storage directory does not create it. Also
+                // recreate it if tvOS purged the cache between launches.
                 try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
                 try JSONEncoder().encode(state).write(to: url, options: .atomic)
                 var resourceValues = URLResourceValues()
