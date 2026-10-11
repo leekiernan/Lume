@@ -5,9 +5,17 @@ import Testing
 private final nonisolated class TraktScrobbleStubProtocol: URLProtocol {
     private static let lock = NSLock()
     private nonisolated(unsafe) static var requests: [URLRequest] = []
+    private nonisolated(unsafe) static var statusCode = 201
+    private nonisolated(unsafe) static var responseBody = "{}"
+    private nonisolated(unsafe) static var deleteStatusCode = 204
 
-    static func reset() {
-        lock.withLock { requests = [] }
+    static func reset(statusCode: Int = 201, responseBody: String = "{}", deleteStatusCode: Int = 204) {
+        lock.withLock {
+            requests = []
+            Self.statusCode = statusCode
+            Self.responseBody = responseBody
+            Self.deleteStatusCode = deleteStatusCode
+        }
     }
 
     static func recordedRequests() -> [URLRequest] {
@@ -29,12 +37,16 @@ private final nonisolated class TraktScrobbleStubProtocol: URLProtocol {
         // its body stream (see `URLRequest.bodyData`) may already be spent.
         var recorded = request
         recorded.httpBody = request.bodyData
-        Self.lock.withLock { Self.requests.append(recorded) }
+        let (statusCode, responseBody) = Self.lock.withLock {
+            Self.requests.append(recorded)
+            if recorded.httpMethod == "DELETE" { return (Self.deleteStatusCode, "") }
+            return (Self.statusCode, Self.responseBody)
+        }
         guard let url = request.url,
-              let response = HTTPURLResponse(url: url, statusCode: 201, httpVersion: nil, headerFields: nil)
+              let response = HTTPURLResponse(url: url, statusCode: statusCode, httpVersion: nil, headerFields: nil)
         else { return }
         client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
-        client?.urlProtocol(self, didLoad: Data("{}".utf8))
+        client?.urlProtocol(self, didLoad: Data(responseBody.utf8))
         client?.urlProtocolDidFinishLoading(self)
     }
 
@@ -44,6 +56,54 @@ private final nonisolated class TraktScrobbleStubProtocol: URLProtocol {
 @MainActor
 @Suite(.serialized)
 struct TraktScrobbleClientTests {
+    @Test(arguments: [TraktScrobbleTarget.movie(tmdbID: 42), .episode(showTMDBID: 84, season: 1, episode: 2)])
+    func `discard ends watching and removes only its returned playback entry`(target: TraktScrobbleTarget) async throws {
+        TraktScrobbleStubProtocol.reset(responseBody: #"{"id":9876543210,"action":"pause","progress":1}"#)
+        let response = try await makeClient().scrobble(target, action: .discard, progress: 0.7, accessToken: "token")
+        let requests = TraktScrobbleStubProtocol.recordedRequests()
+        #expect(requests.map(\.httpMethod) == ["POST", "DELETE"])
+        #expect(requests.map { $0.url?.path } == ["/scrobble/stop", "/sync/playback/9876543210"])
+        #expect(try requestJSON(requests[0])["progress"] as? Double == 1)
+        #expect(requests[1].value(forHTTPHeaderField: "Authorization") == "Bearer token")
+        #expect(response.action == "discard" && response.progress == 0)
+    }
+
+    @Test func `discard tolerates an already deleted playback entry`() async throws {
+        TraktScrobbleStubProtocol.reset(responseBody: #"{"id":42,"action":"pause","progress":1}"#, deleteStatusCode: 404)
+        let response = try await makeClient().scrobble(.movie(tmdbID: 42), action: .discard, progress: 0, accessToken: "token")
+        #expect(response.action == "discard")
+    }
+
+    @Test func `failed playback deletion is not reported as a successful discard`() async throws {
+        TraktScrobbleStubProtocol.reset(responseBody: #"{"id":42,"action":"pause","progress":1}"#, deleteStatusCode: 500)
+        do {
+            try await makeClient().scrobble(.movie(tmdbID: 42), action: .discard, progress: 0, accessToken: "token")
+            Issue.record("Expected deletion failure")
+        } catch let error as TraktError {
+            #expect(error == .server(500))
+        }
+    }
+
+    @Test(arguments: [#"{"action":"pause","progress":1}"#, #"{"id":42,"action":"scrobble","progress":100}"#])
+    func `discard never guesses an id or deletes a watched history entry`(body: String) async throws {
+        TraktScrobbleStubProtocol.reset(responseBody: body)
+        do {
+            try await makeClient().scrobble(.movie(tmdbID: 42), action: .discard, progress: 0, accessToken: "token")
+            Issue.record("Expected an invalid response")
+        } catch let error as TraktError {
+            #expect(error == .invalidResponse)
+        }
+        #expect(TraktScrobbleStubProtocol.recordedRequests().count == 1)
+    }
+
+    @Test func `normal stop retains its actual resume point`() async throws {
+        TraktScrobbleStubProtocol.reset()
+        try await makeClient().scrobble(.movie(tmdbID: 42), action: .stop, progress: 16.5, accessToken: "token")
+        let requests = TraktScrobbleStubProtocol.recordedRequests()
+        #expect(requests.count == 1)
+        #expect(try requestJSON(requests[0])["progress"] as? Double == 16.5)
+    }
+
     private func makeClient() -> TraktClient {
         let config = URLSessionConfiguration.ephemeral
         config.protocolClasses = [TraktScrobbleStubProtocol.self]
@@ -100,6 +160,44 @@ struct TraktScrobbleClientTests {
         let body = try #require(request.httpBody)
         return try #require(JSONSerialization.jsonObject(with: body) as? [String: Any])
     }
+
+    @Test(arguments: [422, 429, 500])
+    func `pause failures preserve HTTP status without logging response bodies`(status: Int) async throws {
+        TraktScrobbleStubProtocol.reset(statusCode: status, responseBody: "private-response-marker")
+        do {
+            try await makeClient().scrobble(.movie(tmdbID: 42), action: .pause, progress: 0.3, accessToken: "private-token-marker")
+            Issue.record("Expected an HTTP failure")
+        } catch let error as TraktError {
+            #expect(error == .server(status))
+            #expect(LogRedaction.describe(error) == "TraktError: HTTP \(status)")
+            #expect(!LogRedaction.describe(error).contains("private"))
+        }
+        let request = try #require(TraktScrobbleStubProtocol.recordedRequests().first)
+        #expect(request.url?.path == "/scrobble/pause")
+        #expect(try requestJSON(request)["progress"] as? Double == 0.3)
+    }
+
+    @Test func `pause authentication failures expose HTTP 401`() async throws {
+        TraktScrobbleStubProtocol.reset(statusCode: 401)
+        do {
+            try await makeClient().scrobble(.movie(tmdbID: 42), action: .pause, progress: 25, accessToken: "token")
+            Issue.record("Expected an authentication failure")
+        } catch let error as TraktError {
+            #expect(error == .notAuthenticated)
+            #expect(LogRedaction.describe(error) == "TraktError: not authenticated (HTTP 401)")
+        }
+    }
+
+    @Test func `malformed pause responses are distinguished from HTTP failures`() async throws {
+        TraktScrobbleStubProtocol.reset(responseBody: "not JSON")
+        do {
+            try await makeClient().scrobble(.movie(tmdbID: 42), action: .pause, progress: 25, accessToken: "token")
+            Issue.record("Expected a decoding failure")
+        } catch let error as TraktError {
+            #expect(error == .decoding)
+            #expect(LogRedaction.describe(error) == "TraktError: response decoding failed")
+        }
+    }
 }
 
 @MainActor
@@ -151,7 +249,7 @@ struct TraktPlaybackScrobblerTests {
         ])
     }
 
-    @Test func `progress is bounded and an immediate stop uses Trakt minimum`() {
+    @Test func `progress is bounded and an immediate stop discards its resume point`() {
         #expect(TraktPlaybackScrobbler.progress(elapsed: 30, duration: 120) == 25)
         #expect(TraktPlaybackScrobbler.progress(elapsed: 150, duration: 120) == 100)
         #expect(TraktPlaybackScrobbler.progress(elapsed: 10, duration: 0) == 0)
@@ -164,7 +262,32 @@ struct TraktPlaybackScrobblerTests {
         scrobbler.playbackStarted(target: target, progress: 0)
         scrobbler.playbackStopped(target: target, progress: 0)
 
-        #expect(events.last == Event(target: target, action: .stop, progress: 1))
+        #expect(events.last == Event(target: target, action: .discard, progress: 0))
+    }
+
+    @Test func `early pause is skipped and exit discards once`() {
+        var events: [Event] = []
+        let target = TraktScrobbleTarget.movie(tmdbID: 42)
+        let scrobbler = TraktPlaybackScrobbler { events.append(Event(target: $0, action: $1, progress: $2)) }
+        scrobbler.playbackStarted(target: target, progress: 0)
+        scrobbler.playbackPaused(target: target, progress: 0.7)
+        scrobbler.playbackStopped(target: target, progress: 0.7)
+        scrobbler.playbackStopped(target: target, progress: 0.7)
+        #expect(events == [Event(target: target, action: .start, progress: 0), Event(target: target, action: .discard, progress: 0.7)])
+    }
+
+    @Test func `switching away from an early title discards only the outgoing session`() {
+        var events: [Event] = []
+        let first = TraktScrobbleTarget.movie(tmdbID: 42)
+        let next = TraktScrobbleTarget.movie(tmdbID: 84)
+        let scrobbler = TraktPlaybackScrobbler { events.append(Event(target: $0, action: $1, progress: $2)) }
+        scrobbler.playbackStarted(target: first, progress: 0.7)
+        scrobbler.playbackStarted(target: next, progress: 0)
+        #expect(events == [
+            Event(target: first, action: .start, progress: 0.7),
+            Event(target: first, action: .discard, progress: 0.7),
+            Event(target: next, action: .start, progress: 0)
+        ])
     }
 
     @Test func `resume fallback yields to the engine including a backward seek`() {

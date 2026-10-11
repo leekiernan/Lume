@@ -33,7 +33,7 @@ final class TraktPlaybackScrobbler {
     /// transition coalesces away the explicit stop, settle the old target first.
     func playbackStarted(target newTarget: TraktScrobbleTarget, progress: Double) {
         if let target, target != newTarget, phase != .idle {
-            send(target, .stop, Self.validStopProgress(lastProgress))
+            sendStop(target, progress: lastProgress)
             phase = .idle
         }
 
@@ -49,17 +49,19 @@ final class TraktPlaybackScrobbler {
     func playbackPaused(target currentTarget: TraktScrobbleTarget, progress: Double) {
         guard target == currentTarget, phase == .playing else { return }
         lastProgress = Self.validProgress(progress)
-        send(currentTarget, .pause, lastProgress)
+        // Trakt rejects these with 422; do not manufacture a 1% resume point
+        // just because the viewer paused briefly near the beginning.
+        if lastProgress >= 1 { send(currentTarget, .pause, lastProgress) }
         phase = .paused
     }
 
     /// Ends the current session when the player closes or changes media. Trakt
-    /// rejects stop progress below 1%, so use its minimum accepted value to
-    /// ensure an immediately abandoned title does not remain "Now Watching".
+    /// rejects stop progress below 1%, so an early exit uses a separate discard
+    /// operation: settle watching, then delete the temporary playback entry.
     func playbackStopped(target currentTarget: TraktScrobbleTarget, progress: Double) {
         guard target == currentTarget, phase != .idle else { return }
         lastProgress = Self.validProgress(progress)
-        send(currentTarget, .stop, Self.validStopProgress(lastProgress))
+        sendStop(currentTarget, progress: lastProgress)
         target = nil
         phase = .idle
         lastProgress = 0
@@ -75,7 +77,7 @@ final class TraktPlaybackScrobbler {
         return min(max(progress, 0), 100)
     }
 
-    private nonisolated static func validStopProgress(_ progress: Double) -> Double {
-        max(validProgress(progress), 1)
+    private func sendStop(_ target: TraktScrobbleTarget, progress: Double) {
+        send(target, progress < 1 ? .discard : .stop, progress)
     }
 }

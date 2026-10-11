@@ -147,3 +147,20 @@ nonisolated extension StalkerError: DiagnosticErrorDescribing {}
 nonisolated extension WebDAVError: DiagnosticErrorDescribing {}
 nonisolated extension JellyfinError: DiagnosticErrorDescribing {}
 nonisolated extension PlexError: DiagnosticErrorDescribing {}
+
+nonisolated extension TraktError: DiagnosticErrorDescribing {
+    var logDescription: String {
+        switch self {
+        case .notConfigured: "not configured"
+        case .invalidResponse: "invalid HTTP response"
+        case let .server(status): "HTTP \(status)"
+        case .decoding: "response decoding failed"
+        case .notAuthenticated: "not authenticated (HTTP 401)"
+        case .authorizationPending: "authorization pending (HTTP 400)"
+        case .slowDown: "rate limited (HTTP 429)"
+        case .codeExpired: "device code expired (HTTP 410)"
+        case .codeDenied: "device authorization denied (HTTP 418)"
+        case .codeUsed: "device code already used (HTTP 409)"
+        }
+    }
+}

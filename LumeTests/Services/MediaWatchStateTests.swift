@@ -6,6 +6,50 @@ import Testing
 @MainActor
 @Suite(.globalState)
 struct MediaWatchStateTests {
+    @Test func `early exit resets movie and episode through both trackers`() throws {
+        let (context, series, episodes) = try makeSeries(count: 1)
+        let movie = Movie(id: UUID().uuidString, streamId: 1, name: "Movie")
+        context.insert(movie)
+        movie.watchProgress = 3
+        movie.lastWatchedDate = .now
+        episodes[0].watchProgress = 3
+        episodes[0].lastWatchedDate = .now
+        series.lastWatchedDate = .now
+        let first = HistorySpy(), second = HistorySpy()
+
+        for ref in [PlayableMedia.ContentRef.movie(movie.id), .episode(episodes[0].id)] {
+            #expect(MediaWatchState.discardEarlyProgress(ref: ref, position: 3, duration: 600, in: context, trackers: [first, second]))
+            #expect(RecentResumePoints.position(for: ref, stored: 3, storedAt: nil) == 0)
+        }
+        #expect(movie.watchProgress == 0 && movie.lastWatchedDate == nil)
+        #expect(episodes[0].watchProgress == 0 && series.lastWatchedDate == nil)
+        #expect(first.movieStates == [false] && second.movieStates == [false])
+        #expect(first.episodeStates == [false] && second.episodeStates == [false])
+    }
+
+    @Test func `early replay preserves completed history and sends no unwatched mutation`() throws {
+        let (context, _, episodes) = try makeSeries(count: 1)
+        episodes[0].setWatched(true)
+        let date = episodes[0].lastWatchedDate
+        let tracker = HistorySpy()
+
+        #expect(MediaWatchState.discardEarlyProgress(ref: .episode(episodes[0].id), position: 3, duration: 600, in: context, trackers: [tracker]))
+
+        #expect(episodes[0].isWatched && episodes[0].watchProgress == 600)
+        #expect(episodes[0].lastWatchedDate == date)
+        #expect(tracker.episodeStates.isEmpty)
+    }
+
+    @Test func `normal exits unknown durations and live TV do not reset history`() throws {
+        let (context, _, episodes) = try makeSeries(count: 1)
+        let tracker = HistorySpy()
+        let ref = PlayableMedia.ContentRef.episode(episodes[0].id)
+        #expect(!MediaWatchState.discardEarlyProgress(ref: ref, position: 6, duration: 600, in: context, trackers: [tracker]))
+        #expect(!MediaWatchState.discardEarlyProgress(ref: ref, position: 3, duration: 0, in: context, trackers: [tracker]))
+        #expect(!MediaWatchState.discardEarlyProgress(ref: .live("live"), position: 3, duration: 600, in: context, trackers: [tracker]))
+        #expect(tracker.episodeStates.isEmpty)
+    }
+
     @Test func `manual resets send unwatched intent to every tracker`() throws {
         let (context, _, episodes) = try makeSeries(count: 1)
         let movie = Movie(id: UUID().uuidString, streamId: 1, name: "Movie")

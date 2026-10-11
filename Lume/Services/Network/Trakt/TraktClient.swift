@@ -166,20 +166,10 @@ nonisolated struct TraktClient {
 
     // MARK: - Scrobbling
 
-    /// Reports a playback lifecycle transition. Calling `.start` again resumes
-    /// a paused session; `.stop` also lets Trakt settle completed playback into
-    /// watched history according to its own completion threshold.
-    @discardableResult
-    func scrobble(
-        _ target: TraktScrobbleTarget,
-        action: TraktScrobbleAction,
-        progress: Double,
-        accessToken: String
-    ) async throws -> TraktScrobbleResponse {
-        let request = TraktScrobbleRequest(target: target, progress: progress)
-        return try await post(
-            "/scrobble/\(action.rawValue)", body: request, accessToken: accessToken
-        )
+    /// Deletes paused progress, not a completed watch-history entry.
+    func removePlayback(id: Int64, accessToken: String) async throws {
+        let request = try makeRequest(path: "/sync/playback/\(id)", method: "DELETE", accessToken: accessToken)
+        let _: EmptyResponse = try await send(request).value
     }
 
     // MARK: - Watchlist
@@ -290,7 +280,7 @@ nonisolated struct TraktClient {
         return items
     }
 
-    private func post<T: Decodable>(
+    func post<T: Decodable>(
         _ path: String,
         body: some Encodable,
         authorized: Bool = true,
