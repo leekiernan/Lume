@@ -78,15 +78,16 @@ actor WatchProgressWriter {
         guard progress > 0 else { return nil }
 
         let completed = WatchCompletion.isComplete(progress: progress, duration: duration)
+        let preserveWatched = PlaybackResumePolicy.discardsProgress(position: progress, duration: duration)
 
         do {
             switch ref {
             case let .movie(id):
                 guard WatchHistoryClears.shared.allows(recordedAt, for: id) else { return nil }
-                return try writeMovie(id: id, progress: progress, completed: completed, ref: ref)
+                return try writeMovie(id: id, progress: progress, completed: completed, ref: ref, preserveWatched: preserveWatched)
             case let .episode(id):
                 guard WatchHistoryClears.shared.allows(recordedAt, for: id) else { return nil }
-                return try writeEpisode(id: id, progress: progress, completed: completed, ref: ref)
+                return try writeEpisode(id: id, progress: progress, completed: completed, ref: ref, preserveWatched: preserveWatched)
             case let .live(id):
                 if holdLive {
                     heldLiveTouches[id] = Date()
@@ -131,9 +132,11 @@ actor WatchProgressWriter {
         id: String,
         progress: TimeInterval,
         completed: Bool,
-        ref: PlayableMedia.ContentRef
+        ref: PlayableMedia.ContentRef,
+        preserveWatched: Bool = false
     ) throws -> WatchedChange? {
         guard let movie = PlayerContentLookup.movie(id, in: context) else { return nil }
+        if preserveWatched, movie.isWatched { return nil }
 
         movie.watchProgress = progress
         movie.lastWatchedDate = Date()
@@ -157,9 +160,11 @@ actor WatchProgressWriter {
         id: String,
         progress: TimeInterval,
         completed: Bool,
-        ref: PlayableMedia.ContentRef
+        ref: PlayableMedia.ContentRef,
+        preserveWatched: Bool = false
     ) throws -> WatchedChange? {
         guard let episode = PlayerContentLookup.episode(id, in: context) else { return nil }
+        if preserveWatched, episode.isWatched { return nil }
 
         episode.watchProgress = progress
         episode.lastWatchedDate = Date()

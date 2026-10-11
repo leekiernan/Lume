@@ -61,6 +61,16 @@ struct WatchProgressWriterTests {
 
         #expect(change == nil)
         #expect(try stored(movie.id, in: container).isWatched)
+        #expect(try stored(movie.id, in: container).watchProgress == 6000)
+    }
+
+    @Test func `an early pause in a long replay cannot erase the completed watch`() async throws {
+        let container = try makeTestContainer()
+        let movie = try movie(in: container, watched: true)
+        let change = await WatchProgressWriter(container: container).record(ref: .movie(movie.id), progress: 90, duration: 12000)
+        #expect(change == nil)
+        #expect(try stored(movie.id, in: container).isWatched)
+        #expect(try stored(movie.id, in: container).watchProgress == 6000)
     }
 
     /// Finished again: watched, and reported as a completion — a second play.
