@@ -5,9 +5,15 @@ import Testing
 private final nonisolated class TraktScrobbleStubProtocol: URLProtocol {
     private static let lock = NSLock()
     private nonisolated(unsafe) static var requests: [URLRequest] = []
+    private nonisolated(unsafe) static var statusCode = 201
+    private nonisolated(unsafe) static var responseBody = "{}"
 
-    static func reset() {
-        lock.withLock { requests = [] }
+    static func reset(statusCode: Int = 201, responseBody: String = "{}") {
+        lock.withLock {
+            requests = []
+            Self.statusCode = statusCode
+            Self.responseBody = responseBody
+        }
     }
 
     static func recordedRequests() -> [URLRequest] {
@@ -29,12 +35,15 @@ private final nonisolated class TraktScrobbleStubProtocol: URLProtocol {
         // its body stream (see `URLRequest.bodyData`) may already be spent.
         var recorded = request
         recorded.httpBody = request.bodyData
-        Self.lock.withLock { Self.requests.append(recorded) }
+        let (statusCode, responseBody) = Self.lock.withLock {
+            Self.requests.append(recorded)
+            return (Self.statusCode, Self.responseBody)
+        }
         guard let url = request.url,
-              let response = HTTPURLResponse(url: url, statusCode: 201, httpVersion: nil, headerFields: nil)
+              let response = HTTPURLResponse(url: url, statusCode: statusCode, httpVersion: nil, headerFields: nil)
         else { return }
         client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
-        client?.urlProtocol(self, didLoad: Data("{}".utf8))
+        client?.urlProtocol(self, didLoad: Data(responseBody.utf8))
         client?.urlProtocolDidFinishLoading(self)
     }
 
@@ -99,6 +108,44 @@ struct TraktScrobbleClientTests {
     private func requestJSON(_ request: URLRequest) throws -> [String: Any] {
         let body = try #require(request.httpBody)
         return try #require(JSONSerialization.jsonObject(with: body) as? [String: Any])
+    }
+
+    @Test(arguments: [422, 429, 500])
+    func `pause failures preserve HTTP status without logging response bodies`(status: Int) async throws {
+        TraktScrobbleStubProtocol.reset(statusCode: status, responseBody: "private-response-marker")
+        do {
+            try await makeClient().scrobble(.movie(tmdbID: 42), action: .pause, progress: 0.3, accessToken: "private-token-marker")
+            Issue.record("Expected an HTTP failure")
+        } catch let error as TraktError {
+            #expect(error == .server(status))
+            #expect(LogRedaction.describe(error) == "TraktError: HTTP \(status)")
+            #expect(!LogRedaction.describe(error).contains("private"))
+        }
+        let request = try #require(TraktScrobbleStubProtocol.recordedRequests().first)
+        #expect(request.url?.path == "/scrobble/pause")
+        #expect(try requestJSON(request)["progress"] as? Double == 0.3)
+    }
+
+    @Test func `pause authentication failures expose HTTP 401`() async throws {
+        TraktScrobbleStubProtocol.reset(statusCode: 401)
+        do {
+            try await makeClient().scrobble(.movie(tmdbID: 42), action: .pause, progress: 25, accessToken: "token")
+            Issue.record("Expected an authentication failure")
+        } catch let error as TraktError {
+            #expect(error == .notAuthenticated)
+            #expect(LogRedaction.describe(error) == "TraktError: not authenticated (HTTP 401)")
+        }
+    }
+
+    @Test func `malformed pause responses are distinguished from HTTP failures`() async throws {
+        TraktScrobbleStubProtocol.reset(responseBody: "not JSON")
+        do {
+            try await makeClient().scrobble(.movie(tmdbID: 42), action: .pause, progress: 25, accessToken: "token")
+            Issue.record("Expected a decoding failure")
+        } catch let error as TraktError {
+            #expect(error == .decoding)
+            #expect(LogRedaction.describe(error) == "TraktError: response decoding failed")
+        }
     }
 }
 

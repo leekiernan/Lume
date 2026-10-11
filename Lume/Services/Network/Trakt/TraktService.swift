@@ -242,7 +242,7 @@ final class TraktService {
             } catch {
                 let detail = LogRedaction.describe(error)
                 Logger.network.warning(
-                    "Trakt scrobble \(action.rawValue, privacy: .public) failed: \(detail, privacy: .public)"
+                    "Trakt scrobble \(action.rawValue, privacy: .public) at \(progress, format: .fixed(precision: 1))% failed: \(detail, privacy: .public)"
                 )
             }
         }
