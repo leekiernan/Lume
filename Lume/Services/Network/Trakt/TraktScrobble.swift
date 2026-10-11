@@ -11,6 +11,8 @@ nonisolated enum TraktScrobbleAction: String, Equatable {
     case start
     case pause
     case stop
+    /// Internal operation: end watching and remove its temporary resume entry.
+    case discard
 }
 
 /// The stable catalog identity Trakt needs for a playback session. Episodes are
@@ -63,6 +65,7 @@ nonisolated struct TraktScrobbleRequest: Encodable {
 /// What Trakt recorded for a scrobble — logged, since the website is the
 /// only other place to see it and it lags.
 nonisolated struct TraktScrobbleResponse: Decodable {
+    let id: Int64?
     let action: String?
     let progress: Double?
 }
